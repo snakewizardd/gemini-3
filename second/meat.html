@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👁️👄👁️ THE_MEAT_LOCKER 👁️👄👁️</title>
+    <style>
+        :root {
+            --cursed-red: #ff0000;
+            --mold-green: #00ff00;
+            --void: #000000;
+            --skin: #ffccaa;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            color: var(--mold-green);
+            font-family: "Impact", "Comic Sans MS", sans-serif;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        /* --- THE PSYCHEDELIC WALLPAPER --- */
+        .bg-tile {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: repeating-linear-gradient(45deg, #110000 25%, transparent 25%, transparent 75%, #110000 75%, #110000), repeating-linear-gradient(45deg, #110000 25%, #000000 25%, #000000 75%, #110000 75%, #110000);
+            background-position: 0 0, 10px 10px;
+            background-size: 20px 20px;
+            opacity: 0.5;
+            z-index: -1;
+            animation: scroll-bg 2s linear infinite;
+        }
+
+        @keyframes scroll-bg { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } }
+
+        /* --- CONTAINER --- */
+        #wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            border: 10px solid var(--cursed-red);
+        }
+
+        /* --- HEADER --- */
+        header {
+            background: blue;
+            color: yellow;
+            text-align: center;
+            font-size: 3rem;
+            text-shadow: 5px 5px 0 red;
+            padding: 10px;
+            border-bottom: 5px dashed white;
+            animation: rainbow 0.5s infinite;
+        }
+
+        @keyframes rainbow {
+            0% { background: blue; } 50% { background: purple; } 100% { background: blue; }
+        }
+
+        /* --- MAIN STAGE --- */
+        #flesh-pit {
+            flex-grow: 1;
+            position: relative;
+            background: radial-gradient(circle, #330000, #000);
+            overflow: hidden;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        /* --- UI CONTROLS --- */
+        .control-panel {
+            background: #ccc;
+            border-top: 5px ridge white;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        button {
+            background: linear-gradient(to bottom, #fff, #aaa);
+            border: 3px outset #fff;
+            font-family: "Impact";
+            font-size: 1.5rem;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transform: skew(-10deg);
+        }
+        button:active { border-style: inset; transform: skew(-10deg) translateY(2px); }
+        button:hover { background: yellow; color: red; }
+
+        .scream-btn { background: red; color: white; animation: shake 0.1s infinite; }
+        
+        /* --- CURSED POPUPS --- */
+        .popup {
+            position: absolute;
+            background: white;
+            border: 2px solid blue;
+            padding: 5px;
+            color: black;
+            font-family: Arial;
+            box-shadow: 10px 10px 0px rgba(0,0,0,0.5);
+            pointer-events: none;
+            animation: popup-in 0.2s;
+            z-index: 999;
+            max-width: 200px;
+            text-align: center;
+        }
+        .popup-header { background: blue; color: white; padding: 2px; font-size: 10px; font-weight: bold; text-align: left; }
+
+        @keyframes shake { 0% { transform: translate(1px, 1px) rotate(0deg); } 100% { transform: translate(-1px, -2px) rotate(-1deg); } }
+        @keyframes popup-in { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+
+        /* --- GLITCH OVERLAY --- */
+        .glitch-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            mix-blend-mode: difference;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .marquee {
+            position: absolute;
+            top: 0;
+            white-space: nowrap;
+            color: lime;
+            font-size: 20px;
+            background: black;
+            width: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-tile"></div>
+    <div class="glitch-overlay" id="glitch-fx"></div>
+
+    <div id="wrapper">
+        <header>
+            <div class="marquee"><span id="scroller">::: FEED THE FLESH ::: UPLOAD YOUR SOUL ::: DON'T LOOK AT IT DIRECTLY ::: 404 GOD NOT FOUND :::</span></div>
+            <br>
+            🤮 THE_MEAT_LOCKER 🤮
+        </header>
+
+        <div id="flesh-pit">
+            <canvas id="canvas"></canvas>
+            <div id="instruction" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; pointer-events: none; text-align: center;">
+                <h1>CLICK TO SPAWN A HOMIE</h1>
+                <h2>DRAG TO MELT THEM</h2>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <button onclick="reset()">🗑️ FLUSH</button>
+            <button class="scream-btn" onclick="chaosMode()">🚨 GOBLIN MODE 🚨</button>
+            <button onclick="saveScreenshot()">📸 CAPTURE EVIDENCE</button>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * THE AUDIO ABOMINATION ENGINE 
+         * Synthesizes "Vine Booms", "Screams", and "Wet Slaps"
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+
+        function playVineBoom() {
+            if(ctx.state === 'suspended') ctx.resume();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const distortion = ctx.createWaveShaper();
+
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(60, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(10, ctx.currentTime + 0.5);
+
+            // Distortion Curve
+            distortion.curve = makeDistortionCurve(400);
+            
+            gain.gain.setValueAtTime(1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+
+            osc.connect(distortion);
+            distortion.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start();
+            osc.stop(ctx.currentTime + 0.8);
+        }
+
+        function playWetSlap() {
+            const bufferSize = ctx.sampleRate * 0.5;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start();
+        }
+
+        function makeDistortionCurve(amount) {
+            const k = amount, n_samples = 44100, curve = new Float32Array(n_samples), deg = Math.PI / 180;
+            for (let i = 0; i < n_samples; ++i) {
+                const x = i * 2 / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        /*
+         * THE VISUAL CHIMERA ENGINE
+         */
+        const canvas = document.getElementById('canvas');
+        const c = canvas.getContext('2d');
+        let width, height;
+        let entities = [];
+        let dragging = false;
+
+        // ASSET BANKS
+        const EYES = ['👁️', '🧿', '🎾', '🍳', '🍩', '💿'];
+        const MOUTHS = ['👄', '🌭', '🍆', '🐛', '🥐', '🥩', '🦷'];
+        const BODIES = ['🥔', '🍞', '🗿', '🧼', '🧠', '🫀'];
+        const QUOTES = ["I CAN TASTE COLORS", "DELETE SYSTEM32", "WHY AM I DAMP", "FATHER IS WATCHING", "TEXTURE NOT FOUND", "BRUH"];
+
+        function resize() {
+            width = canvas.width = document.getElementById('flesh-pit').clientWidth;
+            height = canvas.height = document.getElementById('flesh-pit').clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Chimera {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 100 + 50;
+                this.parts = {
+                    body: BODIES[Math.floor(Math.random() * BODIES.length)],
+                    eyeL: EYES[Math.floor(Math.random() * EYES.length)],
+                    eyeR: EYES[Math.floor(Math.random() * EYES.length)],
+                    mouth: MOUTHS[Math.floor(Math.random() * MOUTHS.length)]
+                };
+                // Distortion Vectors
+                this.skewX = (Math.random() - 0.5) * 1;
+                this.skewY = (Math.random() - 0.5) * 1;
+                this.scaleY = 1;
+                this.rotation = (Math.random() - 0.5) * 0.5;
+                this.wobbleSpeed = Math.random() * 0.1;
+            }
+
+            draw(time) {
+                c.save();
+                c.translate(this.x, this.y);
+                c.rotate(this.rotation + Math.sin(time * this.wobbleSpeed) * 0.1);
+                c.transform(1, this.skewY, this.skewX, this.scaleY, 0, 0); // The Matrix Distortion
+
+                c.font = `${this.size}px Serif`;
+                c.textAlign = "center";
+                c.textBaseline = "middle";
+
+                // DRAW BODY
+                c.shadowBlur = 20;
+                c.shadowColor = "lime";
+                c.fillText(this.parts.body, 0, 0);
+
+                // DRAW EYES (Independent movement)
+                const lookX = (Math.sin(time * 2) * 10);
+                const lookY = (Math.cos(time * 3) * 10);
+
+                c.font = `${this.size * 0.4}px Serif`;
+                c.fillText(this.parts.eyeL, -this.size/4 + lookX, -this.size/4 + lookY);
+                c.fillText(this.parts.eyeR, this.size/4 - lookX, -this.size/5 + lookY); // Asymmetrical
+
+                // DRAW MOUTH (Breathing)
+                const mouthOpen = Math.abs(Math.sin(time * 5)) * 20;
+                c.font = `${this.size * 0.5}px Serif`;
+                c.fillText(this.parts.mouth, 0, this.size/3 + mouthOpen);
+
+                c.restore();
+            }
+
+            distort() {
+                this.skewX += (Math.random() - 0.5) * 2;
+                this.scaleY += (Math.random() - 0.5) * 1;
+                this.size += 10;
+                playWetSlap();
+                createPopup(this.x, this.y);
+            }
+        }
+
+        function createPopup(x, y) {
+            // Fake Windows XP error popup
+            const div = document.createElement('div');
+            div.className = 'popup';
+            div.style.left = (x + Math.random()*50) + 'px';
+            div.style.top = (y + Math.random()*50) + 'px';
+            div.innerHTML = `
+                <div class="popup-header">ERROR_420.exe</div>
+                <div style="padding:5px;">
+                    ⚠️ ${QUOTES[Math.floor(Math.random() * QUOTES.length)]}
+                    <br><button style="font-size:10px; padding:2px;">OK</button>
+                </div>
+            `;
+            document.body.appendChild(div);
+            
+            // Auto remove
+            setTimeout(() => div.remove(), 2000);
+        }
+
+        // INPUT HANDLING
+        canvas.addEventListener('mousedown', (e) => {
+            document.getElementById('instruction').style.display = 'none';
+            playVineBoom();
+            
+            // Add glitch FX
+            triggerGlitch();
+
+            // Spawn Chimera
+            const rect = canvas.getBoundingClientRect();
+            entities.push(new Chimera(e.clientX - rect.left, e.clientY - rect.top));
+            
+            dragging = true;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if(dragging && entities.length > 0) {
+                // MELT THE LAST ONE
+                const last = entities[entities.length-1];
+                last.skewX = (e.clientX - last.x) / 50;
+                last.skewY = (e.clientY - last.y) / 50;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => dragging = false);
+
+        // RENDER LOOP
+        let time = 0;
+        function animate() {
+            c.clearRect(0, 0, width, height);
+            time += 0.05;
+
+            entities.forEach(ent => ent.draw(time));
+            
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // CONTROLS
+        function reset() {
+            entities = [];
+            // Clear popups
+            document.querySelectorAll('.popup').forEach(el => el.remove());
+            playWetSlap();
+        }
+
+        function chaosMode() {
+            // INVERT COLORS
+            document.body.style.filter = "invert(100%)";
+            setTimeout(() => document.body.style.filter = "invert(0%)", 100);
+            
+            // SPAWN 20 RANDOM FREAKS
+            for(let i=0; i<20; i++) {
+                setTimeout(() => {
+                    entities.push(new Chimera(Math.random()*width, Math.random()*height));
+                    playVineBoom();
+                }, i * 100);
+            }
+        }
+
+        function triggerGlitch() {
+            const glitch = document.getElementById('glitch-fx');
+            glitch.style.opacity = 1;
+            setTimeout(() => glitch.style.opacity = 0, 50);
+        }
+
+        function saveScreenshot() {
+            // Creates a png so they can share their abomination
+            const link = document.createElement('a');
+            link.download = 'cursed_evidence.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+    </script>
+</body>
+</html>
