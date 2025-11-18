@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💩 BATTLESHITS: THE BROWN NOISE 💩</title>
+    <style>
+        :root {
+            --tile: #e0e0d0;
+            --grout: #a0a090;
+            --stall: #b0c0c0;
+            --stall-shadow: #708080;
+            --danger: #ff0000;
+            --relief: #00ff00;
+        }
+
+        body {
+            margin: 0;
+            background-color: #222;
+            background-image: repeating-linear-gradient(45deg, var(--tile) 0px, var(--tile) 40px, var(--grout) 41px, var(--grout) 42px);
+            font-family: "Arial Black", sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        /* UI LAYER */
+        #ui-top {
+            background: black;
+            color: white;
+            padding: 10px 30px;
+            border: 4px solid white;
+            text-align: center;
+            z-index: 100;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+        }
+
+        h1 { margin: 0; font-size: 3rem; color: yellow; text-shadow: 4px 4px 0 #5b3c11; }
+        p { margin: 5px 0; color: #aaa; }
+
+        /* STALL CONTAINER */
+        #bathroom {
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+            position: relative;
+        }
+
+        .stall-unit {
+            width: 300px;
+            height: 500px;
+            position: relative;
+        }
+
+        /* THE STALL VISUALS */
+        .door {
+            width: 100%;
+            height: 85%;
+            background: var(--stall);
+            border: 5px solid #eee;
+            box-shadow: inset 10px 0 20px rgba(0,0,0,0.2), 10px 10px 20px rgba(0,0,0,0.5);
+            position: absolute;
+            top: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .gap {
+            height: 15%;
+            width: 100%;
+            position: absolute;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        /* SHOES */
+        .shoes {
+            width: 60px;
+            height: 30px;
+            background: #333;
+            border-radius: 20px 20px 0 0;
+            margin: 0 10px;
+            position: relative;
+            bottom: 0;
+            transition: transform 0.1s;
+        }
+        .shoes::after {
+            content: ''; position: absolute; bottom: 0; width: 100%; height: 5px; background: white;
+        }
+
+        /* PLAYER SHOES */
+        #p1-shoes .shoes { background: blue; }
+        /* CPU SHOES */
+        #cpu-shoes .shoes { background: black; }
+
+        /* METERS */
+        .meter-container {
+            width: 80%;
+            height: 30px;
+            background: black;
+            margin: 10px 0;
+            border: 2px solid white;
+            position: relative;
+        }
+        
+        .bar { height: 100%; transition: width 0.1s linear; }
+        
+        #p1-relief-bar { background: linear-gradient(90deg, yellow, lime); width: 0%; }
+        #p1-strain-bar { background: linear-gradient(90deg, orange, red); width: 0%; }
+        
+        #cpu-relief-bar { background: linear-gradient(90deg, grey, red); width: 0%; }
+
+        .label { font-size: 12px; color: white; position: absolute; width: 100%; text-align: center; line-height: 30px; mix-blend-mode: difference; }
+
+        /* ANIMATIONS */
+        .shake-small { animation: shake 0.2s infinite; }
+        .shake-hard { animation: shake 0.1s infinite; }
+
+        @keyframes shake {
+            0% { transform: translate(0,0) rotate(0deg); }
+            25% { transform: translate(2px, 2px) rotate(1deg); }
+            50% { transform: translate(-2px, -2px) rotate(-1deg); }
+            75% { transform: translate(-2px, 2px) rotate(0deg); }
+        }
+
+        /* POPUP TEXT */
+        .float-text {
+            position: absolute;
+            font-family: "Comic Sans MS", cursive;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 1s forwards;
+            text-shadow: 2px 2px 0 #fff;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+        }
+
+        /* START OVERLAY */
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            text-align: center;
+        }
+        
+        button {
+            background: #ffcc00;
+            border: 4px solid #fff;
+            padding: 20px 40px;
+            font-size: 2rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            color: #333;
+        }
+        button:hover { background: #fff; color: black; }
+
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1 style="color: #8b4513;">BATTLESHITS</h1>
+        <h2>STALL WARS</h2>
+        <p>MASH [SPACEBAR] TO PUSH</p>
+        <p>DON'T LET YOUR STRAIN METER HIT MAX!</p>
+        <button onclick="startGame()">SIT DOWN</button>
+    </div>
+
+    <div id="ui-top">
+        <h1>BATTLESHITS</h1>
+        <p id="game-status">PREPARE TO PUSH...</p>
+    </div>
+
+    <div id="bathroom">
+        <!-- PLAYER STALL -->
+        <div class="stall-unit" id="p1-stall">
+            <div class="door">
+                <div style="font-size: 2rem;">YOU</div>
+                
+                <!-- METERS -->
+                <div class="meter-container">
+                    <div class="label">RELIEF (WIN)</div>
+                    <div class="bar" id="p1-relief-bar"></div>
+                </div>
+                <div class="meter-container">
+                    <div class="label">STRAIN (DANGER)</div>
+                    <div class="bar" id="p1-strain-bar"></div>
+                </div>
+
+            </div>
+            <div class="gap" id="p1-shoes">
+                <div class="shoes" style="transform: rotate(-5deg);"></div>
+                <div class="shoes" style="transform: rotate(5deg);"></div>
+            </div>
+        </div>
+
+        <!-- CPU STALL -->
+        <div class="stall-unit" id="cpu-stall">
+            <div class="door">
+                <div style="font-size: 2rem;">RIVAL</div>
+                <div class="meter-container">
+                    <div class="label">RIVAL RELIEF</div>
+                    <div class="bar" id="cpu-relief-bar"></div>
+                </div>
+                <div style="font-size: 3rem; margin-top: 20px;">🚽</div>
+            </div>
+            <div class="gap" id="cpu-shoes">
+                <div class="shoes"></div>
+                <div class="shoes"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * THE GASTRO-AUDIO ENGINE 
+         * Procedural Fart Synthesis using WebAudio API
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let ctx;
+        
+        function initAudio() {
+            if (!ctx) ctx = new AudioContext();
+            if (ctx.state === 'suspended') ctx.resume();
+        }
+
+        function playFart(length = 0.5, pitch = 100, type = 'sawtooth') {
+            if(!ctx) return;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+
+            osc.type = type; // Sawtooth is best for brassy farts
+            osc.frequency.setValueAtTime(pitch, ctx.currentTime);
+            // The "Squeeze" effect (Pitch drop)
+            osc.frequency.exponentialRampToValueAtTime(pitch / 2, ctx.currentTime + length);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, ctx.currentTime);
+            filter.frequency.linearRampToValueAtTime(200, ctx.currentTime + length);
+
+            gain.gain.setValueAtTime(1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + length);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start();
+            osc.stop(ctx.currentTime + length);
+        }
+
+        function playSplash() {
+            if(!ctx) return;
+            const bufferSize = ctx.sampleRate * 0.5;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.5, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            
+            noise.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start();
+        }
+
+        /* 
+         * GAME LOGIC
+         */
+        let gameActive = false;
+        let p1Relief = 0;
+        let p1Strain = 0;
+        let cpuRelief = 0;
+        
+        // Difficulty
+        const RELIEF_GOAL = 100;
+        const STRAIN_MAX = 100;
+        const STRAIN_DECAY = 0.5;
+        
+        function startGame() {
+            document.getElementById('overlay').style.display = 'none';
+            initAudio();
+            gameActive = true;
+            gameLoop();
+            cpuLogic();
+        }
+
+        // Player Input
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameActive) {
+                push();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if(e.code === 'Space') {
+                stopPush();
+            }
+        });
+
+        function push() {
+            // Game Logic
+            p1Relief += 2;
+            p1Strain += 4;
+            
+            // Visuals
+            const stall = document.getElementById('p1-stall');
+            stall.classList.add('shake-small');
+            
+            // Audio (Randomize)
+            const r = Math.random();
+            if (r > 0.8) playFart(0.2, 150, 'sawtooth'); // Squeak
+            else if (r > 0.95) playSplash(); // Splash
+            
+            // Text FX
+            if (Math.random() > 0.8) spawnText("HNNG!", "p1-stall", "white");
+            
+            updateBars();
+            checkGameState();
+        }
+
+        function stopPush() {
+            document.getElementById('p1-stall').classList.remove('shake-small');
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+
+            // Decay Strain
+            if (p1Strain > 0) p1Strain -= STRAIN_DECAY;
+            if (p1Strain < 0) p1Strain = 0;
+
+            // Update Bars
+            updateBars();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // The Enemy AI (The Battleshitter)
+        function cpuLogic() {
+            if (!gameActive) return;
+
+            // CPU Pushes randomly
+            const pushChance = Math.random();
+            
+            if (pushChance > 0.1) { // Aggressive CPU
+                cpuRelief += 0.5;
+                
+                // CPU Visuals
+                const stall = document.getElementById('cpu-stall');
+                stall.style.transform = `translate(${(Math.random()-0.5)*2}px, ${(Math.random()-0.5)*2}px)`;
+                
+                // CPU Audio (Lower pitch for rival)
+                if (Math.random() > 0.92) {
+                    playFart(0.5, 80, 'square'); 
+                    spawnText("BLAARRT!", "cpu-stall", "#ff5555");
+                }
+            }
+
+            updateBars();
+            checkGameState();
+
+            if (gameActive) setTimeout(cpuLogic, 50);
+        }
+
+        function updateBars() {
+            document.getElementById('p1-relief-bar').style.width = p1Relief + '%';
+            document.getElementById('p1-strain-bar').style.width = p1Strain + '%';
+            document.getElementById('cpu-relief-bar').style.width = cpuRelief + '%';
+
+            // Dynamic Strain Color
+            const strainBar = document.getElementById('p1-strain-bar');
+            if(p1Strain > 80) strainBar.style.background = "white"; // FLASHING DANGER
+            else strainBar.style.background = "linear-gradient(90deg, orange, red)";
+        }
+
+        function checkGameState() {
+            // LOSE CONDITION: STRAIN
+            if (p1Strain >= STRAIN_MAX) {
+                gameOver("YOU HAD AN ANEURYSM.", "DEFEAT", "red");
+            }
+            // LOSE CONDITION: CPU WINS
+            else if (cpuRelief >= RELIEF_GOAL) {
+                gameOver("RIVAL DOMINATED THE BATHROOM.", "SHAME", "grey");
+            }
+            // WIN CONDITION
+            else if (p1Relief >= RELIEF_GOAL) {
+                playFart(2.0, 50, 'sawtooth'); // Victory Trumpet
+                spawnText("MASSIVE!", "p1-stall", "gold");
+                gameOver("TOTAL BOWEL DOMINANCE.", "VICTORY", "gold");
+            }
+        }
+
+        function gameOver(msg, title, color) {
+            gameActive = false;
+            const overlay = document.getElementById('overlay');
+            overlay.style.display = 'flex';
+            overlay.innerHTML = `
+                <h1 style="color:${color}">${title}</h1>
+                <p>${msg}</p>
+                <button onclick="location.reload()">REMATCH</button>
+            `;
+        }
+
+        // Helper: Floating Text
+        function spawnText(text, elementId, color) {
+            const el = document.getElementById(elementId);
+            const rect = el.getBoundingClientRect();
+            const div = document.createElement('div');
+            div.innerText = text;
+            div.className = 'float-text';
+            div.style.color = color;
+            div.style.left = (rect.left + rect.width/2) + 'px';
+            div.style.top = (rect.top + rect.height/2) + 'px';
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 1000);
+        }
+
+    </script>
+</body>
+</html>
