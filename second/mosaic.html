@@ -3,249 +3,288 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BACARDI_MOSAIC // REPAIRED</title>
+    <title>SINGULARITY // HYPER_MOSAIC</title>
     <style>
         body {
             margin: 0;
-            background-color: #020205;
+            background-color: #000;
             overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-family: 'Courier New', monospace;
+            height: 100vh;
+            font-family: 'Arial Black', sans-serif;
         }
 
+        /* INTENSITY FILTER */
         canvas {
-            position: absolute;
-            top: 0; left: 0;
-            z-index: 1;
+            filter: contrast(1.4) saturate(1.5) brightness(1.1);
+            box-shadow: 0 0 100px rgba(0, 255, 255, 0.2);
         }
 
-        #ui-layer {
+        #ui {
             position: absolute;
             z-index: 10;
             text-align: center;
-            pointer-events: none; /* Let clicks pass through to body if needed */
+            mix-blend-mode: difference;
+            pointer-events: none;
         }
 
         #btn {
             pointer-events: auto;
-            color: #00f3ff;
-            border: 2px solid #00f3ff;
-            padding: 20px 40px;
-            font-size: 1.5rem;
-            letter-spacing: 4px;
-            background: rgba(0,0,0,0.9);
-            text-transform: uppercase;
+            color: #fff;
+            border: 4px solid #fff;
+            padding: 30px 60px;
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 5px;
+            background: #000;
             cursor: pointer;
-            transition: 0.3s;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+            transition: 0.1s;
+            text-transform: uppercase;
+            box-shadow: 0 0 50px #fff;
         }
 
         #btn:hover {
-            background: #00f3ff;
+            background: #fff;
             color: #000;
-            box-shadow: 0 0 50px #00f3ff;
+            transform: scale(1.1);
+            box-shadow: 0 0 100px #fff;
         }
+
+        #btn:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
 
-    <canvas id="mosaic"></canvas>
+    <canvas id="canvas"></canvas>
     
-    <div id="ui-layer">
-        <div id="btn" onclick="startExperience()">
-            IGNITE MOSAIC
+    <div id="ui">
+        <div id="btn" onclick="ignite()">
+            INITIATE
         </div>
     </div>
 
     <script>
-        /* 
-         * CONFIGURATION 
-         */
-        const TILE_SIZE = 12; 
-        const TEXT_STR = "THE SINGULARITY IS NIGH\nBUT BROTHERS\nVALUE YOUR SOUL";
-
-        const canvas = document.getElementById('mosaic');
+        const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { alpha: false });
 
+        // CONFIG
+        const TILE = 12; // Tile size
+        const TEXT_STR = "THE SINGULARITY IS NIGH\nBUT BROTHERS\nVALUE YOUR SOUL";
+        
+        // STATE
         let width, height;
         let cols, rows;
+        let offsetX, offsetY;
         let tiles = [];
         let time = 0;
         let isRunning = false;
         let mouse = { x: 0, y: 0 };
 
-        // Initialize Dimensions immediately
+        // PRE-CALCULATED TEXT DATA
+        let textMap = null;
+
+        // --- RESIZE & CENTER LOGIC ---
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
             canvas.width = width;
             canvas.height = height;
-            cols = Math.ceil(width / TILE_SIZE);
-            rows = Math.ceil(height / TILE_SIZE);
-            
-            // If running, rebuild grid on resize
-            if (isRunning) setupGrid();
-            else drawIdle(); // Draw something so screen isn't black
-        }
-        window.addEventListener('resize', resize);
-        window.addEventListener('mousemove', e => {
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-        });
 
-        /* ------------------------------------------------
-           VISUAL ENGINE
-           ------------------------------------------------ */
+            // Calculate Grid dimensions
+            cols = Math.floor(width / TILE);
+            rows = Math.floor(height / TILE);
 
-        class Tile {
-            constructor(x, y, isText) {
-                this.x = x; 
-                this.y = y;
-                this.isText = isText;
-                this.phase = Math.random() * Math.PI * 2;
-            }
+            // CALCULATE CENTERING OFFSET
+            // We center the grid block within the window
+            const gridW = cols * TILE;
+            const gridH = rows * TILE;
+            offsetX = Math.floor((width - gridW) / 2);
+            offsetY = Math.floor((height - gridH) / 2);
+
+            if (isRunning) buildGrid();
+            else drawPreview();
         }
 
-        function setupGrid() {
-            tiles = [];
-            // Offscreen text analysis
-            const tCanvas = document.createElement('canvas');
-            tCanvas.width = cols;
-            tCanvas.height = rows;
-            const tCtx = tCanvas.getContext('2d');
-            
-            tCtx.fillStyle = 'black';
+        // --- TEXT ANALYSIS ---
+        function analyzeText() {
+            const tCan = document.createElement('canvas');
+            tCan.width = cols;
+            tCan.height = rows;
+            const tCtx = tCan.getContext('2d');
+
+            // Fill Black
+            tCtx.fillStyle = '#000';
             tCtx.fillRect(0, 0, cols, rows);
-            
-            tCtx.fillStyle = 'white';
+
+            // Draw Text White
+            tCtx.fillStyle = '#fff';
             tCtx.textAlign = 'center';
-            // Dynamic font size based on grid width
-            tCtx.font = 'bold 14px monospace'; 
+            tCtx.textBaseline = 'middle';
             
+            // Dynamic massive font
+            tCtx.font = '900 16px "Arial Black"'; 
+
             const lines = TEXT_STR.split('\n');
-            const centerY = rows / 2;
+            const lh = 20; // Line height in tiles
+            const totalH = lines.length * lh;
+            const startY = (rows / 2) - (totalH / 2) + (lh/2);
+
             lines.forEach((line, i) => {
-                tCtx.fillText(line, cols / 2, centerY + (i * 12) - 12);
+                tCtx.fillText(line, cols / 2, startY + (i * lh));
             });
 
-            const pData = tCtx.getImageData(0, 0, cols, rows).data;
+            return tCtx.getImageData(0, 0, cols, rows).data;
+        }
+
+        // --- BUILD TILES ---
+        function buildGrid() {
+            tiles = [];
+            const data = analyzeText();
 
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
-                    const idx = (y * cols + x) * 4;
-                    // Check Red channel or Alpha
-                    const isText = pData[idx] > 100; 
-                    tiles.push(new Tile(x, y, isText));
+                    const i = (y * cols + x) * 4;
+                    // If Red channel is bright, it's text
+                    const isText = data[i] > 128;
+                    
+                    tiles.push({
+                        x: x,
+                        y: y,
+                        isText: isText,
+                        // Pre-calculate phase for speed
+                        phase: Math.random() * Math.PI * 2,
+                        // Random "Glitch" speed for each tile
+                        speed: 1 + Math.random() * 3
+                    });
                 }
             }
         }
 
-        function drawIdle() {
-            // Simple grid preview so it's not black
-            ctx.fillStyle = '#050505';
-            ctx.fillRect(0, 0, width, height);
-            ctx.strokeStyle = '#111';
-            ctx.beginPath();
-            for (let x = 0; x < width; x+=TILE_SIZE) {
-                ctx.moveTo(x, 0); ctx.lineTo(x, height);
-            }
-            for (let y = 0; y < height; y+=TILE_SIZE) {
-                ctx.moveTo(0, y); ctx.lineTo(width, y);
-            }
-            ctx.stroke();
-        }
-
-        function animate() {
+        // --- RENDER LOOP ---
+        function draw() {
             if (!isRunning) return;
             
-            requestAnimationFrame(animate);
-            
-            time += 0.04;
+            // SPEED MULTIPLIER
+            time += 0.15; 
             updateAudio();
 
-            // Clear
+            // Clear background to deep void
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, width, height);
+
+            // Shift context to center the grid
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
 
             for (let i = 0; i < tiles.length; i++) {
                 const t = tiles[i];
                 
-                // Screen Coordinates
-                const px = t.x * TILE_SIZE;
-                const py = t.y * TILE_SIZE;
-                
-                // Vertical Gradient (0 = Top, 1 = Bottom)
+                // COORDS
+                const px = t.x * TILE;
+                const py = t.y * TILE;
+
+                // GLOBAL GRADIENT (0 = Top, 1 = Bottom)
                 const vPct = t.y / rows; 
-                
+
                 let h, s, l;
 
-                // --- TEXT LOGIC ---
+                // --- TEXT LAYER (HIGH VOLTAGE) ---
                 if (t.isText) {
-                    // Shiny Higher Dimensional Gold/White
-                    const glimmer = Math.sin(time * 10 + t.x * 0.5);
-                    h = 45; // Gold
-                    s = 100;
-                    l = 50 + (glimmer * 40);
+                    // Rapid strobe
+                    const strobe = Math.sin(time * 20 + t.x); 
                     
-                    // "Alien" Glitch
-                    if (Math.random() > 0.98) { h = 180; l = 90; } // Cyan Flash
-                } 
-                // --- BACKGROUND LOGIC ---
-                else {
-                    // Mouse interaction
-                    const dx = px - mouse.x;
-                    const dy = py - mouse.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-                    const mouseGlow = Math.max(0, (300 - dist)/300);
+                    if (strobe > 0.5) {
+                        h = 50; s = 100; l = 100; // BLINDING WHITE
+                    } else {
+                        h = 40; s = 100; l = 50; // GOLD
+                    }
 
-                    // TOP: FIRE
+                    // Random Glitch Artifacts
+                    if (Math.random() > 0.95) {
+                        h = 180; l = 80; // CYAN FLASH
+                    }
+                } 
+                
+                // --- BACKGROUND LAYER (CHAOS) ---
+                else {
+                    // Interaction force
+                    const dx = (px + offsetX) - mouse.x;
+                    const dy = (py + offsetY) - mouse.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const force = Math.max(0, (400 - dist) / 400); // Mouse radius
+
+                    // 1. TOP: PLASMA FIRE
                     if (vPct < 0.4) {
-                        const noise = Math.sin(t.x * 0.2 + time * 3) * Math.cos(t.y * 0.2 - time);
-                        h = 15 + (noise * 30);
+                        // Fast, jagged noise
+                        const n = Math.sin(t.x * 0.5 + time * 5) * Math.tan(t.y * 0.1 - time * 2);
+                        
+                        h = 10 + (n * 20); // Red/Orange
                         s = 100;
-                        l = 20 + (noise * 20) + (mouseGlow * 40);
-                    } 
-                    // BOTTOM: WATER
+                        l = 30 + (n * 20) + (force * 70); // Mouse makes it explode
+                        
+                        if (Math.random() > 0.98) l = 100; // Sparks
+                    }
+                    
+                    // 2. BOTTOM: RAPIDS
                     else if (vPct > 0.6) {
-                        const flow = Math.sin(t.x * 0.1 + t.y * 0.1 + time * 2);
-                        h = 200 + (flow * 20);
-                        s = 80;
-                        l = 20 + (flow * 10) + (mouseGlow * 40);
-                    } 
-                    // MIDDLE: VOID
+                        // Fast flowing sine waves
+                        const flow = Math.sin(t.x * 0.2 + t.y * 0.2 + time * 3);
+                        h = 200 + (flow * 10);
+                        s = 90;
+                        l = 30 + (flow * 20) + (force * 60);
+                    }
+                    
+                    // 3. MIDDLE: THE VOID TRANSITION
                     else {
-                        h = 260; s = 50; l = 5 + (mouseGlow * 20);
+                        h = 270; 
+                        s = 50;
+                        l = 5 + (force * 30);
                     }
                 }
 
-                ctx.fillStyle = `hsl(${h},${s}%,${l}%)`;
+                // DRAW
+                ctx.fillStyle = `hsl(${h}, ${s}%, ${l}%)`;
+                // Tiny gap for grout line
+                ctx.fillRect(px, py, TILE - 1, TILE - 1);
                 
-                // Draw tile with gap
-                const gap = 1;
-                ctx.fillRect(px, py, TILE_SIZE - gap, TILE_SIZE - gap);
-                
-                // Highlight for "Ceramic" feel
-                if (l > 30) {
-                    ctx.fillStyle = `rgba(255,255,255,0.2)`;
-                    ctx.fillRect(px, py, TILE_SIZE - gap, 2);
+                // INTENSITY BLOOM CENTER
+                if (l > 80) {
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(px + 2, py + 2, TILE - 5, TILE - 5);
                 }
             }
+
+            ctx.restore();
+            requestAnimationFrame(draw);
+        }
+
+        function drawPreview() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 2;
+            
+            // Draw a target rect where the grid will be
+            const gw = cols * TILE;
+            const gh = rows * TILE;
+            
+            ctx.strokeRect(offsetX, offsetY, gw, gh);
+            ctx.moveTo(0, 0); ctx.lineTo(width, height);
+            ctx.moveTo(width, 0); ctx.lineTo(0, height);
+            ctx.stroke();
         }
 
         /* ------------------------------------------------
-           AUDIO ENGINE
+           AUDIO (UNCHANGED BUT CONNECTED)
            ------------------------------------------------ */
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        let actx;
-        let waterGain, spiritGain;
-        let evolution = 0; 
+        let actx, waterGain, spiritGain, evolution = 0;
 
         function initAudio() {
             actx = new AudioContext();
-            
-            // Water Drone (Pink Noise)
+            // Water Drone
             const bufferSize = actx.sampleRate * 2;
             const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -254,7 +293,7 @@
                 const white = Math.random() * 2 - 1;
                 data[i] = (lastOut + (0.02 * white)) / 1.02;
                 lastOut = data[i];
-                data[i] *= 3.5;
+                data[i] *= 3.5; 
             }
             const noise = actx.createBufferSource();
             noise.buffer = buffer;
@@ -264,19 +303,16 @@
             filter.frequency.value = 300;
             waterGain = actx.createGain();
             waterGain.gain.value = 0.5;
-            
             noise.connect(filter);
             filter.connect(waterGain);
             waterGain.connect(actx.destination);
             noise.start();
 
-            // Spirit Chimes
+            // Spirit
             spiritGain = actx.createGain();
             spiritGain.gain.value = 0;
             spiritGain.connect(actx.destination);
-            
-            const freqs = [523.25, 783.99, 1046.50, 1318.51];
-            freqs.forEach(f => {
+            [523.25, 783.99, 1046.50, 1318.51].forEach(f => {
                 const osc = actx.createOscillator();
                 osc.frequency.value = f;
                 osc.connect(spiritGain);
@@ -285,26 +321,32 @@
         }
 
         function updateAudio() {
-            evolution += 0.0005;
+            evolution += 0.001; // Faster evolution
             if (evolution > 1) evolution = 1;
             if (waterGain) waterGain.gain.value = 0.5 * (1 - evolution);
             if (spiritGain) spiritGain.gain.value = 0.15 * evolution;
         }
 
-        function startExperience() {
-            const btn = document.getElementById('ui-layer');
-            btn.style.opacity = 0;
-            setTimeout(() => btn.style.display = 'none', 500);
+        // INIT
+        function ignite() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 500);
             
-            // Order of operations fix
-            resize(); 
-            setupGrid();
+            resize(); // Recalculate everything
+            buildGrid(); // Build grid with correct offsets
             initAudio();
             isRunning = true;
-            animate();
+            draw();
         }
 
-        // Run initial resize to draw the idle grid immediately
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        
+        // Initial call
         resize();
 
     </script>
