@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NATARAJA // QUANTUM SUFI</title>
+    <style>
+        :root {
+            --void: #050205;
+            --saffron: #ff9933;
+            --turmeric: #ffcc00;
+            --cern-blue: #00f3ff;
+            --shiva-ash: #e0e0e0;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0; left: 0;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        #overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--saffron);
+            text-align: center;
+            z-index: 10;
+            mix-blend-mode: screen;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 10px;
+            text-shadow: 0 0 20px var(--saffron);
+            margin-bottom: 0;
+        }
+        
+        p { color: var(--cern-blue); letter-spacing: 3px; font-size: 0.8rem; }
+
+        .hidden { opacity: 0; pointer-events: none; }
+
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1>NATARAJA</h1>
+        <p>IGNITE THE COSMIC DANCE</p>
+    </div>
+    <canvas id="cosmos"></canvas>
+
+    <script>
+        const canvas = document.getElementById('cosmos');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height, cx, cy;
+        let particles = [];
+        let time = 0;
+        let isRunning = false;
+
+        // COLOR PALETTE (The South Indian Tinge)
+        const PALETTE = [
+            '#FF9933', // Saffron
+            '#FFCC00', // Turmeric
+            '#D9004C', // Kumkum Red
+            '#00F3FF', // Cherenkov Blue (CERN)
+            '#FFFFFF'  // Ash
+        ];
+
+        // Resize
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE GENERATIVE RAGA
+           ------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        
+        // Raga Mayamalavagowla (approximate) + Microtones
+        // Root, b2, 3, 4, 5, b6, 7
+        const SCALE_RATIOS = [1, 1.066, 1.25, 1.333, 1.5, 1.6, 1.875, 2.0];
+        const BASE_FREQ = 130.81; // C3 (Low drone)
+
+        let nextNoteTime = 0;
+        let rhythmCycle = 0; // Counts 1 to 7 (Tala)
+
+        function initAudio() {
+            actx = new AudioContext();
+            startDrone();
+            scheduler();
+        }
+
+        function startDrone() {
+            // The Tanpura / Eternal Om
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter();
+
+            osc.type = 'sawtooth'; // Rich harmonics
+            osc.frequency.value = BASE_FREQ / 2; // Deep bass
+
+            filter.type = 'lowpass';
+            filter.frequency.value = 200;
+            // LFO for the filter (Breathing effect)
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.1; // Very slow breath
+            const lfoGain = actx.createGain();
+            lfoGain.gain.value = 100;
+            lfo.connect(lfoGain);
+            lfoGain.connect(filter.frequency);
+            lfo.start();
+
+            gain.gain.value = 0.15;
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(actx.destination);
+            osc.start();
+        }
+
+        function scheduler() {
+            const secondsPerBeat = 0.15; // Fast tempo
+            const lookahead = 0.1;
+
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                playGenerativeNote(nextNoteTime);
+                nextNoteTime += secondsPerBeat;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playGenerativeNote(t) {
+            rhythmCycle = (rhythmCycle + 1) % 14; // 7/4 time signature feel
+
+            // 1. TABLA/DRUM (The Heartbeat)
+            if (rhythmCycle === 0 || rhythmCycle === 7 || rhythmCycle === 10) {
+                playKick(t);
+                // Visual Impact
+                pulseVisuals();
+            }
+
+            // 2. THE SITAR/KOTO LEAD (The Dancer)
+            if (Math.random() > 0.3) {
+                const ratio = SCALE_RATIOS[Math.floor(Math.random() * SCALE_RATIOS.length)];
+                const octave = Math.random() > 0.7 ? 2 : 1;
+                const freq = BASE_FREQ * ratio * octave;
+                playPluck(t, freq);
+            }
+        }
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            osc.frequency.setValueAtTime(100, t);
+            osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+            gain.gain.setValueAtTime(0.5, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.connect(gain);
+            gain.connect(actx.destination);
+            osc.start(t);
+            osc.stop(t + 0.1);
+        }
+
+        function playPluck(t, freq) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            // Combined Square/Triangle for Sitar vibe
+            osc.type = 'square'; 
+            
+            // Microtonal bend (The "Gamaka")
+            osc.frequency.setValueAtTime(freq, t);
+            osc.frequency.linearRampToValueAtTime(freq + (Math.random()*2 - 1), t + 0.1);
+
+            // Filter envelope for "Pluck"
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(3000, t);
+            filter.frequency.exponentialRampToValueAtTime(100, t + 0.3);
+
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.0); // Long resonance
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(actx.destination);
+            osc.start(t);
+            osc.stop(t + 1.0);
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE SUFI COLLIDER
+           ------------------------------------------------ */
+        
+        class Dervish {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Spawn on the ring of fire
+                const angle = Math.random() * Math.PI * 2;
+                const r = Math.random() * 100 + 100;
+                this.x = cx + Math.cos(angle) * r;
+                this.y = cy + Math.sin(angle) * r;
+                
+                // Physics
+                this.angle = angle;
+                this.radius = r;
+                this.velocity = (Math.random() * 0.05) + 0.01; // Orbital speed
+                this.inward = (Math.random() * 0.5) + 0.1; // Gravity to center
+                
+                // Aesthetics
+                this.color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+                this.size = Math.random() * 3 + 1;
+                this.history = []; // For trails
+            }
+
+            update(beatPulse) {
+                // 1. SUFI SPIN (Orbit)
+                this.angle += this.velocity;
+                
+                // 2. CHASSIDIC CLAP (Oscillation / Joy)
+                // Particles bob in and out based on music rhythm
+                let rNoise = Math.sin(time * 10 + this.index) * 20 * beatPulse;
+                
+                // 3. CERN DECAY (Spiral into center)
+                this.radius -= this.inward;
+                if (this.radius < 10) this.reset(); // Reincarnate
+
+                // Calculate pos
+                const currentR = this.radius + rNoise;
+                this.x = cx + Math.cos(this.angle) * currentR;
+                this.y = cy + Math.sin(this.angle) * currentR;
+
+                // 4. TRAIL LOGIC
+                this.history.push({x: this.x, y: this.y});
+                if (this.history.length > 10) this.history.shift();
+            }
+
+            draw() {
+                // Draw Trail (The "String Theory" look)
+                ctx.beginPath();
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.size * 0.5;
+                for(let i=0; i<this.history.length; i++) {
+                    ctx.lineTo(this.history[i].x, this.history[i].y);
+                }
+                ctx.stroke();
+
+                // Draw Head
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // Initialization
+        for(let i=0; i<300; i++) particles.push(new Dervish());
+
+        let beatIntensity = 0;
+
+        function pulseVisuals() {
+            beatIntensity = 1.0; // Flash
+        }
+
+        function animate() {
+            if(!isRunning) return;
+
+            time += 0.01;
+            beatIntensity *= 0.9; // Decay
+
+            // CLEAR (With trails)
+            ctx.fillStyle = 'rgba(5, 2, 5, 0.15)'; // Slight fade for trails
+            ctx.fillRect(0, 0, width, height);
+
+            // COMPOSITING (Glow effect)
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Draw The "Bindu" (Center Point)
+            ctx.beginPath();
+            ctx.arc(cx, cy, 10 + beatIntensity * 20, 0, Math.PI*2);
+            ctx.fillStyle = `rgba(255, 153, 51, ${0.5 + beatIntensity})`;
+            ctx.fill();
+
+            // Draw Particles
+            particles.forEach(p => {
+                p.update(beatIntensity);
+                p.draw();
+            });
+
+            // Draw "Kolam" Geometry (The Grid)
+            // A rotating geometric flower behind the particles
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.2);
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<6; i++) {
+                ctx.rotate(Math.PI / 3);
+                ctx.beginPath();
+                ctx.arc(0, 100 + Math.sin(time)*50, 50, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            requestAnimationFrame(animate);
+        }
+
+        // START HANDLER
+        document.body.addEventListener('click', () => {
+            if(!isRunning) {
+                document.getElementById('overlay').classList.add('hidden');
+                initAudio();
+                isRunning = true;
+                animate();
+            }
+        });
+
+    </script>
+</body>
+</html>
