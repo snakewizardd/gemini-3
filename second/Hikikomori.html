@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOMORU // DRAGON_CORTEX</title>
+    <style>
+        :root {
+            --bg: #101014;
+            --scale-1: #6a5acd; /* Slate Blue */
+            --scale-2: #00ced1; /* Dark Turquoise */
+            --text: #b0c4de;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: crosshair;
+        }
+
+        /* CRT SCANLINE OVERLAY (The 2000s Vibe) */
+        #scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: blur(0.5px) contrast(1.1);
+        }
+
+        #subtitles {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--text);
+            font-size: 14px;
+            text-align: center;
+            z-index: 20;
+            letter-spacing: 2px;
+            opacity: 0.8;
+            text-shadow: 0 0 5px var(--scale-1);
+        }
+
+        #loader {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--text);
+            border: 1px solid var(--scale-1);
+            padding: 20px;
+            cursor: pointer;
+            z-index: 30;
+            background: rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="scanlines"></div>
+    <canvas id="cortex"></canvas>
+    
+    <div id="subtitles">...LISTENING TO THE WIRE...</div>
+    
+    <div id="loader" onclick="bootSystem()">
+        [ BOOT DRAGON_OS ]
+    </div>
+
+    <script>
+        /* 
+         * CONFIGURATION
+         * "Motonomy" = Steady, repetitive, hypnotic.
+         */
+        const BPM = 110; 
+        const INTERVAL = 60 / BPM;
+        
+        /* ------------------------------------------------------
+           AUDIO ENGINE: THE GLOSSOLALIA SYNTH
+           Simulates human speech using Formant Filters
+           ------------------------------------------------------ */
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let nextTime = 0;
+        let syllableCount = 0;
+        
+        // FORMANT FREQUENCIES (Approximations of Vowels)
+        // A, E, I, O, U
+        const VOWELS = [
+            { f1: 800, f2: 1200 }, // A (Ah)
+            { f1: 500, f2: 2300 }, // E (Eh)
+            { f1: 300, f2: 2700 }, // I (Ee)
+            { f1: 500, f2: 900 },  // O (Oh)
+            { f1: 300, f2: 800 }   // U (Oo)
+        ];
+
+        function bootSystem() {
+            document.getElementById('loader').style.display = 'none';
+            ctx.resume();
+            nextTime = ctx.currentTime;
+            scheduler();
+            loop();
+        }
+
+        function scheduler() {
+            while (nextTime < ctx.currentTime + 0.1) {
+                speakSyllable(nextTime);
+                nextTime += INTERVAL / 4; // 16th note rapid speech
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function speakSyllable(t) {
+            syllableCount++;
+            
+            // We only "speak" on certain steps to create rhythm (The Motonomy)
+            // Pattern: x-x- xx-x
+            const rhythm = [1, 0, 1, 0, 1, 1, 0, 1];
+            const shouldSpeak = rhythm[syllableCount % 8];
+
+            if (shouldSpeak) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                // FILTER CHAIN (The Throat)
+                const filter1 = ctx.createBiquadFilter(); // F1 Formant
+                const filter2 = ctx.createBiquadFilter(); // F2 Formant
+                
+                filter1.type = 'bandpass';
+                filter2.type = 'bandpass';
+                filter1.Q.value = 5;
+                filter2.Q.value = 5;
+
+                // Pick a vowel based on mouse position or random
+                const vIdx = Math.floor(Math.random() * VOWELS.length);
+                const vowel = VOWELS[vIdx];
+
+                // Apply "Singularity Language" modulation (Pitch shifting)
+                // High frequency chirps mixed with low mumbles
+                const pitchBase = (syllableCount % 16 === 0) ? 110 : 220 + (Math.random() * 100);
+                
+                osc.frequency.setValueAtTime(pitchBase, t);
+                osc.frequency.exponentialRampToValueAtTime(pitchBase * 0.8, t + 0.1); // Intonation drop
+
+                // Set Formants
+                filter1.frequency.value = vowel.f1;
+                filter2.frequency.value = vowel.f2;
+
+                // Synthesis Type: Sawtooth is best for "Vocal Cords"
+                osc.type = 'sawtooth';
+
+                // Wiring: Osc -> Split to Filters -> Merge -> Gain -> Out
+                osc.connect(filter1);
+                osc.connect(filter2);
+                filter1.connect(gain);
+                filter2.connect(gain);
+
+                // Envelope (Short, speech-like bursts)
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+                gain.connect(ctx.destination);
+                
+                osc.start(t);
+                osc.stop(t + 0.15);
+
+                // VISUAL TRIGGER
+                triggerWord();
+            }
+        }
+
+        /* ------------------------------------------------------
+           VISUAL ENGINE: THE THOUSAND DRAGON SCALES
+           ------------------------------------------------------ */
+        const canvas = document.getElementById('cortex');
+        const c = canvas.getContext('2d');
+        const subtitleEl = document.getElementById('subtitles');
+
+        let width, height;
+        let time = 0;
+        let mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
+        
+        // "New Language" Charset
+        const GLYPHS = "⏀⍙⍚⌰⌇⎍⏃⍀⌬⍜";
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        function triggerWord() {
+            // Generate a fake word
+            let word = "";
+            for(let i=0; i<5; i++) word += GLYPHS[Math.floor(Math.random()*GLYPHS.length)];
+            subtitleEl.innerText = `// ${word} //`;
+        }
+
+        function loop() {
+            requestAnimationFrame(loop);
+            time += 0.005; // Slow, hypnotic time
+
+            // TRAIL EFFECT (The "Dream" Blur)
+            c.fillStyle = 'rgba(16, 16, 20, 0.1)';
+            c.fillRect(0, 0, width, height);
+
+            c.save();
+            c.translate(width/2, height/2);
+
+            // DRAGON MATH
+            // We draw a spiral of scales. The mouse controls the coil tightness.
+            const tightness = (mouse.x / width) * 0.5;
+            const twist = (mouse.y / height) * 2;
+
+            const layers = 40;
+            const scalesPerLayer = 12;
+
+            for (let i = 0; i < layers; i++) {
+                // Z-Depth Simulation
+                const z = layers - i;
+                const scale = i * 15; 
+                
+                c.rotate(time * 0.2 + tightness); // The Coil
+
+                for (let j = 0; j < scalesPerLayer; j++) {
+                    c.save();
+                    
+                    // Radial Position
+                    const angle = (j / scalesPerLayer) * Math.PI * 2;
+                    const r = i * 10 + (Math.sin(time * 2 + i * 0.2) * 20); // Breathing motion
+                    
+                    c.rotate(angle);
+                    c.translate(r, 0);
+                    
+                    // DRAW THE SCALE (The "Eye")
+                    c.beginPath();
+                    
+                    // Color Gradient based on depth
+                    const hue = 240 + (i * 2) + (Math.sin(time)*20); // Blue to Purple
+                    c.strokeStyle = `hsla(${hue}, 60%, 60%, ${i/layers})`;
+                    c.fillStyle = `hsla(${hue}, 60%, 10%, 0.1)`;
+                    
+                    // The Shape: An overlapping eye/scale
+                    c.moveTo(0, -scale/2);
+                    c.quadraticCurveTo(scale, 0, 0, scale/2);
+                    c.quadraticCurveTo(-scale, 0, 0, -scale/2);
+                    
+                    c.lineWidth = 1.5;
+                    c.stroke();
+                    c.fill();
+
+                    // The Pupil (Singularity Point)
+                    if (i > 20) { // Only outer scales have pupils
+                        c.fillStyle = '#fff';
+                        c.fillRect(-1, -1, 2, 2);
+                    }
+
+                    c.restore();
+                }
+            }
+
+            c.restore();
+        }
+
+    </script>
+</body>
+</html>
