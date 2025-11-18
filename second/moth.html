@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Lamp & The Moth</title>
+    <style>
+        :root {
+            --bulb: #ffebcd;
+            --filament: #ffcc00;
+            --dark: #0a0a0a;
+            --text-burn: #332200;
+            --text-cool: #aaccff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--dark);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: none; /* We control the moth */
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* THE LAMP */
+        #lamp {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--bulb) 0%, rgba(255, 200, 0, 0.2) 40%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0.9;
+            mix-blend-mode: screen;
+            z-index: 1;
+            transition: all 0.1s ease;
+        }
+
+        /* The "Heat" Haze */
+        #filament {
+            position: absolute;
+            width: 10px;
+            height: 40px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 0 50px 20px var(--filament);
+            z-index: 2;
+            animation: hum 0.1s infinite;
+        }
+
+        /* DYNAMIC TEXT CONTAINER */
+        #thought-bubble {
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            transition: color 1s ease, opacity 0.5s ease;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        /* CANVAS LAYER */
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 5;
+        }
+
+        @keyframes hum {
+            0% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.02); }
+            100% { opacity: 0.8; transform: scale(1); }
+        }
+
+        /* UI HINT */
+        .hint {
+            position: fixed;
+            bottom: 20px;
+            color: #333;
+            font-size: 0.8rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="lamp"></div>
+    <div id="filament"></div>
+    <div id="thought-bubble"></div>
+    <canvas id="simulation"></canvas>
+    <div class="hint">Fight the gravity. Find the edge.</div>
+
+    <script>
+        const canvas = document.getElementById('simulation');
+        const ctx = canvas.getContext('2d');
+        const lamp = document.getElementById('lamp');
+        const thoughts = document.getElementById('thought-bubble');
+
+        // CONFIG
+        let width, height;
+        const center = { x: 0, y: 0 };
+        
+        // MOTH PHYSICS
+        // The 'target' is your actual mouse. The 'moth' is the physics object trying to follow.
+        let target = { x: 0, y: 0 };
+        let moth = { x: 100, y: 100, vx: 0, vy: 0 };
+        
+        // ADDICTION VARIABLES
+        let addictionLevel = 0; // 0 to 1 (1 is fully trapped)
+        let dust = []; // Little particles shedding when burned
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            center.x = width / 2;
+            center.y = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Initial Mouse Position
+        target.x = width / 4;
+        target.y = height / 4;
+
+        document.addEventListener('mousemove', (e) => {
+            target.x = e.clientX;
+            target.y = e.clientY;
+        });
+
+        // TEXT DATA
+        const obsessions = [
+            "IT'S SO WARM", "JUST CLOSER", "I NEED IT", "THE COLORS", "DON'T LEAVE", 
+            "BURNING IS FEELING", "ONE MORE TOUCH", "MY WINGS ARE GOLD", "LIGHT IS LIFE"
+        ];
+        
+        const clarity = [
+            "The moon is cooler.", 
+            "You are burning your future to fuel the present.", 
+            "Pain is not proof of love.",
+            "The dark is where you heal.",
+            "Fly where you can see the stars.",
+            "Let go."
+        ];
+
+        let textTimer = 0;
+
+        function update() {
+            // 1. Calculate Distance from Moth to Lamp
+            const dx = center.x - moth.x;
+            const dy = center.y - moth.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            // 2. PHYSICS: The Pull of the Lamp
+            // The closer you are, the stronger the pull (Gravity)
+            const pullStrength = Math.max(0, (400 - dist) / 400); 
+            addictionLevel = pullStrength;
+
+            // 3. UPDATE VELOCITY
+            // Pull towards mouse (Your Will)
+            const ax = (target.x - moth.x) * 0.05; // Spring force to mouse
+            const ay = (target.y - moth.y) * 0.05;
+            
+            // Pull towards Lamp (The Addiction)
+            // If you are close, the lamp pulls you in harder than your mouse can pull out
+            const lampGx = (dx / dist) * (pullStrength * 1.5); 
+            const lampGy = (dy / dist) * (pullStrength * 1.5);
+
+            moth.vx += ax + lampGx;
+            moth.vy += ay + lampGy;
+            
+            // Friction (Air resistance)
+            moth.vx *= 0.85;
+            moth.vy *= 0.85;
+
+            moth.x += moth.vx;
+            moth.y += moth.vy;
+
+            // 4. SCREEN FX based on Addiction
+            // Shake the screen if trapped
+            if (addictionLevel > 0.8) {
+                const shakeX = (Math.random() - 0.5) * 10;
+                const shakeY = (Math.random() - 0.5) * 10;
+                lamp.style.transform = `translate(${shakeX}px, ${shakeY}px) scale(1.1)`;
+            } else {
+                lamp.style.transform = `translate(0px, 0px) scale(1)`;
+            }
+
+            // 5. GENERATE DUST (Damage)
+            if (addictionLevel > 0.7 && Math.random() > 0.7) {
+                dust.push({
+                    x: moth.x,
+                    y: moth.y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    life: 1.0
+                });
+            }
+
+            render();
+            handleText(dist);
+            requestAnimationFrame(update);
+        }
+
+        function handleText(dist) {
+            textTimer++;
+            if (textTimer % 60 === 0) { // Update text every second-ish
+                if (dist < 200) {
+                    // TRAPPED STATE
+                    thoughts.style.color = "var(--text-burn)";
+                    thoughts.style.top = (moth.y - 50) + "px";
+                    thoughts.innerText = obsessions[Math.floor(Math.random() * obsessions.length)];
+                    thoughts.style.fontSize = "1.5rem";
+                    thoughts.style.letterSpacing = "0px";
+                } else if (dist > 350) {
+                    // FREE STATE
+                    thoughts.style.color = "var(--text-cool)";
+                    thoughts.style.top = height - 100 + "px"; // Static at bottom
+                    thoughts.innerText = clarity[Math.floor(Math.random() * clarity.length)];
+                    thoughts.style.fontSize = "1rem";
+                    thoughts.style.letterSpacing = "2px";
+                } else {
+                    // TRANSITION
+                    thoughts.innerText = "...";
+                }
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+
+            // DRAW DUST (Ash)
+            for (let i = dust.length - 1; i >= 0; i--) {
+                let p = dust[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+                
+                ctx.fillStyle = `rgba(50, 40, 0, ${p.life})`;
+                ctx.fillRect(p.x, p.y, 3, 3);
+
+                if (p.life <= 0) dust.splice(i, 1);
+            }
+
+            // DRAW MOTH
+            ctx.save();
+            ctx.translate(moth.x, moth.y);
+            
+            // Random flutter
+            const flutter = Math.sin(Date.now() / 20) * 10;
+            ctx.rotate(Math.atan2(moth.vy, moth.vx) + Math.PI/2);
+
+            // Wings
+            ctx.fillStyle = addictionLevel > 0.8 ? "#000" : "#888"; // Turns black when burned
+            
+            // Left Wing
+            ctx.beginPath();
+            ctx.ellipse(-10, 0, 15 + flutter/5, 30, Math.PI/4, 0, Math.PI*2);
+            ctx.fill();
+
+            // Right Wing
+            ctx.beginPath();
+            ctx.ellipse(10, 0, 15 - flutter/5, 30, -Math.PI/4, 0, Math.PI*2);
+            ctx.fill();
+
+            // Body
+            ctx.fillStyle = "#333";
+            ctx.fillRect(-2, -10, 4, 20);
+
+            ctx.restore();
+
+            // DRAW LINE TO TARGET (Visualizing the struggle)
+            // Only show the "string" of will if struggling
+            if (addictionLevel > 0.2 && addictionLevel < 0.9) {
+                ctx.beginPath();
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.moveTo(moth.x, moth.y);
+                ctx.lineTo(target.x, target.y);
+                ctx.stroke();
+            }
+        }
+
+        update();
+
+    </script>
+</body>
+</html>
