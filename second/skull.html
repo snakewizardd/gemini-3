@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💀 PRIME_SKULL_PROTOCOL // 145BPM</title>
+    <style>
+        :root {
+            --acid: #ccff00;
+            --blood: #ff0033;
+            --void: #050505;
+            --chrome: #e0e0e0;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: none;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* The "Crunchy" Look */
+            image-rendering: pixelated; 
+        }
+
+        /* UI Overlay */
+        #ui {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--acid);
+            text-align: center;
+            z-index: 10;
+            mix-blend-mode: exclusion;
+            border: 2px solid var(--acid);
+            padding: 20px;
+            background: black;
+            cursor: pointer;
+        }
+
+        .glitch-text {
+            font-weight: bold;
+            animation: twitch 0.1s infinite;
+        }
+
+        @keyframes twitch {
+            0% { transform: translate(0,0); }
+            25% { transform: translate(2px, -2px); }
+            50% { transform: translate(-2px, 1px); }
+            75% { transform: translate(1px, 2px); }
+        }
+
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="rave-layer"></canvas>
+    <div id="ui" onclick="initSystem()">
+        <h1 class="glitch-text">INITIATE PROTOCOL</h1>
+        <p>WARNING: HARD TECHNO // STROBE</p>
+    </div>
+
+    <script>
+        /* 
+         *  SYSTEM CONFIGURATION
+         */
+        const BPM = 145;
+        const STEP_TIME = 60 / BPM / 4; // 16th notes
+        
+        // PRIME SYMMETRY CONSTANTS
+        const PRIMES = [3, 5, 7, 11, 13, 17]; 
+
+        /* ------------------------------------------------------
+           AUDIO ENGINE: THE SKULLREX CORE
+           ------------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let ctx;
+        let masterGain;
+        let analyser;
+        let nextNoteTime = 0;
+        let step = 0;
+        let isPlaying = false;
+
+        // Audio Nodes
+        let distCurve;
+
+        function initSystem() {
+            document.getElementById('ui').classList.add('hidden');
+            ctx = new AudioContext();
+            
+            // Master Chain
+            masterGain = ctx.createGain();
+            masterGain.gain.value = 0.8;
+            
+            // Analyser for Visuals
+            analyser = ctx.createAnalyser();
+            analyser.fftSize = 256; // Low res for punchy visuals
+
+            // Distortion Curve (The "Hard" in Hard Techno)
+            const k = 400;
+            const n_samples = 44100;
+            distCurve = new Float32Array(n_samples);
+            for (let i = 0; i < n_samples; ++i) {
+                let x = (i * 2) / n_samples - 1;
+                distCurve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+            }
+
+            masterGain.connect(analyser);
+            analyser.connect(ctx.destination);
+
+            nextNoteTime = ctx.currentTime;
+            isPlaying = true;
+            scheduler();
+            renderLoop();
+        }
+
+        function scheduler() {
+            while (nextNoteTime < ctx.currentTime + 0.1) {
+                playStep(step, nextNoteTime);
+                nextNoteTime += STEP_TIME;
+                step = (step + 1) % 16;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playStep(s, t) {
+            // 1. THE KICK (Every quarter note)
+            if (s % 4 === 0) {
+                triggerKick(t);
+                visualPulse(true); // Hard visual hit
+            }
+
+            // 2. THE OFF-BEAT BASS (The Rolling Rumble)
+            if (s % 4 !== 0) {
+                triggerBass(t, s);
+            }
+
+            // 3. THE INDUSTRIAL PERC (Polyrhythmic Primes)
+            // Using prime numbers to decide when to trigger noise bursts
+            if (s % 3 === 0 || s % 7 === 0) {
+                triggerNoise(t);
+                visualPulse(false); // Small visual hit
+            }
+        }
+
+        function triggerKick(t) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const dist = ctx.createWaveShaper();
+
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            gain.gain.setValueAtTime(1, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+
+            dist.curve = distCurve;
+
+            osc.connect(dist);
+            dist.connect(gain);
+            gain.connect(masterGain);
+
+            osc.start(t);
+            osc.stop(t + 0.5);
+        }
+
+        function triggerBass(t, s) {
+            const osc = ctx.createOscillator();
+            const filter = ctx.createBiquadFilter();
+            const gain = ctx.createGain();
+            
+            osc.type = 'sawtooth';
+            // Note morphing based on step
+            osc.frequency.setValueAtTime(s % 2 === 0 ? 55 : 110, t); 
+
+            filter.type = 'lowpass';
+            filter.Q.value = 10; // ACID RESONANCE
+            filter.frequency.setValueAtTime(100, t);
+            filter.frequency.linearRampToValueAtTime(800, t + 0.1); // The "Wow" sound
+            
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(masterGain);
+
+            osc.start(t);
+            osc.stop(t + 0.2);
+        }
+
+        function triggerNoise(t) {
+            const bufferSize = ctx.sampleRate * 0.1;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 2000;
+            const gain = ctx.createGain();
+            
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(masterGain);
+            noise.start(t);
+        }
+
+        /* ------------------------------------------------------
+           VISUAL ENGINE: NANO-TO-MACRO MORPHOLOGY
+           ------------------------------------------------------ */
+        const canvas = document.getElementById('rave-layer');
+        const c = canvas.getContext('2d');
+        let width, height, cx, cy;
+
+        // State
+        let visualTime = 0;
+        let kickActive = 0;
+        let currentPrime = 5;
+        let nanoImages = []; // Array of "Sigils"
+
+        // Resize
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // The "Sigil" Class (The evolving Meme/Nanoimage)
+        class Sigil {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = 0; 
+                this.y = 0;
+                this.scale = 0.1; // Nano state
+                this.rotation = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * 0.2 + 0.05;
+                // Random glitch character
+                this.char = String.fromCharCode(0x30A0 + Math.random() * 96); 
+                this.color = Math.random() > 0.5 ? '#fff' : '#ccff00';
+            }
+
+            update(kickForce) {
+                // Expansion Logic (Nano -> Macro)
+                this.scale += this.speed + (kickForce * 2); // Explode on kick
+                this.rotation += 0.1;
+                
+                // Reset if too big (The Loop)
+                if (this.scale > 50) this.reset();
+            }
+
+            draw() {
+                c.save();
+                c.rotate(this.rotation);
+                c.scale(this.scale, this.scale);
+                c.fillStyle = this.color;
+                c.font = "20px monospace";
+                c.fillText(this.char, 0, 0);
+                
+                // Draw geometric artifact
+                c.strokeStyle = this.color;
+                c.lineWidth = 0.5;
+                c.strokeRect(-10, -10, 20, 20);
+                c.restore();
+            }
+        }
+
+        // Initialize Sigils
+        for(let i=0; i<20; i++) nanoImages.push(new Sigil());
+
+        function visualPulse(isKick) {
+            if (isKick) {
+                kickActive = 1.0;
+                // Change symmetry on the beat
+                currentPrime = PRIMES[Math.floor(Math.random() * PRIMES.length)];
+                // Color Inversion chance
+                if (Math.random() > 0.8) {
+                    canvas.style.filter = 'invert(1)';
+                    setTimeout(() => canvas.style.filter = 'invert(0)', 50);
+                }
+            }
+        }
+
+        function renderLoop() {
+            if (!isPlaying) return;
+            requestAnimationFrame(renderLoop);
+
+            // Get Audio Data for Harmonics
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+            // Calculate average volume
+            const volume = dataArray.reduce((a,b) => a+b) / dataArray.length;
+            
+            visualTime += 0.05;
+            kickActive *= 0.9; // Decay force
+
+            // 1. CLEAR with Feedback (Trails)
+            c.fillStyle = `rgba(5, 5, 5, 0.2)`; 
+            c.fillRect(0, 0, width, height);
+
+            // 2. PRIME SYMMETRY SETUP
+            c.save();
+            c.translate(cx, cy);
+            
+            // Rotate entire world based on Bass volume
+            c.rotate(visualTime * 0.1 + (volume / 100));
+
+            // 3. RENDER SEGMENTS
+            const angleStep = (Math.PI * 2) / currentPrime;
+
+            for (let i = 0; i < currentPrime; i++) {
+                c.save();
+                c.rotate(i * angleStep);
+                
+                // Mirror logic for symmetry
+                if (i % 2 === 0) c.scale(1, -1);
+
+                // 4. DRAW NANO-IMAGES (Morphing to Macro)
+                // Shift origin outward based on volume (Visioaudioharmonic)
+                c.translate(volume * 2, 0);
+                
+                nanoImages.forEach(sigil => {
+                    sigil.update(kickActive);
+                    sigil.draw();
+                });
+                
+                // 5. DRAW GEOMETRIC WIREFRAMES
+                c.beginPath();
+                c.strokeStyle = `hsl(${volume * 2}, 100%, 50%)`;
+                c.lineWidth = 2;
+                c.moveTo(0, 0);
+                // Dynamic distorted line
+                c.lineTo(100 + (kickActive * 200), 50); 
+                c.stroke();
+
+                c.restore();
+            }
+
+            c.restore();
+
+            // 6. GLITCH OVERLAY (The Digital Decay)
+            if (kickActive > 0.5) {
+                const sliceH = Math.random() * height;
+                const sliceY = Math.random() * height;
+                // Shift a slice of the canvas
+                c.drawImage(canvas, 
+                    0, sliceY, width, sliceH, 
+                    (Math.random() - 0.5) * 50, sliceY, width, sliceH
+                );
+            }
+        }
+
+    </script>
+</body>
+</html>
