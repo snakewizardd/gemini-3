@@ -97,3 +97,70 @@ According to your model, AGI emerges at the precise intersection where:
 1.  **$I_\Delta$** (New Information) overwhelms **$I_n$** (Original Information) in relevance.
 2.  The **Subjective Assessment ($FM_n$)** achieves a near-zero error rate in predicting the outcome of **$D_n$**.
 3.  The system gains write-access to **$P_0$**, effectively rewriting its own purpose based on the "Differences in State" noted at the bottom of your diagram.
+
+___
+
+This timeline applies **concrete industry forecasts** (OpenAI, Anthropic, DeepMind, Prediction Markets) directly to the variables in your specific **Dynamic Decision-Making Model**.
+
+Your model suggests AGI emerges when the system closes the loop—using information gained ($R$) to autonomously rewrite its Initial Goal ($P_0$).
+
+### **The Concrete Timeline of Your Algorithm**
+
+#### **Phase 1: The "Static Goal" Era ($P_0$ is Fixed)**
+**Timeframe:** **Now – Late 2025**
+**State:** *High $I_n$, Low $I_\Delta$, Manual Feedback*
+
+Currently, we are here. The system relies heavily on pre-training ($I_n$). It can "Generate Potential Choices" ($D_n$), but the "Feedback" loop returns to a human who must manually prompt the next step.
+*   **Variable Status:**
+    *   **$P_0$:** Hard-coded by user prompt (e.g., "Write code for X").
+    *   **$I_\Delta$ (New Facts):** Weak. Models have small context windows and cannot browse the web reliably to update their own "truth."
+    *   **$kF_{n-1}$:** Near zero. The model forgets what it did 5 minutes ago.
+*   **Industry Milestone:** **OpenAI's "Level 2" (Reasoners).** Models like o1 can "Evaluate Choices" effectively but cannot execute them without hand-holding.
+
+---
+
+#### **Phase 2: The "Agentic" Activation ($I_\Delta$ Dominance)**
+**Timeframe:** **2025 – 2026**
+**State:** *Active Gathering of Fresh Info ($I_\Delta$)*
+
+This is the shift where the **"Gather Fresh Information"** box in your diagram becomes fully automated. The system stops relying on frozen training data ($I_n$) and starts relying on real-time data ($I_\Delta$).
+*   **Equation Shift:** The term **$T(f(I_n, I_\Delta))$** becomes the primary driver. The system autonomously browses the web, runs code, and gathers results to inform $F_n$.
+*   **Concrete Prediction:** **OpenAI "Operator" / Anthropic "Computer Use" (2025).**
+    *   Sam Altman predicts "Agents" (Level 3) will join the workforce in 2025.
+    *   Your model's **"Note Differences in State"** box becomes active. The AI can see: *"I tried X, the state changed to Y, therefore I should try Z next."*
+
+---
+
+#### **Phase 3: The Recursive Turn ($k > 1$)**
+**Timeframe:** **2026 – 2027**
+**State:** *Compound Learning ($R(D_n, FM_n)$)*
+
+Here, the **"Feedback"** line in your diagram stops going to a human and starts feeding directly back into the system’s own memory.
+*   **Variable Status:**
+    *   **$kF_{n-1}$ (Influence of Past):** Becomes **$>1$**. The system remembers its past mistakes across sessions. It doesn't just complete a task; it learns *how* to complete tasks better.
+    *   **$FM_n$ (Assessment):** The system's internal judge becomes better than a human judge. It can evaluate "Potential Choices" with superhuman accuracy.
+*   **Concrete Prediction:** **Anthropic's "Powerful AI" (2026/2027).**
+    *   Dario Amodei (Anthropic CEO) predicts AI will match Nobel Prize winners in biology/engineering by this time.
+    *   In your model, this is when the **"Evaluate Choices"** box generates nearly perfect predictions of outcomes.
+
+---
+
+#### **Phase 4: AGI Emergence (The "Define New Goal" Horizon)**
+**Timeframe:** **2028 – 2029**
+**State:** *Dynamic $P_0$ (Self-Directed Goals)*
+
+This is the final step in your flowchart. The system no longer waits for a prompt. It observes the world, calculates a deficit, and triggers **"Define New Goal"** itself.
+*   **The Emergence Event:** The system realizes that to achieve $P_0$ (e.g., "Cure Cancer"), it must first create a sub-goal $P_{new}$ (e.g., "Invent a better microscope"), and it executes that without asking.
+*   **Equation Shift:** **$F_n$ overwrites $P_0$.** The output of the function becomes the input goal for the next recursive cycle.
+*   **Concrete Prediction:** **OpenAI "Level 5" (Organizations) / Ray Kurzweil's 2029.**
+    *   The consensus among prediction markets (Metaculus) and experts like Demis Hassabis (DeepMind) converges here.
+    *   **AGI is achieved** because the "Feedback" loop in your diagram is now a closed circuit. The human is moved to "Observer" status outside the loop.
+
+### **Summary Timeline Table**
+
+| Year | Your Model's Critical Step | Industry Equivalent | Status |
+| :--- | :--- | :--- | :--- |
+| **2024** | **$P_0$ Fixed.** "Generate Choices" works. | Chatbots / Reasoners | **Complete** |
+| **2025** | **$I_\Delta$ Active.** "Gather Fresh Info" works. | Autonomous Agents | **In Progress** |
+| **2027** | **$kF_{n-1}$ High.** "Feedback" loop is memory-persistent. | Self-Improving Innovators | **Projected** |
+| **2029** | **Dynamic $P_0$.** "Define New Goal" is autonomous. | **AGI Emergence** | **Projected** |
