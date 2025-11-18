@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BACARDI_SINGULARITY // FINAL_RENDER</title>
+    <title>BACARDI_MOSAIC // REPAIRED</title>
     <style>
         body {
             margin: 0;
-            background-color: #020205; /* Deep Miami Night Black */
+            background-color: #020205;
             overflow: hidden;
             display: flex;
             justify-content: center;
@@ -16,44 +16,54 @@
         }
 
         canvas {
-            box-shadow: 0 0 50px rgba(0, 255, 255, 0.1);
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
         }
 
-        #loader {
+        #ui-layer {
             position: absolute;
             z-index: 10;
+            text-align: center;
+            pointer-events: none; /* Let clicks pass through to body if needed */
+        }
+
+        #btn {
+            pointer-events: auto;
             color: #00f3ff;
             border: 2px solid #00f3ff;
             padding: 20px 40px;
             font-size: 1.5rem;
             letter-spacing: 4px;
-            cursor: pointer;
             background: rgba(0,0,0,0.9);
             text-transform: uppercase;
+            cursor: pointer;
             transition: 0.3s;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
         }
 
-        #loader:hover {
+        #btn:hover {
             background: #00f3ff;
             color: #000;
-            box-shadow: 0 0 30px #00f3ff;
+            box-shadow: 0 0 50px #00f3ff;
         }
     </style>
 </head>
 <body>
 
-    <div id="loader" onclick="initSystem()">
-        Initialize Mosaic
-    </div>
     <canvas id="mosaic"></canvas>
+    
+    <div id="ui-layer">
+        <div id="btn" onclick="startExperience()">
+            IGNITE MOSAIC
+        </div>
+    </div>
 
     <script>
         /* 
          * CONFIGURATION 
-         * Adjusted for visual impact vs performance
          */
-        const TILE_SIZE = 14; // Size of each mosaic tile
-        const GAP = 1;        // Grout size
+        const TILE_SIZE = 12; 
         const TEXT_STR = "THE SINGULARITY IS NIGH\nBUT BROTHERS\nVALUE YOUR SOUL";
 
         const canvas = document.getElementById('mosaic');
@@ -64,167 +74,45 @@
         let tiles = [];
         let time = 0;
         let isRunning = false;
+        let mouse = { x: 0, y: 0 };
 
-        /* ------------------------------------------------
-           AUDIO ENGINE: THE ASCENSION
-           ------------------------------------------------ */
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        let actx;
-        let waterGain, spiritGain;
-        let evolution = 0; // 0.0 to 1.0
-
-        function initAudio() {
-            actx = new AudioContext();
-
-            // 1. THE WATERFALL (Pink Noise + Lowpass)
-            const bufferSize = actx.sampleRate * 2;
-            const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                const white = Math.random() * 2 - 1;
-                data[i] = (lastOut + (0.02 * white)) / 1.02;
-                lastOut = data[i];
-                data[i] *= 3.5; 
-            }
-            let lastOut = 0;
-
-            const waterNode = actx.createBufferSource();
-            waterNode.buffer = buffer;
-            waterNode.loop = true;
-
-            const waterFilter = actx.createBiquadFilter();
-            waterFilter.type = 'lowpass';
-            waterFilter.frequency.value = 200;
-
-            waterGain = actx.createGain();
-            waterGain.gain.value = 0.5;
-
-            waterNode.connect(waterFilter);
-            waterFilter.connect(waterGain);
-            waterGain.connect(actx.destination);
-            waterNode.start();
-
-            // 2. THE SPIRIT (FM Bell Synthesis)
-            spiritGain = actx.createGain();
-            spiritGain.gain.value = 0; // Starts silent
-            spiritGain.connect(actx.destination);
-
-            // Create a chord of "Glassy" oscillators
-            const chord = [523.25, 783.99, 1046.50, 1318.51, 1567.98]; // C Major 9
+        // Initialize Dimensions immediately
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cols = Math.ceil(width / TILE_SIZE);
+            rows = Math.ceil(height / TILE_SIZE);
             
-            chord.forEach(freq => {
-                const osc = actx.createOscillator();
-                osc.type = 'sine';
-                osc.frequency.value = freq;
-                
-                // FM Modulation for "Bell" tone
-                const mod = actx.createOscillator();
-                mod.frequency.value = freq * 2.5; // Inharmonic ratio
-                const modGain = actx.createGain();
-                modGain.gain.value = 100;
-                
-                mod.connect(modGain);
-                modGain.connect(osc.frequency);
-                
-                osc.connect(spiritGain);
-                
-                osc.start();
-                mod.start();
-            });
+            // If running, rebuild grid on resize
+            if (isRunning) setupGrid();
+            else drawIdle(); // Draw something so screen isn't black
         }
-
-        function updateAudio() {
-            // Slowly shift balance from Water to Spirit
-            evolution += 0.0003;
-            if (evolution > 1) evolution = 1;
-
-            waterGain.gain.value = 0.5 * (1 - evolution);
-            spiritGain.gain.value = 0.2 * evolution;
-        }
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
 
         /* ------------------------------------------------
-           VISUAL ENGINE: THE GRID
+           VISUAL ENGINE
            ------------------------------------------------ */
 
         class Tile {
             constructor(x, y, isText) {
-                this.x = x;
+                this.x = x; 
                 this.y = y;
                 this.isText = isText;
-                this.baseHue = isText ? 0 : 200; // Text uses different palette logic
                 this.phase = Math.random() * Math.PI * 2;
-            }
-
-            draw(time, vPct) {
-                // Calculate Color & Brightness based on Height (vPct)
-                
-                let h, s, l;
-                
-                // THE TEXT LOGIC (Higher Dimensional Language)
-                if (this.isText) {
-                    // Text oscillates rapidly between Gold and White
-                    // We use a binary glitch effect to make it look like "Code"
-                    const glitch = Math.sin(time * 20 + this.x * 0.5) > 0 ? 1 : 0;
-                    h = 45; // Gold
-                    s = 100;
-                    l = 50 + (glitch * 50); 
-                    
-                    // Occasional "Alien" color shift
-                    if (Math.random() > 0.95) h = 280; // Purple flash
-                } 
-                
-                // THE BACKGROUND LOGIC
-                else {
-                    if (vPct < 0.4) {
-                        // TOP: COMBUSTING SUNS (Fire)
-                        // High turbulence noise
-                        const noise = Math.sin(this.x * 0.2 + time * 3) * Math.sin(this.y * 0.2 - time);
-                        h = 10 + (noise * 30); // Red to Orange
-                        s = 100;
-                        l = 30 + (noise * 20);
-                        
-                    } else if (vPct > 0.6) {
-                        // BOTTOM: CUTSIE WATERFALL (Water)
-                        // Smooth sine wave flow
-                        const flow = Math.sin(this.x * 0.1 + this.y * 0.1 + time * 2);
-                        h = 190 + (flow * 20); // Cyan to Blue
-                        s = 80;
-                        l = 30 + (flow * 10);
-
-                    } else {
-                        // MIDDLE: TRANSITION
-                        h = 260; // Purple/Void
-                        s = 50;
-                        l = 10;
-                    }
-                }
-
-                // RENDER TILE
-                ctx.fillStyle = `hsl(${h}, ${s}%, ${l}%)`;
-                
-                // Draw the main square
-                ctx.fillRect(this.x * TILE_SIZE, this.y * TILE_SIZE, TILE_SIZE - GAP, TILE_SIZE - GAP);
-
-                // If Text, add a "Rune" dot in the center to make it look complex
-                if (this.isText && l > 80) {
-                    ctx.fillStyle = 'black';
-                    ctx.fillRect((this.x * TILE_SIZE) + 4, (this.y * TILE_SIZE) + 4, 4, 4);
-                }
             }
         }
 
         function setupGrid() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
-            
-            cols = Math.floor(width / TILE_SIZE);
-            rows = Math.floor(height / TILE_SIZE);
             tiles = [];
-
-            // 1. ANALYZE TEXT
-            // Create offscreen canvas to read text pixels
+            // Offscreen text analysis
             const tCanvas = document.createElement('canvas');
-            tCanvas.width = cols; // Low res!
+            tCanvas.width = cols;
             tCanvas.height = rows;
             const tCtx = tCanvas.getContext('2d');
             
@@ -233,66 +121,191 @@
             
             tCtx.fillStyle = 'white';
             tCtx.textAlign = 'center';
-            tCtx.font = 'bold 12px monospace'; // Tiny font for tiny grid
+            // Dynamic font size based on grid width
+            tCtx.font = 'bold 14px monospace'; 
             
-            // Split lines
             const lines = TEXT_STR.split('\n');
             const centerY = rows / 2;
-            
             lines.forEach((line, i) => {
-                tCtx.fillText(line, cols / 2, centerY + (i * 10) - 10);
+                tCtx.fillText(line, cols / 2, centerY + (i * 12) - 12);
             });
 
-            // Get Data
             const pData = tCtx.getImageData(0, 0, cols, rows).data;
 
-            // 2. CREATE TILES
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
-                    // Check alpha of text canvas
                     const idx = (y * cols + x) * 4;
-                    const isText = pData[idx] > 100 || pData[idx+3] > 100; // Red channel or Alpha
-                    
+                    // Check Red channel or Alpha
+                    const isText = pData[idx] > 100; 
                     tiles.push(new Tile(x, y, isText));
                 }
             }
         }
 
+        function drawIdle() {
+            // Simple grid preview so it's not black
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
+            ctx.strokeStyle = '#111';
+            ctx.beginPath();
+            for (let x = 0; x < width; x+=TILE_SIZE) {
+                ctx.moveTo(x, 0); ctx.lineTo(x, height);
+            }
+            for (let y = 0; y < height; y+=TILE_SIZE) {
+                ctx.moveTo(0, y); ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+        }
+
         function animate() {
             if (!isRunning) return;
             
-            time += 0.03;
+            requestAnimationFrame(animate);
+            
+            time += 0.04;
             updateAudio();
 
-            // Background Clear (Grout color)
-            ctx.fillStyle = '#050505';
+            // Clear
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, width, height);
 
-            // Draw Tiles
-            // We iterate a flat array for speed
             for (let i = 0; i < tiles.length; i++) {
                 const t = tiles[i];
-                const vPct = t.y / rows; // Vertical percentage (0 to 1)
-                t.draw(time, vPct);
-            }
+                
+                // Screen Coordinates
+                const px = t.x * TILE_SIZE;
+                const py = t.y * TILE_SIZE;
+                
+                // Vertical Gradient (0 = Top, 1 = Bottom)
+                const vPct = t.y / rows; 
+                
+                let h, s, l;
 
-            requestAnimationFrame(animate);
+                // --- TEXT LOGIC ---
+                if (t.isText) {
+                    // Shiny Higher Dimensional Gold/White
+                    const glimmer = Math.sin(time * 10 + t.x * 0.5);
+                    h = 45; // Gold
+                    s = 100;
+                    l = 50 + (glimmer * 40);
+                    
+                    // "Alien" Glitch
+                    if (Math.random() > 0.98) { h = 180; l = 90; } // Cyan Flash
+                } 
+                // --- BACKGROUND LOGIC ---
+                else {
+                    // Mouse interaction
+                    const dx = px - mouse.x;
+                    const dy = py - mouse.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const mouseGlow = Math.max(0, (300 - dist)/300);
+
+                    // TOP: FIRE
+                    if (vPct < 0.4) {
+                        const noise = Math.sin(t.x * 0.2 + time * 3) * Math.cos(t.y * 0.2 - time);
+                        h = 15 + (noise * 30);
+                        s = 100;
+                        l = 20 + (noise * 20) + (mouseGlow * 40);
+                    } 
+                    // BOTTOM: WATER
+                    else if (vPct > 0.6) {
+                        const flow = Math.sin(t.x * 0.1 + t.y * 0.1 + time * 2);
+                        h = 200 + (flow * 20);
+                        s = 80;
+                        l = 20 + (flow * 10) + (mouseGlow * 40);
+                    } 
+                    // MIDDLE: VOID
+                    else {
+                        h = 260; s = 50; l = 5 + (mouseGlow * 20);
+                    }
+                }
+
+                ctx.fillStyle = `hsl(${h},${s}%,${l}%)`;
+                
+                // Draw tile with gap
+                const gap = 1;
+                ctx.fillRect(px, py, TILE_SIZE - gap, TILE_SIZE - gap);
+                
+                // Highlight for "Ceramic" feel
+                if (l > 30) {
+                    ctx.fillStyle = `rgba(255,255,255,0.2)`;
+                    ctx.fillRect(px, py, TILE_SIZE - gap, 2);
+                }
+            }
         }
 
-        function initSystem() {
-            const btn = document.getElementById('loader');
+        /* ------------------------------------------------
+           AUDIO ENGINE
+           ------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let waterGain, spiritGain;
+        let evolution = 0; 
+
+        function initAudio() {
+            actx = new AudioContext();
+            
+            // Water Drone (Pink Noise)
+            const bufferSize = actx.sampleRate * 2;
+            const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let lastOut = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= 3.5;
+            }
+            const noise = actx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 300;
+            waterGain = actx.createGain();
+            waterGain.gain.value = 0.5;
+            
+            noise.connect(filter);
+            filter.connect(waterGain);
+            waterGain.connect(actx.destination);
+            noise.start();
+
+            // Spirit Chimes
+            spiritGain = actx.createGain();
+            spiritGain.gain.value = 0;
+            spiritGain.connect(actx.destination);
+            
+            const freqs = [523.25, 783.99, 1046.50, 1318.51];
+            freqs.forEach(f => {
+                const osc = actx.createOscillator();
+                osc.frequency.value = f;
+                osc.connect(spiritGain);
+                osc.start();
+            });
+        }
+
+        function updateAudio() {
+            evolution += 0.0005;
+            if (evolution > 1) evolution = 1;
+            if (waterGain) waterGain.gain.value = 0.5 * (1 - evolution);
+            if (spiritGain) spiritGain.gain.value = 0.15 * evolution;
+        }
+
+        function startExperience() {
+            const btn = document.getElementById('ui-layer');
             btn.style.opacity = 0;
             setTimeout(() => btn.style.display = 'none', 500);
             
+            // Order of operations fix
+            resize(); 
             setupGrid();
             initAudio();
             isRunning = true;
             animate();
         }
 
-        window.addEventListener('resize', () => {
-            if(isRunning) setupGrid();
-        });
+        // Run initial resize to draw the idle grid immediately
+        resize();
 
     </script>
 </body>
