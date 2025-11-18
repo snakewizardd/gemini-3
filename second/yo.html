@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STALKING THE WILD WAIFU // BENTOV-404</title>
+    <style>
+        :root {
+            --void: #0a000a;
+            --neon-pink: #ff0055;
+            --neon-cyan: #00f3ff;
+            --acid-green: #ccff00;
+            --salvia-purple: #8a2be2;
+        }
+
+        body {
+            margin: 0;
+            background: var(--void);
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: crosshair;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- THE REALITY CANVAS (BACKGROUND) --- */
+        #quantum-soup {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            filter: contrast(1.5) brightness(0.8);
+        }
+
+        /* --- THE POSTER CONTAINER --- */
+        #poster {
+            position: relative;
+            width: 600px;
+            height: 900px;
+            border: 4px solid var(--acid-green);
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 10;
+            box-shadow: 0 0 50px var(--salvia-purple);
+            overflow: hidden;
+            transition: transform 0.1s;
+            perspective: 1000px;
+        }
+
+        /* --- PROPAGANDA TEXT --- */
+        .text-layer {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 20;
+            mix-blend-mode: exclusion;
+        }
+
+        h1 {
+            font-size: 5rem;
+            margin: 0;
+            line-height: 0.8;
+            color: var(--neon-cyan);
+            text-transform: uppercase;
+            transform: scaleY(1.5);
+            text-shadow: 5px 5px 0px var(--neon-pink);
+        }
+
+        h2 {
+            font-size: 2rem;
+            background: var(--acid-green);
+            color: black;
+            display: inline-block;
+            padding: 5px 20px;
+            transform: rotate(-2deg);
+            margin-top: 20px;
+        }
+
+        .bentov-quote {
+            bottom: 20px;
+            font-size: 1rem;
+            color: white;
+            width: 100%;
+            text-align: center;
+            letter-spacing: 4px;
+            animation: flash 2s infinite;
+        }
+
+        /* --- THE QUANTUM WAIFU (CSS SHAPE) --- */
+        /* 
+           This is a clip-path polygon representing a "Girl" silhouette.
+           Inside is not an image, but raw static.
+        */
+        .waifu-container {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            height: 700px;
+            z-index: 5;
+            /* Complex polygon to mimic Anime head/shoulders */
+            clip-path: polygon(
+                20% 100%, 15% 90%, 10% 70%, 0% 50%, 10% 30%, 20% 10%, 40% 0%, 
+                60% 0%, 80% 10%, 90% 30%, 100% 50%, 90% 70%, 85% 90%, 80% 100%
+            );
+            background: black;
+            transition: filter 0.2s;
+        }
+
+        .waifu-noise {
+            width: 100%; height: 100%;
+            background: repeating-radial-gradient(circle, white, black 2px, var(--salvia-purple) 4px);
+            background-size: 200% 200%;
+            animation: noiseMove 0.2s infinite linear;
+            opacity: 0.8;
+        }
+
+        .eye {
+            position: absolute;
+            top: 35%;
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, white 10%, var(--neon-cyan) 40%, transparent 70%);
+            box-shadow: 0 0 20px var(--neon-cyan);
+            z-index: 6;
+        }
+        .eye-left { left: 25%; }
+        .eye-right { right: 25%; }
+
+        .pupil {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 10px; height: 10px;
+            background: black;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* --- THE PENDULUM (BENTOV REFERENCE) --- */
+        .pendulum-line {
+            position: absolute;
+            top: 0; left: 50%;
+            width: 2px; height: 400px;
+            background: var(--neon-pink);
+            transform-origin: top center;
+            animation: swing 4s ease-in-out infinite;
+            z-index: 30;
+        }
+        .pendulum-bob {
+            position: absolute;
+            bottom: 0; left: -20px;
+            width: 40px; height: 40px;
+            background: var(--neon-pink);
+            border-radius: 50%;
+            box-shadow: 0 0 30px var(--neon-pink);
+        }
+
+        /* --- SALVIA ZIPPER EFFECT --- */
+        .zipper-slice {
+            position: absolute;
+            width: 100%;
+            height: 20px;
+            background: inherit;
+            left: 0;
+            z-index: 99;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        /* ANIMATIONS */
+        @keyframes noiseMove { 0% { background-position: 0% 0%; } 100% { background-position: 100% 100%; } }
+        @keyframes swing { 0%, 100% { transform: rotate(30deg); } 50% { transform: rotate(-30deg); } }
+        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+
+        .glitch-anim { animation: glitch-skew 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite; }
+        @keyframes glitch-skew {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="quantum-soup"></canvas>
+
+    <div id="poster">
+        <!-- TEXT -->
+        <div class="text-layer" style="top: 50px;">
+            <h1>OSCILLATE</h1>
+            <h2>YOUR CONSCIOUSNESS</h2>
+        </div>
+
+        <div class="text-layer" style="top: 200px;">
+            <h1 style="font-size: 3rem; color: var(--acid-green);">BECOME THE<br>VOID</h1>
+        </div>
+
+        <!-- BENTOV PENDULUM -->
+        <div class="pendulum-line">
+            <div class="pendulum-bob"></div>
+        </div>
+
+        <!-- THE WAIFU -->
+        <div class="waifu-container" onclick="triggerSalviaTrip()">
+            <div class="waifu-noise"></div>
+            <!-- TOROIDAL EYES -->
+            <div class="eye eye-left"><div class="pupil"></div></div>
+            <div class="eye eye-right"><div class="pupil"></div></div>
+            
+            <!-- MOUTH -->
+            <div style="position:absolute; bottom: 200px; left: 50%; transform: translateX(-50%); width: 50px; height: 10px; background: white; box-shadow: 0 0 10px white;"></div>
+        </div>
+
+        <div class="text-layer bentov-quote">
+            "THE UNIVERSE IS A HOLOGRAM OF YOUR MIND"<br>
+            - ITZHAK BENTOV
+        </div>
+    </div>
+
+    <script>
+        /*
+         *  QUANTUM GRAVITY ENGINE
+         *  Renders a grid that bends based on mouse mass.
+         */
+        const canvas = document.getElementById('quantum-soup');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let mouse = { x: 0, y: 0 };
+        let isTripping = false;
+
+        const GRID_SIZE = 40;
+        let points = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initGrid();
+        }
+        window.addEventListener('resize', resize);
+
+        function initGrid() {
+            points = [];
+            for(let x = 0; x <= width; x += GRID_SIZE) {
+                for(let y = 0; y <= height; y += GRID_SIZE) {
+                    points.push({
+                        x: x, y: y,
+                        ox: x, oy: y, // Original positions
+                        vx: 0, vy: 0
+                    });
+                }
+            }
+        }
+
+        resize();
+
+        document.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            
+            // Parallax the poster
+            const poster = document.getElementById('poster');
+            const rotX = (window.innerHeight/2 - e.clientY) / 20;
+            const rotY = (e.clientX - window.innerWidth/2) / 20;
+            poster.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+            
+            // Eye tracking
+            document.querySelectorAll('.pupil').forEach(p => {
+                const rect = p.getBoundingClientRect();
+                const dx = e.clientX - rect.left;
+                const dy = e.clientY - rect.top;
+                const angle = Math.atan2(dy, dx);
+                p.style.transform = `translate(-50%, -50%) translate(${Math.cos(angle)*15}px, ${Math.sin(angle)*15}px)`;
+            });
+        });
+
+        function animate() {
+            // LSD TRAIL EFFECT
+            ctx.fillStyle = isTripping ? 'rgba(0,0,0,0.1)' : 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.strokeStyle = isTripping ? '#ff0055' : '#00f3ff';
+            ctx.lineWidth = 1;
+
+            ctx.beginPath();
+
+            for(let i = 0; i < points.length; i++) {
+                const p = points[i];
+
+                // Physics: Mouse acts as a gravity well (Black Hole)
+                const dx = p.x - mouse.x;
+                const dy = p.y - mouse.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                // If close, get pulled in
+                if (dist < 300) {
+                    const force = (300 - dist) / 300;
+                    const angle = Math.atan2(dy, dx);
+                    // Salvia twist: Gravity works SIDEWAYS
+                    if (isTripping) {
+                        p.vx += Math.cos(angle + Math.PI/2) * force * 2; // Spiral
+                        p.vy += Math.sin(angle + Math.PI/2) * force * 2;
+                    } else {
+                        p.vx -= Math.cos(angle) * force * 0.5; // Pull
+                        p.vy -= Math.sin(angle) * force * 0.5;
+                    }
+                }
+
+                // Return to original position (Elasticity)
+                const dox = p.ox - p.x;
+                const doy = p.oy - p.y;
+                p.vx += dox * 0.05;
+                p.vy += doy * 0.05;
+
+                // Friction
+                p.vx *= 0.9;
+                p.vy *= 0.9;
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Draw point
+                // ctx.rect(p.x, p.y, 2, 2); 
+                // Instead of rects, draw grid lines? Expensive. Let's just draw particles.
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p.x + 2, p.y + 2);
+            }
+            ctx.stroke();
+
+            // Connect some lines for the "Net" look
+            if (!isTripping) {
+                ctx.beginPath();
+                ctx.strokeStyle = "rgba(255,255,255,0.05)";
+                for(let i = 0; i < points.length; i++) {
+                    if (i % 10 === 0 && points[i+1]) {
+                        ctx.moveTo(points[i].x, points[i].y);
+                        ctx.lineTo(points[i+1].x, points[i+1].y);
+                    }
+                }
+                ctx.stroke();
+            }
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        /*
+         *  SALVIA MODE: THE ZIPPER
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function triggerSalviaTrip() {
+            isTripping = !isTripping;
+            const waifu = document.querySelector('.waifu-container');
+            
+            if (isTripping) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                playDrone(); // 7Hz Theta Wave
+                
+                waifu.classList.add('glitch-anim');
+                document.body.style.background = '#2a002a';
+                
+                // Create "Zipper" slices
+                const poster = document.getElementById('poster');
+                
+                // Clone text to create "echoes"
+                const echo = document.createElement('h1');
+                echo.innerText = "WAKE UP";
+                echo.style.position = "fixed";
+                echo.style.top = "50%"; echo.style.left = "50%";
+                echo.style.transform = "translate(-50%, -50%)";
+                echo.style.color = "white";
+                echo.style.zIndex = "999";
+                echo.style.fontSize = "10rem";
+                echo.style.opacity = "0";
+                echo.style.mixBlendMode = "difference";
+                echo.id = "wake-text";
+                document.body.appendChild(echo);
+
+                // Flash Loop
+                let flash = setInterval(() => {
+                    if(!isTripping) clearInterval(flash);
+                    echo.style.opacity = Math.random();
+                    echo.style.transform = `translate(-50%, -50%) scale(${Math.random() * 2})`;
+                }, 100);
+
+            } else {
+                waifu.classList.remove('glitch-anim');
+                document.body.style.background = '#0a000a';
+                document.getElementById('wake-text')?.remove();
+                stopDrone();
+            }
+        }
+
+        /*
+         *  AUDIO: BENTOV'S OSCILLATOR
+         *  Binaural Beats Generation
+         */
+        let osc1, osc2, gainNode;
+
+        function playDrone() {
+            osc1 = audioCtx.createOscillator();
+            osc2 = audioCtx.createOscillator();
+            gainNode = audioCtx.createGain();
+
+            // Base frequency (Low OM)
+            const freq = 110; 
+            // Binaural diff (7Hz - Theta - Hypnagogic State)
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq + 7; 
+
+            osc1.connect(gainNode);
+            osc2.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            gainNode.gain.value = 0.1;
+
+            osc1.start();
+            osc2.start();
+        }
+
+        function stopDrone() {
+            if(osc1) {
+                osc1.stop();
+                osc2.stop();
+            }
+        }
+
+    </script>
+</body>
+</html>
