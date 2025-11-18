@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROJECT: AGARTHA // ENTRY VECTOR</title>
+    <style>
+        :root {
+            --terminal: #00ff41;
+            --bg: #001100;
+            --alert: #ff3333;
+            --agartha: #ffcc00; /* The Inner Sun */
+            --crust: #4a3b2a;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg);
+            color: var(--terminal);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            cursor: crosshair;
+            user-select: none;
+        }
+
+        /* CRT EFFECTS */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 60%, black 100%);
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        /* UI LAYER */
+        #ui-layer {
+            position: absolute;
+            padding: 20px;
+            z-index: 10;
+            width: 100%;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--terminal);
+            display: inline-block;
+            padding-bottom: 5px;
+            text-shadow: 0 0 10px var(--terminal);
+        }
+
+        .status-box {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+        }
+
+        #depth-meter {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        #log-console {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 300px;
+            height: 150px;
+            overflow: hidden;
+            font-size: 0.8rem;
+            opacity: 0.8;
+            border-left: 2px solid var(--terminal);
+            padding-left: 10px;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        /* GATE BUTTONS */
+        .gate-btn {
+            position: absolute;
+            padding: 10px 20px;
+            border: 1px solid var(--terminal);
+            background: rgba(0, 20, 0, 0.8);
+            color: var(--terminal);
+            cursor: pointer;
+            pointer-events: auto;
+            font-family: 'Courier New', monospace;
+            transition: 0.2s;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .gate-btn:hover {
+            background: var(--terminal);
+            color: black;
+            box-shadow: 0 0 20px var(--terminal);
+        }
+
+        /* Center Overlay */
+        #warning-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            pointer-events: auto;
+        }
+
+        .blink { animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <!-- CANVAS FOR RADAR & AGARTHA -->
+    <canvas id="radar"></canvas>
+
+    <!-- UI -->
+    <div id="ui-layer">
+        <h1>OPERATION: HIGHJUMP // NAV</h1>
+        
+        <div class="status-box">
+            <div>DEPTH SENSOR</div>
+            <div id="depth-meter">0 km</div>
+            <div id="temp-meter" style="font-size: 0.8rem; color: #88ff88;">SURFACE TEMP</div>
+        </div>
+
+        <div id="log-console">
+            <div>> SYSTEM INITIALIZED</div>
+            <div>> WAITING FOR VECTOR...</div>
+        </div>
+    </div>
+
+    <!-- GATES -->
+    <button class="gate-btn" style="top: 20%; left: 50%; transform: translateX(-50%);" onclick="selectGate('NORTH_POLE')">
+        ⚠️ GATE 1: NORTH POLE (BYRD)
+    </button>
+    
+    <button class="gate-btn" style="bottom: 20%; left: 50%; transform: translateX(-50%);" onclick="selectGate('ANTARCTICA')">
+        🧊 GATE 2: NEUSCHWABENLAND
+    </button>
+
+    <button class="gate-btn" style="top: 50%; right: 15%;" onclick="selectGate('TIBET')">
+        🏔️ GATE 3: MT. KAILASH
+    </button>
+
+    <!-- DRILL INSTRUCTION -->
+    <div id="warning-overlay">
+        <h2 class="blink" style="color: var(--alert); font-size: 2rem;">CRUST DETECTED</h2>
+        <p>HOLD LEFT MOUSE TO DRILL</p>
+        <p style="font-size: 0.8rem;">DO NOT RELENT. THE MANTLE IS THICK.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('radar');
+        const ctx = canvas.getContext('2d');
+        const logConsole = document.getElementById('log-console');
+        const depthMeter = document.getElementById('depth-meter');
+        const tempMeter = document.getElementById('temp-meter');
+        const warningOverlay = document.getElementById('warning-overlay');
+        const gateBtns = document.querySelectorAll('.gate-btn');
+
+        // STATE
+        let width, height;
+        let state = 'MAP'; // MAP, DRILLING, AGARTHA
+        let depth = 0; // km
+        let maxDepth = 800; // Crust thickness before void
+        let isDrilling = false;
+        let radarAngle = 0;
+        let drillShake = 0;
+        
+        // Agartha Particles
+        let particles = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // LOGGING
+        function log(msg) {
+            const div = document.createElement('div');
+            div.innerText = `> ${msg}`;
+            logConsole.prepend(div);
+            if (logConsole.children.length > 8) logConsole.lastChild.remove();
+        }
+
+        // GAMEPLAY
+        function selectGate(gateName) {
+            if (state !== 'MAP') return;
+            
+            log(`VECTOR LOCKED: ${gateName}`);
+            log("INITIATING DESCENT SEQUENCE...");
+            
+            // Hide buttons
+            gateBtns.forEach(btn => btn.style.display = 'none');
+            
+            setTimeout(() => {
+                state = 'DRILLING';
+                warningOverlay.style.display = 'block';
+                log("DRILL MECHANISM ENGAGED");
+            }, 1000);
+        }
+
+        // INPUT
+        window.addEventListener('mousedown', () => { if(state === 'DRILLING') isDrilling = true; });
+        window.addEventListener('mouseup', () => { if(state === 'DRILLING') isDrilling = false; });
+
+        // ANIMATION LOOP
+        function animate() {
+            // Clear
+            ctx.fillStyle = 'rgba(0, 10, 0, 0.2)'; // Trails
+            if (state === 'AGARTHA') ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            if (state === 'MAP') {
+                drawRadar();
+                drawMapOverlay();
+            } 
+            else if (state === 'DRILLING') {
+                updateDrill();
+                drawDrillInterface();
+            } 
+            else if (state === 'AGARTHA') {
+                drawInnerSun();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- MODE 1: RADAR MAP ---
+        function drawRadar() {
+            const cx = width / 2;
+            const cy = height / 2;
+            
+            // Radar Sweep
+            radarAngle += 0.02;
+            
+            ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
+            ctx.lineWidth = 1;
+            
+            // Circles
+            ctx.beginPath(); ctx.arc(cx, cy, 100, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx, cy, 200, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx, cy, 300, 0, Math.PI*2); ctx.stroke();
+
+            // Sweep Line
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(radarAngle) * 400, cy + Math.sin(radarAngle) * 400);
+            ctx.strokeStyle = 'var(--terminal)';
+            ctx.stroke();
+
+            // Anomalies (Blips)
+            if (Math.random() > 0.95) {
+                ctx.fillStyle = 'var(--alert)';
+                ctx.fillRect(cx + (Math.random()-0.5)*400, cy + (Math.random()-0.5)*400, 4, 4);
+            }
+        }
+
+        function drawMapOverlay() {
+            // Just visuals handled by HTML buttons
+        }
+
+        // --- MODE 2: THE DRILL ---
+        function updateDrill() {
+            if (isDrilling) {
+                depth += 2; // Drill speed
+                drillShake = (Math.random() - 0.5) * 10;
+                
+                // Dynamic Logs based on Depth
+                if (depth === 100) log("LITHOSPHERE BREACHED");
+                if (depth === 300) log("MANTLE TEMP RISING");
+                if (depth === 500) log("ANOMALY: GRAVITY INVERSION DETECTED");
+                if (depth === 700) log("WARNING: BIOLOGICAL SIGNATURES");
+
+                // Visual Shake
+                document.body.style.transform = `translate(${drillShake}px, ${drillShake}px)`;
+                tempMeter.innerText = `${20 + depth * 5}°C`;
+                
+                if (depth >= maxDepth) {
+                    enterAgartha();
+                }
+            } else {
+                drillShake = 0;
+                document.body.style.transform = `translate(0px, 0px)`;
+                // Cool down/Push back logic
+                if (depth > 0) depth -= 0.5; 
+            }
+            depthMeter.innerText = `${Math.floor(depth)} KM`;
+        }
+
+        function drawDrillInterface() {
+            const cx = width / 2;
+            const cy = height / 2;
+
+            // The Tunnel
+            ctx.beginPath();
+            ctx.arc(cx, cy, depth / 2, 0, Math.PI * 2);
+            ctx.strokeStyle = isDrilling ? 'white' : 'var(--terminal)';
+            ctx.lineWidth = isDrilling ? 5 : 2;
+            ctx.stroke();
+
+            // Rocks flying
+            if (isDrilling) {
+                for(let i=0; i<5; i++) {
+                    ctx.fillStyle = 'var(--crust)';
+                    const ang = Math.random() * Math.PI * 2;
+                    const dist = (depth/2) * Math.random();
+                    ctx.fillRect(cx + Math.cos(ang)*dist, cy + Math.sin(ang)*dist, 5, 5);
+                }
+                
+                // Progress Bar
+                ctx.fillStyle = 'var(--terminal)';
+                ctx.fillRect(width/2 - 100, height - 100, (depth/maxDepth) * 200, 20);
+                ctx.strokeStyle = 'white';
+                ctx.strokeRect(width/2 - 100, height - 100, 200, 20);
+            }
+        }
+
+        // --- MODE 3: AGARTHA ---
+        function enterAgartha() {
+            state = 'AGARTHA';
+            isDrilling = false;
+            document.body.style.transform = 'none';
+            warningOverlay.style.display = 'none';
+            log("CRITIAL: HOLLOW SPACE ENTERED");
+            log("WELCOME TO AGARTHA");
+            
+            // Init Inner Sun Particles
+            for(let i=0; i<200; i++) {
+                particles.push({
+                    x: width/2,
+                    y: height/2,
+                    vx: (Math.random()-0.5)*4,
+                    vy: (Math.random()-0.5)*4,
+                    hue: Math.random() * 60 + 20, // Golds/Yellows
+                    size: Math.random() * 5
+                });
+            }
+        }
+
+        function drawInnerSun() {
+            const cx = width / 2;
+            const cy = height / 2;
+
+            // The Black Sun / Inner Sun Core
+            ctx.beginPath();
+            ctx.arc(cx, cy, 80, 0, Math.PI*2);
+            ctx.fillStyle = 'black';
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = 'var(--agartha)';
+            ctx.fill();
+            ctx.strokeStyle = 'var(--agartha)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Rays
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.size *= 0.99; // Shrink
+                
+                // Reset if dead
+                if (p.size < 0.1 || Math.abs(p.x-cx) > 500) {
+                    p.x = cx;
+                    p.y = cy;
+                    p.size = Math.random() * 5 + 2;
+                    p.vx = (Math.random()-0.5) * 4;
+                    p.vy = (Math.random()-0.5) * 4;
+                }
+
+                ctx.fillStyle = `hsl(${p.hue}, 100%, 50%)`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+            });
+
+            // Flavor Text
+            ctx.font = "20px Courier New";
+            ctx.fillStyle = "white";
+            ctx.shadowBlur = 0;
+            ctx.fillText("GRAVITY STABILIZED", 50, height/2);
+            ctx.fillText("MAMMOTHS DETECTED", width - 250, height/2);
+        }
+
+        animate();
+
+    </script>
+</body>
+</html>
