@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIGITO_SINGULARITY // EAT ME</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            cursor: none;
+            font-family: 'Courier New', monospace;
+        }
+
+        #canvas-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: contrast(1.2) saturate(1.5);
+        }
+
+        /* The "Oil Slick" Overlay */
+        #glitch-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: transparent;
+            pointer-events: none;
+            mix-blend-mode: exclusion;
+            z-index: 10;
+        }
+
+        /* START BUTTON */
+        #trigger {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #0f0;
+            background: black;
+            color: #0f0;
+            padding: 20px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 100;
+            transition: 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            box-shadow: 0 0 20px #0f0;
+        }
+        #trigger:hover {
+            background: #0f0;
+            color: black;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas-layer"></canvas>
+    <div id="glitch-layer"></div>
+
+    <div id="trigger">INGEST THE CHEMICAL</div>
+
+    <script>
+        /**
+         * AUDIO ENGINE: THE INFINITE TECHNO GENERATOR
+         * Uses WebAudio API to create a 135 BPM procedurally generated track.
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let ctx; // Audio Context
+        
+        // State
+        let isRunning = false;
+        let mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
+        let isBadTrip = false; // Mouse down state
+        
+        // Sequencer
+        let nextNoteTime = 0.0;
+        let timerID;
+        let step = 0;
+        const TEMPO = 135;
+        const LOOKAHEAD = 25.0; // ms
+        const SCHEDULE_AHEAD_TIME = 0.1; // s
+
+        // VISUAL ENGINE VARS
+        const canvas = document.getElementById('canvas-layer');
+        const c = canvas.getContext('2d');
+        let width, height;
+        let time = 0;
+        
+        // PHRASES
+        const WORDS = ["EAT ME", "DRINK ME", "BUFFERING", "FOREVER", "NO EXIT", "UPLOAD", "MELT", "SYNTAX ERROR"];
+
+        /* ----------------- INITIALIZATION ----------------- */
+
+        document.getElementById('trigger').addEventListener('click', function() {
+            this.classList.add('hidden');
+            initAudio();
+            initVisuals();
+            isRunning = true;
+            
+            // Launch loops
+            scheduler();
+            requestAnimationFrame(renderVisuals);
+        });
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        
+        window.addEventListener('mousedown', () => isBadTrip = true);
+        window.addEventListener('mouseup', () => isBadTrip = false);
+
+        /* ----------------- AUDIO SYNTHESIS ----------------- */
+
+        function initAudio() {
+            ctx = new AudioContext();
+            nextNoteTime = ctx.currentTime;
+        }
+
+        function scheduler() {
+            while (nextNoteTime < ctx.currentTime + SCHEDULE_AHEAD_TIME) {
+                scheduleNote(step, nextNoteTime);
+                nextStep();
+            }
+            timerID = setTimeout(scheduler, LOOKAHEAD);
+        }
+
+        function nextStep() {
+            const secondsPerBeat = 60.0 / TEMPO;
+            nextNoteTime += 0.25 * secondsPerBeat; // 16th notes
+            step = (step + 1) % 16;
+        }
+
+        function scheduleNote(beatNumber, time) {
+            // 1. THE KICK (Four on the floor)
+            if (beatNumber % 4 === 0) playKick(time);
+
+            // 2. THE BASS (Off-beat rolling)
+            if (beatNumber % 4 === 2) playBass(time, 50);
+            if (beatNumber % 4 === 3) playBass(time, 60);
+
+            // 3. THE HI-HAT (Open/Closed)
+            if (beatNumber % 2 === 1) playHat(time, beatNumber % 4 === 2);
+
+            // 4. THE PSYCHEDELIC LEAD (Random Arpeggio)
+            // Chance to play increases if "Bad Trip" (Mouse Down)
+            let chance = isBadTrip ? 0.9 : 0.4;
+            if (Math.random() < chance) {
+                // Scale: Phrygian Dominant-ish
+                const notes = [110, 123, 138, 146, 164, 174, 220, 246, 277, 440]; 
+                const freq = notes[Math.floor(Math.random() * notes.length)];
+                playLead(time, freq * (isBadTrip ? Math.random() * 2 : 1)); // Detune on bad trip
+            }
+        }
+
+        // --- INSTRUMENTS ---
+
+        function playKick(t) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            gain.gain.setValueAtTime(1, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.5);
+        }
+
+        function playBass(t, freq) {
+            const osc = ctx.createOscillator();
+            const filter = ctx.createBiquadFilter();
+            const gain = ctx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(200, t);
+            filter.frequency.exponentialRampToValueAtTime(800, t + 0.1); // Wah effect
+            
+            gain.gain.setValueAtTime(0.4, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.start(t);
+            osc.stop(t + 0.3);
+        }
+
+        function playHat(t, isOpen) {
+            // White Noise Buffer
+            const bufferSize = ctx.sampleRate * 0.1;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 5000;
+            
+            const gain = ctx.createGain();
+            const len = isOpen ? 0.1 : 0.03;
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + len);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start(t);
+        }
+
+        function playLead(t, freq) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const panner = ctx.createStereoPanner(); // PANNING
+
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freq, t);
+            
+            // Slide effect
+            if(Math.random() > 0.5) {
+                osc.frequency.exponentialRampToValueAtTime(freq * 2, t + 0.1);
+            }
+
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            
+            panner.pan.value = Math.sin(t * 10); // Spin around head
+
+            osc.connect(panner);
+            panner.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(t);
+            osc.stop(t + 0.2);
+        }
+
+
+        /* ----------------- VISUALS: THE VORTEX ----------------- */
+
+        function initVisuals() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        function renderVisuals() {
+            if (!isRunning) return;
+
+            time += isBadTrip ? 0.1 : 0.02;
+
+            // 1. THE TRAIL (Feedback Loop)
+            // Instead of clearing, we draw a transparent black rect
+            // This causes previous frames to fade out, creating trails
+            c.fillStyle = isBadTrip ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.1)';
+            c.fillRect(0, 0, width, height);
+
+            // 2. COORDINATE TRANSFORMATION (The Trip)
+            c.save();
+            c.translate(width/2, height/2);
+            
+            // Rotate entire world based on time
+            c.rotate(time * 0.2);
+            
+            // Scale based on mouse
+            const zoom = 1 + Math.sin(time) * 0.5;
+            c.scale(zoom, zoom);
+
+            // 3. DRAW THE CHECKERBOARD VORTEX
+            const rings = 20;
+            for (let i = 0; i < rings; i++) {
+                c.beginPath();
+                
+                // The Radius breaths
+                let r = (i * 40) + (Math.sin(time * 2 + i) * 20);
+                if (r < 0) r = 0;
+
+                // Distort shape
+                c.lineWidth = isBadTrip ? Math.random() * 10 : 2;
+                c.strokeStyle = `hsl(${(time * 50) + (i * 20)}, 100%, 50%)`;
+                
+                // Draw distorted circles/spirals
+                for(let a=0; a < Math.PI*2; a+=0.1) {
+                    // Salvia Distortion: x/y coords decouple
+                    let xOff = Math.cos(a) * r;
+                    let yOff = Math.sin(a) * r;
+                    
+                    // Warping logic
+                    let warp = Math.sin(a * 10 + time) * (width * 0.05);
+                    
+                    if (i % 2 === 0) {
+                         c.lineTo(xOff + warp, yOff);
+                    } else {
+                         c.lineTo(xOff, yOff + warp);
+                    }
+                }
+                
+                c.closePath();
+                c.stroke();
+                
+                // Occasionally fill ring
+                if (i % 5 === 0) {
+                    c.fillStyle = `hsla(${(time * 100) + (i * 10)}, 100%, 50%, 0.1)`;
+                    c.fill();
+                }
+            }
+
+            // 4. THE "CONGRESS" FLUID OVERLAY (Difference blending)
+            // This creates the oily/negative color effect
+            c.globalCompositeOperation = 'difference';
+            
+            // Draw random blobs based on mouse
+            c.fillStyle = 'white';
+            const blobs = 5;
+            for(let j=0; j<blobs; j++) {
+                c.beginPath();
+                let bx = (mouse.x - width/2) + Math.sin(time * (j+1)) * 200;
+                let by = (mouse.y - height/2) + Math.cos(time * (j+1)) * 200;
+                c.arc(bx, by, 50 + Math.sin(time*5)*20, 0, Math.PI*2);
+                c.fill();
+            }
+
+            // Reset blend mode
+            c.globalCompositeOperation = 'source-over';
+
+            // 5. TEXT HALLUCINATIONS
+            c.restore(); // Back to normal coords (0,0 is top left)
+            
+            if (Math.random() > 0.95) {
+                c.save();
+                c.translate(Math.random() * width, Math.random() * height);
+                c.rotate(Math.random() - 0.5);
+                c.fillStyle = isBadTrip ? '#f00' : '#fff';
+                c.font = `${Math.random() * 50 + 20}px Courier New`;
+                c.fillText(WORDS[Math.floor(Math.random() * WORDS.length)], 0, 0);
+                c.restore();
+            }
+
+            // 6. GLITCH OVERLAY (DOM)
+            const glitch = document.getElementById('glitch-layer');
+            if (Math.random() > 0.9) {
+                glitch.style.background = `rgba(${Math.random()*255},0,${Math.random()*255},0.1)`;
+                glitch.style.transform = `translate(${Math.random()*10}px, ${Math.random()*10}px)`;
+            } else {
+                glitch.style.background = 'transparent';
+            }
+
+            requestAnimationFrame(renderVisuals);
+        }
+
+    </script>
+</body>
+</html>
