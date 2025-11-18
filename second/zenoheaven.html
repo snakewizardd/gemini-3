@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>~*~ XENO_HEAVEN_2003 ~*~ [NO PARENTS ALLOWED]</title>
+    <style>
+        /* --- THE MYSPACE / GEOCITIES AESTHETIC --- */
+        :root {
+            --neon-green: #00ff00;
+            --hot-pink: #ff00ff;
+            --crusty-blue: #0000ff;
+            --bg-pattern: repeating-linear-gradient(45deg, #111 0px, #111 10px, #220022 10px, #220022 20px);
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-pattern);
+            color: var(--neon-green);
+            font-family: "Comic Sans MS", "Chalkboard SE", sans-serif;
+            overflow-x: hidden;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" style="fill:lime"><polygon points="0,0 20,10 10,20"/></svg>'), auto;
+        }
+
+        a { color: var(--hot-pink); text-decoration: none; }
+        a:hover { background: yellow; color: red; cursor: help; }
+
+        /* LAYOUT GRID (TABLE SIMULATION) */
+        .container {
+            width: 900px;
+            margin: 0 auto;
+            background: black;
+            border: 5px ridge var(--crusty-blue);
+            padding: 10px;
+        }
+
+        /* HEADER */
+        header {
+            text-align: center;
+            border-bottom: 3px dashed yellow;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0;
+            text-shadow: 3px 3px 0px red, -3px -3px 0px blue;
+            animation: jitter 0.2s infinite;
+        }
+
+        /* MARQUEE REPLACEMENT */
+        .scroll-text {
+            background: navy;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            border: 2px inset white;
+        }
+        .scroll-text span {
+            display: inline-block;
+            padding-left: 100%;
+            animation: scroll-left 10s linear infinite;
+        }
+
+        /* COLUMNS */
+        .content-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        .sidebar {
+            width: 200px;
+            background: #050505;
+            border: 2px solid white;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .main-stage {
+            flex-grow: 1;
+            border: 2px solid white;
+            padding: 10px;
+            background: #1a001a;
+            position: relative;
+        }
+
+        /* WINAMP PLAYER */
+        .winamp {
+            background: #333;
+            border: 2px outset #888;
+            padding: 5px;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+            color: #0f0;
+        }
+        .winamp-bar { background: #000; padding: 5px; margin-bottom: 5px; }
+        .winamp-btn { 
+            font-size: 10px; background: #ccc; border: 1px outset #fff; cursor: pointer; color: black; 
+        }
+        .winamp-btn:active { border: 1px inset #fff; }
+
+        /* CHIMERA MAKER CANVAS */
+        #meme-canvas {
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="white"/><rect width="10" height="10" fill="gray"/></svg>');
+            border: 3px inset red;
+            cursor: crosshair;
+            width: 100%;
+            height: 400px;
+            image-rendering: pixelated;
+        }
+
+        /* ANIMATIONS */
+        @keyframes scroll-left { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        @keyframes jitter { 0% { transform: translate(0,0); } 25% { transform: translate(2px, 2px); } 50% { transform: translate(-2px, 1px); } 75% { transform: translate(1px, -2px); } }
+        
+        .blinky { animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .sparkle-text {
+            background-image: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet);
+            -webkit-background-clip: text;
+            color: transparent;
+            font-weight: bold;
+        }
+
+        /* MEME BUTTONS */
+        .tool-btn {
+            background: linear-gradient(to bottom, #fff, #aaa);
+            border: 2px outset white;
+            margin: 5px;
+            padding: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .tool-btn:active { border: 2px inset white; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>☠️ XENO_HEAVEN ☠️</h1>
+            <div class="scroll-text">
+                <span>::: WELCOME TO THE REALITY GLITCH ::: DON'T FEED THE CHIMERAS ::: MOM GET OUT OF MY ROOM ::: UPLOAD YOUR CONSCIOUSNESS :::</span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            <!-- LEFT SIDEBAR -->
+            <div class="sidebar">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/d/d9/Under_construction_animated.gif" width="100">
+                <p class="blinky" style="color: red;"><b>⚠ UNDER CONSTRUCTION ⚠</b></p>
+                <hr>
+                <p><b>MOOD:</b> CHAOTIC</p>
+                <p><b>MUSIC:</b> TECHNO_TRANCE.MP3</p>
+                <hr>
+                <div class="winamp">
+                    <div class="winamp-bar">00:42 - DARUDE_SANDSTORM_REMIX.mp3</div>
+                    <button class="winamp-btn" onclick="toggleMusic()">▶ PLAY TRACK</button>
+                    <button class="winamp-btn" onclick="stopMusic()">■ STOP</button>
+                </div>
+                <hr>
+                <h3>WHO'S ONLINE</h3>
+                <ul style="text-align: left; font-size: 12px;">
+                    <li>xX_Sephiroth_Xx</li>
+                    <li>GokuLover99</li>
+                    <li>LiminalSpace</li>
+                </ul>
+                <br>
+                <div style="border: 1px inset white; background: black; color: red; font-family: Courier;">
+                    VISITORS:<br>
+                    666,420
+                </div>
+            </div>
+
+            <!-- MAIN CONTENT -->
+            <div class="main-stage">
+                <h2 class="sparkle-text" style="text-align: center;">~~~ THE XENOMORPHIC CHIMERA CREATOR 3000 ~~~</h2>
+                <p style="text-align: center; font-size: 12px;">CLICK TO STAMP CURSED ASSETS. MAKE YOUR OWN DEMON.</p>
+                
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <button class="tool-btn" onclick="setTool('alien')">👽 AY LMAO</button>
+                    <button class="tool-btn" onclick="setTool('moai')">🗿 BRUH</button>
+                    <button class="tool-btn" onclick="setTool('eye')">👁️ SEER</button>
+                    <button class="tool-btn" onclick="setTool('shrimp')">🦐 POSTURE</button>
+                    <button class="tool-btn" onclick="clearCanvas()">🗑️ NUKE IT</button>
+                </div>
+
+                <canvas id="meme-canvas" width="600" height="400"></canvas>
+
+                <div style="margin-top: 20px; border: 2px dashed yellow; padding: 10px; background: #000;">
+                    <h3 style="color: yellow;">LATEST INSANITY:</h3>
+                    <p>"i saw a moth in the lamp and it told me the future"</p>
+                    <p>"why do hot dogs come in packs of 10 but buns in 8? illuminati confirmed"</p>
+                </div>
+            </div>
+        </div>
+
+        <footer style="text-align: center; padding: 20px; font-size: 10px; color: #555;">
+            COPYRIGHT 2003-2025 XENO_CORP // BEST VIEWED IN NETSCAPE NAVIGATOR 4.0 // <a href="#">E-MAIL ME</a>
+        </footer>
+    </div>
+
+    <script>
+        /* 
+         * AUDIO ENGINE (009 SOUND SYSTEM VIBES)
+         * Simple oscillator beep-boop trance music
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        let isPlaying = false;
+        let intervalId;
+
+        function playNote(freq, type, duration) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.stop(ctx.currentTime + duration);
+        }
+
+        function startLoop() {
+            if(isPlaying) return;
+            isPlaying = true;
+            if (ctx.state === 'suspended') ctx.resume();
+
+            let beat = 0;
+            intervalId = setInterval(() => {
+                // Kick drum (Trance beat)
+                if (beat % 4 === 0) {
+                    playNote(150, 'square', 0.1); // Bass kick
+                    playNote(60, 'sine', 0.2); // Sub
+                }
+                // Off-beat hat
+                if (beat % 4 === 2) {
+                    playNote(800, 'sawtooth', 0.05); // Hi-hat ish
+                }
+                // Arpeggio melody
+                const scale = [220, 261, 329, 392, 440, 392, 329, 261]; // A Minor arpeggio
+                if (beat % 2 === 0) {
+                    let note = scale[Math.floor(Math.random() * scale.length)];
+                    playNote(note * (Math.random() > 0.8 ? 2 : 1), 'triangle', 0.1);
+                }
+                
+                beat++;
+            }, 125); // Fast BPM
+        }
+
+        function toggleMusic() {
+            startLoop();
+            document.querySelector('.winamp-bar').innerText = "▶ PLAYING: SANDSTORM_WAV";
+            document.querySelector('.winamp-bar').style.color = "red";
+            document.querySelector('.winamp-bar').classList.add("blinky");
+        }
+
+        function stopMusic() {
+            clearInterval(intervalId);
+            isPlaying = false;
+            document.querySelector('.winamp-bar').innerText = "■ STOPPED";
+            document.querySelector('.winamp-bar').style.color = "#0f0";
+            document.querySelector('.winamp-bar').classList.remove("blinky");
+        }
+
+        /*
+         * THE CHIMERA MAKER (CANVAS)
+         */
+        const canvas = document.getElementById('meme-canvas');
+        const c = canvas.getContext('2d');
+        let currentTool = 'alien';
+
+        // Initialization
+        c.font = "30px Arial";
+        c.fillStyle = "black"; // Transparent-ish
+        c.fillRect(0,0,600,400);
+
+        function setTool(tool) {
+            currentTool = tool;
+        }
+
+        function clearCanvas() {
+            c.clearRect(0,0,600,400);
+            // Redraw grid pattern
+            c.fillStyle = "rgba(0,0,0,0.5)";
+            c.fillRect(0,0,600,400);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            stamp(x, y);
+        });
+
+        function stamp(x, y) {
+            c.save();
+            c.translate(x, y);
+            
+            // Random Distortion
+            const scaleX = 1 + (Math.random() - 0.5) * 2; // STRETCH IT
+            const scaleY = 1 + (Math.random() - 0.5) * 2; // SQUASH IT
+            const rotation = (Math.random() - 0.5) * 3;   // SPIN IT
+            
+            c.scale(scaleX, scaleY);
+            c.rotate(rotation);
+
+            // Content Logic
+            let content = '';
+            let color = '';
+            
+            if (currentTool === 'alien') { content = '👽'; }
+            if (currentTool === 'moai') { content = '🗿'; }
+            if (currentTool === 'eye') { content = '👁️'; }
+            if (currentTool === 'shrimp') { content = '🦐'; }
+
+            // Shadow for the "bad photoshop" look
+            c.shadowColor = "lime";
+            c.shadowBlur = 5;
+            
+            c.font = `${Math.random() * 50 + 30}px Serif`;
+            c.fillText(content, -20, 10);
+            
+            // Add "Deep Fried" artifacts
+            if(Math.random() > 0.7) {
+                c.globalCompositeOperation = 'difference';
+                c.fillStyle = 'white';
+                c.fillRect(-20, -20, 40, 40);
+            }
+
+            c.restore();
+        }
+
+        // Auto-generate some chaos on load
+        for(let i=0; i<10; i++) {
+            setTool(['alien', 'moai', 'eye', 'shrimp'][Math.floor(Math.random()*4)]);
+            stamp(Math.random()*600, Math.random()*400);
+        }
+
+    </script>
+</body>
+</html>
