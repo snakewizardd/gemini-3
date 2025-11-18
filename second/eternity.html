@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE_LAST_HOWL // ETERNITY</title>
+    <style>
+        :root {
+            --midnight: #050510;
+            --moon: #e0e0ff;
+            --spirit: #00ffff;
+            --pixel-rock: #2a2a40;
+        }
+
+        body {
+            margin: 0;
+            background: var(--midnight);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: var(--moon);
+            mix-blend-mode: lighten;
+            transition: opacity 2s;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 10px;
+            text-shadow: 0 0 30px var(--spirit);
+            margin-bottom: 0;
+            text-transform: uppercase;
+        }
+
+        .btn {
+            margin-top: 20px;
+            padding: 15px 40px;
+            border: 1px solid var(--spirit);
+            color: var(--spirit);
+            background: rgba(0,0,0,0.5);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.5s;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .btn:hover {
+            background: var(--spirit);
+            color: var(--midnight);
+            box-shadow: 0 0 50px var(--spirit);
+        }
+
+        /* The Starfield Overlay */
+        .stars {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, #eee, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 40px 70px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0));
+            background-size: 200px 200px;
+            animation: starMove 100s linear infinite;
+            opacity: 0.5;
+            z-index: 0;
+        }
+        
+        @keyframes starMove { from { transform: translateY(0); } to { transform: translateY(-1000px); } }
+
+    </style>
+</head>
+<body>
+
+    <div class="stars"></div>
+    <canvas id="landscape"></canvas>
+
+    <div id="ui">
+        <h1>INTO THE ETHER</h1>
+        <div class="btn" onclick="ascend()">BEGIN TRANSMISSION</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('landscape');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+        
+        // LANDSCAPE VARS
+        const LINES = 50; // Number of horizontal lines
+        let points = [];
+        let speed = 0;
+        let evolution = 0; // 0 = Rock, 1 = Light
+
+        // AUDIO CONTEXT
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let analyser;
+        
+        // HOWL STATE
+        let nextHowlTime = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE WOLF SYNTH
+           ------------------------------------------------ */
+
+        function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.7;
+            
+            // Analyser for visual reactivity
+            analyser = actx.createAnalyser();
+            analyser.fftSize = 256;
+            masterGain.connect(analyser);
+            analyser.connect(actx.destination);
+
+            // Start the Drone (The Wind)
+            createWind();
+            
+            // Schedule the pack
+            scheduleAudio();
+        }
+
+        function createWind() {
+            // Pink Noise Generator
+            const bufferSize = actx.sampleRate * 2;
+            const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let b0, b1, b2, b3, b4, b5, b6;
+            b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179;
+                b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520;
+                b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522;
+                b5 = -0.7616 * b5 - white * 0.0168980;
+                data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                data[i] *= 0.11; // Auto-normalize
+                b6 = white * 0.115926;
+            }
+
+            const noise = actx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 200;
+            
+            // LFO to sweep the wind
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.05;
+            const lfoGain = actx.createGain();
+            lfoGain.gain.value = 300;
+            
+            lfo.connect(lfoGain);
+            lfoGain.connect(filter.frequency);
+
+            noise.connect(filter);
+            filter.connect(masterGain);
+            
+            noise.start();
+            lfo.start();
+        }
+
+        function scheduleAudio() {
+            const now = actx.currentTime;
+            
+            // RANDOM DRUM HIT (The Paws)
+            if (Math.random() > 0.6) {
+                triggerDrum(now);
+            }
+
+            // RANDOM HOWL (The Spirit)
+            if (now > nextHowlTime) {
+                triggerHowl(now);
+                nextHowlTime = now + 5 + (Math.random() * 8); // Interval
+            }
+
+            if (isRunning) setTimeout(scheduleAudio, 500);
+        }
+
+        function triggerDrum(t) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            osc.frequency.setValueAtTime(80, t);
+            osc.frequency.exponentialRampToValueAtTime(20, t + 0.5); // Pitch drop
+            
+            gain.gain.setValueAtTime(1.0, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.8); // Long decay boom
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            
+            osc.start(t);
+            osc.stop(t + 0.8);
+        }
+
+        function triggerHowl(t) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter();
+            
+            osc.type = 'sawtooth'; // Rich in harmonics for the throat
+            
+            // THE MELODY (Wolf Scale - Minor Pentatonic drift)
+            const freq = 220 + (Math.random() * 100); 
+            
+            // PITCH GLIDE (The "Awooo")
+            osc.frequency.setValueAtTime(freq * 0.8, t); // Start low
+            osc.frequency.linearRampToValueAtTime(freq, t + 1); // Slide up
+            osc.frequency.linearRampToValueAtTime(freq * 0.9, t + 3); // Slide down slightly
+            osc.frequency.linearRampToValueAtTime(freq * 0.5, t + 5); // Fade out low
+
+            // FORMANT FILTER (The Mouth)
+            // Opens and closes to simulate "Oooo" -> "Aaaa" -> "Oooo"
+            filter.type = 'bandpass';
+            filter.Q.value = 5; 
+            filter.frequency.setValueAtTime(400, t);
+            filter.frequency.linearRampToValueAtTime(1000, t + 1.5);
+            filter.frequency.linearRampToValueAtTime(300, t + 5);
+
+            // ENVELOPE
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 1); // Slow attack
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 5); // Long release
+
+            // ECHO DELAY
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.4;
+            const delayGain = actx.createGain();
+            delayGain.gain.value = 0.4;
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(masterGain);
+            
+            // Delay Loop
+            gain.connect(delay);
+            delay.connect(delayGain);
+            delayGain.connect(masterGain);
+            delayGain.connect(delay);
+
+            osc.start(t);
+            osc.stop(t + 6);
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE MOUNTAIN
+           ------------------------------------------------ */
+
+        function drawLandscape() {
+            if (!isRunning) return;
+            requestAnimationFrame(drawLandscape);
+
+            time += 0.01;
+            evolution += 0.0003; // The Ascenscion
+            if (evolution > 1) evolution = 1;
+
+            // Get Audio Data for Terrian Height
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+            const bass = dataArray[10] / 255; // Use bass for height
+
+            // CLEAR with Trails
+            ctx.fillStyle = `rgba(5, 5, 16, 0.3)`;
+            ctx.fillRect(0, 0, width, height);
+
+            // THE SUN / SINGULARITY
+            const sunY = height * 0.3;
+            const sunSize = 50 + (bass * 50) + (evolution * 500); // Sun grows to consume screen
+            
+            // Sun Glow
+            const grad = ctx.createRadialGradient(width/2, sunY, 10, width/2, sunY, sunSize * 2);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.1, `rgba(255, 255, 255, ${0.8 + evolution})`);
+            grad.addColorStop(0.4, `rgba(0, 255, 255, ${0.2 * evolution})`);
+            grad.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height); // Light bloom
+
+            // DRAW MOUNTAINS
+            // We draw horizontal lines stacked vertically
+            ctx.lineWidth = 2;
+
+            for (let i = 0; i < LINES; i++) {
+                // Perspective Scaling
+                const p = i / LINES; // 0 (Horizon) -> 1 (Bottom)
+                const y = sunY + (p * p * height * 0.8) + 20; // Exponential spacing
+                
+                ctx.beginPath();
+                
+                // Color Morph: Rock -> Spirit
+                const r = 40 + (evolution * 200);
+                const g = 40 + (evolution * 255);
+                const b = 60 + (evolution * 255);
+                const alpha = p; // Fade out near horizon
+
+                ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                
+                // Draw Line
+                for (let x = 0; x <= width; x += 10) {
+                    // Noise Function (Simulated)
+                    const noiseX = (x * 0.01) + time; 
+                    const noiseY = (i * 0.2) + time;
+                    
+                    // Mountain Height
+                    // Combines static terrain noise with audio reactivity
+                    const terrain = Math.sin(noiseX * 5) * Math.cos(noiseX * 2) * 50 * p;
+                    const audioMod = bass * 100 * p * Math.sin(x/100);
+                    
+                    const lineY = y - Math.abs(terrain) - audioMod;
+                    
+                    if (x === 0) ctx.moveTo(x, lineY);
+                    else ctx.lineTo(x, lineY);
+                }
+                ctx.stroke();
+            }
+
+            // THE WOLF SPIRIT (Center Silhouette)
+            if (evolution < 0.8) {
+                ctx.fillStyle = `rgba(0, 0, 0, ${1 - evolution})`;
+                ctx.beginPath();
+                const wx = width / 2;
+                const wy = height - 50;
+                // Simple Geometric Wolf Head
+                ctx.moveTo(wx, wy - 100); // Ear Tip L
+                ctx.lineTo(wx - 20, wy - 60);
+                ctx.lineTo(wx - 40, wy - 80); // Cheek
+                ctx.lineTo(wx, wy); // Chin
+                ctx.lineTo(wx + 40, wy - 80);
+                ctx.lineTo(wx + 20, wy - 60);
+                ctx.lineTo(wx, wy - 100); // Ear Tip R
+                ctx.fill();
+            }
+        }
+
+        /* ------------------------------------------------
+           CONTROL
+           ------------------------------------------------ */
+
+        function ascend() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            actx = new AC();
+            actx.resume().then(() => {
+                initAudio();
+                isRunning = true;
+                drawLandscape();
+            });
+        }
+
+    </script>
+</body>
+</html>
