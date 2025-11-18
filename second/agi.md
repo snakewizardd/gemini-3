@@ -163,4 +163,44 @@ This is the final step in your flowchart. The system no longer waits for a promp
 | **2024** | **$P_0$ Fixed.** "Generate Choices" works. | Chatbots / Reasoners | **Complete** |
 | **2025** | **$I_\Delta$ Active.** "Gather Fresh Info" works. | Autonomous Agents | **In Progress** |
 | **2027** | **$kF_{n-1}$ High.** "Feedback" loop is memory-persistent. | Self-Improving Innovators | **Projected** |
-| **2029** | **Dynamic $P_0$.** "Define New Goal" is autonomous. | **AGI Emergence** | **Projected** |
+| **2029** | **Dynamic $P_0$.** "Define New Goal" is autonomous. | **AGI Emergence** | **Projected** 
+
+___
+
+Here is the copy-paste breakdown for your Discord server. It strips the math down to the core mechanic: **The Feedback Loop**.
+
+***
+
+### 🚨 The "Loop" Theory: Wen AGI?
+
+Stop guessing random years. Look at the diagram. AGI happens when the **Feedback Line** finally connects to the **"Define New Goal"** box without a human in the middle.
+
+Here is the timeline based on the math:
+
+**1. The "Tool" Era (2023 - 2024) ❌**
+*   **The State:** Static.
+*   **The Bottleneck:** We have to manually type $P_0$ (The Goal) every single time. The AI has no memory ($k=0$).
+*   **Status:** **Completed.** (GPT-4, Claude 3.5)
+
+**2. The "Agent" Era (Right Now - Late 2025) 🚧**
+*   **The Shift:** The **"Gather Fresh Information"** ($I_\Delta$) box activates.
+*   **What changes:** The AI stops staring at frozen data. It browses, uses tools, and sees the result of its choices. It can handle the *middle* of the flowchart, but we still have to start it.
+*   **Status:** **Active.** (OpenAI Operator, Anthropic Computer Use).
+
+**3. The "Memory" Era (2026 - 2027) 🧠**
+*   **The Shift:** The **Feedback** line stops breaking.
+*   **What changes:** The variable $kF$ (Influence of Past Decisions) goes $>1$. The AI remembers what it did yesterday and improves today. It stops making the same mistake twice.
+*   **Prediction:** AI starts doing "weeks of work" in minutes because it remembers the context.
+
+**4. AGI Emergence (2028 - 2029) 🤖**
+*   **The Shift:** **"Define New Goal"** becomes autonomous.
+*   **The End Game:** The system looks at the **"Differences in State"** (bottom box) and realizes its current goal $P_0$ is too small. It rewrites its own code to make a new $P_0$.
+*   **Result:** The loop runs forever, self-improving. **AGI is here.**
+
+***
+
+### 📉 TL;DR Summary for the Lads:
+
+*   **2025:** AI gets **Hands** (Can use PC/Tools).
+*   **2027:** AI gets **Long-term Memory** (Learns from mistakes).
+*   **2029:** AI gets **Willpower** (Sets its own goals). **AGI.**
