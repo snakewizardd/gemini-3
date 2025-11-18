@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLASSIFIED // WEAPON_SYS</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: #fff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.5) brightness(0.8);
+        }
+
+        #hud {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px);
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 50px;
+            z-index: 20;
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn {
+            border: 1px solid #555;
+            background: #000;
+            color: #555;
+            padding: 15px 30px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: 0.2s;
+        }
+
+        .btn:hover {
+            color: #fff;
+            border-color: #fff;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+
+        .btn.active-rad {
+            color: #0f0;
+            border-color: #0f0;
+            box-shadow: 0 0 30px #0f0;
+            animation: pulseGreen 0.5s infinite;
+        }
+
+        .btn.active-hrt {
+            color: #f00;
+            border-color: #f00;
+            box-shadow: 0 0 30px #f00;
+            animation: pulseRed 0.2s infinite;
+        }
+
+        #status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 12px;
+            z-index: 20;
+        }
+
+        @keyframes pulseGreen { 50% { opacity: 0.5; } }
+        @keyframes pulseRed { 0% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+    </style>
+</head>
+<body>
+
+    <div id="hud"></div>
+    <canvas id="grid"></canvas>
+    
+    <div id="status">
+        SYSTEM: STANDBY<br>
+        TARGET: NULL
+    </div>
+
+    <div id="controls">
+        <div class="btn" id="btn-cancer" onclick="activateWeapon('CANCER')">DEPLOY: RAY_EMITTER</div>
+        <div class="btn" id="btn-heart" onclick="activateWeapon('HEART')">DEPLOY: CARDIAC_ARREST</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('grid');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        // CONFIG
+        const TILE = 10;
+        let width, height, cols, rows;
+        let tiles = [];
+        let time = 0;
+        let weaponMode = 'IDLE'; // IDLE, CANCER, HEART
+        let intensity = 0;
+        
+        // Audio
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+
+        // WEAPON TEXTS
+        const TEXT_CANCER = "CELLULAR\nMUTATION\nDETECTED";
+        const TEXT_HEART = "CARDIAC\nFAILURE\nIMMINENT";
+        let textPixels = [];
+
+        /* ------------------------------------------------
+           INITIALIZATION
+           ------------------------------------------------ */
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cols = Math.ceil(width / TILE);
+            rows = Math.ceil(height / TILE);
+            initGrid();
+        }
+        
+        function initGrid() {
+            tiles = [];
+            for(let i=0; i<cols*rows; i++) {
+                tiles.push({
+                    val: 0, // 0-1 intensity
+                    state: 0, // For cellular automata
+                    life: Math.random() // Random start
+                });
+            }
+        }
+        
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           TEXT MATRIX GENERATOR
+           ------------------------------------------------ */
+        function scanText(text) {
+            const tCan = document.createElement('canvas');
+            tCan.width = cols;
+            tCan.height = rows;
+            const tCtx = tCan.getContext('2d');
+            
+            tCtx.fillStyle = 'black';
+            tCtx.fillRect(0,0,cols,rows);
+            tCtx.fillStyle = 'white';
+            tCtx.textAlign = 'center';
+            tCtx.font = '900 16px "Courier New"'; // Blocky font
+            
+            const lines = text.split('\n');
+            const lh = 18;
+            const startY = (rows/2) - ((lines.length*lh)/2) + lh/2;
+            
+            lines.forEach((l, i) => {
+                tCtx.fillText(l, cols/2, startY + (i*lh));
+            });
+            
+            return tCtx.getImageData(0,0,cols,rows).data;
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE PAIN FREQUENCIES
+           ------------------------------------------------ */
+        let radOsc, radGain, heartOsc, heartGain;
+
+        function initAudio() {
+            if(actx) return;
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.5;
+            masterGain.connect(actx.destination);
+        }
+
+        function playRadiation() {
+            // High pitched, modulated sine wave (The "Ray")
+            radOsc = actx.createOscillator();
+            radOsc.type = 'sawtooth';
+            radOsc.frequency.value = 12000; // Uncomfortable high freq
+            
+            // FM Modulation for "Buzz"
+            const lfo = actx.createOscillator();
+            lfo.type = 'square';
+            lfo.frequency.value = 50; // 50hz buzz
+            const lfoGain = actx.createGain();
+            lfoGain.gain.value = 1000;
+            
+            lfo.connect(lfoGain);
+            lfoGain.connect(radOsc.frequency);
+            
+            radGain = actx.createGain();
+            radGain.gain.value = 0;
+            
+            radOsc.connect(radGain);
+            radGain.connect(masterGain);
+            
+            radOsc.start();
+            lfo.start();
+        }
+
+        function playHeartbeat() {
+            heartOsc = actx.createOscillator();
+            heartOsc.type = 'triangle'; // Deep thud
+            heartOsc.frequency.value = 60;
+            
+            heartGain = actx.createGain();
+            heartGain.gain.value = 0;
+            
+            heartOsc.connect(heartGain);
+            heartGain.connect(masterGain);
+            heartOsc.start();
+        }
+
+        function triggerBeat() {
+            if(weaponMode !== 'HEART') return;
+            
+            const now = actx.currentTime;
+            heartOsc.frequency.setValueAtTime(60, now);
+            heartOsc.frequency.exponentialRampToValueAtTime(20, now + 0.1); // Pitch drop
+            
+            heartGain.gain.setValueAtTime(1, now);
+            heartGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            
+            // ARRHYTHMIA LOGIC: Randomize next beat
+            const irregularity = Math.random() * 0.5; 
+            setTimeout(triggerBeat, (400 + (irregularity * 1000))); 
+        }
+
+        /* ------------------------------------------------
+           WEAPON LOGIC
+           ------------------------------------------------ */
+        function activateWeapon(type) {
+            initAudio();
+            
+            // Reset UI
+            document.querySelectorAll('.btn').forEach(b => b.className = 'btn');
+            
+            // Stop prev sounds
+            if(radGain) radGain.gain.setTargetAtTime(0, actx.currentTime, 0.1);
+            if(heartGain) heartGain.gain.setTargetAtTime(0, actx.currentTime, 0.1);
+
+            if (weaponMode === type) {
+                weaponMode = 'IDLE'; // Toggle off
+                document.getElementById('status').innerHTML = "SYSTEM: STANDBY";
+                return;
+            }
+
+            weaponMode = type;
+            
+            if (type === 'CANCER') {
+                document.getElementById('btn-cancer').classList.add('active-rad');
+                document.getElementById('status').innerHTML = "WEAPON: IONIZING_RAY<br>TARGET: CELLULAR STRUCTURE";
+                textPixels = scanText(TEXT_CANCER);
+                if(!radOsc) playRadiation();
+                radGain.gain.setTargetAtTime(0.15, actx.currentTime, 1); // Fade in buzz
+            }
+            
+            if (type === 'HEART') {
+                document.getElementById('btn-heart').classList.add('active-hrt');
+                document.getElementById('status').innerHTML = "WEAPON: ICE_DART<br>TARGET: MYOCARDIUM";
+                textPixels = scanText(TEXT_HEART);
+                if(!heartOsc) playHeartbeat();
+                triggerBeat();
+            }
+        }
+
+        /* ------------------------------------------------
+           RENDER LOOP
+           ------------------------------------------------ */
+        function render() {
+            requestAnimationFrame(render);
+            time += 1;
+
+            // Clear
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            for(let y=0; y<rows; y++) {
+                for(let x=0; x<cols; x++) {
+                    const idx = y*cols + x;
+                    const t = tiles[idx];
+                    let r=0, g=0, b=0;
+
+                    // --- MODE 1: CANCER RAY (Cellular Automata / Mutation) ---
+                    if (weaponMode === 'CANCER') {
+                        // Is this pixel part of the text?
+                        const isText = textPixels[idx*4] > 100;
+                        
+                        // Simulation: Pixels "infect" neighbors
+                        if (Math.random() > 0.9) t.val = Math.random(); // Random mutation
+                        
+                        // Color Logic: Sick Green/Purple
+                        if (isText) {
+                            // The text fights the cancer
+                            r = 200; g = 255; b = 200; 
+                            if(Math.random() > 0.8) { r=100; g=255; b=0; } // Radiation flash
+                        } else {
+                            // Background radiation
+                            const noise = Math.sin(x*0.1 + time*0.2) * Math.cos(y*0.1 + time*0.5);
+                            r = 50 + (noise * 50);
+                            g = 20;
+                            b = 50 + (noise * 50);
+                        }
+                        
+                        // Mutation Glitch
+                        if (Math.random() > 0.98) {
+                            r = 0; g = 255; b = 0; // Bright Green Pixel
+                        }
+                    } 
+                    
+                    // --- MODE 2: HEART ATTACK (Pulse Wave) ---
+                    else if (weaponMode === 'HEART') {
+                        const isText = textPixels[idx*4] > 100;
+                        
+                        // EKG Line Logic
+                        // A wave moves across the screen
+                        const waveX = (time * 10) % width;
+                        const distToWave = Math.abs((x*TILE) - waveX);
+                        
+                        let beat = 0;
+                        if (distToWave < 50) {
+                            // Draw spike
+                            beat = Math.exp(-distToWave * 0.1) * 255;
+                        }
+
+                        if (isText) {
+                            // Text throbs with pain
+                            r = 255;
+                            g = 0;
+                            b = 0;
+                            // Random blackout (Skipped beat)
+                            if (Math.random() > 0.9) { r=0; }
+                        } else {
+                            // Background is EKG line + Static
+                            r = beat;
+                            g = 0;
+                            b = 0;
+                            // Flatline static
+                            if (beat < 10 && Math.random() > 0.99) r = 50;
+                        }
+                    } 
+                    
+                    // --- MODE 3: IDLE (Surveillance) ---
+                    else {
+                        r = 0; g = 20; b = 0; // Night vision dark
+                        if (Math.random() > 0.995) g = 100; // Blip
+                    }
+
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(x*TILE, y*TILE, TILE-1, TILE-1);
+                }
+            }
+        }
+
+        render();
+
+    </script>
+</body>
+</html>
