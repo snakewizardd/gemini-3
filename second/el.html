@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HI ELIAS // CRYSTAL MOSAIC</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #loading {
+            position: absolute;
+            color: #00ffff;
+            font-family: monospace;
+            font-size: 12px;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        ALLOCATING MEMORY... <span id="mem-stat">0%</span>
+    </div>
+    <canvas id="mosaic"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mosaic');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for speed
+        const memStat = document.getElementById('mem-stat');
+
+        let width, height;
+        let particles = [];
+        let mouse = { x: -1000, y: -1000 };
+        
+        // CONFIGURATION
+        const DENSITY = 6; // Lower = Higher Resolution (Warning: CPU heavy if < 4)
+        const TEXT_SCALE = 15; // Font size multiplier
+        
+        // COLORS (Bismuth / Holographic)
+        // We use HSL, so we manipulate Hue
+        const BASE_HUE = 200; // Cyan/Blue base
+
+        /* 
+         * 1. SETUP & OFFSCREEN TEXT ANALYSIS
+         * We draw the text on a hidden canvas, read the pixels, 
+         * and use that map to tell our particles if they are "Text" or "Void".
+         */
+        function init() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+
+            // Temporary canvas for text data
+            const textCanvas = document.createElement('canvas');
+            const tCtx = textCanvas.getContext('2d');
+            textCanvas.width = width;
+            textCanvas.height = height;
+
+            // Draw the text
+            const fontSize = Math.min(width, height) / 4;
+            tCtx.font = `900 ${fontSize}px "Arial", sans-serif`;
+            tCtx.textAlign = 'center';
+            tCtx.textBaseline = 'middle';
+            tCtx.fillStyle = 'white';
+            
+            // First Line
+            tCtx.fillText("hi", width / 2, height / 2 - fontSize * 0.6);
+            // Second Line
+            tCtx.fillText("ELIAS", width / 2, height / 2 + fontSize * 0.6);
+
+            // Get Pixel Data
+            const imageData = tCtx.getImageData(0, 0, width, height).data;
+
+            // Create Particles
+            particles = [];
+            let index = 0;
+            
+            // Iterate through grid
+            for (let y = 0; y < height; y += DENSITY) {
+                for (let x = 0; x < width; x += DENSITY) {
+                    // Check pixel alpha at this coordinate
+                    const i = (y * width + x) * 4;
+                    const isText = imageData[i + 3] > 128; // If alpha > 50%
+
+                    particles.push(new Crystal(x, y, isText, index));
+                    index++;
+                }
+            }
+
+            memStat.innerText = `BUFFER FULL: ${particles.length} CRYSTALS LOADED`;
+            setTimeout(() => document.getElementById('loading').style.opacity = 0, 2000);
+        }
+
+        /*
+         * 2. THE CRYSTAL PARTICLE
+         */
+        class Crystal {
+            constructor(x, y, isText, index) {
+                this.x = x;
+                this.y = y;
+                this.isText = isText;
+                this.index = index;
+                
+                // Geometry jitter for "Mosaic" look
+                this.size = DENSITY; 
+                this.angle = Math.random() * Math.PI;
+                
+                // Color base
+                this.baseHue = isText ? Math.random() * 60 + 180 : 230; // Text is Cyan/Blue, BG is Dark Blue
+                this.lightness = isText ? 50 : 5; // Text shines, BG is dark void
+                
+                // Animation phase
+                this.phase = Math.random() * Math.PI * 2;
+            }
+
+            draw(time) {
+                // Distance from mouse (The Flashlight Effect)
+                const dx = this.x - mouse.x;
+                const dy = this.y - mouse.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                // CALCULATE SHINE
+                // 1. Ambient Shimmer (Time based)
+                let l = this.lightness + Math.sin(time + this.phase) * 10;
+                
+                // 2. Mouse Reflection (Proximity based)
+                // If close to mouse, brighten massively
+                if (dist < 300) {
+                    const intensity = (300 - dist) / 300;
+                    l += intensity * 60;
+                    
+                    // Tilting effect based on mouse relative position
+                    // This simulates the facet of the crystal catching light
+                    if (this.isText) {
+                        // Prismatic shift
+                        ctx.fillStyle = `hsl(${this.baseHue + (intensity * 100)}, 80%, ${l}%)`;
+                    } else {
+                        // Background highlight
+                        ctx.fillStyle = `hsl(${this.baseHue}, 50%, ${l}%)`;
+                    }
+                } else {
+                    // Default Idle State
+                    if (this.isText) {
+                        // Text sparkles slowly
+                        ctx.fillStyle = `hsl(${this.baseHue + Math.sin(time)*20}, 70%, ${l}%)`;
+                    } else {
+                        // Background is dark void
+                        ctx.fillStyle = `hsl(${this.baseHue}, 30%, ${l}%)`;
+                    }
+                }
+
+                // DRAW THE TILE
+                // We draw directly to context for performance (no path objects)
+                ctx.fillRect(this.x, this.y, this.size - 1, this.size - 1); // -1 creates the grout lines
+            }
+        }
+
+        /*
+         * 3. RENDER LOOP
+         */
+        let time = 0;
+        function animate() {
+            // No clearRect needed if we fill the screen every frame, 
+            // but for "Mosaic" gaps we want a black background.
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, width, height);
+
+            time += 0.05;
+
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].draw(time);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        /*
+         * 4. INTERACTION
+         */
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        window.addEventListener('resize', () => {
+            init();
+        });
+
+        // Start
+        init();
+        animate();
+
+    </script>
+</body>
+</html>
