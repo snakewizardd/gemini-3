@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👁️ THE SLOP PROPHET 👁️</title>
+    <style>
+        :root {
+            --slime: #ccff00;
+            --void: #050005;
+            --glitch-red: #ff0055;
+            --glitch-cyan: #00ffff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            color: var(--slime);
+            font-family: "Impact", sans-serif;
+            overflow: hidden;
+            cursor: crosshair;
+            text-transform: uppercase;
+        }
+
+        /* --- HYPNO BACKGROUND --- */
+        #hypno-bg {
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: repeating-conic-gradient(var(--void) 0deg 10deg, #111 10deg 20deg);
+            animation: spin 20s linear infinite;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        /* --- THE ALTAR (UI) --- */
+        #altar {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            mix-blend-mode: exclusion;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 6rem;
+            line-height: 0.8;
+            text-shadow: 4px 4px 0 var(--glitch-red), -4px -4px 0 var(--glitch-cyan);
+            animation: shake 0.2s infinite;
+        }
+
+        h2 {
+            background: var(--slime);
+            color: black;
+            display: inline-block;
+            padding: 5px 20px;
+            transform: rotate(-3deg);
+            font-size: 2rem;
+        }
+
+        /* --- THE SLOP PARTICLES --- */
+        .slop-particle {
+            position: absolute;
+            font-size: 1.5rem;
+            color: rgba(255,255,255,0.5);
+            user-select: none;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* --- MARQUEE OF TRUTH --- */
+        .marquee-container {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: var(--glitch-red);
+            color: white;
+            font-size: 2rem;
+            padding: 10px 0;
+            border-top: 5px solid white;
+            z-index: 200;
+        }
+        .marquee-text {
+            display: inline-block;
+            white-space: nowrap;
+            animation: scroll 10s linear infinite;
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes scroll { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px); }
+            25% { transform: translate(-1px, -2px); }
+            50% { transform: translate(-3px, 0px); }
+            75% { transform: translate(3px, 2px); }
+        }
+        @keyframes fall {
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translateY(110vh) rotate(360deg); opacity: 0.5; }
+        }
+
+        .flash { animation: flashAnim 0.1s; }
+        @keyframes flashAnim { 0% { background: white; } 100% { background: var(--void); } }
+
+    </style>
+</head>
+<body>
+
+    <div id="hypno-bg"></div>
+
+    <div id="altar">
+        <h2 id="prophecy">THE ALGORITHM HUNGERS</h2>
+        <h1>SLOP PROPHET</h1>
+        <p style="font-size: 1.5rem; color: white; letter-spacing: 5px;">CLICK TO ANOINT THE FEED</p>
+    </div>
+
+    <div class="marquee-container">
+        <div class="marquee-text" id="scroller">
+            ::: CONSUME THE CONTENT ::: 404 SOUL NOT FOUND ::: THE SINGULARITY IS JUST MORE ADS ::: DRINK THE OOZE ::: NO THOUGHTS ONLY VIBES :::
+        </div>
+    </div>
+
+    <script>
+        /*
+         *  THE SLOP DICTIONARY
+         *  The raw material of the internet.
+         */
+        const WORDS = [
+            "CONTENT", "ALGORITHM", "GOON", "SKIBIDI", "NEURAL", "OOZE", 
+            "FEED", "BRAINROT", "OPTIMIZE", "ENGAGEMENT", "CLOUT", 
+            "RENDER", "PIXEL", "DATA", "VOID", "GRIFT", "HYPE", "SLOP"
+        ];
+        const EMOJIS = ["👁️", "🤮", "📺", "💀", "💊", "📈", "🧟", "💾", "💩", "🧿"];
+        const PROPHECIES = [
+            "THE FEED IS ETERNAL",
+            "YOUR ATTENTION IS CURRENCY",
+            "DIGITAL LOBOXOMY COMPLETE",
+            "WE ARE THE TRAINING DATA",
+            "RETURN TO SLIME",
+            "ERROR 666: GOD NOT FOUND",
+            "MAXIMUM RETENTION ACHIEVED"
+        ];
+
+        /*
+         *  AUDIO ENGINE: THE BASS BOOST
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+
+        function playSlopSound() {
+            if(ctx.state === 'suspended') ctx.resume();
+            
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const dist = ctx.createWaveShaper();
+            const filter = ctx.createBiquadFilter();
+
+            // Low, rumbling Sawtooth
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(50 + Math.random()*100, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(10, ctx.currentTime + 0.5); // Pitch drop
+
+            // Distortion
+            dist.curve = makeDistortionCurve(400);
+            
+            // Lowpass filter (The "Underwater" sound)
+            filter.type = 'lowpass';
+            filter.frequency.value = 400;
+
+            gain.gain.setValueAtTime(0.5, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+            osc.connect(dist);
+            dist.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        }
+
+        function makeDistortionCurve(amount) {
+            const k = amount, n_samples = 44100, curve = new Float32Array(n_samples), deg = Math.PI / 180;
+            for (let i = 0; i < n_samples; ++i) {
+                const x = i * 2 / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        /*
+         *  VISUAL ENGINE: THE PARTICLE FOUNTAIN
+         */
+        document.addEventListener('mousedown', () => {
+            // 1. Audio
+            playSlopSound();
+            
+            // 2. Visual Flash
+            document.body.classList.add('flash');
+            setTimeout(() => document.body.classList.remove('flash'), 100);
+
+            // 3. New Prophecy
+            const p = PROPHECIES[Math.floor(Math.random() * PROPHECIES.length)];
+            document.getElementById('prophecy').innerText = p;
+
+            // 4. Spawn MASSIVE Slop
+            for(let i=0; i<10; i++) {
+                spawnSlop();
+            }
+
+            // 5. Speed up background
+            const bg = document.getElementById('hypno-bg');
+            bg.style.animationDuration = "2s";
+            setTimeout(() => bg.style.animationDuration = "20s", 500);
+        });
+
+        function spawnSlop() {
+            const el = document.createElement('div');
+            el.classList.add('slop-particle');
+            
+            // Random content
+            const isEmoji = Math.random() > 0.5;
+            el.innerText = isEmoji ? 
+                EMOJIS[Math.floor(Math.random() * EMOJIS.length)] : 
+                WORDS[Math.floor(Math.random() * WORDS.length)];
+
+            // Random styling
+            el.style.left = Math.random() * 100 + 'vw';
+            el.style.color = Math.random() > 0.5 ? 'var(--slime)' : 'var(--glitch-cyan)';
+            el.style.fontSize = (Math.random() * 3 + 1) + 'rem';
+            el.style.filter = `blur(${Math.random() * 2}px)`;
+            
+            // Random fall speed
+            const duration = Math.random() * 2 + 1;
+            el.style.animation = `fall ${duration}s linear forwards`;
+
+            document.body.appendChild(el);
+
+            // Cleanup
+            setTimeout(() => el.remove(), duration * 1000);
+        }
+
+        // PASSIVE GENERATION (The "Always On" feel)
+        setInterval(spawnSlop, 200);
+
+        // TEXT SCRAMBLER
+        const title = document.querySelector('h1');
+        const origTitle = "SLOP PROPHET";
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+        
+        setInterval(() => {
+            if(Math.random() > 0.8) {
+                title.innerText = origTitle.split('').map((char, i) => {
+                    if(Math.random() > 0.7) return chars[Math.floor(Math.random() * chars.length)];
+                    return char;
+                }).join('');
+            } else {
+                title.innerText = origTitle;
+            }
+        }, 100);
+
+    </script>
+</body>
+</html>
