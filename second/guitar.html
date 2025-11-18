@@ -3,227 +3,419 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JS CYBER-AXE // WEBAUDIO</title>
+    <title>Pro JS Guitar</title>
     <style>
         :root {
-            --bg: #111;
-            --fret: #222;
-            --wood: #1a1a1a;
-            --string-idle: #555;
-            --string-hot: #00ffcc; /* Neon Cyan */
-            --gold: #ffcc00;
-            --glow: rgba(0, 255, 204, 0.5);
+            --wood-dark: #3e2211;
+            --wood-light: #5e3b22;
+            --gold: #d4af37;
         }
 
         body {
-            margin: 0;
-            background: var(--bg);
-            height: 100vh;
+            background-color: #151515;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+            color: white;
             user-select: none;
+            overflow: hidden;
         }
 
-        /* UI OVERLAY */
-        #controls {
-            position: absolute;
-            top: 20px;
+        /* Controls Header */
+        .controls {
             display: flex;
             gap: 20px;
-            z-index: 10;
-        }
-
-        .pedal {
-            background: #333;
-            border: 2px solid #555;
-            color: #aaa;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            text-transform: uppercase;
-            font-weight: bold;
-            font-size: 0.8rem;
-            transition: 0.2s;
-            box-shadow: 0 5px 10px rgba(0,0,0,0.5);
-        }
-
-        .pedal.active {
-            background: var(--fret);
-            border-color: var(--string-hot);
-            color: var(--string-hot);
-            box-shadow: 0 0 15px var(--glow);
-            text-shadow: 0 0 5px var(--string-hot);
-        }
-
-        .pedal:active { transform: translateY(2px); }
-
-        /* GUITAR BODY */
-        #guitar-neck {
-            position: relative;
-            width: 800px;
-            height: 300px;
-            background: linear-gradient(90deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
+            margin-bottom: 20px;
+            background: #222;
+            padding: 15px;
             border-radius: 10px;
-            box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 20px 50px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+            align-items: center;
+        }
+
+        .btn {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: inherit;
+            transition: all 0.1s;
+            text-transform: uppercase;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .btn:active { transform: scale(0.95); }
+        .btn.active { background: #b00; border-color: #f00; box-shadow: 0 0 10px #b00; }
+
+        .fret-display {
+            font-size: 20px;
+            color: var(--gold);
+            min-width: 80px;
+            text-align: center;
+        }
+
+        /* Guitar Body */
+        .guitar-body {
+            position: relative;
+            width: 320px;
+            height: 420px;
+            background: radial-gradient(circle, var(--wood-light) 20%, var(--wood-dark) 100%);
+            border-radius: 40px 40px 60px 60px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
             display: flex;
-            flex-direction: column;
-            justify-content: space-evenly;
-            padding: 20px 0;
-            border-right: 10px solid #444; /* Nut */
+            justify-content: center;
+            border: 6px solid #1a0d06;
+            transition: transform 0.05s;
         }
 
-        /* Frets */
-        .fret-marker {
-            position: absolute;
-            top: 0; bottom: 0; width: 4px; background: #444;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
-            z-index: 0;
+        /* The "Slam" visual effect */
+        .guitar-body.slammed {
+            transform: scale(0.98) translateY(5px);
+            box-shadow: 0 5px 10px rgba(0,0,0,1);
         }
 
-        /* Canvas Layer for Vibrating Strings */
-        #string-canvas {
+        .sound-hole {
             position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 240px;
+            height: 240px;
+            background-color: #120804;
+            border-radius: 50%;
+            border: 8px solid #2a150b;
+            box-shadow: inset 0 0 40px #000;
+            z-index: 1;
+        }
+
+        .strings-container {
+            position: absolute;
+            top: -10px;
+            bottom: -10px;
+            width: 220px;
+            display: flex;
+            justify-content: space-between;
             z-index: 2;
+        }
+
+        .string-wrapper {
+            position: relative;
+            height: 100%;
+            width: 35px;
+            display: flex;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .string {
+            width: 2px;
+            background: #ccc;
+            height: 100%;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            transition: transform 0.05s;
+        }
+
+        /* String styles */
+        .string-wrapper:nth-child(1) .string { width: 5px; background: #b8860b; } 
+        .string-wrapper:nth-child(2) .string { width: 4px; background: #b8860b; }
+        .string-wrapper:nth-child(3) .string { width: 3px; background: #d4af37; }
+        .string-wrapper:nth-child(4) .string { width: 2.5px; }
+        .string-wrapper:nth-child(5) .string { width: 2px; }
+        .string-wrapper:nth-child(6) .string { width: 1.5px; }
+
+        .key-hint {
+            position: absolute;
+            bottom: 30px;
+            background: #000;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
             pointer-events: none;
         }
 
-        /* Hitbox layer for Mouse Interaction */
-        .string-hitbox {
-            position: absolute;
-            left: 0; width: 100%; height: 40px;
-            z-index: 3;
-            cursor: row-resize;
-            /* Invisible but interactable */
-            background: transparent; 
+        /* Vibration Keyframes */
+        .vibrating { animation: vibrate 0.08s infinite linear; }
+        @keyframes vibrate {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(1.5px); }
+            75% { transform: translateX(-1.5px); }
+            100% { transform: translateX(0); }
         }
 
-        /* INSTRUCTIONS */
-        #instruction {
+        .instructions {
             margin-top: 30px;
-            color: #666;
+            color: #888;
             text-align: center;
-            font-size: 0.9rem;
-            line-height: 1.5;
+            font-size: 14px;
+            line-height: 1.6;
         }
-        
         kbd {
             background: #333;
-            padding: 2px 5px;
-            border-radius: 3px;
-            color: var(--string-hot);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            color: #eee;
         }
-
     </style>
 </head>
 <body>
 
-    <div id="controls">
-        <div class="pedal active" id="btn-amp" onclick="togglePedal('amp')">Overdrive</div>
-        <div class="pedal active" id="btn-delay" onclick="togglePedal('delay')">Echo Delay</div>
-        <div class="pedal" id="btn-clean" onclick="togglePedal('clean')">Clean Tone</div>
+    <div class="controls">
+        <div>
+            <button class="btn" id="btn-dist" onclick="toggleDistortion()">Distortion: OFF</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <button class="btn" onclick="changeFret(-1)">⬇ Fret</button>
+            <div class="fret-display" id="fret-display">Fret 0</div>
+            <button class="btn" onclick="changeFret(1)">⬆ Fret</button>
+        </div>
     </div>
 
-    <div id="guitar-neck">
-        <!-- VISUAL FRETS -->
-        <div class="fret-marker" style="left: 15%"></div>
-        <div class="fret-marker" style="left: 28%"></div>
-        <div class="fret-marker" style="left: 39%"></div>
-        <div class="fret-marker" style="left: 49%"></div>
-        <div class="fret-marker" style="left: 58%"></div>
-        <div class="fret-marker" style="left: 66%"></div>
-        <div class="fret-marker" style="left: 73%"></div>
-        
-        <!-- CANVAS FOR PHYSICS -->
-        <canvas id="string-canvas"></canvas>
-
-        <!-- INTERACTION ZONES -->
-        <!-- Calculating roughly where strings are vertically -->
-        <div class="string-hitbox" style="top: 35px;" onmouseenter="strum(5)"></div>
-        <div class="string-hitbox" style="top: 75px;" onmouseenter="strum(4)"></div>
-        <div class="string-hitbox" style="top: 115px;" onmouseenter="strum(3)"></div>
-        <div class="string-hitbox" style="top: 155px;" onmouseenter="strum(2)"></div>
-        <div class="string-hitbox" style="top: 195px;" onmouseenter="strum(1)"></div>
-        <div class="string-hitbox" style="top: 235px;" onmouseenter="strum(0)"></div>
+    <div class="guitar-body" id="guitar-body">
+        <div class="sound-hole"></div>
+        <div class="strings-container" id="strings">
+            <!-- Strings generated via JS -->
+        </div>
     </div>
 
-    <div id="instruction">
-        CLICK SCREEN TO ACTIVATE AUDIO<br>
-        Mouse over strings to strum. <br>
-        Keys <kbd>1-6</kbd> to pluck. <kbd>SPACE</kbd> to slam. <kbd>SHIFT</kbd> to mute.
+    <div class="instructions">
+        <p>Play: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>G</kbd> <kbd>H</kbd></p>
+        <p><strong>SLAM / MUTE:</strong> Press <kbd>SPACEBAR</kbd></p>
+        <p>Change Fret: <kbd>⬆</kbd> <kbd>⬇</kbd> arrows</p>
     </div>
 
     <script>
-        /* 
-         *  THE AUDIO ENGINE (Web Audio API)
-         */
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioContext();
+        // --- CONFIGURATION ---
+        const baseFrequencies = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63]; // E A D G B E
+        const keys = ['a', 's', 'd', 'f', 'g', 'h'];
         
-        // Resume audio context on first click (Chrome policy)
-        document.addEventListener('click', () => {
-            if (ctx.state === 'suspended') ctx.resume();
+        let audioCtx;
+        let masterGain;
+        let distortionNode;
+        
+        // State
+        let currentFret = 0;
+        let isDistortion = false;
+        let activeNodes = []; // Track playing sounds to kill them on "Slam"
+
+        const stringsContainer = document.getElementById('strings');
+        const fretDisplay = document.getElementById('fret-display');
+        const distBtn = document.getElementById('btn-dist');
+        const guitarBody = document.getElementById('guitar-body');
+
+        // --- INITIALIZATION ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.5;
+
+                // Create Distortion Node (WaveShaper)
+                distortionNode = audioCtx.createWaveShaper();
+                distortionNode.curve = makeDistortionCurve(400); // 400 = amount of grit
+                distortionNode.oversample = '4x';
+
+                // Initial routing: Master -> Destination
+                masterGain.connect(audioCtx.destination);
+            }
+        }
+
+        // Create Distortion Curve (Math stuff for electric sound)
+        function makeDistortionCurve(amount) {
+            const k = typeof amount === 'number' ? amount : 50;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            const deg = Math.PI / 180;
+            for (let i = 0; i < n_samples; ++i) {
+                const x = i * 2 / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        // --- UI GENERATION ---
+        baseFrequencies.forEach((freq, index) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'string-wrapper';
+            
+            const stringDiv = document.createElement('div');
+            stringDiv.className = 'string';
+            
+            const hint = document.createElement('div');
+            hint.className = 'key-hint';
+            hint.innerText = keys[index].toUpperCase();
+
+            wrapper.appendChild(stringDiv);
+            wrapper.appendChild(hint);
+            stringsContainer.appendChild(wrapper);
+
+            // Mouse Click
+            wrapper.addEventListener('mousedown', () => {
+                initAudio();
+                playString(index);
+            });
         });
 
-        // GUITAR TUNING (Standard E)
-        // Frequencies: Low E, A, D, G, B, High E
-        const tuning = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
-        
-        // FX STATE
-        let settings = {
-            distortion: true,
-            delay: true,
-            gain: 0.3
-        };
+        // --- AUDIO ENGINE ---
 
-        /*
-         *  SYNTHESIZER LOGIC
-         *  Simulates a plucked string using Subtractive Synthesis
-         *  Sawtooth Wave (Harmonics) -> Lowpass Filter (Body) -> Envelope (Pluck)
-         */
-        function playNote(frequency, velocity = 1) {
-            if (ctx.state === 'suspended') ctx.resume();
+        function getFrequency(baseFreq, fret) {
+            // Formula to increase pitch by semitones
+            return baseFreq * Math.pow(2, fret / 12);
+        }
 
-            const t = ctx.currentTime;
+        function playString(index) {
+            if(!audioCtx) initAudio();
+
+            const baseFreq = baseFrequencies[index];
+            const freq = getFrequency(baseFreq, currentFret);
+            const now = audioCtx.currentTime;
+
+            // 1. Oscillator (The String)
+            const osc = audioCtx.createOscillator();
+            osc.type = isDistortion ? 'sawtooth' : 'triangle'; // Sawtooth is buzzier
+            osc.frequency.value = freq;
+
+            // 2. String Gain (Envelope)
+            const noteGain = audioCtx.createGain();
             
-            // 1. SOURCE: Oscillator
-            const osc = ctx.createOscillator();
-            osc.type = 'sawtooth'; // Sawtooth has the buzz needed for guitar
-            osc.frequency.value = frequency;
+            // 3. Connect the path
+            osc.connect(noteGain);
 
-            // 2. FILTER: Simulates the "pluck" sound (starts bright, gets dull)
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.Q.value = 1; // Resonance
-            filter.frequency.setValueAtTime(3000, t); // Start open (bright)
-            filter.frequency.exponentialRampToValueAtTime(100, t + 0.4); // Close quickly
-
-            // 3. GAIN: Envelope (ADSRish)
-            const gainNode = ctx.createGain();
-            gainNode.gain.setValueAtTime(0, t);
-            gainNode.gain.linearRampToValueAtTime(settings.gain * velocity, t + 0.01); // Attack
-            gainNode.gain.exponentialRampToValueAtTime(0.001, t + 2.0); // Long Decay
-
-            // 4. EFFECTS CHAIN
-            // Connect Source -> Filter -> Gain
-            osc.connect(filter);
-            filter.connect(gainNode);
-
-            let output = gainNode;
-
-            // FX: DISTORTION (WaveShaper)
-            if (settings.distortion) {
-                const dist = ctx.createWaveShaper();
-                dist.curve = makeDistortionCurve(400); // Amount of crunch
-                dist.oversample = '4x';
-                output.connect(dist);
-                output = dist;
+            if (isDistortion) {
+                // Osc -> NoteGain -> Distortion -> Master
+                noteGain.connect(distortionNode);
+                distortionNode.connect(masterGain);
+                // Electric guitars sustain longer
+                noteGain.gain.setValueAtTime(0, now);
+                noteGain.gain.linearRampToValueAtTime(0.8, now + 0.02); 
+                noteGain.gain.exponentialRampToValueAtTime(0.01, now + 2.5); 
+            } else {
+                // Osc -> NoteGain -> Master
+                noteGain.connect(masterGain);
+                // Acoustic decays faster
+                noteGain.gain.setValueAtTime(0, now);
+                noteGain.gain.linearRampToValueAtTime(1, now + 0.02); 
+                noteGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5); 
             }
 
-            // FX: DELAY (Echo)
-            if (settings.delay) {
+            osc.start(now);
+            osc.stop(now + 3);
+
+            // Track this node so we can stop it on "Slam"
+            const nodeObj = { osc, noteGain };
+            activeNodes.push(nodeObj);
+
+            // Cleanup automatically
+            osc.onended = () => {
+                activeNodes = activeNodes.filter(n => n !== nodeObj);
+            };
+
+            // 4. Visual Animation
+            const stringEl = document.querySelectorAll('.string')[index];
+            stringEl.classList.remove('vibrating');
+            void stringEl.offsetWidth; // Reset reflow
+            stringEl.classList.add('vibrating');
+            
+            setTimeout(() => stringEl.classList.remove('vibrating'), isDistortion ? 600 : 300);
+        }
+
+        // --- THE SLAM FUNCTION ---
+        function slamGuitar() {
+            if(!audioCtx) initAudio();
+            const now = audioCtx.currentTime;
+
+            // 1. Kill all ringing strings
+            activeNodes.forEach(node => {
+                // Fast ramp down to avoid clicking
+                node.noteGain.gain.cancelScheduledValues(now);
+                node.noteGain.gain.setValueAtTime(node.noteGain.gain.value, now);
+                node.noteGain.gain.linearRampToValueAtTime(0, now + 0.05);
+                node.osc.stop(now + 0.06);
+            });
+            activeNodes = [];
+
+            // 2. Play Percussive "Thud"
+            const thudOsc = audioCtx.createOscillator();
+            const thudGain = audioCtx.createGain();
+            
+            thudOsc.frequency.setValueAtTime(60, now); // Low bass thump
+            thudOsc.frequency.exponentialRampToValueAtTime(0.01, now + 0.2);
+            
+            thudGain.gain.setValueAtTime(0.8, now);
+            thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+            thudOsc.connect(thudGain);
+            thudGain.connect(masterGain); // Bypass distortion for the slap
+            
+            thudOsc.start(now);
+            thudOsc.stop(now + 0.2);
+
+            // 3. Visual feedback
+            guitarBody.classList.add('slammed');
+            setTimeout(() => guitarBody.classList.remove('slammed'), 100);
+        }
+
+        // --- CONTROLS LOGIC ---
+
+        function toggleDistortion() {
+            initAudio();
+            isDistortion = !isDistortion;
+            if(isDistortion) {
+                distBtn.innerText = "Distortion: ON";
+                distBtn.classList.add('active');
+            } else {
+                distBtn.innerText = "Distortion: OFF";
+                distBtn.classList.remove('active');
+            }
+        }
+
+        function changeFret(amount) {
+            currentFret += amount;
+            // Capo limits (-2 to 12)
+            if(currentFret < -2) currentFret = -2;
+            if(currentFret > 12) currentFret = 12;
+            
+            fretDisplay.innerText = currentFret === 0 ? "Open" : `Fret ${currentFret}`;
+        }
+
+        // --- INPUT HANDLERS ---
+        document.addEventListener('keydown', (e) => {
+            if(e.repeat) return;
+
+            // Slam
+            if(e.code === 'Space') {
+                e.preventDefault(); // Stop scrolling
+                slamGuitar();
+                return;
+            }
+
+            // Fret Navigation
+            if(e.code === 'ArrowUp') {
+                e.preventDefault();
+                changeFret(1);
+                return;
+            }
+            if(e.code === 'ArrowDown') {
+                e.preventDefault();
+                changeFret(-1);
+                return;
+            }
+
+            // Strings
+            const keyIndex = keys.indexOf(e.key.toLowerCase());
+            if(keyIndex !== -1) {
+                playString(keyIndex);
+            }
+        });
+
+    </script>
+</body>
+</html>
