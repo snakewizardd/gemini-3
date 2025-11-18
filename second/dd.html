@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ENLIST NOW - BATTLESHITS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Courier+Prime:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink-black: #1a1a1a;
+            --propaganda-red: #b30000;
+            --paper-cream: #f4e4bc;
+            --accent-gold: #d4af37;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'Anton', sans-serif;
+        }
+
+        /* --- POSTER CONTAINER --- */
+        #poster {
+            width: 600px;
+            height: 850px;
+            background-color: var(--paper-cream);
+            position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            overflow: hidden;
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: transform 0.1s;
+        }
+
+        /* --- PAPER TEXTURE & GRIT --- */
+        #poster::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: 99;
+            mix-blend-mode: multiply;
+        }
+
+        /* --- GEOMETRY LAYER --- */
+        .shape {
+            position: absolute;
+            mix-blend-mode: multiply;
+        }
+
+        /* The Sunburst */
+        .ray-box {
+            position: absolute;
+            top: 40%; left: 50%;
+            width: 800px; height: 800px;
+            transform: translate(-50%, -50%);
+            animation: spin 60s linear infinite;
+            z-index: 0;
+            opacity: 0.5;
+        }
+        .ray {
+            position: absolute;
+            top: 0; left: 50%;
+            width: 40px; height: 50%;
+            background: var(--propaganda-red);
+            transform-origin: bottom center;
+        }
+
+        /* The Toilet Monolith (CSS Art) */
+        .toilet-base {
+            bottom: 150px; left: 50%;
+            width: 200px; height: 150px;
+            background: var(--ink-black);
+            transform: translateX(-50%);
+            clip-path: polygon(10% 0, 90% 0, 100% 100%, 0% 100%);
+            z-index: 2;
+        }
+        .toilet-tank {
+            bottom: 300px; left: 50%;
+            width: 240px; height: 150px;
+            background: var(--propaganda-red);
+            transform: translateX(-50%);
+            clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
+            z-index: 1;
+        }
+        .toilet-seat {
+            bottom: 280px; left: 50%;
+            width: 260px; height: 40px;
+            background: var(--ink-black);
+            transform: translateX(-50%);
+            border-radius: 10px;
+            z-index: 3;
+        }
+
+        /* --- TYPOGRAPHY --- */
+        .header-text {
+            position: absolute;
+            top: 30px; width: 100%;
+            text-align: center;
+            font-size: 8rem;
+            color: var(--ink-black);
+            line-height: 0.8;
+            z-index: 5;
+            text-transform: uppercase;
+            transform: rotate(-2deg);
+        }
+
+        .sub-text {
+            position: absolute;
+            top: 160px; width: 100%;
+            text-align: center;
+            font-size: 3rem;
+            color: var(--propaganda-red);
+            background: var(--ink-black);
+            padding: 10px 0;
+            transform: rotate(2deg);
+            z-index: 6;
+        }
+
+        .bottom-text {
+            position: absolute;
+            bottom: 30px; width: 100%;
+            text-align: center;
+            font-size: 4rem;
+            color: var(--propaganda-red);
+            border-top: 10px solid var(--ink-black);
+            border-bottom: 10px solid var(--ink-black);
+            padding: 10px 0;
+            background: var(--paper-cream);
+            z-index: 5;
+        }
+
+        .quote {
+            position: absolute;
+            bottom: 180px; width: 100%;
+            text-align: center;
+            font-family: 'Courier Prime', monospace;
+            font-size: 1.2rem;
+            color: var(--ink-black);
+            z-index: 5;
+            font-weight: bold;
+        }
+
+        /* --- STAMP EFFECT --- */
+        #stamp {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg) scale(2);
+            border: 10px solid var(--propaganda-red);
+            padding: 20px;
+            color: var(--propaganda-red);
+            font-size: 5rem;
+            opacity: 0;
+            transition: 0.1s;
+            z-index: 100;
+            mix-blend-mode: multiply;
+            pointer-events: none;
+            white-space: nowrap;
+            background: rgba(244, 228, 188, 0.8);
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        .grain {
+            position: absolute;
+            top: -50%; left: -50%; width: 200%; height: 200%;
+            background: transparent;
+            animation: grainMove 0.5s steps(5) infinite;
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 98;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="poster" onclick="stampPoster()">
+        <!-- BACKGROUND RAYS -->
+        <div class="ray-box">
+            <div class="ray" style="transform: rotate(0deg)"></div>
+            <div class="ray" style="transform: rotate(20deg)"></div>
+            <div class="ray" style="transform: rotate(40deg)"></div>
+            <div class="ray" style="transform: rotate(60deg)"></div>
+            <div class="ray" style="transform: rotate(80deg)"></div>
+            <div class="ray" style="transform: rotate(100deg)"></div>
+            <div class="ray" style="transform: rotate(120deg)"></div>
+            <div class="ray" style="transform: rotate(140deg)"></div>
+            <div class="ray" style="transform: rotate(160deg)"></div>
+            <div class="ray" style="transform: rotate(180deg)"></div>
+            <div class="ray" style="transform: rotate(200deg)"></div>
+            <div class="ray" style="transform: rotate(220deg)"></div>
+            <div class="ray" style="transform: rotate(240deg)"></div>
+            <div class="ray" style="transform: rotate(260deg)"></div>
+            <div class="ray" style="transform: rotate(280deg)"></div>
+            <div class="ray" style="transform: rotate(300deg)"></div>
+            <div class="ray" style="transform: rotate(320deg)"></div>
+            <div class="ray" style="transform: rotate(340deg)"></div>
+        </div>
+
+        <!-- TEXT LAYERS -->
+        <div class="header-text">PUSH</div>
+        <div class="sub-text">FOR GLORY</div>
+
+        <!-- THE TOILET MONOLITH -->
+        <div class="shape toilet-tank"></div>
+        <div class="shape toilet-base"></div>
+        <div class="shape toilet-seat"></div>
+
+        <!-- FIST ICON (CSS) -->
+        <div style="
+            position: absolute; bottom: 350px; left: 50%; transform: translateX(-50%);
+            width: 80px; height: 120px; background: var(--ink-black);
+            border-radius: 20px 20px 5px 5px; z-index: 4;
+            box-shadow: 10px 10px 0 rgba(0,0,0,0.2);
+        "></div>
+        <div style="
+            position: absolute; bottom: 450px; left: 50%; transform: translateX(-50%);
+            width: 20px; height: 100px; background: #8b5a2b; z-index: 3;
+        "></div>
+
+        <div class="quote">"THE ONLY THING WE HAVE TO FEAR<br>IS THE STRAIN ITSELF."</div>
+
+        <div class="bottom-text">ENLIST TODAY</div>
+
+        <!-- THE STAMP -->
+        <div id="stamp">BOWELS: CLEARED</div>
+    </div>
+
+    <script>
+        function stampPoster() {
+            const stamp = document.getElementById('stamp');
+            const audio = new AudioContext();
+            
+            // VISUAL
+            stamp.style.opacity = 1;
+            stamp.style.transform = "translate(-50%, -50%) rotate(-15deg) scale(1)";
+
+            // AUDIO (Heavy Stamp Sound)
+            if (audio.state === 'suspended') audio.resume();
+            const osc = audio.createOscillator();
+            const gain = audio.createGain();
+            
+            osc.frequency.setValueAtTime(150, audio.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(0.01, audio.currentTime + 0.2);
+            osc.type = 'square';
+            
+            gain.gain.setValueAtTime(1, audio.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audio.currentTime + 0.2);
+
+            osc.connect(gain);
+            gain.connect(audio.destination);
+            osc.start();
+            osc.stop(audio.currentTime + 0.2);
+        }
+
+        // 3D Tilt Effect on Mouse Move
+        document.addEventListener('mousemove', (e) => {
+            const poster = document.getElementById('poster');
+            const x = (window.innerWidth / 2 - e.pageX) / 30;
+            const y = (window.innerHeight / 2 - e.pageY) / 30;
+            poster.style.transform = `rotateY(${x}deg) rotateX(${y}deg)`;
+        });
+    </script>
+</body>
+</html>
