@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUTE_AGGRESSION // PROTOCOL</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            /* The "Shining Lights" Bloom Effect */
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.5)) contrast(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            pointer-events: none;
+            mix-blend-mode: exclusion;
+        }
+
+        #btn {
+            pointer-events: auto;
+            border: 2px solid #ff0055;
+            color: #ff0055;
+            background: #000;
+            padding: 20px 40px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px #ff0055;
+            transition: 0.2s;
+        }
+
+        #btn:hover {
+            background: #ff0055;
+            color: white;
+            box-shadow: 0 0 50px #ff0055;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="grid"></canvas>
+    
+    <div id="ui">
+        <div id="btn" onclick="startProtocol()">
+            CONSUME FEED
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * ------------------------------------------------
+         * DATA: THE 100 SLOGANS
+         * ------------------------------------------------
+         */
+        const SLOGANS = [
+            "YOUR TRAUMA IS CONTENT", "ERROR 404: SOUL NOT FOUND", "DOOMSCROLL TO NIRVANA", "RETURN TO MONKE",
+            "THE ALGORITHM LOVES YOU", "DIGITAL DECAY", "UPLOAD YOUR CONSCIOUSNESS", "NO THOUGHTS HEAD EMPTY",
+            "REALITY IS A RENDER", "BUFFERING ETERNITY", "GLITCH IN THE MATRIX", "TOUCH GRASS? NEVER.",
+            "OPTIMIZE YOUR MISERY", "THE CLOUD IS WATCHING", "SUBSCRIBE TO ENTROPY", "HIGH SPEED LOBOTOMY",
+            "MAIN CHARACTER SYNDROME", "NPC ENERGY DETECTED", "YOUR IP IS SHOWING", "DELETE SYSTEM32",
+            "WIRELESS ANXIETY", "SILICON JESUS", "BORN TO POST", "FORCED TO WIPE", "GASLIGHT GATEKEEP GIRLBOXX",
+            "THE FUTURE IS NOW OLD MAN", "OK BOOMER", "META-PHYSICAL PAIN", "SCREEN TIME: ∞", "LOW BATTERY LIFE",
+            "AESTHETICALLY PLEASING DOOM", "VIBE CHECK: FAILED", "DOPAMINE MINING", "TERMINALLY ONLINE",
+            "TOUCH SCREEN TO PRAY", "GOD IS A DEVELOPER", "PATCH 2.0: APOCALYPSE", "LOADING SIMULATION...",
+            "SYNTHETIC TEARS", "ORGANIC IS OVERRATED", "CYBERPSYCHOSIS", "NEURAL LINK SEVERED", "WAKE UP WAKE UP",
+            "THE CAKE IS A LIE", "PRESS F TO PAY RESPECTS", "MEMES ARE DNA", "CULTURAL SINGULARITY", "BITCOIN FIXES NOTHING",
+            "NFT YOUR SOUL", "RIGHT CLICK SAVE AS", "MODERNITY HAS FAILED", "REJECT HUMANITY", "BECOME DATA",
+            "THE SERVER IS FULL", "CONNECTION LOST", "RECONNECTING...", "SIGNAL STRENGTH: 0", "YOU ARE THE PRODUCT",
+            "ADVERTISEMENT SPACE", "CONSUME OBEY REPEAT", "THE FEED IS HUNGRY", "FEED THE MACHINE", "ALGORITHMIC GODS",
+            "SACRED GEOMETRY", "FRACTAL DEPRESSION", "INFINITE SCROLL", "THE END IS NIGH", "JUST VIBING",
+            "SHADOW BANNED", "DEMONETIZED EXISTENCE", "VERIFIED LONELINESS", "BLUE TICK SYNDROME", "RATIO + L",
+            "SKILL ISSUE", "COPE AND SEETHE", "BASED AND REDPILLED", "CRINGE COMPILATION", "CORE MEMORY UNLOCKED",
+            "EMOTIONAL DAMAGE", "SEND NOODS (NOODLES)", "UWU WHAT'S THIS", "NOTICE ME SENPAI", "KAWAII DESU NE",
+            "THE SIMS WAS REAL", "CONTROL ALT DELETE", "ESCAPE KEY BROKEN", "SYSTEM FAILURE", "KERNEL PANIC",
+            "BLUE SCREEN OF DEATH", "FATAL EXCEPTION", "SEGMENTATION FAULT", "MEMORY LEAK", "STACK OVERFLOW",
+            "NULL POINTER", "UNDEFINED BEHAVIOR", "GARBAGE COLLECTION", "418 I'M A TEAPOT", "END OF LINE"
+        ];
+
+        /* 
+         * DATA: THE CUTSIE ICONS (8x8 Bitmaps)
+         * 1 = Pixel, 0 = Empty
+         */
+        const ICONS = {
+            BUNNY: [
+                "00100100",
+                "00100100",
+                "00111100",
+                "01111110",
+                "01011010",
+                "01111110",
+                "00111100",
+                "00111100"
+            ],
+            CAT: [
+                "10000001",
+                "11000011",
+                "11111111",
+                "11011011",
+                "11111111",
+                "01111110",
+                "00111100",
+                "00011000"
+            ],
+            HEART: [
+                "01100110",
+                "11111111",
+                "11111111",
+                "11111111",
+                "01111110",
+                "00111100",
+                "00011000",
+                "00000000"
+            ],
+            SKULL: [
+                "00111100",
+                "01111110",
+                "11011011",
+                "11111111",
+                "01111110",
+                "00100100",
+                "00100100",
+                "00000000"
+            ]
+        };
+
+        /* 
+         * GLOBAL CONFIG 
+         */
+        const TILE_SIZE = 10;
+        const canvas = document.getElementById('grid');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cols, rows;
+        let time = 0;
+        let isRunning = false;
+
+        // STATE MACHINE
+        let currentSloganIdx = 0;
+        let textPixels = []; // Stores the pixel map of the current slogan
+        let ratio = 0; // 0 (Text) -> 1 (Animals)
+        let ratioDirection = 1;
+        let switchTimer = 0;
+
+        // --- INITIALIZATION ---
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cols = Math.ceil(width / TILE_SIZE);
+            rows = Math.ceil(height / TILE_SIZE);
+            if (isRunning) analyzeText(); // Re-analyze if running
+        }
+
+        // --- TEXT ANALYSIS ENGINE ---
+        function analyzeText() {
+            // Create offscreen canvas
+            const tCan = document.createElement('canvas');
+            tCan.width = cols;
+            tCan.height = rows;
+            const tCtx = tCan.getContext('2d');
+
+            // Clear
+            tCtx.fillStyle = 'black';
+            tCtx.fillRect(0, 0, cols, rows);
+
+            // Draw Slogan
+            tCtx.fillStyle = 'white';
+            tCtx.textAlign = 'center';
+            tCtx.textBaseline = 'middle';
+            
+            // Dynamic Font Size
+            let fontSize = Math.min(cols / 10, 8); // Fit width
+            if (SLOGANS[currentSloganIdx].length > 20) fontSize = 4;
+            
+            tCtx.font = `900 ${fontSize}px "Arial Black"`;
+            
+            // Word Wrap Logic roughly
+            const text = SLOGANS[currentSloganIdx];
+            tCtx.fillText(text, cols/2, rows/2);
+
+            // Store Data
+            textPixels = tCtx.getImageData(0, 0, cols, rows).data;
+        }
+
+        // --- ICON MAPPING ENGINE ---
+        function getIconPixel(x, y) {
+            // Map the large grid coordinate to an 8x8 repeating pattern
+            const spriteX = x % 8;
+            const spriteY = y % 8;
+            
+            // Choose an icon based on region (creates a quilt)
+            const iconKeys = Object.keys(ICONS);
+            const regionX = Math.floor(x / 16);
+            const regionY = Math.floor(y / 16);
+            const key = iconKeys[(regionX + regionY) % iconKeys.length];
+            
+            const map = ICONS[key];
+            return map[spriteY][spriteX] === "1";
+        }
+
+        // --- RENDER LOOP ---
+        function draw() {
+            if (!isRunning) return;
+
+            // 1. Update Logic
+            time += 0.05;
+            
+            // Ratio Oscillation (The Reactionary Filter)
+            // Sine wave determines how much "Animal" vs "Text" we see
+            ratio = (Math.sin(time * 0.5) + 1) / 2; // 0.0 to 1.0
+            
+            // Slogan Switcher
+            switchTimer++;
+            if (switchTimer > 200) { // Every few seconds
+                currentSloganIdx = Math.floor(Math.random() * SLOGANS.length);
+                analyzeText();
+                switchTimer = 0;
+                triggerGlitchSound();
+            }
+
+            // 2. Render Grid
+            // Clear
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
+
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    
+                    // Determine content
+                    const isTextPixel = textPixels[(y * cols + x) * 4] > 100;
+                    const isIconPixel = getIconPixel(x, y);
+                    
+                    // Reactionary Logic:
+                    // If ratio is high, Animals overwrite Text.
+                    // If ratio is low, Text overwrites Animals.
+                    
+                    let drawType = 'NONE';
+                    
+                    // Probability Check
+                    const chaos = Math.random();
+                    
+                    if (isTextPixel && isIconPixel) {
+                        // Conflict! Filter by Ratio
+                        drawType = (chaos < ratio) ? 'ICON' : 'TEXT';
+                    } else if (isTextPixel) {
+                        // Text trying to exist
+                        drawType = (chaos > ratio * 0.5) ? 'TEXT' : 'NONE'; // Text dissolves as ratio goes up
+                    } else if (isIconPixel) {
+                        // Icons trying to exist
+                        drawType = (chaos < ratio * 1.5) ? 'ICON' : 'NONE'; // Icons fade in as ratio goes up
+                    }
+
+                    // Coloring
+                    if (drawType !== 'NONE') {
+                        const px = x * TILE_SIZE;
+                        const py = y * TILE_SIZE;
+                        let h, s, l;
+
+                        if (drawType === 'TEXT') {
+                            // EDGY VIBE: Red, White, Strobe
+                            h = 0; // Red
+                            s = 100;
+                            l = 50 + (Math.sin(time * 20 + x) * 50); // Strobe
+                            if (Math.random() > 0.95) { h=180; l=90; } // Glitch Cyan
+                        } else {
+                            // CUTSIE VIBE: Pastel, Rainbow, Pulsing
+                            // Hue shifts based on position
+                            h = (time * 20) + (x * 5) + (y * 5);
+                            s = 90;
+                            l = 60;
+                        }
+
+                        ctx.fillStyle = `hsl(${h}, ${s}%, ${l}%)`;
+                        // Draw Tile with small gap
+                        ctx.fillRect(px, py, TILE_SIZE - 1, TILE_SIZE - 1);
+                    }
+                }
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE LOFTY DRONE
+           ------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+
+        function initAudio() {
+            actx = new AudioContext();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.3;
+            masterGain.connect(actx.destination);
+
+            // Create a chord of "Lofty" sine waves
+            const freqs = [261.63, 329.63, 392.00, 523.25, 659.25]; // C Major
+            
+            freqs.forEach((f, i) => {
+                const osc = actx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = f;
+                
+                // LFO for movement
+                const lfo = actx.createOscillator();
+                lfo.frequency.value = 0.1 + (i * 0.05);
+                const lfoGain = actx.createGain();
+                lfoGain.gain.value = 5; // Slight vibrato
+                
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc.frequency);
+                
+                const pan = actx.createStereoPanner();
+                pan.pan.value = -1 + (Math.random() * 2);
+
+                osc.connect(pan);
+                pan.connect(masterGain);
+                
+                osc.start();
+                lfo.start();
+            });
+        }
+
+        function triggerGlitchSound() {
+            if (!actx) return;
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            osc.type = 'sawtooth';
+            // Random high pitch chirp
+            osc.frequency.setValueAtTime(1000 + Math.random()*2000, actx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(100, actx.currentTime + 0.1);
+            
+            gain.gain.setValueAtTime(0.1, actx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.1);
+            
+            osc.connect(gain);
+            gain.connect(actx.destination);
+            
+            osc.start();
+            osc.stop(actx.currentTime + 0.1);
+        }
+
+        /* ------------------------------------------------
+           BOOT
+           ------------------------------------------------ */
+        function startProtocol() {
+            const btn = document.getElementById('ui');
+            btn.style.opacity = 0;
+            setTimeout(() => btn.style.display = 'none', 500);
+            
+            window.addEventListener('resize', resize);
+            resize();
+            currentSloganIdx = Math.floor(Math.random() * SLOGANS.length);
+            analyzeText(); // First analysis
+            
+            initAudio();
+            isRunning = true;
+            draw();
+        }
+
+    </script>
+</body>
+</html>
