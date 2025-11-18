@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DESKTOP_98 // MEMORY CARD</title>
+    <style>
+        :root {
+            --win-grey: #c0c0c0;
+            --win-dark: #808080;
+            --win-light: #ffffff;
+            --win-blue: #000080;
+            --desktop-teal: #008080;
+        }
+
+        @font-face {
+            font-family: 'PixelSans';
+            src: local('Courier New'); /* Fallback */
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--desktop-teal);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Modern fallback that looks okay */
+            font-family: "MS Sans Serif", Geneva, sans-serif;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+        }
+
+        /* --- BOOT SEQUENCE --- */
+        #bios-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            color: white;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- DESKTOP ICONS --- */
+        .icon {
+            width: 64px;
+            text-align: center;
+            color: white;
+            margin: 20px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-shadow: 1px 1px 0px black;
+        }
+        .icon img {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 5px;
+            image-rendering: pixelated;
+        }
+        .icon-text {
+            background: transparent;
+            padding: 2px;
+        }
+        .icon:active .icon-text {
+            background: var(--win-blue);
+            border: 1px dotted white;
+        }
+
+        /* --- WINDOWS UI --- */
+        .window {
+            position: absolute;
+            background: var(--win-grey);
+            border-top: 2px solid var(--win-light);
+            border-left: 2px solid var(--win-light);
+            border-right: 2px solid black;
+            border-bottom: 2px solid black;
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+            display: none; /* Hidden by default */
+            flex-direction: column;
+        }
+
+        .title-bar {
+            background: var(--win-blue);
+            color: white;
+            padding: 2px 5px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: default;
+        }
+
+        .close-btn {
+            background: var(--win-grey);
+            color: black;
+            border: 1px outset white;
+            width: 16px; height: 14px;
+            line-height: 12px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-btn:active { border-style: inset; }
+
+        .window-content {
+            padding: 10px;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* --- TASKBAR --- */
+        #taskbar {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%; height: 28px;
+            background: var(--win-grey);
+            border-top: 2px solid var(--win-light);
+            display: flex;
+            align-items: center;
+            padding: 2px;
+            z-index: 1000;
+        }
+
+        #start-btn {
+            display: flex;
+            align-items: center;
+            padding: 2px 5px;
+            border: 2px outset white;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 2px;
+        }
+        #start-btn img { width: 16px; margin-right: 4px; }
+        #start-btn:active { border-style: inset; }
+
+        .clock {
+            margin-left: auto;
+            border: 2px inset white;
+            padding: 2px 10px;
+            margin-right: 5px;
+            font-size: 0.8rem;
+        }
+
+        /* --- SPECIFIC APPS --- */
+        
+        /* PET */
+        #pet-screen {
+            width: 120px; height: 120px;
+            background: #9ea792; /* LCD Green */
+            border: 4px inset #666;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            image-rendering: pixelated;
+            font-family: monospace;
+        }
+        #pet-sprite { font-size: 40px; animation: bounce 1s infinite; }
+        .pet-stats { font-size: 10px; position: absolute; top: 2px; left: 2px; }
+        
+        /* PAINT */
+        #canvas-container { border: 2px inset white; background: white; cursor: crosshair; }
+        .paint-tools { display: flex; gap: 5px; margin-bottom: 5px; }
+        .color-box { width: 15px; height: 15px; border: 1px solid black; cursor: pointer; }
+
+        /* PLAYER */
+        .winamp-skin {
+            background: #222; color: #0f0;
+            font-family: 'Courier New', monospace;
+            padding: 5px; border: 2px solid #555;
+        }
+        .visualizer { height: 30px; background: black; margin-bottom: 5px; display: flex; align-items: flex-end; gap: 1px; }
+        .vis-bar { width: 5%; background: lime; }
+
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* DIAL UP OVERLAY */
+        #modem-window { text-align: center; }
+        .progress-bar { width: 100%; height: 20px; background: white; border: 1px inset grey; margin-top: 10px; position: relative; }
+        .progress-fill { height: 100%; background: blue; width: 0%; transition: width 0.2s; }
+
+    </style>
+</head>
+<body>
+
+    <!-- BIOS BOOT SCREEN -->
+    <div id="bios-screen">
+        <div>AWARD MODULAR BIOS v4.51PG</div>
+        <div>(C) 1998 ENERGY STAR ALLY</div>
+        <br>
+        <div>PENTIUM II-MMX CPU at 233MHz</div>
+        <div>Memory Test: 640K OK</div>
+        <br>
+        <div>DETECTING IDE DRIVES...</div>
+        <div id="boot-text"></div>
+        <br>
+        <div class="blink" id="cursor">_</div>
+    </div>
+
+    <!-- DESKTOP -->
+    <div id="desktop">
+        <!-- ICONS -->
+        <div class="icon" ondblclick="openWindow('modem')">
+            <div style="font-size: 32px;">🌐</div>
+            <div class="icon-text">Internet</div>
+        </div>
+        <div class="icon" ondblclick="openWindow('paint')">
+            <div style="font-size: 32px;">🎨</div>
+            <div class="icon-text">RadPaint</div>
+        </div>
+        <div class="icon" ondblclick="openWindow('pet')">
+            <div style="font-size: 32px;">👾</div>
+            <div class="icon-text">Pocket_Pal</div>
+        </div>
+        <div class="icon" ondblclick="openWindow('player')">
+            <div style="font-size: 32px;">⚡</div>
+            <div class="icon-text">WinAmp</div>
+        </div>
+        <div class="icon" ondblclick="bsod()">
+            <div style="font-size: 32px;">💣</div>
+            <div class="icon-text">Do Not Click</div>
+        </div>
+
+        <!-- WINDOW: INTERNET DIALER -->
+        <div class="window" id="win-modem" style="top: 100px; left: 100px; width: 300px;">
+            <div class="title-bar" onmousedown="startDrag(event, 'win-modem')">
+                <span>Connection Wizard</span>
+                <div class="close-btn" onclick="closeWindow('modem')">X</div>
+            </div>
+            <div class="window-content" id="modem-window">
+                <img src="https://www.w3schools.com/w3css/img_avatar3.png" style="width: 50px; image-rendering: pixelated; filter: grayscale(100%);">
+                <p>Dialing 555-0199...</p>
+                <button onclick="dialUp()" style="padding: 5px 15px;">CONNECT</button>
+                <div class="progress-bar"><div class="progress-fill" id="modem-bar"></div></div>
+                <p id="modem-status" style="font-size: 12px; color: blue;"></p>
+            </div>
+        </div>
+
+        <!-- WINDOW: PAINT -->
+        <div class="window" id="win-paint" style="top: 50px; left: 200px; width: 400px;">
+            <div class="title-bar" onmousedown="startDrag(event, 'win-paint')">
+                <span>RadPaint - Untitled</span>
+                <div class="close-btn" onclick="closeWindow('paint')">X</div>
+            </div>
+            <div class="window-content">
+                <div class="paint-tools">
+                    <button onclick="paintTool='brush'">🖌️</button>
+                    <button onclick="paintTool='spray'">💨</button>
+                    <button onclick="paintTool='eraser'">⬜</button>
+                    <button onclick="clearCanvas()">🗑️</button>
+                    <div class="color-box" style="background:black" onclick="paintColor='black'"></div>
+                    <div class="color-box" style="background:red" onclick="paintColor='red'"></div>
+                    <div class="color-box" style="background:blue" onclick="paintColor='blue'"></div>
+                    <div class="color-box" style="background:lime" onclick="paintColor='lime'"></div>
+                    <div class="color-box" style="background:fuchsia" onclick="paintColor='fuchsia'"></div>
+                </div>
+                <div id="canvas-container">
+                    <canvas id="paintCanvas" width="360" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- WINDOW: PET -->
+        <div class="window" id="win-pet" style="top: 200px; left: 400px; width: 160px;">
+            <div class="title-bar" onmousedown="startDrag(event, 'win-pet')">
+                <span>Pocket_Pal.exe</span>
+                <div class="close-btn" onclick="closeWindow('pet')">X</div>
+            </div>
+            <div class="window-content" style="text-align: center;">
+                <div id="pet-screen">
+                    <div class="pet-stats">HUNGER: <span id="hunger-stat">0</span>%</div>
+                    <div id="pet-sprite">🥚</div>
+                </div>
+                <div style="margin-top: 5px;">
+                    <button onclick="feedPet()">FEED</button>
+                    <button onclick="cleanPet()">CLEAN</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- WINDOW: PLAYER -->
+        <div class="window" id="win-player" style="top: 300px; left: 50px; width: 200px;">
+            <div class="title-bar" onmousedown="startDrag(event, 'win-player')">
+                <span>WinAmp</span>
+                <div class="close-btn" onclick="closeWindow('player')">X</div>
+            </div>
+            <div class="window-content winamp-skin">
+                <div style="margin-bottom: 5px; color: lime;">01. SANDSTORM.MP3</div>
+                <div class="visualizer" id="viz">
+                    <div class="vis-bar" style="height: 20%"></div>
+                    <div class="vis-bar" style="height: 50%"></div>
+                    <div class="vis-bar" style="height: 80%"></div>
+                    <div class="vis-bar" style="height: 40%"></div>
+                    <div class="vis-bar" style="height: 90%"></div>
+                    <div class="vis-bar" style="height: 60%"></div>
+                    <div class="vis-bar" style="height: 30%"></div>
+                    <div class="vis-bar" style="height: 70%"></div>
+                </div>
+                <button onclick="playMusic()">▶</button>
+                <button onclick="stopMusic()">⏹</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TASKBAR -->
+    <div id="taskbar">
+        <div id="start-btn">
+            <span style="font-style: italic; font-weight: 900; margin-right: 2px;">❖</span> Start
+        </div>
+        <div class="clock" id="clock">12:00 PM</div>
+    </div>
+
+    <script>
+        /* 
+         * SYSTEM BOOT LOGIC
+         */
+        setTimeout(() => {
+            const lines = ["LOADING IO.SYS...", "CONFIGURING MEMORY...", "STARTING WINDOWS 98..."];
+            let i = 0;
+            const int = setInterval(() => {
+                if(i >= lines.length) {
+                    clearInterval(int);
+                    setTimeout(() => {
+                        document.getElementById('bios-screen').style.display = 'none';
+                        playStartupSound();
+                    }, 1000);
+                } else {
+                    document.getElementById('boot-text').innerHTML += lines[i] + "<br>";
+                    i++;
+                }
+            }, 800);
+        }, 1000);
+
+        /*
+         *  WINDOW MANAGER
+         */
+        let zIndex = 10;
+        let activeDrag = null;
+        let dragOffset = {x:0, y:0};
+
+        function openWindow(id) {
+            const win = document.getElementById('win-' + id);
+            win.style.display = 'flex';
+            win.style.zIndex = ++zIndex;
+        }
+
+        function closeWindow(id) {
+            document.getElementById('win-' + id).style.display = 'none';
+        }
+
+        function startDrag(e, id) {
+            activeDrag = document.getElementById(id);
+            activeDrag.style.zIndex = ++zIndex;
+            const rect = activeDrag.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            if(activeDrag) {
+                activeDrag.style.left = (e.clientX - dragOffset.x) + 'px';
+                activeDrag.style.top = (e.clientY - dragOffset.y) + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => activeDrag = null);
+
+        /*
+         *  AUDIO ENGINE: DIAL UP & MUSIC
+         */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+
+        function playStartupSound() {
+            // The "Tada" chord
+            if(ctx.state === 'suspended') ctx.resume();
+            const now = ctx.currentTime;
+            createOsc(now, 400, 'triangle', 1);
+            createOsc(now + 0.1, 600, 'triangle', 1);
+            createOsc(now + 0.2, 1000, 'triangle', 2);
+        }
+
+        function createOsc(time, freq, type, dur) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            gain.gain.setValueAtTime(0.1, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+            osc.start(time);
+            osc.stop(time + dur);
+        }
+
+        function dialUp() {
+            const btn = document.querySelector('#modem-window button');
+            btn.disabled = true;
+            const status = document.getElementById('modem-status');
+            const bar = document.getElementById('modem-fill');
+            
+            status.innerText = "Handshaking...";
+            
+            // NOISE
+            const bufferSize = ctx.sampleRate * 2; // 2 seconds
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const gain = ctx.createGain();
+            gain.gain.value = 0.05;
+            noise.connect(gain);
+            gain.connect(ctx.destination);
+            noise.start();
+
+            // BEEPS
+            createOsc(ctx.currentTime, 1200, 'square', 0.5);
+            createOsc(ctx.currentTime+0.5, 1500, 'square', 0.5);
+            createOsc(ctx.currentTime+1.0, 2100, 'sawtooth', 1.5);
+
+            // Progress Bar Animation
+            let prog = 0;
+            const int = setInterval(() => {
+                prog += 5;
+                document.getElementById('modem-bar').style.width = prog + '%';
+                if(prog >= 100) {
+                    clearInterval(int);
+                    status.innerText = "CONNECTED: 28.8 kbps";
+                    btn.disabled = false;
+                }
+            }, 100);
+        }
+
+        /*
+         *  RAD PAINT
+         */
+        const pCanvas = document.getElementById('paintCanvas');
+        const pCtx = pCanvas.getContext('2d');
+        let painting = false;
+        let paintTool = 'brush';
+        let paintColor = 'black';
+
+        pCanvas.addEventListener('mousedown', () => painting = true);
+        pCanvas.addEventListener('mouseup', () => painting = false);
+        pCanvas.addEventListener('mousemove', draw);
+
+        function draw(e) {
+            if(!painting) return;
+            const rect = pCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            pCtx.fillStyle = paintColor;
+            pCtx.strokeStyle = paintColor;
+
+            if(paintTool === 'brush') {
+                pCtx.fillRect(x, y, 4, 4);
+            } else if (paintTool === 'eraser') {
+                pCtx.fillStyle = 'white';
+                pCtx.fillRect(x, y, 10, 10);
+            } else if (paintTool === 'spray') {
+                for(let i=0; i<10; i++) {
+                    const rx = (Math.random() - 0.5) * 15;
+                    const ry = (Math.random() - 0.5) * 15;
+                    pCtx.fillRect(x+rx, y+ry, 1, 1);
+                }
+            }
+        }
+        function clearCanvas() { pCtx.clearRect(0,0,360,250); }
+
+        /*
+         *  POCKET PAL (PET)
+         */
+        let hunger = 0;
+        let petStage = 'egg'; // egg, baby, dead
+        const spriteEl = document.getElementById('pet-sprite');
+        const hungerEl = document.getElementById('hunger-stat');
+
+        setInterval(() => {
+            if(petStage === 'egg') return;
+            if(petStage === 'dead') return;
+            
+            hunger += 2;
+            hungerEl.innerText = hunger;
+            
+            if(hunger > 100) {
+                petStage = 'dead';
+                spriteEl.innerText = '☠️';
+                spriteEl.style.animation = 'none';
+            } else if (hunger > 70) {
+                spriteEl.innerText = '🤢';
+            } else if (Math.random() > 0.9) {
+                spriteEl.innerText = '💩'; // Poop event
+            }
+        }, 1000);
+
+        function feedPet() {
+            if(petStage === 'egg') {
+                petStage = 'baby';
+                spriteEl.innerText = '👾';
+                return;
+            }
+            if(petStage === 'dead') return;
+            hunger = Math.max(0, hunger - 20);
+            hungerEl.innerText = hunger;
+            spriteEl.innerText = '😋';
+            setTimeout(() => spriteEl.innerText = '👾', 500);
+        }
+
+        function cleanPet() {
+            if(spriteEl.innerText === '💩') spriteEl.innerText = '👾';
+        }
+
+        /*
+         *  CLOCK
+         */
+        setInterval(() => {
+            const d = new Date();
+            document.getElementById('clock').innerText = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }, 1000);
+
+        /*
+         *  WINAMP VISUALIZER
+         */
+        let musicInt;
+        function playMusic() {
+            if(musicInt) return;
+            // Play beat
+            const bass = ctx.createOscillator();
+            bass.frequency.value = 100;
+            bass.type = 'square';
+            bass.connect(ctx.destination);
+            bass.start();
+            
+            // Simple beat loop
+            let tick = 0;
+            musicInt = setInterval(() => {
+                bass.frequency.value = (tick % 2 === 0) ? 120 : 60;
+                
+                // Randomize bars
+                const bars = document.querySelectorAll('.vis-bar');
+                bars.forEach(b => b.style.height = Math.random() * 100 + '%');
+                tick++;
+            }, 150);
+        }
+
+        function stopMusic() {
+            if(musicInt) clearInterval(musicInt);
+            musicInt = null;
+            ctx.suspend().then(() => ctx.resume()); // Kill audio
+        }
+
+        /* 
+         * BLUE SCREEN OF DEATH
+         */
+        function bsod() {
+            document.body.innerHTML = `
+                <div style="background:blue; color:white; height:100vh; font-family:monospace; padding:50px;">
+                    <p style="background:grey; color:blue; display:inline-block;">WINDOWS</p>
+                    <br><br>
+                    A fatal exception 0E has occurred at 0028:C0011E36 in VXD VMM(01) + 00010E36. The current application will be terminated.
+                    <br><br>
+                    * Press any key to terminate the current application.<br>
+                    * Press CTRL+ALT+DEL again to restart your computer. You will lose any unsaved information in all applications.
+                    <br><br>
+                    Press any key to continue_
+                </div>
+            `;
+            document.body.onclick = () => location.reload();
+        }
+
+    </script>
+</body>
+</html>
