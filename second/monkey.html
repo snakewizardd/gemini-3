@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐒 LOVIN_TOWN_PROTOCOL 🐒</title>
+    <style>
+        :root {
+            --sun: #ffd700;
+            --weed: #44aa44;
+            --sky: #44ccff;
+            --void: #1a1a1a;
+        }
+
+        body {
+            margin: 0;
+            background: var(--void);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            image-rendering: pixelated;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--sun);
+            text-shadow: 4px 4px 0 #000;
+            z-index: 10;
+            border: 4px solid var(--weed);
+            padding: 2rem;
+            background: rgba(0,0,0,0.8);
+            transition: opacity 0.5s;
+        }
+
+        h1 { font-size: 3rem; margin: 0; text-transform: uppercase; }
+        p { color: var(--sky); font-weight: bold; }
+
+        .stat-monitor {
+            position: absolute;
+            bottom: 10px; left: 10px;
+            color: lime;
+            font-size: 12px;
+            pointer-events: none;
+            white-space: pre;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay" onclick="startTrip()">
+        <h1>ENTER THE GARDEN</h1>
+        <p>CLICK TO START THE EVOLUTION</p>
+    </div>
+    
+    <div class="stat-monitor" id="stats">WAITING FOR INPUT...</div>
+    <canvas id="trip-canvas"></canvas>
+
+    <script>
+        /*
+         *  GLOBAL CONFIG
+         */
+        const BPM = 90; // That laid back Sublime tempo
+        const BEAT_TIME = 60 / BPM;
+        
+        /* ------------------------------------------------------
+           AUDIO ENGINE: THE EVOLUTIONARY DUB SYSTEM
+           ------------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let ctx;
+        let masterGain;
+        let reverbNode;
+        
+        // The "Optimization" Level (0.0 to 1.0)
+        let mixQuality = 0.0; 
+        let evolutionStep = 0;
+
+        // Music State
+        let nextNoteTime = 0;
+        let beatCount = 0;
+
+        // Scales (D Major - Sublime style)
+        const SCALE_BASS = [73.42, 82.41, 92.50, 110.00]; // D2, E2, F#2, A2
+        const SCALE_LEAD = [293.66, 329.63, 369.99, 440.00, 554.37, 587.33]; // D4 Pentatonic
+
+        function initAudio() {
+            ctx = new AudioContext();
+            masterGain = ctx.createGain();
+            masterGain.gain.value = 0.8;
+
+            // CREATE INFINITE REVERB (Convolution)
+            reverbNode = ctx.createConvolver();
+            reverbNode.buffer = createImpulseResponse(3.0, 2.0); // 3 seconds decay
+            reverbNode.normalize = true;
+
+            // Chain
+            masterGain.connect(ctx.destination);
+            // Reverb runs parallel
+            const revGain = ctx.createGain();
+            revGain.gain.value = 0.4;
+            masterGain.connect(reverbNode);
+            reverbNode.connect(revGain);
+            revGain.connect(ctx.destination);
+
+            // Start Loop
+            nextNoteTime = ctx.currentTime;
+            scheduler();
+            
+            // Start Evolution Timer
+            setInterval(evolveMusic, 5000); // Every 5 seconds, improve the algo
+        }
+
+        // Procedural Impulse Response for that "Tunnel" sound
+        function createImpulseResponse(duration, decay) {
+            const rate = ctx.sampleRate;
+            const length = rate * duration;
+            const impulse = ctx.createBuffer(2, length, rate);
+            const left = impulse.getChannelData(0);
+            const right = impulse.getChannelData(1);
+
+            for (let i = 0; i < length; i++) {
+                // Exponential decay with noise
+                const n = length - i;
+                left[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+                right[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            }
+            return impulse;
+        }
+
+        function evolveMusic() {
+            if(mixQuality < 1.0) {
+                mixQuality += 0.1;
+                evolutionStep++;
+                document.getElementById('stats').innerText = 
+                    `ALGORITHM: LEARNING...\nMIX_QUALITY: ${(mixQuality*100).toFixed(0)}%\nGEN: ${evolutionStep}`;
+            } else {
+                document.getElementById('stats').innerText = 
+                    `ALGORITHM: TRANSCENDENT\nMODE: INFINITE DUB`;
+            }
+        }
+
+        function scheduler() {
+            while (nextNoteTime < ctx.currentTime + 0.1) {
+                playBeat(nextNoteTime, beatCount);
+                nextNoteTime += BEAT_TIME / 4; // 16th notes
+                beatCount = (beatCount + 1) % 16;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playBeat(t, step) {
+            // 1. DRUMS (Simple -> Complex)
+            if (step % 8 === 0) playKick(t); // Kick on 1 and 3
+            if (step % 8 === 4 && mixQuality > 0.2) playSnare(t); // Snare on 2 and 4
+            if (step % 2 === 0 && mixQuality > 0.4) playHiHat(t);
+
+            // 2. BASS (Dubby -> Funky)
+            if (step % 4 === 0 || (mixQuality > 0.6 && step % 16 === 14)) {
+                // Choose note
+                const note = SCALE_BASS[Math.floor(Math.random() * SCALE_BASS.length)];
+                playBass(t, note);
+            }
+
+            // 3. SKANK GUITAR (The "Sublime" Offbeat)
+            // Only plays on the "&" of the beat (step 2, 6, 10, 14)
+            if ((step % 4 === 2) && mixQuality > 0.3) {
+                playSkank(t);
+            }
+
+            // 4. LEAD (Procedural Soul)
+            if (mixQuality > 0.8 && Math.random() > 0.7) {
+                 const note = SCALE_LEAD[Math.floor(Math.random() * SCALE_LEAD.length)];
+                 playLead(t, note);
+            }
+        }
+
+        /* --- INSTRUMENTS (Procedural Synthesis) --- */
+
+        function playKick(t) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            gain.gain.setValueAtTime(1.0, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start(t);
+            osc.stop(t + 0.5);
+        }
+
+        function playSnare(t) {
+            // White Noise
+            const bufferSize = ctx.sampleRate * 0.1; 
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+            
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            
+            // Filter (Highpass)
+            const filt = ctx.createBiquadFilter();
+            filt.type = 'highpass';
+            filt.frequency.value = 1000;
+
+            const gain = ctx.createGain();
+            // Mix quality affects snare crispness
+            gain.gain.setValueAtTime(0.5 + (mixQuality * 0.5), t); 
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            
+            noise.connect(filt);
+            filt.connect(gain);
+            gain.connect(masterGain);
+            // Send to reverb for Dub effect
+            if (Math.random() > 0.8) gain.connect(reverbNode); 
+            
+            noise.start(t);
+        }
+
+        function playHiHat(t) {
+            const osc = ctx.createOscillator();
+            osc.type = 'square'; // Metallic
+            // High freq modulation for metallic sound
+            osc.frequency.setValueAtTime(800, t); 
+            
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+            
+            const filt = ctx.createBiquadFilter();
+            filt.type = 'highpass';
+            filt.frequency.value = 8000;
+
+            osc.connect(filt);
+            filt.connect(gain);
+            gain.connect(masterGain);
+            osc.start(t);
+            osc.stop(t + 0.05);
+        }
+
+        function playBass(t, freq) {
+            const osc = ctx.createOscillator();
+            osc.type = mixQuality > 0.7 ? 'sawtooth' : 'sine'; // Gets buzzier later
+            osc.frequency.setValueAtTime(freq, t);
+
+            const filt = ctx.createBiquadFilter();
+            filt.type = 'lowpass';
+            // The filter opens up as the "AI" learns
+            filt.frequency.setValueAtTime(100 + (mixQuality * 400), t); 
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.5, t);
+            gain.gain.linearRampToValueAtTime(0.0, t + 0.4);
+
+            osc.connect(filt);
+            filt.connect(gain);
+            gain.connect(masterGain);
+            osc.start(t);
+            osc.stop(t + 0.4);
+        }
+
+        function playSkank(t) {
+            // Short, sharp chord stab
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            // Play a D Major triad based on random inversion
+            const notes = [293.66, 369.99, 440.00]; 
+            // Simple simulation: just one osc for now to save CPU, modulated
+            osc.frequency.setValueAtTime(notes[0], t);
+
+            const filt = ctx.createBiquadFilter();
+            filt.type = 'highpass';
+            filt.frequency.value = 1500;
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.4, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1); // Super short
+
+            // Delay effect (The Dub Element)
+            const delay = ctx.createDelay();
+            delay.delayTime.value = BEAT_TIME * 0.75; // Dotted 8th delay
+            const delayGain = ctx.createGain();
+            delayGain.gain.value = 0.3;
+
+            osc.connect(filt);
+            filt.connect(gain);
+            gain.connect(masterGain);
+            
+            // Delay path
+            gain.connect(delay);
+            delay.connect(delayGain);
+            delayGain.connect(masterGain);
+            delayGain.connect(delay); // Feedback
+
+            osc.start(t);
+            osc.stop(t + 0.2);
+        }
+
+        function playLead(t, freq) {
+            const osc = ctx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, t);
+            // Slide
+            osc.frequency.linearRampToValueAtTime(freq * 1.01, t + 0.2);
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.3);
+            
+            // Reverb send
+            gain.connect(reverbNode);
+            gain.connect(masterGain);
+
+            osc.start(t);
+            osc.stop(t + 0.3);
+        }
+
+        /* ------------------------------------------------------
+           VISUAL ENGINE: KALEIDOSCOPIC TUNNEL & MONKEYS
+           ------------------------------------------------------ */
+        const canvas = document.getElementById('trip-canvas');
+        const c = canvas.getContext('2d');
+        let width, height, cx, cy;
+        let time = 0;
+
+        let monkeys = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Monkey {
+            constructor() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.z = 1000; // Depth
+                this.jumpPhase = Math.random() * Math.PI;
+                this.color = Math.random() > 0.5 ? '#8b4513' : '#a0522d'; // Brown shades
+            }
+
+            update() {
+                // Move towards camera
+                this.z -= 10 + (mixQuality * 5); // Gets faster as music improves
+                if (this.z < 10) this.z = 1000;
+
+                // Jump physics (Sine wave relative to radius)
+                this.jumpPhase += 0.1;
+            }
+
+            draw() {
+                const scale = 500 / (this.z);
+                const r = (200 * scale); // Base radius of tunnel
+                
+                // Jump height
+                const jumpH = Math.abs(Math.sin(this.jumpPhase)) * (100 * scale);
+                
+                const x = cx + Math.cos(this.angle) * (r - jumpH);
+                const y = cy + Math.sin(this.angle) * (r - jumpH);
+                const size = 30 * scale;
+
+                // DRAW PIXEL MONKEY
+                c.save();
+                c.translate(x, y);
+                c.rotate(this.angle + Math.PI/2); // Rotate to match tunnel wall
+                
+                c.fillStyle = this.color;
+                // Body
+                c.fillRect(-size/2, -size/2, size, size);
+                // Head
+                c.fillRect(-size/3, -size, size/1.5, size/1.5);
+                // Arms (Flailing)
+                c.fillStyle = '#cca';
+                const armWag = Math.sin(time * 10) * (size/2);
+                c.fillRect(-size, -size/2 + armWag, size/2, size/4);
+                c.fillRect(size/2, -size/2 - armWag, size/2, size/4);
+
+                c.restore();
+            }
+        }
+
+        // Spawn Monkeys
+        for(let i=0; i<12; i++) monkeys.push(new Monkey());
+
+        function drawTunnel() {
+            // 1. KALEIDOSCOPE BACKGROUND
+            const rings = 10;
+            c.lineWidth = 5;
+
+            for (let i = 0; i < rings; i++) {
+                const z = (time * 100 + i * 200) % 2000;
+                const scale = 1000 / (2000 - z); // Inverted Z buffer logic
+                const r = 50 * scale;
+                
+                c.beginPath();
+                c.arc(cx, cy, r, 0, Math.PI * 2);
+                
+                // Color Cycle: Green/Gold/Red (Rasta colors)
+                const hue = (time * 50 + i * 30) % 360;
+                c.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+                c.lineWidth = 10 * scale;
+                c.stroke();
+
+                // Connecting lines (The "Wireframe")
+                if (i % 2 === 0) {
+                    c.save();
+                    c.translate(cx, cy);
+                    c.rotate(time * 0.5);
+                    const spokes = 8;
+                    for (let j = 0; j < spokes; j++) {
+                        c.rotate((Math.PI * 2) / spokes);
+                        c.beginPath();
+                        c.moveTo(r, 0);
+                        c.lineTo(r * 1.5, 0);
+                        c.strokeStyle = `hsla(${hue}, 100%, 50%, 0.5)`;
+                        c.stroke();
+                    }
+                    c.restore();
+                }
+            }
+        }
+
+        function render() {
+            if(beatCount === 0) return; // Wait for start
+
+            time += 0.02;
+
+            // TRAIL EFFECT
+            c.fillStyle = 'rgba(20, 10, 20, 0.2)';
+            c.fillRect(0, 0, width, height);
+
+            drawTunnel();
+
+            // MONKEYS
+            monkeys.forEach(m => {
+                m.update();
+                m.draw();
+            });
+
+            // POST-PROCESSING: CHROMATIC ABERRATION based on Mix Quality
+            // As the music gets better, the visuals get more "crisp" (less blur, but more RGB split)
+            if (mixQuality > 0.5) {
+                const intensity = 5;
+                const imageData = c.getImageData(0, 0, width, height);
+                const data = imageData.data;
+                // Simple fake aberration by shifting channels is too slow for CPU loop here
+                // So we simulate it by drawing the canvas over itself with offsets
+                c.globalCompositeOperation = 'screen';
+                c.drawImage(canvas, intensity, 0);
+                c.drawImage(canvas, -intensity, 0);
+                c.globalCompositeOperation = 'source-over';
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        function startTrip() {
+            document.getElementById('overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 500);
+            initAudio();
+            requestAnimationFrame(render);
+        }
+
+    </script>
+</body>
+</html>
