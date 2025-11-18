@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORTEX_OVERRIDE // ASCENSION</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            cursor: none;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 2s;
+        }
+
+        h1 {
+            font-size: 2rem;
+            letter-spacing: 5px;
+            color: #ff0000;
+            text-shadow: 0 0 10px #ff0000;
+            animation: panic 0.1s infinite;
+        }
+
+        .btn {
+            border: 1px solid #fff;
+            padding: 20px 40px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            margin-top: 20px;
+            transition: 0.3s;
+        }
+        .btn:hover { background: #fff; color: #000; }
+
+        #subtitles {
+            position: fixed;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            font-size: 1.5rem;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 50;
+            opacity: 0.8;
+        }
+
+        @keyframes panic {
+            0% { transform: translate(1px, 1px); }
+            50% { transform: translate(-1px, -1px); }
+            100% { transform: translate(-1px, 1px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1>NEURAL PATHWAY: BLOCKED</h1>
+        <div class="btn" onclick="startAscension()">INITIATE PINEAL DECALCIFICATION</div>
+    </div>
+
+    <div id="subtitles"></div>
+    <canvas id="trip"></canvas>
+
+    <script>
+        /* 
+         * GLOBAL STATE
+         */
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const canvas = document.getElementById('trip');
+        const c = canvas.getContext('2d');
+        const subText = document.getElementById('subtitles');
+        
+        let width, height, cx, cy;
+        let evolution = 0.0; // 0.0 (Terror) -> 1.0 (Godhead)
+        let time = 0;
+        let isRunning = false;
+
+        // AUDIO SCHEDULING
+        let nextNoteTime = 0;
+        let beat = 0;
+        const BPM = 140;
+        const SECONDS_PER_BEAT = 60 / BPM;
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE MORPHING SYNTHESIZER
+           ------------------------------------------------ */
+        
+        let masterGain, limiter;
+
+        function initAudio() {
+            masterGain = ctx.createGain();
+            masterGain.gain.value = 0.8;
+            
+            limiter = ctx.createDynamicsCompressor();
+            limiter.threshold.value = -10;
+            limiter.ratio.value = 20;
+
+            masterGain.connect(limiter);
+            limiter.connect(ctx.destination);
+
+            nextNoteTime = ctx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            // Schedule ahead
+            while (nextNoteTime < ctx.currentTime + 0.1) {
+                playStep(nextNoteTime, beat);
+                nextNoteTime += SECONDS_PER_BEAT / 4; // 16th notes
+                beat = (beat + 1) % 16;
+                
+                // PROGRESS THE EVOLUTION
+                if (evolution < 1.0) evolution += 0.0008; // Slow burn
+                updateNarrative();
+            }
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        function updateNarrative() {
+            if(evolution < 0.2) subText.innerText = "CORTEX STATUS: PANIC // UNABLE TO PROCESS REALITY";
+            else if(evolution < 0.4) subText.innerText = "DETECTING PATTERN... SEEKING GEOMETRY";
+            else if(evolution < 0.6) subText.innerText = "SPIRITUAL ALIGNMENT IN PROGRESS";
+            else if(evolution < 0.8) subText.innerText = "DISSOLVING EGO BOUNDARIES";
+            else subText.innerText = "/// PINEAL GLAND FULLY OPEN /// WELCOME HOME";
+            
+            // Colorize text
+            if (evolution < 0.3) subText.style.color = `rgb(255, ${Math.random()*50}, 0)`; // Red/Flicker
+            else subText.style.color = `hsl(${evolution * 180}, 100%, 80%)`; // Rainbow shift
+        }
+
+        function playStep(t, step) {
+            // 1. THE KICK (From Heart Palpitation to 909 Thud)
+            if (step % 4 === 0) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                if (evolution < 0.3) {
+                    // PANIC HEARTBEAT (Irregular, muffled)
+                    osc.frequency.setValueAtTime(60 + Math.random()*20, t);
+                    gain.gain.setValueAtTime(0.5, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                    osc.connect(gain);
+                    gain.connect(masterGain);
+                } else {
+                    // TECHNO KICK (Tight, Deep)
+                    osc.frequency.setValueAtTime(150, t);
+                    osc.frequency.exponentialRampToValueAtTime(40, t + 0.5);
+                    gain.gain.setValueAtTime(1.0, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+                    osc.connect(gain);
+                    gain.connect(masterGain);
+                }
+                osc.start(t);
+                osc.stop(t + 0.5);
+            }
+
+            // 2. THE NEURO-BASS (From Fear Drone to Rolling Bass)
+            if (step % 4 === 2 || (evolution > 0.7 && step % 2 !== 0)) {
+                const osc = ctx.createOscillator();
+                const filter = ctx.createBiquadFilter();
+                const gain = ctx.createGain();
+                
+                // Evolution of Waveform
+                osc.type = evolution < 0.4 ? 'sawtooth' : 'square'; 
+                
+                // Evolution of Harmony (Dissonance -> Harmony)
+                let freq;
+                if (evolution < 0.3) freq = 50 + Math.random() * 20; // Detuned fear
+                else if (evolution < 0.6) freq = 55; // A1 (Grounding)
+                else freq = [55, 55, 65.41, 82.41][Math.floor(step/4)%4]; // Melodic progression
+
+                osc.frequency.setValueAtTime(freq, t);
+
+                // Evolution of Filter (Opening the Third Eye)
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(100 + (evolution * 2000), t);
+                filter.Q.value = evolution * 10; // More acid resonance as we evolve
+
+                gain.gain.setValueAtTime(evolution * 0.4, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(masterGain);
+                osc.start(t);
+                osc.stop(t + 0.3);
+            }
+
+            // 3. THE SPIRIT LEAD (From Screams to Arpeggios)
+            if (Math.random() < evolution) { // Plays more often as we evolve
+                const osc = ctx.createOscillator();
+                const panner = ctx.createStereoPanner();
+                const gain = ctx.createGain();
+
+                if (evolution < 0.4) {
+                    // SCREAMS (High pitched, random panning)
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(Math.random() * 3000 + 1000, t);
+                    osc.frequency.linearRampToValueAtTime(500, t + 0.2); // Falling scream
+                    panner.pan.value = (Math.random() * 2) - 1;
+                    gain.gain.value = 0.1;
+                } else {
+                    // SYMPHONY (Major Scale Arps)
+                    osc.type = 'triangle';
+                    // A Major Pentatonic
+                    const notes = [440, 554.37, 659.25, 880, 1108.73]; 
+                    const note = notes[step % notes.length];
+                    osc.frequency.setValueAtTime(note, t);
+                    panner.pan.value = Math.sin(t); // Smooth swirling
+                    gain.gain.setValueAtTime(0.2, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                }
+
+                osc.connect(panner);
+                panner.connect(gain);
+                gain.connect(masterGain);
+                osc.start(t);
+                osc.stop(t + 0.3);
+            }
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: BIOLOGICAL TO GEOMETRIC
+           ------------------------------------------------ */
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function render() {
+            time += 0.05 + (evolution * 0.05); // Time speeds up
+            
+            // 1. BACKGROUND (Fear = Dark/Red, Godhead = White/Gold)
+            if (evolution < 0.3) {
+                // Chaotic flashing
+                c.fillStyle = `rgba(${Math.random()*20}, 0, 0, 0.2)`;
+            } else {
+                // Smooth trails
+                c.fillStyle = `rgba(0, 0, 0, 0.2)`;
+            }
+            c.fillRect(0, 0, width, height);
+
+            c.save();
+            c.translate(cx, cy);
+
+            // 2. THE SHAPE (The "Soul")
+            if (evolution < 0.3) {
+                // NEOPHYTE STATE: Jagged, nervous lines
+                c.beginPath();
+                c.strokeStyle = '#f00';
+                c.lineWidth = 1;
+                for (let i = 0; i < 20; i++) {
+                    c.moveTo(0,0);
+                    c.lineTo((Math.random()-0.5)*width, (Math.random()-0.5)*height);
+                }
+                c.stroke();
+                
+                // Tunnel Vision Vignette
+                const grad = c.createRadialGradient(0,0, 100, 0,0, width);
+                grad.addColorStop(0, 'transparent');
+                grad.addColorStop(1, 'black');
+                c.fillStyle = grad;
+                c.fillRect(-cx, -cy, width, height);
+
+            } else if (evolution < 0.7) {
+                // EVOLVING STATE: Organizing into circles
+                c.rotate(time * 0.5);
+                c.strokeStyle = `hsl(${time * 50}, 50%, 50%)`;
+                c.lineWidth = 2;
+                
+                const rings = 5 + (evolution * 10);
+                for(let i=0; i<rings; i++) {
+                    c.beginPath();
+                    let r = 50 + (i * 30) + Math.sin(time + i)*20;
+                    c.arc(0, 0, r, 0, Math.PI*2);
+                    c.stroke();
+                }
+
+            } else {
+                // GODHEAD STATE: Perfect Mandala
+                c.rotate(time * 0.2);
+                const symmetry = 8 + Math.floor(evolution * 8);
+                c.lineWidth = 2;
+                
+                for (let i = 0; i < symmetry; i++) {
+                    c.save();
+                    c.rotate((Math.PI * 2 * i) / symmetry);
+                    
+                    c.beginPath();
+                    c.strokeStyle = `hsl(${(time * 100) + (i*20)}, 100%, 60%)`;
+                    
+                    // The "Lotus" Shape
+                    c.moveTo(0, 0);
+                    c.bezierCurveTo(50, 100, -50, 200, 0, 300 + Math.sin(time * 10)*50);
+                    c.bezierCurveTo(50, 200, -50, 100, 0, 0);
+                    
+                    // Intense Glow
+                    c.shadowBlur = 20;
+                    c.shadowColor = 'white';
+                    
+                    c.stroke();
+                    c.restore();
+                }
+                
+                // The "Singularity" Center
+                c.beginPath();
+                c.fillStyle = '#fff';
+                c.arc(0, 0, 20 + (Math.sin(time*20)*10), 0, Math.PI*2);
+                c.fill();
+            }
+
+            c.restore();
+            if (isRunning) requestAnimationFrame(render);
+        }
+
+        function startAscension() {
+            document.getElementById('overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 2000);
+            
+            ctx.resume().then(() => {
+                isRunning = true;
+                initAudio();
+                render();
+            });
+        }
+
+    </script>
+</body>
+</html>
