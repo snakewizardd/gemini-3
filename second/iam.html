@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROTOCOL: DIAL_UP -> SYMPHONY</title>
+    <style>
+        :root {
+            --bg: #000;
+            --term: #0f0;
+            --sync: #0ff;
+            --err: #f0f;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: var(--term);
+            cursor: pointer;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--term);
+            padding: 20px;
+            box-shadow: 0 0 30px var(--term);
+        }
+
+        #status-bar {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%;
+            background: #111;
+            border-top: 1px solid #333;
+            padding: 5px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .glitch { animation: twitch 0.1s infinite; display: inline-block; }
+        @keyframes twitch {
+            0% { transform: translate(0,0); }
+            25% { transform: translate(2px, -2px); }
+            50% { transform: translate(-2px, 1px); }
+            75% { transform: translate(1px, 2px); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="screen"></canvas>
+
+    <div id="ui">
+        <h1 class="glitch">INITIALIZE HANDSHAKE</h1>
+        <p>[CLICK TO CONNECT]</p>
+    </div>
+
+    <div id="status-bar">
+        <span id="sys-status">SYSTEM: OFFLINE</span>
+        <span id="bandwidth">BANDWIDTH: 0 kbps</span>
+        <span id="clarity">SIGNAL_INTEGRITY: 0%</span>
+    </div>
+
+    <script>
+        /*
+         *  GLOBAL CONFIG
+         */
+        const BPM = 138;
+        const LOOKAHEAD = 25.0; // ms
+        const SCHEDULE_AHEAD_TIME = 0.1; // s
+        
+        // THE EVOLUTION VARIABLE (0.0 to 1.0)
+        let sysIntegrity = 0.0;
+        let evolutionSpeed = 0.003; // How fast we upgrade per tick
+
+        /* ------------------------------------------------------
+           AUDIO ENGINE: THE HARMONIC RECONSTRUCTOR
+           ------------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let ctx;
+        let masterGain;
+        let limiter;
+
+        let nextNoteTime = 0.0;
+        let timerID;
+        let step = 0;
+        let bar = 0;
+        
+        // VISUAL SYNC QUEUE
+        // We push events here with a timestamp. Render loop checks them.
+        let visualQueue = [];
+
+        // SCALES
+        const FREQ_LOW = [55, 110, 55, 110, 55, 82.4, 55, 110]; // A Bass
+        const FREQ_HIGH = [440, 554.37, 659.25, 880, 554.37, 659.25, 440, 329.63]; // A Major Arp
+
+        function initSystem() {
+            document.getElementById('ui').style.display = 'none';
+            ctx = new AudioContext();
+            
+            // Master Chain (Limiter to prevent ear-bleed during Dial-up phase)
+            masterGain = ctx.createGain();
+            masterGain.gain.value = 0.5;
+            
+            const dyn = ctx.createDynamicsCompressor();
+            dyn.threshold.value = -10;
+            dyn.ratio.value = 20;
+
+            masterGain.connect(dyn);
+            dyn.connect(ctx.destination);
+
+            nextNoteTime = ctx.currentTime;
+            scheduler();
+            renderLoop();
+        }
+
+        function scheduler() {
+            while (nextNoteTime < ctx.currentTime + SCHEDULE_AHEAD_TIME) {
+                scheduleNote(step, nextNoteTime);
+                nextNoteTime += (60.0 / BPM) / 4; // 16th notes
+                step++;
+                if (step === 16) {
+                    step = 0;
+                    bar++;
+                    upgradeSystem(); // Improve music every bar
+                }
+            }
+            timerID = setTimeout(scheduler, LOOKAHEAD);
+        }
+
+        function upgradeSystem() {
+            if (sysIntegrity < 1.0) {
+                sysIntegrity += 0.02; // ~50 bars to reach 100%
+                if (sysIntegrity > 1) sysIntegrity = 1;
+                
+                // UI Updates
+                document.getElementById('clarity').innerText = `SIGNAL_INTEGRITY: ${(sysIntegrity*100).toFixed(1)}%`;
+                document.getElementById('bandwidth').innerText = `BANDWIDTH: ${(14.4 + (sysIntegrity * 1000)).toFixed(1)} kbps`;
+                
+                if(sysIntegrity < 0.3) document.getElementById('sys-status').innerText = "SYSTEM: HANDSHAKING (NOISE)";
+                else if(sysIntegrity < 0.6) document.getElementById('sys-status').innerText = "SYSTEM: QUANTIZING BEAT";
+                else if(sysIntegrity < 0.9) document.getElementById('sys-status').innerText = "SYSTEM: HARMONIC ALIGNMENT";
+                else document.getElementById('sys-status').innerText = "SYSTEM: SYMPHONY ONLINE";
+            }
+        }
+
+        function scheduleNote(beat, time) {
+            // PUSH VISUAL EVENT FOR SYNC
+            visualQueue.push({ time: time, beat: beat, integrity: sysIntegrity });
+
+            /* 
+             * INSTRUMENT 1: THE KICK / STATIC 
+             * Evolution: White Noise Burst -> Tight 909 Kick
+             */
+            if (beat % 4 === 0) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                if (sysIntegrity < 0.3) {
+                    // DIAL UP SCREECH MODE
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(1000 + Math.random()*2000, time);
+                    osc.frequency.linearRampToValueAtTime(500, time + 0.1);
+                    gain.gain.setValueAtTime(0.3, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+                } else {
+                    // TECHNO KICK MODE
+                    osc.frequency.setValueAtTime(150, time);
+                    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+                    gain.gain.setValueAtTime(1.0, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                }
+                
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start(time);
+                osc.stop(time + 0.5);
+            }
+
+            /* 
+             * INSTRUMENT 2: THE MODEM / LEAD
+             * Evolution: Random Frequencies -> Quantized Arpeggio
+             */
+            if (beat % 2 !== 0 || sysIntegrity < 0.2) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                let freq;
+                if (sysIntegrity < 0.4) {
+                    // RANDOM NOISE
+                    freq = Math.random() * 3000;
+                    osc.type = 'square';
+                } else {
+                    // MUSICAL ARP
+                    const noteIdx = (bar + beat) % FREQ_HIGH.length;
+                    freq = FREQ_HIGH[noteIdx];
+                    osc.type = sysIntegrity > 0.8 ? 'triangle' : 'sawtooth'; // Smooth out wave later
+                }
+
+                osc.frequency.setValueAtTime(freq, time);
+                
+                // ADSR Envelope tightens up
+                const release = sysIntegrity < 0.4 ? 0.05 : 0.2;
+                gain.gain.setValueAtTime(0.2 * sysIntegrity, time); // Volume increases with integrity
+                gain.gain.exponentialRampToValueAtTime(0.001, time + release);
+
+                // Filter sweep (opens up)
+                const filter = ctx.createBiquadFilter();
+                filter.type = sysIntegrity < 0.5 ? 'bandpass' : 'lowpass';
+                filter.frequency.setValueAtTime(200 + (sysIntegrity * 2000), time);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(masterGain);
+                osc.start(time);
+                osc.stop(time + release);
+            }
+
+            /* 
+             * INSTRUMENT 3: THE PAD / CONNECTION TONE
+             * Evolution: Dissonant Drone -> Major Chord
+             */
+            if (beat === 0) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                if (sysIntegrity < 0.5) {
+                    // CARRIER SIGNAL TONE
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(2000, time); // That annoying dialup tone
+                    osc.frequency.linearRampToValueAtTime(2200, time + 2);
+                    gain.gain.value = 0.1 * (1 - sysIntegrity); // Fades out
+                } else {
+                    // BASS PAD
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(FREQ_LOW[bar % 8], time);
+                    
+                    // Lowpass
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(100, time);
+                    filter.frequency.linearRampToValueAtTime(300, time + 0.5);
+
+                    gain.gain.setValueAtTime(0.4, time);
+                    gain.gain.linearRampToValueAtTime(0, time + 1.5); // Sidechain effect sim
+                    
+                    osc.connect(filter);
+                    filter.connect(gain);
+                }
+                
+                if(sysIntegrity < 0.5) osc.connect(gain); 
+                gain.connect(masterGain);
+                osc.start(time);
+                osc.stop(time + 2);
+            }
+        }
+
+        /* ------------------------------------------------------
+           VISUAL ENGINE: THE COMPILER
+           ------------------------------------------------------ */
+        const canvas = document.getElementById('screen');
+        const c = canvas.getContext('2d');
+        let width, height, cx, cy;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Visual State
+        let pulse = 0;
+        let activeBeat = 0;
+        let glitchLines = [];
+
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            
+            const now = ctx.currentTime;
+            
+            // 1. PROCESS SYNC QUEUE
+            // Check if any queued beat has happened in audio time
+            while (visualQueue.length && visualQueue[0].time <= now) {
+                const event = visualQueue.shift();
+                pulse = 1.0;
+                activeBeat = event.beat;
+                
+                // Spawn glitch lines on kick
+                if (event.beat % 4 === 0) {
+                    for(let i=0; i<5; i++) glitchLines.push({y: Math.random()*height, w: Math.random()*width, life: 1.0});
+                }
+            }
+
+            // 2. RENDER LOGIC
+            pulse *= 0.9; // Decay visual hit
+
+            // BACKGROUND
+            // Starts noisy grey (static), becomes deep black
+            const noise = (1 - sysIntegrity) * 50;
+            c.fillStyle = `rgb(${noise},${noise},${noise})`;
+            c.fillRect(0, 0, width, height);
+
+            // 3. STAGE 1: THE STATIC (DIAL UP)
+            if (sysIntegrity < 0.4) {
+                c.fillStyle = '#0f0';
+                for(let i=0; i<100; i++) {
+                    c.fillRect(Math.random()*width, Math.random()*height, 2, 2);
+                }
+                // Drawing raw waveform-ish lines
+                c.beginPath();
+                c.strokeStyle = '#0f0';
+                c.lineWidth = 1;
+                c.moveTo(0, height/2);
+                for(let x=0; x<width; x+=10) {
+                    c.lineTo(x, height/2 + (Math.random()-0.5)*200);
+                }
+                c.stroke();
+            }
+
+            // 4. STAGE 2: THE GRID (TECHNO)
+            if (sysIntegrity > 0.3) {
+                c.lineWidth = 2 * sysIntegrity;
+                
+                // Perspective Grid
+                const fov = 300;
+                c.strokeStyle = `rgba(0, 255, 255, ${sysIntegrity})`;
+                c.beginPath();
+                
+                // Floor moving
+                const offset = (now * 500) % 100;
+                
+                for(let i=0; i<width; i+=100) {
+                    // Vertical lines
+                    c.moveTo(i, height/2);
+                    c.lineTo((i - cx)*2 + cx, height);
+                }
+                
+                // Horizontal lines (Speeding up)
+                for(let i=0; i<height/2; i+=50) {
+                    const y = height/2 + i + (pulse*10);
+                    c.moveTo(0, y);
+                    c.lineTo(width, y);
+                }
+                c.stroke();
+            }
+
+            // 5. STAGE 3: THE MANDALA (SYMPHONY)
+            if (sysIntegrity > 0.7) {
+                c.save();
+                c.translate(cx, cy);
+                c.rotate(now * 0.5);
+                
+                const sides = 6;
+                const rad = 100 + (pulse * 50);
+                
+                c.strokeStyle = `hsl(${now * 100}, 100%, 50%)`;
+                c.lineWidth = 5;
+                c.beginPath();
+                for(let i=0; i<=sides; i++) {
+                    const ang = (i / sides) * Math.PI * 2;
+                    c.lineTo(Math.cos(ang)*rad, Math.sin(ang)*rad);
+                }
+                c.closePath();
+                c.stroke();
+                
+                // Rays
+                c.globalCompositeOperation = 'lighter';
+                c.fillStyle = `rgba(255, 255, 255, ${pulse * 0.5})`;
+                c.beginPath();
+                c.arc(0, 0, rad * 0.5, 0, Math.PI*2);
+                c.fill();
+                
+                c.restore();
+            }
+
+            // 6. GLITCH OVERLAY (Fades out as system perfects)
+            if (sysIntegrity < 1.0) {
+                c.fillStyle = '#fff';
+                glitchLines.forEach((g, i) => {
+                    c.fillRect(0, g.y, g.w, 2);
+                    g.life -= 0.1;
+                    if(g.life <= 0) glitchLines.splice(i, 1);
+                });
+            }
+        }
+
+        // START
+        document.body.addEventListener('click', () => {
+            if(!ctx) initSystem();
+        });
+
+    </script>
+</body>
+</html>
