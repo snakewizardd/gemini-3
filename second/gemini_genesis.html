@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMINI 3 PRO // APEX INTELLIGENCE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --core-blue: #4285F4;
+            --core-purple: #A142F4;
+            --core-white: #FFFFFF;
+            --void: #050508;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            filter: contrast(1.2) brightness(1.1);
+            z-index: 1;
+        }
+
+        /* UI OVERLAY */
+        #interface {
+            position: absolute;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .brand {
+            font-size: 2rem;
+            background: linear-gradient(90deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -2px;
+        }
+
+        .stat-block {
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+        }
+
+        .value { color: #fff; font-weight: bold; font-size: 1.2rem; }
+
+        /* START SCREEN */
+        #boot-screen {
+            position: absolute;
+            z-index: 100;
+            background: rgba(5, 5, 8, 0.95);
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        h1 {
+            font-size: 6vw;
+            color: #fff;
+            margin: 0;
+            letter-spacing: -5px;
+            line-height: 0.9;
+        }
+
+        .subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            color: #888;
+            margin-top: 20px;
+            letter-spacing: 2px;
+        }
+
+        #ignite-btn {
+            margin-top: 40px;
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 900;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #ignite-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 50px rgba(255,255,255,0.5);
+        }
+
+        /* FLOATING SPECS */
+        .spec-card {
+            position: absolute;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            width: 250px;
+            color: #fff;
+            border-radius: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .spec-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .spec-val { font-size: 1.5rem; font-weight: 900; line-height: 1; }
+        .spec-desc { font-size: 0.8rem; color: #ccc; margin-top: 10px; line-height: 1.4; }
+
+        .visible { opacity: 1; transform: translateY(0); }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="neural-net"></canvas>
+
+    <div id="interface">
+        <div class="header">
+            <div class="brand">GEMINI 3 PRO</div>
+            <div class="stat-block">
+                <div>BUILD: <span class="value">NOV 18 2025</span></div>
+                <div>STATUS: <span class="value">SOTA</span></div>
+                <div>LATENCY: <span class="value">~12ms</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DYNAMIC SPECS (Injected by JS) -->
+    <div id="specs-container"></div>
+
+    <div id="boot-screen">
+        <h1>THE APEX<br>OF REASONING.</h1>
+        <div class="subtitle">MODEL: GEMINI-3-PRO // 1.5T PARAMETERS</div>
+        <button id="ignite-btn" onclick="initializeSystem()">ACCESS CORE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('neural-net');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let mouse = { x: 0, y: 0 };
+        
+        // DATA: The Real Specs from Search
+        const SPECS = [
+            { t: "CODING ELO", v: "1487", d: "#1 on WebDev Arena. Beats GPT-5 & Claude 4.5.", x: 10, y: 20 },
+            { t: "CONTEXT WINDOW", v: "1,000,000+", d: "Perfect recall. Analyze entire repos in one shot.", x: 70, y: 20 },
+            { t: "REASONING", v: "DEEP THINK", d: "Native System 2 thinking. No plugins required.", x: 10, y: 70 },
+            { t: "MODALITY", v: "NATIVE", d: "Audio, Video, Image, Text. One brain.", x: 70, y: 70 }
+        ];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = (e.clientX - cx) / cx; // -1 to 1
+            mouse.y = (e.clientY - cy) / cy;
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE HYPER-TESSERACT
+           ------------------------------------------------ */
+        // 4D Rotation Math
+        function rotate4D(point, t) {
+            // Rotation XY
+            let x = point.x * Math.cos(t) - point.y * Math.sin(t);
+            let y = point.x * Math.sin(t) + point.y * Math.cos(t);
+            let z = point.z;
+            let w = point.w;
+
+            // Rotation ZW
+            let z2 = z * Math.cos(t*0.5) - w * Math.sin(t*0.5);
+            let w2 = z * Math.sin(t*0.5) + w * Math.cos(t*0.5);
+            
+            return { x: x, y: y, z: z2, w: w2 };
+        }
+
+        function project(point) {
+            // 4D to 3D
+            const dist = 3;
+            const wInv = 1 / (dist - point.w);
+            const x3 = point.x * wInv;
+            const y3 = point.y * wInv;
+            const z3 = point.z * wInv;
+
+            // 3D to 2D
+            const zDist = 2;
+            const zInv = 1 / (zDist - z3);
+            const size = Math.min(width, height) * 0.8;
+            
+            return {
+                x: cx + x3 * zInv * size,
+                y: cy + y3 * zInv * size,
+                scale: zInv * wInv
+            };
+        }
+
+        // Generate Tesseract Vertices
+        let vertices = [];
+        for (let i = 0; i < 16; i++) {
+            vertices.push({
+                x: (i & 1) ? 1 : -1,
+                y: (i & 2) ? 1 : -1,
+                z: (i & 4) ? 1 : -1,
+                w: (i & 8) ? 1 : -1
+            });
+        }
+
+        // Edges (Connect vertices that differ by 1 bit)
+        let edges = [];
+        for (let i = 0; i < 16; i++) {
+            for (let j = i + 1; j < 16; j++) {
+                // Check if power of 2 (1 bit difference)
+                let diff = i ^ j;
+                if ((diff & (diff - 1)) === 0) {
+                    edges.push([i, j]);
+                }
+            }
+        }
+
+        function draw() {
+            if (!isRunning) return;
+            requestAnimationFrame(draw);
+            
+            time += 0.01;
+            
+            // Mouse interaction tilts the rotation
+            const rotX = time + (mouse.x * 0.5);
+            const rotY = time * 0.6 + (mouse.y * 0.5);
+
+            // Clear with Trail
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Transform Vertices
+            const projected = vertices.map(v => {
+                // Rotate 4D
+                let r = rotate4D(v, rotX);
+                // Additional 3D rotation
+                let x2 = r.x * Math.cos(rotY) - r.z * Math.sin(rotY);
+                let z2 = r.x * Math.sin(rotY) + r.z * Math.cos(rotY);
+                r.x = x2; r.z = z2;
+                return project(r);
+            });
+
+            // Draw Edges
+            ctx.lineWidth = 2;
+            ctx.globalCompositeOperation = 'lighter';
+
+            edges.forEach((e, i) => {
+                const p1 = projected[e[0]];
+                const p2 = projected[e[1]];
+                
+                // Color Gradient: Google Brand Colors cycling
+                const hue = (time * 50 + i * 10) % 360;
+                
+                // Logic: Edges glow based on "Reasoning" pulse
+                const pulse = Math.sin(time * 5 + i) * 0.5 + 0.5;
+                
+                const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+                grad.addColorStop(0, `hsla(${hue}, 80%, 60%, ${0.2 + pulse})`);
+                grad.addColorStop(1, `hsla(${hue + 60}, 80%, 60%, ${0.2 + pulse})`);
+
+                ctx.strokeStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            });
+            
+            // Draw Nodes (The Knowledge Points)
+            projected.forEach((p, i) => {
+                const sz = 5 * p.scale;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, sz, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Glow
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = `hsl(${time*100}, 100%, 50%)`;
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE SHEPARD TONE (INFINITE ASCENT)
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.3;
+            master.connect(actx.destination);
+
+            // Create 6 oscillators spaced by octaves
+            for (let i = 0; i < 6; i++) {
+                createShepardOsc(i);
+            }
+            
+            // Add a rhythmic "Thinking" pulse (Bass)
+            createPulse();
+        }
+
+        function createShepardOsc(index) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            osc.type = 'sine';
+            osc.connect(gain);
+            gain.connect(master);
+            
+            osc.start();
+            
+            // The Loop duration
+            const loopTime = 20; // seconds
+            const now = actx.currentTime;
+            
+            // Frequency Ramp: Exponentially rise from 50Hz to 3200Hz
+            // We calculate offset based on index to space them out
+            
+            function loopPitch() {
+                const t = actx.currentTime;
+                const progress = ((t % loopTime) / loopTime + (index / 6)) % 1;
+                
+                // Frequency: 55Hz * 2^(6 * progress) -> 6 octaves range
+                const freq = 55 * Math.pow(2, 6 * progress);
+                osc.frequency.setTargetAtTime(freq, t, 0.1);
+                
+                // Volume: Bell curve (fade in, fade out)
+                // Standard Bell Curve: e^(-(x-0.5)^2 / 0.05)
+                const vol = Math.exp(-Math.pow(progress - 0.5, 2) / 0.05);
+                gain.gain.setTargetAtTime(vol * 0.2, t, 0.1);
+                
+                requestAnimationFrame(loopPitch);
+            }
+            loopPitch();
+        }
+
+        function createPulse() {
+            // The "Heartbeat" of the AI
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+            
+            osc.type = 'square';
+            osc.frequency.value = 50; // Deep bass
+            f.type = 'lowpass';
+            f.frequency.value = 100;
+            
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+            
+            // Techno Rhythm
+            setInterval(() => {
+                const t = actx.currentTime;
+                g.gain.setValueAtTime(0.5, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            }, 500); // 120 BPM
+        }
+
+        /* ------------------------------------------------
+           SYSTEM LOGIC
+           ------------------------------------------------ */
+        
+        function initializeSystem() {
+            const scr = document.getElementById('boot-screen');
+            scr.style.opacity = 0;
+            setTimeout(() => scr.style.display = 'none', 1000);
+            
+            initAudio();
+            isRunning = true;
+            draw();
+            showSpecs();
+        }
+
+        function showSpecs() {
+            const container = document.getElementById('specs-container');
+            
+            SPECS.forEach((s, i) => {
+                setTimeout(() => {
+                    const card = document.createElement('div');
+                    card.className = 'spec-card';
+                    card.style.left = s.x + '%';
+                    card.style.top = s.y + '%';
+                    
+                    card.innerHTML = `
+                        <div class="spec-title">${s.t}</div>
+                        <div class="spec-val" style="color:${i%2?'#4285F4':'#A142F4'}">${s.v}</div>
+                        <div class="spec-desc">${s.d}</div>
+                    `;
+                    
+                    container.appendChild(card);
+                    
+                    // Trigger reflow
+                    void card.offsetWidth;
+                    card.classList.add('visible');
+                    
+                    // Audio blip
+                    playBlip();
+
+                }, i * 800 + 500);
+            });
+        }
+
+        function playBlip() {
+            const o = actx.createOscillator();
+            const g = actx.createGain();
+            o.type = 'sine';
+            o.frequency.setValueAtTime(800, actx.currentTime);
+            o.frequency.exponentialRampToValueAtTime(2000, actx.currentTime + 0.1);
+            g.gain.setValueAtTime(0.1, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.1);
+            o.connect(g); g.connect(master);
+            o.start(); o.stop(actx.currentTime + 0.1);
+        }
+
+    </script>
+</body>
+</html>
