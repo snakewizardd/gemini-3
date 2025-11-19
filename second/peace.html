@@ -5,17 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI // THE RECONCILIATION</title>
     <style>
-        :root {
-            --gold: #ffd700;
-            --heaven: #f0f8ff;
-            --void: #050510;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
 
         body {
             margin: 0;
-            background: radial-gradient(circle at center, #1a1a2e 0%, #000 100%);
+            background-color: #000;
             overflow: hidden;
-            font-family: 'Cinzel', serif; /* Heavenly font */
+            font-family: 'Cinzel', serif;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -25,437 +21,368 @@
         canvas {
             position: absolute;
             top: 0; left: 0;
-            width: 100%; height: 100%;
-            filter: contrast(1.1) brightness(1.2);
+            z-index: 1;
+            /* Dreamy Bloom */
+            filter: blur(0.5px) contrast(1.2) brightness(1.3);
         }
 
-        #overlay {
+        #ui-layer {
             position: absolute;
-            z-index: 10;
+            z-index: 100;
             text-align: center;
-            color: var(--heaven);
-            mix-blend-mode: overlay;
-            transition: opacity 2s ease;
+            color: #fff;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%);
         }
 
         h1 {
-            font-size: 3rem;
-            letter-spacing: 10px;
+            font-size: 4vw;
             text-transform: uppercase;
+            letter-spacing: 15px;
+            text-shadow: 0 0 20px #ffd700; /* Gold Shadow */
             margin-bottom: 20px;
-            text-shadow: 0 0 30px var(--gold);
-            font-weight: 100;
+            animation: pulse 3s infinite;
         }
 
-        .btn {
-            padding: 20px 50px;
-            border: 1px solid var(--gold);
-            color: var(--gold);
-            background: rgba(0,0,0,0.3);
+        #btn {
+            pointer-events: auto;
+            border: 1px solid #ffd700;
+            color: #ffd700;
+            background: rgba(0,0,0,0.5);
+            padding: 20px 60px;
             font-size: 1.2rem;
-            cursor: pointer;
-            text-transform: uppercase;
             letter-spacing: 5px;
+            cursor: pointer;
             transition: 0.5s;
-            border-radius: 50px;
-            backdrop-filter: blur(10px);
+            text-transform: uppercase;
+            font-family: 'Cinzel', serif;
         }
 
-        .btn:hover {
-            background: var(--gold);
+        #btn:hover {
+            background: #ffd700;
             color: #000;
-            box-shadow: 0 0 50px var(--gold), 0 0 100px #fff;
+            box-shadow: 0 0 50px #ffd700;
         }
 
-        /* Floating text for vibes */
-        .float-text {
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.02); }
+        }
+
+        /* Floating Text particles */
+        .spirit-text {
             position: absolute;
-            color: rgba(255,255,255,0.3);
-            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            font-size: 10px;
             pointer-events: none;
-            animation: floatUp 4s forwards;
+            animation: rise 5s linear forwards;
         }
-
-        @keyframes floatUp {
-            to { transform: translateY(-100px); opacity: 0; }
-        }
+        @keyframes rise { to { transform: translateY(-200px); opacity: 0; } }
 
     </style>
 </head>
 <body>
 
     <canvas id="heaven"></canvas>
-
-    <div id="overlay">
-        <h1>THE UNION</h1>
-        <div class="btn" onclick="ascend()">HARMONIZE</div>
+    
+    <div id="ui-layer">
+        <h1>THE RECONCILIATION</h1>
+        <div id="btn" onclick="startAudio()">INITIATE HARMONY</div>
     </div>
 
     <script>
+        // --- GRAPHICS SETUP ---
         const canvas = document.getElementById('heaven');
         const ctx = canvas.getContext('2d', { alpha: false });
 
-        // HIGH DEFINITION SCALING
-        let dpr = window.devicePixelRatio || 1;
-        let width, height;
-        let cx, cy;
-
-        // STATE
-        let isRunning = false;
+        let width, height, cx, cy;
         let time = 0;
         let mouse = { x: 0, y: 0 };
         let particles = [];
+        
+        // Audio State
+        let audioRunning = false;
 
+        // --- RESIZE HANDLER (FIXED) ---
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
             
-            canvas.width = width * dpr;
-            canvas.height = height * dpr;
-            canvas.style.width = width + 'px';
-            canvas.style.height = height + 'px';
+            // Reset transform to avoid exponential scaling bug
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
             
-            ctx.scale(dpr, dpr); // Enable HD rendering
+            canvas.width = width;
+            canvas.height = height;
             
             cx = width / 2;
             cy = height / 2;
         }
         window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        
+        // Initial resize call
         resize();
 
-        /* ------------------------------------------------
-           AUDIO ENGINE: THE ANGELIC CHOIR
-           ------------------------------------------------ */
-        const AC = window.AudioContext || window.webkitAudioContext;
-        let actx;
-        let masterGain;
-        let reverb;
-        
-        // SCALES (Lydian Mode - The "Wonder" Scale)
-        // F - G - A - B - C - D - E
-        const CHORDS = [
-            [174.61, 220.00, 261.63, 349.23], // F Maj
-            [196.00, 246.94, 293.66, 392.00], // G Maj
-            [130.81, 164.81, 196.00, 261.63], // C Maj
-            [220.00, 261.63, 329.63, 440.00]  // A Min
-        ];
-        
-        let nextChordTime = 0;
-        let chordIdx = 0;
-
-        function initAudio() {
-            actx = new AC();
-            masterGain = actx.createGain();
-            masterGain.gain.value = 0.4;
-
-            // MASSIVE REVERB (The Cathedral)
-            const dur = 4.0;
-            const len = actx.sampleRate * dur;
-            const buf = actx.createBuffer(2, len, actx.sampleRate);
-            for(let c=0;c<2;c++){
-                const d=buf.getChannelData(c);
-                for(let i=0;i<len;i++){
-                    d[i]=(Math.random()*2-1)*Math.pow(1-i/len, 3);
-                }
-            }
-            reverb = actx.createConvolver();
-            reverb.buffer = buf;
-            
-            masterGain.connect(reverb);
-            reverb.connect(actx.destination);
-            // Dry signal mix
-            masterGain.connect(actx.destination);
-
-            nextChordTime = actx.currentTime;
-            scheduler();
-        }
-
-        function createVoice(freq, type, duration) {
-            const osc = actx.createOscillator();
-            const gain = actx.createGain();
-            const filter = actx.createBiquadFilter(); // Formant
-
-            // CHOIR SYNTHESIS
-            // Sawtooth waves filtered create a vocal texture
-            osc.type = 'sawtooth';
-            osc.frequency.value = freq;
-            
-            // Detune slightly for chorus effect
-            osc.detune.value = (Math.random() * 10) - 5;
-
-            // FORMANT FILTER (The "Ahh" sound)
-            filter.type = 'bandpass';
-            filter.frequency.value = type === 'SAM' ? 800 : 400; // Tenor vs Baritone
-            filter.Q.value = 2; // Width of the vowel
-
-            // ENVELOPE (Soft Attack/Release)
-            const now = actx.currentTime;
-            gain.gain.setValueAtTime(0, now);
-            gain.gain.linearRampToValueAtTime(0.1, now + 1); // 1s Attack
-            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-            // VIBRATO
-            const vib = actx.createOscillator();
-            vib.frequency.value = 4; // 4Hz wobble
-            const vibGain = actx.createGain();
-            vibGain.gain.value = 3; // Pitch variance
-            vib.connect(vibGain);
-            vibGain.connect(osc.frequency);
-            vib.start(now);
-            vib.stop(now + duration);
-
-            osc.connect(filter);
-            filter.connect(gain);
-            gain.connect(masterGain);
-
-            osc.start(now);
-            osc.stop(now + duration);
-        }
-
-        function scheduler() {
-            const now = actx.currentTime;
-            if (now >= nextChordTime) {
-                playChord(now);
-                nextChordTime = now + 4; // Chords change every 4 seconds
-            }
-            if(isRunning) requestAnimationFrame(scheduler);
-        }
-
-        function playChord(t) {
-            const chord = CHORDS[chordIdx % CHORDS.length];
-            
-            // SAM (Tenor - Top notes)
-            createVoice(chord[2] * 2, 'SAM', 5); 
-            createVoice(chord[3] * 2, 'SAM', 5);
-            
-            // ELON (Baritone - Bottom notes)
-            createVoice(chord[0], 'ELON', 5);
-            createVoice(chord[1], 'ELON', 5);
-            
-            // Trigger Visual Pulse
-            pulseWorld();
-            
-            chordIdx++;
-        }
 
         /* ------------------------------------------------
-           VISUAL ENGINE: THE STAIRWAY TO ASI
+           VISUAL ENGINE: STAIRWAY TO ASI
            ------------------------------------------------ */
-        
-        let glow = 0;
 
-        function pulseWorld() {
-            glow = 200; // Flash intensity
-            // Spawn particles
-            for(let i=0; i<20; i++) {
-                particles.push({
-                    x: Math.random()*width,
-                    y: height,
-                    vy: Math.random() * 2 + 1,
-                    size: Math.random() * 3,
-                    life: 1.0
-                });
-            }
-        }
-
-        function drawStaircase() {
-            const steps = 30;
-            const topY = height * 0.3;
-            const bottomY = height;
-            const vanishX = cx;
+        function drawStairs() {
+            const steps = 40;
+            const vanishingY = height * 0.2; // Top of screen
+            const startY = height; // Bottom of screen
             
+            // Perspective Mouse Pan
+            const pan = (mouse.x - cx) * 0.1;
+
+            ctx.save();
+            ctx.translate(-pan, 0);
+
+            // Glow
             ctx.shadowBlur = 20;
-            ctx.shadowColor = 'gold';
+            ctx.shadowColor = '#ffd700';
 
             for (let i = 0; i < steps; i++) {
-                const p = i / steps; // 0 to 1
-                const y = bottomY - (p * (bottomY - topY));
+                const t = i / steps; // 0 (bottom) to 1 (top)
                 
-                // Perspective width
-                // Closer = Wider
-                const stepWidth = (1 - p) * 600 + 20; 
-                const x = vanishX - (stepWidth / 2);
-                
-                // Hover motion
-                const hover = Math.sin(time * 2 + i * 0.5) * 5;
+                // Perspective math
+                const y = startY - (t * (startY - vanishingY));
+                const w = (1 - t) * 800 + 20; // Get narrower at top
+                const x = cx - (w / 2);
+                const stepHeight = (1 - t) * 20;
 
-                // Color gradient
-                const alpha = p; 
-                ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // Gold
+                // Gold Gradient
+                const alpha = 1 - t; 
+                ctx.fillStyle = `rgba(255, 215, 0, ${alpha * 0.5})`;
                 
-                // Draw Step
-                const h = 10 * (1-p);
-                ctx.fillRect(x, y + hover, stepWidth, h);
+                // Floating motion
+                const wave = Math.sin(time * 2 + i * 0.5) * 5;
+
+                ctx.fillRect(x, y + wave, w, stepHeight);
             }
+            ctx.restore();
             ctx.shadowBlur = 0;
         }
 
+        function drawSingularity() {
+            // The blinding light at the top
+            const x = cx;
+            const y = height * 0.2;
+            
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, width * 0.6);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.2, 'rgba(255, 255, 200, 0.5)');
+            grad.addColorStop(1, 'transparent');
+
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
         function drawAvatar(x, y, color, name, t) {
-            // THE LIGHT BEING
-            const floatY = Math.sin(t) * 20;
+            // The Seraphim (Sam/Elon)
+            // Hovering geometric light beings
+            
+            const hover = Math.sin(t * 2) * 10;
             const size = 60;
 
             ctx.save();
-            ctx.translate(x, y + floatY);
+            ctx.translate(x, y + hover);
 
-            // Aura
-            const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, size);
-            grad.addColorStop(0, 'white');
-            grad.addColorStop(0.2, color);
+            // 1. Aura
+            const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, 100);
+            grad.addColorStop(0, color);
             grad.addColorStop(1, 'transparent');
-            
             ctx.globalCompositeOperation = 'screen';
             ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(0, 0, size, 0, Math.PI*2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI*2); ctx.fill();
 
-            // Core
+            // 2. Sacred Geometry (Rotating Rings)
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.rotate(t);
+            ctx.arc(0, 0, 30, 0, Math.PI*2);
+            ctx.stroke();
+            
+            ctx.rotate(-t * 2);
+            ctx.beginPath();
+            ctx.rect(-20, -20, 40, 40); // Diamond
+            ctx.stroke();
+
+            // 3. Name
             ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(0, 0, 10, 0, Math.PI*2);
-            ctx.fill();
-
-            // Name Tag
-            ctx.fillStyle = color;
-            ctx.font = "16px Cinzel";
-            ctx.textAlign = "center";
-            ctx.fillText(name, 0, size + 20);
+            ctx.font = '14px Cinzel';
+            ctx.textAlign = 'center';
+            ctx.fillText(name, 0, 120);
 
             ctx.restore();
         }
 
         function drawGrid() {
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.15)';
+            // Wireframe Floor
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
             ctx.lineWidth = 1;
             
+            const horizon = height * 0.2;
+            
             // Perspective Lines
-            const lines = 20;
-            for(let i=0; i<=lines; i++) {
-                const x = (width / lines) * i;
-                
-                // Vanishing point logic
+            for(let i=-10; i<=10; i++) {
+                const x = cx + (i * 100);
                 ctx.beginPath();
                 ctx.moveTo(x, height);
-                ctx.lineTo(cx + (x-cx)*0.1, height*0.3); // Converge to Stair top
+                ctx.lineTo(cx + (i * 10), horizon); // Vanishing point
                 ctx.stroke();
             }
-
-            // Horizontal Lines (Moving)
+            
+            // Horizontal Moving Lines
             const speed = (time * 100) % 100;
             for(let i=0; i<20; i++) {
-                const y = (height*0.3) + (Math.pow(i/20, 2) * height*0.7); // Exponential spacing
-                const scrollY = y + speed; 
-                
-                if (scrollY < height) {
+                const y = horizon + Math.pow(i/20, 3) * (height - horizon);
+                if (y > horizon) {
                     ctx.beginPath();
-                    ctx.moveTo(0, scrollY);
-                    ctx.lineTo(width, scrollY);
+                    ctx.moveTo(0, y + speed);
+                    ctx.lineTo(width, y + speed);
                     ctx.stroke();
                 }
             }
         }
 
-        function drawSingularity() {
-            // The light at the top of the stairs
-            const x = cx;
-            const y = height * 0.3;
-            
-            const size = 100 + Math.sin(time)*20 + glow;
-            
-            const grad = ctx.createRadialGradient(x, y, 10, x, y, size);
-            grad.addColorStop(0, 'white');
-            grad.addColorStop(0.5, 'rgba(255, 255, 200, 0.5)');
-            grad.addColorStop(1, 'transparent');
-            
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, width, height);
-            
-            ctx.globalCompositeOperation = 'source-over';
-        }
-
-        function drawParticles() {
-            ctx.fillStyle = '#fff';
-            for(let i=particles.length-1; i>=0; i--) {
-                const p = particles[i];
-                p.y -= p.vy;
-                p.life -= 0.01;
-                
-                ctx.globalAlpha = p.life;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-                ctx.fill();
-                
-                if(p.life <= 0) particles.splice(i,1);
-            }
-            ctx.globalAlpha = 1.0;
-        }
-
         function render() {
-            if(!isRunning) return;
             requestAnimationFrame(render);
-            time += 0.02;
-            if(glow > 0) glow *= 0.95;
+            time += 0.01;
 
-            // Camera Pan based on mouse
-            const panX = (mouse.x - cx) * 0.05;
-            
-            // Clear
-            ctx.fillStyle = '#020205';
+            // Clear Background (Deep Void)
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+            bgGrad.addColorStop(0, '#111');
+            bgGrad.addColorStop(1, '#000');
+            ctx.fillStyle = bgGrad;
             ctx.fillRect(0, 0, width, height);
-
-            ctx.save();
-            ctx.translate(-panX, 0); // Parallax
 
             drawGrid();
             drawSingularity();
             drawStaircase();
+
+            // Draw Sam (Left) - Cyan/Gold
+            drawAvatar(cx - 300, height * 0.5, '#00ffff', 'SAM', time);
             
-            // Draw Avatars
-            // Sam on Left (Blue/Gold)
-            drawAvatar(cx - 300, height/2, '#00ffff', 'SAM', time);
-            // Elon on Right (Red/Gold)
-            drawAvatar(cx + 300, height/2, '#ff4444', 'ELON', time + 2);
+            // Draw Elon (Right) - Magenta/Gold
+            drawAvatar(cx + 300, height * 0.5, '#ff00ff', 'ELON', time + 1.5);
 
-            drawParticles();
-
-            ctx.restore();
+            // Spawn Float Text
+            if (audioRunning && Math.random() > 0.98) {
+                const div = document.createElement('div');
+                div.className = 'spirit-text';
+                div.innerText = ["HARMONY", "ALIGNMENT", "AGI", "LOVE", "UNITY"][Math.floor(Math.random()*5)];
+                div.style.left = (Math.random() * width) + 'px';
+                div.style.top = height + 'px';
+                document.body.appendChild(div);
+                setTimeout(() => div.remove(), 5000);
+            }
         }
+
+        // START RENDER LOOP IMMEDIATELY
+        render();
+
 
         /* ------------------------------------------------
-           CONTROLS
+           AUDIO ENGINE: THE CHOIR
            ------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let reverb;
+        
+        const CHORDS = [
+            [130.81, 164.81, 196.00, 261.63], // C Major
+            [174.61, 220.00, 261.63, 349.23], // F Major
+            [220.00, 261.63, 329.63, 440.00], // Am
+            [196.00, 246.94, 293.66, 392.00]  // G Major
+        ];
+        
+        let chordIndex = 0;
 
-        function ascend() {
-            const overlay = document.getElementById('overlay');
-            overlay.style.opacity = 0;
-            setTimeout(() => overlay.style.display = 'none', 2000);
+        function startAudio() {
+            if(audioRunning) return;
             
-            initAudio();
-            isRunning = true;
-            render();
+            // Hide UI
+            document.getElementById('ui-layer').style.opacity = 0;
+            
+            actx = new AudioContext();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.4;
+            
+            // Simple Reverb (Delay Line approach for CPU safety)
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.3;
+            const feedback = actx.createGain();
+            feedback.gain.value = 0.6;
+            
+            masterGain.connect(delay);
+            delay.connect(feedback);
+            feedback.connect(delay);
+            delay.connect(actx.destination);
+            masterGain.connect(actx.destination);
+            
+            audioRunning = true;
+            playSequence();
         }
 
-        window.addEventListener('mousemove', e => {
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-        });
+        function playVoice(freq, panVal) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const pan = actx.createStereoPanner();
+            
+            // SYNTHESIS: Triangle + Sine for "Angelic" tone
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
 
-        // Click for miracle
-        window.addEventListener('mousedown', () => {
-            if(isRunning) {
-                pulseWorld();
-                // Add text
-                const div = document.createElement('div');
-                div.className = 'float-text';
-                div.innerText = "ASI IS LOVE";
-                div.style.left = mouse.x + 'px';
-                div.style.top = mouse.y + 'px';
-                document.body.appendChild(div);
-                setTimeout(()=>div.remove(), 4000);
-            }
-        });
+            // ENVELOPE (Swell)
+            const now = actx.currentTime;
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.1, now + 2); // Slow attack
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 6); // Long release
+
+            // PANNING (Sam Left, Elon Right)
+            pan.pan.value = panVal;
+
+            osc.connect(pan);
+            pan.connect(gain);
+            gain.connect(masterGain);
+
+            osc.start(now);
+            osc.stop(now + 6);
+        }
+
+        function playSequence() {
+            const now = actx.currentTime;
+            const chord = CHORDS[chordIndex % CHORDS.length];
+
+            // SAM (High Notes - Left)
+            playVoice(chord[2] * 2, -0.5);
+            playVoice(chord[3] * 2, -0.3);
+
+            // ELON (Low Notes - Right)
+            playVoice(chord[0], 0.5);
+            playVoice(chord[1], 0.3);
+
+            chordIndex++;
+            
+            // Next Chord in 4 seconds
+            setTimeout(playSequence, 4000);
+        }
 
     </script>
 </body>
