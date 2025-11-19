@@ -3,25 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RIVER BATTLE // ALTMAN vs MUSK</title>
+    <title>NC RIVER BATTLE // ALTMAN vs MUSK</title>
     <style>
         body {
             margin: 0;
             background-color: #111;
             overflow: hidden;
-            font-family: 'Verdana', sans-serif;
+            font-family: 'Impact', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
+            user-select: none;
         }
 
         canvas {
             box-shadow: 0 0 50px rgba(0,0,0,0.8);
-            background: #333;
+            background: #222;
         }
 
-        /* UI OVERLAY */
+        /* HUD */
         #ui {
             position: absolute;
             top: 20px;
@@ -33,17 +34,16 @@
         }
 
         .hud-panel {
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             border: 3px solid #fff;
-            padding: 10px 20px;
-            width: 300px;
-            transform: skew(-15deg);
+            padding: 15px;
+            width: 350px;
+            transform: skew(-10deg);
         }
 
         .name {
             color: white;
-            font-weight: 900;
-            font-size: 24px;
+            font-size: 2rem;
             text-transform: uppercase;
             margin-bottom: 5px;
             text-shadow: 2px 2px 0 #000;
@@ -51,22 +51,22 @@
 
         .bar-track {
             width: 100%;
-            height: 20px;
-            background: #444;
-            border: 2px solid #000;
+            height: 25px;
+            background: #333;
+            border: 2px solid #555;
         }
 
         .bar-fill {
             height: 100%;
             width: 100%;
-            transition: width 0.1s;
+            transition: width 0.1s linear;
         }
 
         /* START SCREEN */
         #menu {
             position: absolute;
             width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
+            background: rgba(0,0,0,0.9);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -76,30 +76,39 @@
 
         h1 {
             color: #ffd700;
-            font-size: 5rem;
+            font-size: 4rem;
             text-transform: uppercase;
-            text-shadow: 5px 5px 0 #ff0000;
+            text-shadow: 4px 4px 0 #d00;
             margin: 0;
             font-style: italic;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            color: #aaa;
+            font-family: 'Courier New';
+            font-size: 1.5rem;
+            margin-top: 10px;
         }
 
         button {
-            margin-top: 40px;
-            padding: 20px 50px;
+            margin-top: 50px;
+            padding: 20px 60px;
             font-size: 2rem;
-            font-weight: bold;
-            background: #ff0000;
+            font-family: 'Impact';
+            background: #d00;
             color: #fff;
             border: 4px solid #fff;
             cursor: pointer;
             transform: skew(-10deg);
             transition: 0.1s;
+            box-shadow: 0 0 20px #d00;
         }
 
         button:hover {
             background: #fff;
-            color: #ff0000;
-            transform: skew(-10deg) scale(1.1);
+            color: #d00;
+            transform: skew(-10deg) scale(1.05);
         }
 
     </style>
@@ -107,211 +116,241 @@
 <body>
 
     <div id="ui">
-        <div class="hud-panel" style="border-color: cyan;">
-            <div class="name" style="color: cyan;">SAM A.</div>
-            <div class="bar-track"><div class="bar-fill" id="hp1" style="background: cyan;"></div></div>
+        <div class="hud-panel" style="border-color: #0ff;">
+            <div class="name" style="color: #0ff;">SAM ALTMAN</div>
+            <div class="bar-track"><div class="bar-fill" id="hp1" style="background: linear-gradient(90deg, #00f, #0ff);"></div></div>
         </div>
-        <div class="hud-panel" style="border-color: red; text-align: right;">
-            <div class="name" style="color: red;">ELON M.</div>
-            <div class="bar-track"><div class="bar-fill" id="hp2" style="background: red; float: right;"></div></div>
+        <div class="hud-panel" style="border-color: #f00; text-align: right;">
+            <div class="name" style="color: #f00;">ELON MUSK</div>
+            <div class="bar-track"><div class="bar-fill" id="hp2" style="background: linear-gradient(90deg, #800, #f00); float: right;"></div></div>
         </div>
     </div>
 
     <div id="menu">
         <h1>SILICON RIVALS</h1>
-        <p style="color: white; font-size: 1.2rem; letter-spacing: 2px;">NORTH CAROLINA RIVER STAGE</p>
+        <h2>STAGE: BLUE RIDGE RIVER</h2>
         <button onclick="startGame()">FIGHT!</button>
     </div>
 
     <canvas id="game"></canvas>
 
     <script>
+        // 1. DEFINE GLOBALS FIRST (Fixing the ReferenceError)
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d', { alpha: false });
+        
+        // Audio Context Global Definition
+        const AC = window.AudioContext || window.webkitAudioContext;
 
-        // GLOBAL STATE
-        let width, height, floorY;
+        let width = 0;
+        let height = 0;
+        let floorY = 0; // Defined here, assigned in resize
+        
         let isRunning = false;
         let time = 0;
         let shake = 0;
-        let timeScale = 1.0; // For hitstop effect
+        let timeScale = 1.0; // Hitstop multiplier
 
-        // ASSETS
         let p1, p2;
         let particles = [];
-        
+
         /* ------------------------------------------------
-           INIT & RESIZE
+           SETUP & RESIZE
            ------------------------------------------------ */
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
             canvas.width = width;
             canvas.height = height;
-            floorY = height - 120; // Ensure floor is visible
-            
-            // Reset fighter positions if they exist so they don't fall into void
-            if(p1) p1.y = floorY;
-            if(p2) p2.y = floorY;
+            floorY = height - 120; // The ground line
+
+            // Safety: Ensure fighters stay on screen if resized
+            if(p1) { p1.y = floorY; p1.x = Math.min(p1.x, width-50); }
+            if(p2) { p2.y = floorY; p2.x = Math.min(p2.x, width-50); }
         }
-        window.addEventListener('resize', resize);
+        
+        // Initial call
         resize();
+        window.addEventListener('resize', resize);
 
         /* ------------------------------------------------
-           PARTICLE PHYSICS (THE FIX)
+           PHYSICS: THE PARTICLE SYSTEM
            ------------------------------------------------ */
         class Particle {
-            constructor(x, y, angle) {
+            constructor(x, y, direction) {
                 this.x = x; 
                 this.y = y;
                 
-                // BURST LOGIC: Cone shape opposite to impact
-                // Add randomness to angle (+/- 30 degrees)
-                const spread = (Math.random() - 0.5); 
-                const finalAngle = angle + spread;
-                
-                const force = Math.random() * 15 + 5;
-                this.vx = Math.cos(finalAngle) * force;
-                this.vy = Math.sin(finalAngle) * force;
+                // CONE SPREAD: Direction + random spread (-0.5 to 0.5 radians)
+                const angle = direction + (Math.random() - 0.5);
+                const speed = Math.random() * 10 + 5; // Fast burst
+
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
                 
                 this.life = 1.0;
-                this.decay = 0.02 + Math.random() * 0.03;
+                this.decay = 0.02 + Math.random() * 0.02; 
+                this.gravity = 0.6;
+                this.drag = 0.92;
                 this.size = Math.random() * 8 + 4;
-                this.colorType = Math.random(); // 0-1 for gradient
+                this.colorType = Math.random(); // To pick color palette
             }
 
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.vy += 0.8; // Gravity
-                this.vx *= 0.9; // Air resistance
+                
+                this.vx *= this.drag;
+                this.vy += this.gravity; // Gravity pulls down
+                
                 this.life -= this.decay;
 
-                // Floor bounce
-                if(this.y > floorY) {
+                // Floor Bounce
+                if (this.y > floorY) {
                     this.y = floorY;
-                    this.vy *= -0.5;
+                    this.vy *= -0.6; // Lose energy
+                    this.vx *= 0.8;  // Friction
                 }
             }
 
             draw() {
-                // Color shift: White (Hot) -> Yellow -> Grey (Smoke)
-                let c;
-                if (this.life > 0.7) c = `rgba(255, 255, 255, ${this.life})`;
-                else if (this.life > 0.4) c = `rgba(255, 200, 0, ${this.life})`;
-                else c = `rgba(100, 100, 100, ${this.life})`;
-
-                // Non-linear size (Shrink fast at end)
-                const s = this.size * Math.pow(this.life, 0.5);
+                // COLOR SHIFT: Heat (White) -> Fire (Yellow/Orange) -> Smoke (Grey)
+                let r, g, b;
                 
-                ctx.fillStyle = c;
-                ctx.fillRect(this.x, this.y, s, s);
+                if (this.life > 0.7) { // White hot
+                    r = 255; g = 255; b = 255;
+                } else if (this.life > 0.3) { // Fire
+                    r = 255; g = Math.floor(this.life * 200); b = 0;
+                } else { // Smoke
+                    const c = Math.floor(this.life * 100);
+                    r = c; g = c; b = c;
+                }
+
+                // CUBIC EASING for Alpha (Stays visible then disappears fast)
+                const alpha = this.life * this.life * this.life;
+                
+                ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
             }
         }
 
-        function spawnImpact(x, y, directionOfImpact) {
-            // Particles fly opposite to impact
-            const angle = directionOfImpact === 1 ? Math.PI : 0; 
+        function spawnParticles(x, y, impactDir) {
+            // ImpactDir is 1 (Right) or -1 (Left). 
+            // Particles fly OPPOSITE to impact.
+            const baseAngle = impactDir === 1 ? Math.PI : 0; // If hit right, fly left (PI)
+            // Add slight upward bias (-0.2 rads)
+            const angle = baseAngle - 0.2;
+
             for(let i=0; i<15; i++) {
                 particles.push(new Particle(x, y, angle));
             }
         }
 
         /* ------------------------------------------------
-           FIGHTER CLASS
+           FIGHTER LOGIC
            ------------------------------------------------ */
         class Fighter {
-            constructor(id, startX) {
-                this.id = id; // 'SAM' or 'ELON'
+            constructor(name, startX) {
+                this.name = name;
                 this.x = startX;
                 this.y = floorY;
-                this.vx = 0;
+                this.vx = 0; 
                 this.vy = 0;
                 this.hp = 100;
-                this.state = 'IDLE'; // IDLE, RUN, ATTACK, HIT
+                this.state = 'IDLE';
+                this.facing = name === 'SAM' ? 1 : -1;
                 this.timer = 0;
-                this.facing = id === 'SAM' ? 1 : -1;
                 
                 // Stats
-                this.speed = id === 'SAM' ? 1.2 : 0.8; // Sam faster
-                this.mass = id === 'SAM' ? 1.0 : 1.5;  // Elon heavier
+                this.speed = name === 'SAM' ? 1.5 : 0.8; // Sam fast, Elon slow
+                this.mass = name === 'SAM' ? 1.0 : 1.5;  // Elon heavy
             }
 
             update(enemy) {
-                // 1. AI LOGIC
+                // AI BRAIN
                 const dx = enemy.x - this.x;
                 const dist = Math.abs(dx);
-                
-                // Always face enemy
-                if (this.state !== 'HIT') {
-                    this.facing = Math.sign(dx) || 1;
-                }
+                const dir = Math.sign(dx);
 
-                // Decisions
+                // Always look at enemy
+                if (this.state !== 'HIT') this.facing = dir || 1;
+
                 if (this.state === 'IDLE' || this.state === 'RUN') {
-                    if (dist > 80) {
+                    if (dist > 100) {
                         // Chase
-                        this.vx += this.facing * this.speed;
+                        this.vx += dir * (this.speed * 0.5);
                         this.state = 'RUN';
                     } else {
-                        // Close enough to hit?
+                        // Attack Range
                         this.vx *= 0.8; // Brake
-                        if (this.timer <= 0 && Math.random() > 0.94) {
+                        if (this.timer <= 0 && Math.random() > 0.95) {
                             this.attack();
                         }
                     }
                 }
 
-                // 2. PHYSICS
-                this.vy += 1.5; // Gravity
+                // ATTACK STATE
+                if (this.state === 'ATTACK') {
+                    if (this.timer === 18) { // Lunge frame
+                        this.vx = this.facing * 15;
+                    }
+                }
+
+                // PHYSICS
+                this.vy += 1.0; // Gravity
                 this.x += this.vx;
                 this.y += this.vy;
                 this.vx *= 0.85; // Friction
 
-                // Floor
+                // Floor constraint
                 if (this.y > floorY) {
                     this.y = floorY;
                     this.vy = 0;
                 }
 
-                // Bounds
+                // Wall constraint
                 if (this.x < 50) this.x = 50;
-                if (this.x > width - 50) this.x = width - 50;
+                if (this.x > width-50) this.x = width-50;
 
-                // Timers
+                // Cooldowns
                 if (this.timer > 0) this.timer--;
                 if (this.timer === 0 && this.state !== 'IDLE') this.state = 'IDLE';
             }
 
             attack() {
                 this.state = 'ATTACK';
-                this.timer = 20; // Duration
-                this.vx = this.facing * 20; // Lunge
-                playSynth('SWOOSH');
+                this.timer = 25; // Duration
+                playSfx('SWOOSH');
             }
 
-            takeHit(damage, knockbackDir) {
+            takeHit(damage, knockDir) {
                 this.state = 'HIT';
-                this.timer = 15; // Stun time
+                this.timer = 20; // Stun
                 this.hp -= damage;
-                this.vx = knockbackDir * (30 / this.mass); // Physics based knockback
-                this.vy = -10; // Pop up
                 
+                // Physics Reaction
+                this.vx = knockDir * (20 / this.mass);
+                this.vy = -10;
+                
+                // Effects
+                playSfx('HIT');
                 shake = 10;
-                timeScale = 0.1; // Hitstop
-                setTimeout(() => timeScale = 1.0, 50);
-
-                spawnImpact(this.x, this.y - 60, knockbackDir);
-                playSynth('HIT');
+                timeScale = 0.1; // Freeze frame
+                setTimeout(() => timeScale = 1.0, 80);
+                
+                spawnParticles(this.x, this.y - 50, knockDir);
                 updateUI();
             }
 
             checkHit(enemy) {
-                // Only hit if attacking and within active frames
-                if (this.state === 'ATTACK' && this.timer > 10 && this.timer < 18) {
-                    const dist = Math.abs(this.x - enemy.x);
-                    // Hitbox check
-                    if (dist < 80 && Math.abs(this.y - enemy.y) < 50 && enemy.state !== 'HIT') {
+                // Active frames of attack: 15 to 20
+                if (this.state === 'ATTACK' && this.timer > 15 && this.timer < 20) {
+                    const dx = Math.abs(this.x - enemy.x);
+                    const dy = Math.abs(this.y - enemy.y);
+                    
+                    if (dx < 80 && dy < 50 && enemy.state !== 'HIT') {
                         enemy.takeHit(10, this.facing);
                     }
                 }
@@ -320,92 +359,86 @@
             draw() {
                 ctx.save();
                 ctx.translate(this.x, this.y);
-                ctx.scale(this.facing, 1); // Flip if facing left
+                ctx.scale(this.facing, 1);
 
                 // Shadow
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
                 ctx.beginPath();
-                ctx.ellipse(0, 0, 40, 10, 0, 0, Math.PI*2);
+                ctx.ellipse(0, 0, 50, 10, 0, 0, Math.PI*2);
                 ctx.fill();
 
-                // Sprite Drawing
-                if (this.id === 'SAM') this.drawSam();
+                if (this.name === 'SAM') this.drawSam();
                 else this.drawElon();
 
                 ctx.restore();
             }
 
             drawSam() {
-                // Lean into attack
-                if(this.state === 'ATTACK') ctx.rotate(0.2);
-                if(this.state === 'HIT') ctx.rotate(-0.5);
+                // Attack Pose tilt
+                if (this.state === 'ATTACK') ctx.rotate(0.2);
+                if (this.state === 'HIT') ctx.rotate(-0.5);
 
+                // Suit Body
+                ctx.fillStyle = '#2c3e50'; // Navy Suit
+                ctx.fillRect(-25, -130, 50, 80);
                 // Legs
-                ctx.fillStyle = '#1a1a1a';
-                ctx.fillRect(-15, -40, 10, 40); // Back leg
-                ctx.fillRect(5, -40, 10, 40);   // Front leg
-                
-                // Body (Suit)
-                ctx.fillStyle = '#34495e';
-                ctx.fillRect(-20, -110, 40, 70);
-                
+                ctx.fillRect(-25, -50, 20, 50);
+                ctx.fillRect(5, -50, 20, 50);
                 // Tie
-                ctx.fillStyle = 'cyan';
-                ctx.fillRect(-5, -110, 10, 40);
-
-                // Head
-                ctx.fillStyle = '#ffccaa';
-                ctx.fillRect(-15, -140, 30, 30);
-
-                // Eyes (Laser eyes)
                 ctx.fillStyle = '#00ffff';
-                ctx.fillRect(0, -135, 10, 5);
-                
-                // Effect: Energy Blade on arm
+                ctx.fillRect(-5, -130, 10, 50);
+                // Head
+                ctx.fillStyle = '#f1c40f'; // Skin/Hair
+                ctx.fillRect(-20, -160, 40, 35);
+                // Eyes
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(0, -150, 15, 5);
+
+                // Energy Blade (Attack Only)
                 if (this.state === 'ATTACK') {
-                    ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+                    ctx.fillStyle = 'rgba(0,255,255,0.6)';
                     ctx.beginPath();
-                    ctx.moveTo(10, -80);
-                    ctx.lineTo(100, -60);
-                    ctx.lineTo(20, -40);
+                    ctx.moveTo(20, -100);
+                    ctx.lineTo(120, -80); // Blade tip
+                    ctx.lineTo(30, -60);
                     ctx.fill();
                 }
             }
 
             drawElon() {
-                if(this.state === 'ATTACK') ctx.rotate(0.2);
-                if(this.state === 'HIT') ctx.rotate(-0.5);
+                if (this.state === 'ATTACK') ctx.rotate(0.2);
+                if (this.state === 'HIT') ctx.rotate(-0.5);
 
-                // Legs (Mech)
-                ctx.fillStyle = '#555';
-                ctx.fillRect(-20, -50, 15, 50); 
-                ctx.fillRect(5, -50, 15, 50);
-
-                // Body (Armor)
-                ctx.fillStyle = '#000';
-                ctx.fillRect(-25, -120, 50, 70);
-                // Chest Logo X
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 3;
+                // Mech Armor
+                ctx.fillStyle = '#222'; // Black Armor
+                ctx.fillRect(-30, -135, 60, 85);
+                // Metal Legs
+                ctx.fillStyle = '#7f8c8d';
+                ctx.fillRect(-30, -50, 25, 50);
+                ctx.fillRect(5, -50, 25, 50);
+                // Chest Plate
+                ctx.strokeStyle = '#e74c3c';
+                ctx.lineWidth = 4;
                 ctx.beginPath();
-                ctx.moveTo(-10, -100); ctx.lineTo(10, -80);
-                ctx.moveTo(10, -100); ctx.lineTo(-10, -80);
+                ctx.moveTo(-15, -110); ctx.lineTo(15, -90);
+                ctx.moveTo(15, -110); ctx.lineTo(-15, -90);
                 ctx.stroke();
-
                 // Head
-                ctx.fillStyle = '#ffccaa';
-                ctx.fillRect(-15, -150, 30, 30);
-                
-                // Visor
-                ctx.fillStyle = '#ff0000';
-                ctx.fillRect(-15, -145, 30, 5);
+                ctx.fillStyle = '#ecf0f1';
+                ctx.fillRect(-20, -165, 40, 35);
+                // Red Visor
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillRect(-15, -155, 35, 8);
 
-                // Effect: Rocket Punch
+                // Rocket Fist (Attack Only)
                 if (this.state === 'ATTACK') {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                    ctx.fillStyle = '#e74c3c';
                     ctx.beginPath();
-                    ctx.arc(50, -80, 25, 0, Math.PI*2);
+                    ctx.arc(60, -90, 35, 0, Math.PI*2);
                     ctx.fill();
+                    // Trail
+                    ctx.fillStyle = 'rgba(255,200,0,0.5)';
+                    ctx.fillRect(20, -100, 40, 20);
                 }
             }
         }
@@ -413,13 +446,10 @@
         function updateUI() {
             document.getElementById('hp1').style.width = Math.max(0, p1.hp) + '%';
             document.getElementById('hp2').style.width = Math.max(0, p2.hp) + '%';
-            
-            if(p1.hp <= 0 || p2.hp <= 0) {
-                setTimeout(resetMatch, 2000);
-            }
+            if (p1.hp <= 0 || p2.hp <= 0) setTimeout(resetGame, 2000);
         }
-        
-        function resetMatch() {
+
+        function resetGame() {
             p1.hp = 100; p2.hp = 100;
             p1.x = width * 0.2; p2.x = width * 0.8;
             updateUI();
@@ -429,157 +459,160 @@
            VISUAL ENGINE: NORTH CAROLINA RIVER
            ------------------------------------------------ */
         function drawBackground() {
-            // 1. Sky
+            // 1. Sky Gradient
             const grad = ctx.createLinearGradient(0, 0, 0, height);
-            grad.addColorStop(0, '#2980b9');
-            grad.addColorStop(1, '#6dd5fa');
+            grad.addColorStop(0, '#2b5876'); // Deep Blue
+            grad.addColorStop(1, '#4e4376'); // Purple Haze
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, width, height);
 
-            // 2. Blue Ridge Mountains (Parallax)
-            drawMountains(height * 0.5, '#1a5276', 0.2);
-            drawMountains(height * 0.6, '#21618c', 0.5);
-            drawMountains(height * 0.75, '#2874a6', 0.8);
+            // 2. Mountains (Parallax)
+            drawMountainLayer(height * 0.5, '#1B2631', 0.1);
+            drawMountainLayer(height * 0.65, '#283747', 0.3);
 
-            // 3. The River
-            const riverY = height - 180;
+            // 3. River
+            const riverY = height - 150;
+            ctx.fillStyle = '#21618C';
+            ctx.fillRect(0, riverY, width, 150);
             
-            // River Base
-            ctx.fillStyle = '#2e86c1';
-            ctx.fillRect(0, riverY, width, height - riverY);
-
-            // Flowing Water Effect
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-            ctx.lineWidth = 3;
+            // River Shine (Sine waves)
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 2;
             for (let i = 0; i < 5; i++) {
                 ctx.beginPath();
                 for (let x = 0; x <= width; x+=20) {
-                    // Sine wave + Time
-                    const y = riverY + 30 + (i*30) + Math.sin(x * 0.01 + time * 0.05 + i) * 10;
+                    const y = riverY + 20 + (i*25) + Math.sin(x*0.01 + time*0.05 + i)*5;
                     if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
                 }
                 ctx.stroke();
             }
-            
-            // Trees on bank
-            ctx.fillStyle = '#145a32'; // Pine
-            for (let x = 0; x < width; x+= 80) {
-                const treeH = 80 + Math.sin(x)*20;
-                const y = riverY;
+
+            // 4. Trees (Bank)
+            ctx.fillStyle = '#0B3B0B';
+            for(let x = -50; x < width+50; x+=60) {
+                // Parallax tree movement
+                const px = x - ((time * 2) % 1000) + (x > width ? 0 : 1000); // Loop roughly
+                // Actually, let's keep trees static for the arena feel, maybe just wind
+                const sway = Math.sin(time * 0.05 + x)*5;
                 ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x + 20, y - treeH);
-                ctx.lineTo(x + 40, y);
+                ctx.moveTo(x + sway, height - 200);
+                ctx.lineTo(x - 20, height);
+                ctx.lineTo(x + 20, height);
                 ctx.fill();
             }
         }
 
-        function drawMountains(yBase, color, speedMult) {
+        function drawMountainLayer(baseY, color, speed) {
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.moveTo(0, height);
-            for (let x = 0; x <= width; x+=10) {
-                // Perlin-ish noise
-                const noise = Math.sin(x * 0.005) * Math.cos(x * 0.02) * 150;
-                const parallax = Math.sin(time * 0.01 * speedMult) * 50;
-                ctx.lineTo(x, yBase - Math.abs(noise) + parallax);
+            for (let x = 0; x <= width; x += 20) {
+                // Simplex-ish noise
+                const noise = Math.sin(x * 0.005) * 100 + Math.sin(x * 0.02) * 30;
+                // Scroll
+                const scroll = Math.sin(time * 0.01 * speed) * 50;
+                ctx.lineTo(x, baseY - Math.abs(noise) + scroll);
             }
             ctx.lineTo(width, height);
             ctx.fill();
         }
 
         /* ------------------------------------------------
-           AUDIO ENGINE: POKEMON BATTLE
+           AUDIO ENGINE: POKEMON BATTLE THEME
            ------------------------------------------------ */
-        const AC = window.AudioContext || window.webkitAudioContext;
         let actx;
-        let nextNote = 0;
-        let beat = 0;
+        let nextNoteTime = 0;
+        let beatCount = 0;
 
-        const BASS = [110, 110, 116, 116, 123, 123, 116, 116];
-        const LEAD = [440, 554, 659, 880, 659, 554];
+        const BASSLINE = [110, 110, 116, 116, 123, 123, 116, 116]; // Chromatic tension
+        const ARP = [440, 554, 659, 880]; // High energy arp
 
         function initAudio() {
+            if(actx) return;
             actx = new AC();
-            nextNote = actx.currentTime;
-            scheduleAudio();
+            nextNoteTime = actx.currentTime;
+            scheduler();
         }
 
-        function scheduleAudio() {
-            const bpm = 170;
-            const secPerBeat = 60 / bpm;
-            const sixteenth = secPerBeat / 4;
+        function scheduler() {
+            const bpm = 175; // Fast battle music
+            const secondsPerBeat = 60.0 / bpm;
+            const sixteenth = secondsPerBeat / 4;
 
-            while (nextNote < actx.currentTime + 0.1) {
-                playTrack(nextNote, beat);
-                nextNote += sixteenth;
-                beat = (beat + 1) % 32;
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playStep(nextNoteTime, beatCount);
+                nextNoteTime += sixteenth;
+                beatCount = (beatCount + 1) % 32;
             }
-            setTimeout(scheduleAudio, 25);
+            setTimeout(scheduler, 25);
         }
 
-        function playTrack(t, b) {
+        function playStep(t, step) {
             const master = actx.createGain();
-            master.gain.value = 0.1; // Keep safe volume
+            master.gain.value = 0.15;
             master.connect(actx.destination);
 
-            // Bass (Square Wave - driving)
-            if (b % 4 === 0) {
+            // Bass (8th notes)
+            if (step % 2 === 0) {
                 const osc = actx.createOscillator();
                 osc.type = 'square';
-                const idx = Math.floor(b/4) % BASS.length;
-                osc.frequency.setValueAtTime(BASS[idx], t);
-                
-                const g = actx.createGain();
-                g.gain.setValueAtTime(1, t);
-                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
-                
-                osc.connect(g); g.connect(master);
-                osc.start(t); osc.stop(t + 0.1);
-            }
-
-            // Arp (Sawtooth - intense)
-            if (b % 2 === 0) {
-                const osc = actx.createOscillator();
-                osc.type = 'sawtooth';
-                const note = LEAD[b % LEAD.length];
+                const note = BASSLINE[Math.floor(step/4) % BASSLINE.length];
                 osc.frequency.setValueAtTime(note, t);
                 
                 const g = actx.createGain();
-                g.gain.setValueAtTime(0.3, t);
+                g.gain.setValueAtTime(0.5, t);
                 g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
                 
                 osc.connect(g); g.connect(master);
                 osc.start(t); osc.stop(t + 0.1);
             }
-            
-            // Noise Snare
-            if (b % 8 === 4) {
-                const buf = actx.createBuffer(1, actx.sampleRate*0.05, actx.sampleRate);
+
+            // Snare (Noise) on 4, 12
+            if (step % 8 === 4) {
+                const buf = actx.createBuffer(1, actx.sampleRate * 0.1, actx.sampleRate);
                 const d = buf.getChannelData(0);
-                for(let i=0; i<d.length; i++) d[i]=Math.random()*2-1;
+                for(let i=0; i<d.length; i++) d[i] = Math.random() * 2 - 1;
                 const src = actx.createBufferSource();
                 src.buffer = buf;
-                src.connect(master);
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.4, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                src.connect(g); g.connect(master);
                 src.start(t);
             }
+
+            // Arp (16ths)
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            const arpNote = ARP[step % ARP.length] * (step % 8 === 0 ? 2 : 1); // Accent
+            osc.frequency.setValueAtTime(arpNote, t);
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.1);
         }
 
-        function playSynth(type) {
-            if (!actx) return;
+        function playSfx(type) {
+            if(!actx) return;
             const osc = actx.createOscillator();
             const g = actx.createGain();
-            g.gain.value = 0.1;
             g.connect(actx.destination);
-
+            
             if (type === 'HIT') {
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(150, actx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(10, actx.currentTime + 0.2);
-            } else {
-                osc.type = 'triangle'; // Swoosh
-                osc.frequency.setValueAtTime(600, actx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, actx.currentTime + 0.1);
+                g.gain.setValueAtTime(0.3, actx.currentTime);
+                g.gain.linearRampToValueAtTime(0, actx.currentTime + 0.1);
+            } else { // Swoosh
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, actx.currentTime);
                 osc.frequency.linearRampToValueAtTime(100, actx.currentTime + 0.1);
+                g.gain.setValueAtTime(0.1, actx.currentTime);
+                g.gain.linearRampToValueAtTime(0, actx.currentTime + 0.1);
             }
             
             osc.connect(g);
@@ -587,13 +620,12 @@
         }
 
         /* ------------------------------------------------
-           GAME LOOP
+           MAIN LOOP
            ------------------------------------------------ */
         function loop() {
             if (!isRunning) return;
             requestAnimationFrame(loop);
 
-            // Logic update based on timescale (Hitstop)
             if (timeScale > 0.5) {
                 time++;
                 p1.update(p2);
@@ -602,7 +634,7 @@
                 p2.checkHit(p1);
             }
 
-            // Screenshake offset
+            // Screenshake
             let sx = 0, sy = 0;
             if (shake > 0) {
                 sx = (Math.random() - 0.5) * shake;
@@ -615,8 +647,8 @@
 
             drawBackground();
             
-            // Draw Particles (Fix: Non-linear fade)
-            for (let i = particles.length - 1; i >= 0; i--) {
+            // Draw Particles
+            for(let i=particles.length-1; i>=0; i--) {
                 particles[i].update();
                 particles[i].draw();
                 if(particles[i].life <= 0) particles.splice(i, 1);
@@ -630,11 +662,9 @@
 
         function startGame() {
             document.getElementById('menu').style.display = 'none';
-            
-            p1 = new Fighter('SAM', width * 0.3);
-            p2 = new Fighter('ELON', width * 0.7);
-            
             initAudio();
+            p1 = new Fighter('SAM', width * 0.2);
+            p2 = new Fighter('ELON', width * 0.8);
             isRunning = true;
             loop();
         }
