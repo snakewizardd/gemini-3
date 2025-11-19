@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COLLATZ // MULTI-TUNING SYNTH</title>
+    <style>
+        :root {
+            --bg: #05050a;
+            --panel-bg: rgba(10, 10, 15, 0.85);
+            --primary: #00f3ff;
+            --secondary: #ff0055;
+            --tertiary: #ffcc00;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+            user-select: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none; /* Allow clicks to pass through empty space */
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+        }
+
+        .stat-box {
+            background: var(--panel-bg);
+            border-left: 2px solid var(--primary);
+            border-top: 1px solid rgba(0, 243, 255, 0.2);
+            padding: 12px;
+            min-width: 220px;
+            font-size: 12px;
+            box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            pointer-events: auto;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #fff;
+            text-transform: uppercase;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .label {
+            display: inline-block;
+            width: 100px;
+            opacity: 0.7;
+        }
+
+        /* SELECTOR STYLING */
+        select {
+            background: rgba(0,0,0,0.6);
+            color: var(--tertiary);
+            border: 1px solid var(--tertiary);
+            padding: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: 100%;
+            cursor: pointer;
+            outline: none;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        select:hover {
+            background: rgba(255, 204, 0, 0.1);
+        }
+
+        option {
+            background: #000;
+            color: var(--tertiary);
+        }
+
+        #btn {
+            position: absolute;
+            bottom: 50px; left: 50%;
+            transform: translateX(-50%);
+            pointer-events: auto;
+            background: rgba(0,0,0,0.8);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 15px 40px;
+            font-size: 16px;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: 0.3s;
+            z-index: 20;
+            backdrop-filter: blur(4px);
+        }
+
+        #btn:hover {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 30px var(--primary);
+        }
+
+        .highlight { color: var(--secondary); font-weight: bold; }
+        .freq-text { color: var(--tertiary); }
+
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="stat-box">
+            <h1>System Metrics</h1>
+            <span class="label">ACTIVE_STEP:</span> <span id="step-val" class="highlight">0</span><br>
+            <span class="label">DENSITY:</span> <span id="density-val">0</span><br>
+            <span class="label">FREQ:</span> <span id="hz-val" class="freq-text">SILENT</span><br>
+            <span class="label">MODE:</span> <span id="mode-display">IDLE</span>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="stat-box">
+            <h1>Audio Engine</h1>
+            <label>TUNING SYSTEM</label>
+            <select id="tuning-selector" onchange="updateTuning(this.value)">
+                <option value="chromatic">12-TET (Chromatic)</option>
+                <option value="just">Just Intonation (Pure)</option>
+                <option value="pentatonic" selected>Pentatonic (Minor)</option>
+                <option value="solfeggio">Solfeggio (Healing)</option>
+                <option value="hydrogen">Hydrogen (Spectral)</option>
+            </select>
+        </div>
+    </div>
+
+    <button id="btn" onclick="initSystem()">INITIALIZE SYSTEM</button>
+    <canvas id="viz"></canvas>
+
+    <script>
+        const canvas = document.getElementById('viz');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        // --- CONFIG ---
+        let width, height, cx, cy;
+        let dataset = [];
+        let maxSteps = 0;
+        let isRunning = false;
+        let time = 0;
+
+        // Viewport Physics
+        let mouse = { x: 0, y: 0 };
+        let tiltX = 0, tiltY = 0;
+
+        // Animation
+        let scanRadius = 0;
+        let currentTuningMode = 'pentatonic';
+
+        /* ------------------------------------------------
+           TUNING SYSTEMS ENGINE
+           ------------------------------------------------ */
+
+        const TUNING_SYSTEMS = {
+            // 1. Standard 12-Tone Equal Temperament (A Minor Scale mapping)
+            // Formula: f = 440 * 2^((n-69)/12)
+            chromatic: (stepIndex, octave) => {
+                const scale = [0, 2, 3, 5, 7, 8, 10]; // A Minor intervals
+                const baseNote = 57; // A3
+                const noteOffset = scale[stepIndex % scale.length];
+                const midiNote = baseNote + noteOffset + (octave * 12);
+                return 440 * Math.pow(2, (midiNote - 69) / 12);
+            },
+
+            // 2. Just Intonation (Harmonic Ratios) based on C (261.63Hz)
+            just: (stepIndex, octave) => {
+                const baseFreq = 261.63; 
+                const ratios = [1/1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8, 2/1];
+                const ratio = ratios[stepIndex % ratios.length];
+                const mult = Math.pow(2, octave);
+                return baseFreq * ratio * mult;
+            },
+
+            // 3. Pentatonic Custom (Original Code's scale style)
+            pentatonic: (stepIndex, octave) => {
+                const scale = [261.6, 293.6, 329.6, 392.0, 440.0, 523.2]; // C D E G A C
+                const note = scale[stepIndex % scale.length];
+                // Only apply octave if manually shifted, otherwise allow scale to loop
+                const mult = octave === 0 ? 1 : (octave * 0.5);
+                return note * (1 + (octave * 0.5));
+            },
+
+            // 4. Solfeggio (Esoteric/Numerology freqs)
+            solfeggio: (stepIndex, octave) => {
+                const freqs = [174, 285, 396, 417, 528, 639, 741, 852, 963];
+                let f = freqs[stepIndex % freqs.length];
+                if (octave > 1) f *= 2; // Shift up for high density
+                if (octave < 1) f *= 0.5;
+                return f;
+            },
+
+            // 5. Hydrogen Spectral Lines (Physics derived visualization)
+            // Rydberg formula approximation mapping
+            hydrogen: (stepIndex, octave) => {
+                // n1=2 (Balmer series), n2 increases
+                // R = 3.29 x 10^15 Hz (scaled down to audio)
+                const R = 440 * 2; 
+                let n = (stepIndex % 7) + 3; 
+                const freq = R * (1/4 - 1/(n*n)); // 1/2^2 = 1/4
+                return freq * (octave + 0.5);
+            }
+        };
+
+        function updateTuning(val) {
+            currentTuningMode = val;
+            document.getElementById('mode-display').innerText = val.toUpperCase();
+        }
+
+        /* ------------------------------------------------
+           DATA GENERATION (COLLATZ)
+           ------------------------------------------------ */
+        
+        function collatzSteps(n) {
+            let steps = 0;
+            while (n > 1) {
+                if (n % 2 === 0) n = n / 2;
+                else n = 3 * n + 1;
+                steps++;
+            }
+            return steps;
+        }
+
+        function generateData() {
+            dataset = [];
+            maxSteps = 0;
+            const COUNT = 4000;
+            const GOLDEN_ANGLE = 2.39996323; // Radians
+
+            for (let i = 1; i <= COUNT; i++) {
+                const steps = collatzSteps(i);
+                if (steps > maxSteps) maxSteps = steps;
+                
+                dataset.push({
+                    num: i,
+                    steps: steps,
+                    // x/y calculated in draw for dynamic movement, 
+                    // but we store polar logic here
+                    angle: i * GOLDEN_ANGLE,
+                    colorHue: (steps * 2.5) % 360
+                });
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let reverbNode;
+
+        async function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.3;
+
+            // Create Convolver (Reverb) for "Space" sound
+            reverbNode = actx.createConvolver();
+            // Generate impulse response noise
+            const rate = actx.sampleRate;
+            const length = rate * 2.5; // 2.5 seconds reverb
+            const impulse = actx.createBuffer(2, length, rate);
+            for (let c = 0; c < 2; c++) {
+                const chan = impulse.getChannelData(c);
+                for (let i = 0; i < length; i++) {
+                    // Exponential decay
+                    chan[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+                }
+            }
+            reverbNode.buffer = impulse;
+
+            const dryGain = actx.createGain();
+            const wetGain = actx.createGain();
+            dryGain.gain.value = 0.7;
+            wetGain.gain.value = 0.4;
+
+            masterGain.connect(dryGain);
+            masterGain.connect(reverbNode);
+            reverbNode.connect(wetGain);
+            
+            dryGain.connect(actx.destination);
+            wetGain.connect(actx.destination);
+        }
+
+        function playStepTone(stepCount, density) {
+            if (!actx || actx.state === 'suspended') {
+                if(actx) actx.resume();
+                return;
+            }
+
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            // Sound Design based on Density
+            // High density = Core orbital paths (Sine/Triangle wave, smoother)
+            // Low density = Outliers/Chaos (Sawtooth, sharper)
+            osc.type = density > 20 ? 'sine' : (density > 5 ? 'triangle' : 'sawtooth');
+            
+            // Octave Logic: 
+            // Very dense areas play lower (Root)
+            // Sparse areas play higher (Details)
+            let octave = 1;
+            if (density > 50) octave = 0;
+            else if (density < 5) octave = 2;
+
+            // Get Frequency from selected system
+            const freq = TUNING_SYSTEMS[currentTuningMode](stepCount, octave);
+
+            // Safety clamp
+            osc.frequency.value = Math.max(60, Math.min(freq, 12000));
+            
+            // Envelope
+            const now = actx.currentTime;
+            const dur = density > 30 ? 0.4 : 0.15; // Dense clusters ring longer
+
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            
+            osc.start(now);
+            osc.stop(now + dur);
+
+            // Visual Update
+            document.getElementById('hz-val').innerText = osc.frequency.value.toFixed(1) + " Hz";
+        }
+
+        /* ------------------------------------------------
+           VISUALIZATION
+           ------------------------------------------------ */
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = (e.clientX - cx) / cx;
+            mouse.y = (e.clientY - cy) / cy;
+        });
+
+        function draw() {
+            if (!isRunning) return;
+            requestAnimationFrame(draw);
+            
+            time += 0.008; // Rotation speed
+            
+            // Smooth Tilt
+            tiltX += (mouse.x - tiltX) * 0.05;
+            tiltY += (mouse.y - tiltY) * 0.05;
+
+            // Scanner Progress
+            scanRadius += 0.3; 
+            if (scanRadius > maxSteps + 10) scanRadius = 0;
+            
+            // Determine active step
+            const activeStep = Math.round(scanRadius);
+            
+            // Trigger Audio & Stats once per integer step flip
+            const diff = Math.abs(scanRadius - activeStep);
+            if (diff < 0.15) {
+                const prevStep = parseInt(document.getElementById('step-val').innerText);
+                if (activeStep !== prevStep) {
+                    // Find how many numbers take exactly `activeStep` steps to reach 1
+                    const matches = dataset.filter(d => d.steps === activeStep);
+                    const dens = matches.length;
+                    
+                    document.getElementById('step-val').innerText = activeStep;
+                    document.getElementById('density-val').innerText = dens;
+
+                    if (dens > 0) playStepTone(activeStep, dens);
+                }
+            }
+
+            // CLEAR
+            ctx.fillStyle = '#05050a';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // CAMERA FX
+            ctx.rotate(time * 0.15);
+            ctx.scale(1 - Math.abs(tiltY)*0.15, 1 - Math.abs(tiltX)*0.15);
+
+            // DRAW POINTS
+            for (let i = 0; i < dataset.length; i++) {
+                const d = dataset[i];
+                
+                // Logic: Radius = Steps. 
+                // We multiply by 5 to spread it out on screen.
+                const r = d.steps * 5; 
+                
+                const x = Math.cos(d.angle) * r;
+                const y = Math.sin(d.angle) * r;
+
+                // Highlight Logic
+                const distToScan = Math.abs(d.steps - scanRadius);
+                
+                let size = 1.2;
+                let alpha = 0.4;
+                let hue = d.colorHue;
+                
+                // Active Scan Band
+                if (distToScan < 3) {
+                    const intensity = 1 - (distToScan/3); // 0 to 1
+                    size = 2 + (intensity * 4);
+                    alpha = 1.0;
+                    ctx.shadowBlur = 15 * intensity;
+                    
+                    // Change Color based on tuning mode for visual feedback
+                    if (currentTuningMode === 'hydrogen') hue = 200; // Blue
+                    else if (currentTuningMode === 'just') hue = 50; // Gold
+                    else if (currentTuningMode === 'solfeggio') hue = 280; // Purple
+
+                    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Draw Scanner Ring
+            ctx.beginPath();
+            ctx.arc(0, 0, scanRadius * 5, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw secondary echo ring
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.max(0, (scanRadius * 5) - 20), 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        async function initSystem() {
+            document.getElementById('btn').style.display = 'none';
+            
+            // Init Logic
+            generateData();
+            await initAudio();
+            
+            updateTuning(document.getElementById('tuning-selector').value);
+            
+            isRunning = true;
+            draw();
+        }
+
+    </script>
+</body>
+</html>
+
+
+
