@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>45_MINUTES // THE HOLY FOLD</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+        body {
+            margin: 0;
+            background: #050010;
+            overflow: hidden;
+            font-family: 'Fredoka One', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            /* The Salvia "Zipper" Effect */
+            filter: contrast(1.2) saturate(1.5) hue-rotate(0deg);
+            animation: hueCycle 20s linear infinite;
+        }
+
+        @keyframes hueCycle {
+            0% { filter: contrast(1.2) saturate(1.5) hue-rotate(0deg); }
+            100% { filter: contrast(1.2) saturate(1.5) hue-rotate(360deg); }
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+
+        #btn {
+            pointer-events: auto;
+            background: linear-gradient(45deg, #ff00cc, #3333ff);
+            border: 4px solid #fff;
+            padding: 20px 60px;
+            font-size: 2rem;
+            color: #fff;
+            font-family: 'Fredoka One', cursive;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 0 30px #ff00cc;
+            transition: 0.2s;
+            text-transform: uppercase;
+            animation: float 2s infinite ease-in-out;
+        }
+
+        #btn:hover { transform: scale(1.1); background: #fff; color: #ff00cc; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+        }
+
+        .rabbit-speech {
+            position: absolute;
+            font-size: 1.5rem;
+            color: #ffff00;
+            text-shadow: 3px 3px 0 #ff0000;
+            white-space: nowrap;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            z-index: 20;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="trip"></canvas>
+    
+    <div id="ui">
+        <div id="btn" onclick="startTrip()">TURN THE CRANK</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('trip');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+
+        // RIDDLE STATE
+        let totalTimePassed = 0; // In visual units
+        let phase = 0; // 0=Start, 1=Burning A(2)+B(1), 2=Burning B(2), 3=Done
+        
+        // ROPES
+        const ropes = [
+            { id: 'A', burnL: 0, burnR: 0, burningL: false, burningR: false, color: '#ff00cc' },
+            { id: 'B', burnL: 0, burnR: 0, burningL: false, burningR: false, color: '#00ffff' }
+        ];
+
+        // RABBIT
+        const rabbit = { x: 0, y: 0, phrase: "", hop: 0 };
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE CLOCKWORK CALLIOPE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.3;
+            master.connect(actx.destination);
+            playAmbiance();
+        }
+
+        function playAmbiance() {
+            // The "Holy Salvia" Drone
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = 110; // Low A
+            
+            // LFO for the "Folding" sound
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.1;
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 50;
+            lfo.connect(lfoG);
+            lfoG.connect(osc.frequency);
+
+            g.gain.value = 0.2;
+            osc.connect(g); g.connect(master);
+            osc.start(); lfo.start();
+        }
+
+        function playSpark(freq, type) {
+            // Burning sound
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = type || 'sawtooth';
+            osc.frequency.setValueAtTime(freq, actx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(freq/2, actx.currentTime + 0.1);
+            
+            g.gain.setValueAtTime(0.1, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.1);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(); osc.stop(actx.currentTime + 0.1);
+        }
+
+        function playChime() {
+            // THE REVEAL SOUND
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, actx.currentTime); // C
+            osc.frequency.setValueAtTime(659.25, actx.currentTime + 0.1); // E
+            osc.frequency.setValueAtTime(783.99, actx.currentTime + 0.2); // G
+            
+            g.gain.setValueAtTime(0.5, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 2);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(); osc.stop(actx.currentTime + 2);
+        }
+
+        /* ------------------------------------------------
+           LOGIC & RENDER
+           ------------------------------------------------ */
+
+        function drawRope(rope, yOffset) {
+            const len = width * 0.6;
+            const startX = cx - len/2;
+            const endX = cx + len/2;
+            const y = cy + yOffset;
+
+            // Draw Unburnt Rope (Wiggly)
+            ctx.beginPath();
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            
+            // Create the "Variable Density" visual (Thick and thin spots)
+            for (let i = 0; i <= 100; i++) {
+                const p = i / 100;
+                const rx = startX + (p * len);
+                const wave = Math.sin(p * 20 + time) * 10;
+                // Density distortion
+                const density = Math.sin(p * 10) * 5; 
+                
+                if (i===0) ctx.moveTo(rx, y + wave + density);
+                else ctx.lineTo(rx, y + wave + density);
+            }
+            ctx.stroke();
+
+            // Draw BURNING parts (Neon)
+            // Calculate physical burn positions (0.0 to 1.0)
+            // Note: Density varies, but we visualize "Amount Burned"
+            
+            // Left Burn
+            if (rope.burnL > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = rope.color;
+                ctx.lineWidth = 15;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = rope.color;
+                
+                for (let i = 0; i <= rope.burnL * 100; i++) {
+                    const p = i / 100;
+                    const rx = startX + (p * len);
+                    const wave = Math.sin(p * 20 + time) * 10;
+                    const density = Math.sin(p * 10) * 5; 
+                    if (i===0) ctx.moveTo(rx, y + wave + density);
+                    else ctx.lineTo(rx, y + wave + density);
+                }
+                ctx.stroke();
+                
+                // Fire Particle at tip
+                const tipX = startX + (rope.burnL * len);
+                drawFire(tipX, y + Math.sin(rope.burnL*20+time)*10 + Math.sin(rope.burnL*10)*5);
+                
+                // Rabbit Follow
+                if(rope.burningL && Math.random() > 0.5) {
+                    rabbit.x = tipX; rabbit.y = y - 50;
+                }
+            }
+
+            // Right Burn
+            if (rope.burnR > 0) {
+                ctx.beginPath();
+                ctx.strokeStyle = rope.color;
+                ctx.lineWidth = 15;
+                
+                for (let i = 0; i <= rope.burnR * 100; i++) {
+                    const p = i / 100;
+                    // Invert direction
+                    const rx = endX - (p * len);
+                    // Need to calculate wave at this pos
+                    const realP = 1 - p;
+                    const wave = Math.sin(realP * 20 + time) * 10;
+                    const density = Math.sin(realP * 10) * 5; 
+                    if (i===0) ctx.moveTo(rx, y + wave + density);
+                    else ctx.lineTo(rx, y + wave + density);
+                }
+                ctx.stroke();
+                
+                const tipX = endX - (rope.burnR * len);
+                drawFire(tipX, y + Math.sin((1-rope.burnR)*20+time)*10);
+                
+                 // Rabbit Follow
+                if(rope.burningR && Math.random() > 0.5) {
+                    rabbit.x = tipX; rabbit.y = y - 50;
+                }
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+
+        function drawFire(x, y) {
+            const size = 10 + Math.random() * 20;
+            ctx.fillStyle = `hsl(${Math.random()*60}, 100%, 50%)`;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Audio Tick
+            if (Math.random() > 0.9) playSpark(800 + Math.random()*400, 'square');
+        }
+
+        function drawRabbit() {
+            ctx.save();
+            ctx.translate(rabbit.x, rabbit.y + Math.sin(time * 10) * 10);
+            
+            // Neon Rabbit Head
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, 0, Math.PI*2); // Head
+            ctx.moveTo(-10, -15); ctx.lineTo(-15, -50); // Ear L
+            ctx.moveTo(10, -15); ctx.lineTo(15, -50); // Ear R
+            ctx.stroke();
+            
+            // Eyes
+            ctx.fillStyle = '#f0f';
+            ctx.beginPath(); ctx.arc(-7, -5, 3, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(7, -5, 3, 0, Math.PI*2); ctx.fill();
+
+            // Speech Bubble
+            if (rabbit.phrase) {
+                ctx.font = "24px 'Fredoka One'";
+                ctx.fillStyle = "#fff";
+                ctx.textAlign = "center";
+                ctx.fillText(rabbit.phrase, 0, -70);
+            }
+            
+            ctx.restore();
+        }
+
+        function drawClock() {
+            // The "Jack in the Box" Timer
+            ctx.save();
+            ctx.translate(cx, 100);
+            
+            const mins = (totalTimePassed * 60).toFixed(0);
+            ctx.fillStyle = '#fff';
+            ctx.font = "40px monospace";
+            ctx.fillText(`${mins} MIN`, 0, 0);
+            
+            ctx.restore();
+        }
+
+        function loop() {
+            if(!isRunning) return;
+            requestAnimationFrame(loop);
+
+            // Salvia "Folding" Trail
+            // We shift the previous frame slightly to create the zipper effect
+            ctx.drawImage(canvas, -2, 2, width + 4, height - 4);
+            
+            // Fade
+            ctx.fillStyle = 'rgba(5, 0, 16, 0.1)';
+            ctx.fillRect(0,0,width,height);
+
+            time += 0.1;
+
+            // --- RIDDLE LOGIC ---
+            // Speed factor
+            const burnSpeed = 0.002; 
+            
+            if (phase === 1) {
+                // Phase 1: Burn A (Both Ends), Burn B (Left End)
+                ropes[0].burningL = true;
+                ropes[0].burningR = true;
+                ropes[1].burningL = true;
+                
+                ropes[0].burnL += burnSpeed;
+                ropes[0].burnR += burnSpeed;
+                ropes[1].burnL += burnSpeed; // B burns standard speed
+                
+                totalTimePassed += burnSpeed / 2; // Visual time approximation
+
+                // CHECK ROPE A
+                if (ropes[0].burnL + ropes[0].burnR >= 1.0) {
+                    // 30 Minutes Reached!
+                    phase = 2;
+                    rabbit.phrase = "30 MINS! LIGHT IT UP!";
+                    playChime();
+                    // Flash
+                    ctx.fillStyle = 'white'; ctx.fillRect(0,0,width,height);
+                } else {
+                    rabbit.phrase = "WAIT FOR IT...";
+                }
+            }
+
+            if (phase === 2) {
+                // Phase 2: Rope A gone. Light Rope B Right end!
+                ropes[0].burningL = false; ropes[0].burningR = false;
+                
+                ropes[1].burningL = true;
+                ropes[1].burningR = true; // NOW BURNING BOTH ENDS
+                
+                // It burns twice as fast now
+                ropes[1].burnL += burnSpeed;
+                ropes[1].burnR += burnSpeed;
+                
+                totalTimePassed += burnSpeed; // Time moves faster relative to rope length remaining
+
+                if (ropes[1].burnL + ropes[1].burnR >= 1.0) {
+                    // 45 Minutes Reached!
+                    phase = 3;
+                    rabbit.phrase = "45 MINUTES! WE ARE HERE!";
+                    playChime();
+                    triggerJackInBox();
+                } else {
+                    rabbit.phrase = "TIME IS FOLDING!";
+                }
+            }
+            
+            if (phase === 3) {
+                // DONE
+                drawJackInBox();
+            }
+
+            // DRAW
+            if (phase < 3) {
+                drawRope(ropes[0], -100);
+                drawRope(ropes[1], 100);
+                drawRabbit();
+                drawClock();
+            }
+        }
+
+        let jackSize = 0;
+        function triggerJackInBox() {
+            // Explosion of confetti logic here
+        }
+
+        function drawJackInBox() {
+            jackSize += (1 - jackSize) * 0.1; // Easing open
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // The Box
+            ctx.fillStyle = `hsl(${time * 10}, 100%, 50%)`;
+            const s = 300;
+            ctx.fillRect(-s/2, -s/2, s, s);
+            
+            // The Jack (The Answer)
+            ctx.scale(jackSize, jackSize);
+            ctx.fillStyle = '#fff';
+            ctx.font = "50px 'Fredoka One'";
+            ctx.textAlign = "center";
+            
+            ctx.fillText("30m (A) + 15m (B)", 0, -50);
+            ctx.fillText("= 45 MINUTES", 0, 50);
+            
+            ctx.restore();
+        }
+
+        function startTrip() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(()=>ui.style.display='none', 1000);
+            
+            initAudio();
+            isRunning = true;
+            phase = 1;
+            loop();
+        }
+
+    </script>
+</body>
+</html>
