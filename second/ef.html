@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIGI_FILES // DARK_AREA</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
+
+        :root {
+            --digi-orange: #ff9900;
+            --digi-blue: #00ccff;
+            --glitch-red: #ff0055;
+            --void: #050505;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'VT323', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        /* DIGIVICE CONTAINER */
+        #device {
+            width: 800px;
+            height: 600px;
+            border: 4px solid var(--digi-blue);
+            background: #000;
+            position: relative;
+            box-shadow: 0 0 50px var(--digi-blue), inset 0 0 50px rgba(0, 204, 255, 0.2);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* GRID BACKGROUND */
+        #grid-layer {
+            position: absolute;
+            width: 200%; height: 200%;
+            background-image: 
+                linear-gradient(var(--digi-blue) 1px, transparent 1px),
+                linear-gradient(90deg, var(--digi-blue) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.1;
+            animation: scrollGrid 10s linear infinite;
+            z-index: 0;
+        }
+
+        @keyframes scrollGrid { to { transform: translate(-40px, -40px); } }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.5);
+        }
+
+        /* UI OVERLAY */
+        #ui {
+            position: absolute;
+            z-index: 10;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Press Start 2P', cursive;
+            color: var(--digi-orange);
+            font-size: 12px;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* REDACTED BLOCKS */
+        .redacted-container {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+        }
+
+        .data-block {
+            background: var(--glitch-red);
+            color: #000;
+            padding: 5px 10px;
+            margin: 5px;
+            font-size: 1.5rem;
+            display: inline-block;
+            cursor: pointer;
+            transition: 0.1s;
+            border: 1px solid #fff;
+        }
+
+        .data-block:hover {
+            background: #fff;
+            color: var(--glitch-red);
+            transform: scale(1.1);
+        }
+
+        .revealed {
+            background: var(--digi-blue) !important;
+            color: #000 !important;
+            font-family: 'Press Start 2P';
+            font-size: 10px;
+        }
+
+        /* LOGIN SCREEN */
+        #login {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        h1 {
+            color: var(--digi-orange);
+            font-family: 'Press Start 2P';
+            font-size: 2rem;
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        button {
+            background: transparent;
+            color: var(--digi-blue);
+            border: 2px solid var(--digi-blue);
+            padding: 15px 30px;
+            font-family: 'Press Start 2P';
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.2s;
+        }
+        
+        button:hover { background: var(--digi-blue); color: #000; box-shadow: 0 0 20px var(--digi-blue); }
+
+        /* GLITCH TEXT */
+        .glitch-text {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: red;
+            font-size: 24px;
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="device">
+        <div id="grid-layer"></div>
+        <canvas id="render"></canvas>
+        
+        <div id="ui">
+            <div class="header">
+                <div>FILE: LITTLE_ST_JAMES</div>
+                <div>STATUS: CORRUPTED</div>
+                <div>SEC_LEVEL: MAX</div>
+            </div>
+            <div class="glitch-text" id="cam-status">ERROR: CAMERA 1 MALFUNCTION</div>
+        </div>
+
+        <div class="redacted-container" id="data-pile">
+            <!-- Injected via JS -->
+        </div>
+
+        <div id="login">
+            <h1>FILE_SERVER<br>ACCESS</h1>
+            <button onclick="hackIn()">LOG IN</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('render');
+        const ctx = canvas.getContext('2d');
+        
+        let width = 800;
+        let height = 600;
+        canvas.width = width;
+        canvas.height = height;
+
+        let time = 0;
+        let isRunning = false;
+        let corruptionLevel = 0;
+        
+        // MEMETIC DATA
+        const DATA_POINTS = [
+            { hidden: "████████", real: "THE_PRINCE" },
+            { hidden: "██████", real: "SLICK_WILLY" },
+            { hidden: "█████████", real: "ACADEMIA_FUND" },
+            { hidden: "███████", real: "MODEL_AGENCY" },
+            { hidden: "██████████", real: "HYOID_BONE" },
+            { hidden: "████", real: "MOSSAD?" },
+            { hidden: "████████", real: "MAXWELL_DEMON" },
+            { hidden: "██████████", real: "PAINTING_IN_DRESS" }
+        ];
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE DIGI-EGG
+           ------------------------------------------------ */
+        
+        let particles = [];
+
+        function drawEgg() {
+            const cx = width / 2;
+            const cy = height / 2;
+            
+            // Glitch Shake
+            const sx = Math.random() * corruptionLevel * 10;
+            const sy = Math.random() * corruptionLevel * 10;
+
+            // Draw The "Egg" (The Server)
+            ctx.save();
+            ctx.translate(cx + sx, cy + sy);
+            
+            // Wireframe Pulse
+            ctx.strokeStyle = `rgba(0, 255, 0, ${0.5 - (corruptionLevel*0.1)})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for(let i=0; i<20; i++) {
+                const ang = (time + i) * 0.5;
+                const r = 100 + Math.sin(ang * 5) * 10;
+                ctx.ellipse(0, 0, r, r * 1.5, ang, 0, Math.PI*2);
+            }
+            ctx.stroke();
+
+            // The Core (Red Eye)
+            ctx.fillStyle = corruptionLevel > 0.5 ? '#ff0000' : '#000';
+            ctx.beginPath();
+            ctx.arc(0, 0, 50, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Glitch Lines
+            if (corruptionLevel > 0) {
+                ctx.fillStyle = '#fff';
+                for(let i=0; i<corruptionLevel * 10; i++) {
+                    const y = (Math.random()-0.5) * 300;
+                    const w = Math.random() * 200;
+                    ctx.fillRect(-100, y, w, 2);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        class FileParticle {
+            constructor() {
+                this.x = width/2;
+                this.y = height/2;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 10 + 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.text = Math.random() > 0.5 ? "1" : "0";
+                this.color = "#00ccff";
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.font = "12px monospace";
+                ctx.fillText(this.text, this.x, this.y);
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.05;
+
+            // Clear (Trail effect)
+            ctx.fillStyle = 'rgba(0, 5, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            drawEgg();
+
+            // Particles
+            if (Math.random() > 0.8) particles.push(new FileParticle());
+            
+            for(let i=particles.length-1; i>=0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if(particles[i].x < 0 || particles[i].x > width || particles[i].y < 0 || particles[i].y > height) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            // CRASH SEQUENCE
+            if (corruptionLevel >= 1.0) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'red' : 'black';
+                ctx.fillRect(0, 0, width, height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = "40px 'Press Start 2P'";
+                ctx.textAlign = "center";
+                ctx.fillText("NO SIGNAL", width/2, height/2);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: BREAKCORE / DATA NOISE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let master;
+        let nextBeat = 0;
+        let beatCount = 0;
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.3;
+            
+            // Bitcrusher (Distortion)
+            const shaper = actx.createWaveShaper();
+            shaper.curve = makeDistortionCurve(400);
+            
+            master.connect(shaper);
+            shaper.connect(actx.destination);
+
+            nextBeat = actx.currentTime;
+            scheduler();
+        }
+
+        function makeDistortionCurve(amount) {
+            const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        function scheduler() {
+            const bpm = 180 + (corruptionLevel * 100); // Speed up as we reveal truth
+            const step = 60 / bpm / 4; // 16th notes
+
+            while (nextBeat < actx.currentTime + 0.1) {
+                playDrum(nextBeat, beatCount);
+                nextBeat += step;
+                beatCount++;
+            }
+            if (corruptionLevel < 1.0) setTimeout(scheduler, 25);
+        }
+
+        function playDrum(t, i) {
+            // Breakcore Pattern Generator (Amen-ish)
+            // Kick: 0, 10
+            // Snare: 4, 12
+            const mod16 = i % 16;
+            
+            if (mod16 === 0 || mod16 === 10 || (corruptionLevel > 0.5 && Math.random() > 0.8)) {
+                kick(t);
+            }
+            if (mod16 === 4 || mod16 === 12 || (corruptionLevel > 0.5 && Math.random() > 0.8)) {
+                snare(t);
+            }
+            if (i % 2 === 0) hihat(t);
+
+            // The "Digi-Scream" (High pitch glitch)
+            if (Math.random() < (corruptionLevel * 0.5)) {
+                glitchSound(t);
+            }
+        }
+
+        function kick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        function snare(t) {
+            const buf = actx.createBuffer(1, actx.sampleRate * 0.1, actx.sampleRate);
+            const d = buf.getChannelData(0);
+            for(let i=0; i<d.length; i++) d[i] = Math.random() * 2 - 1;
+            const src = actx.createBufferSource();
+            src.buffer = buf;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.7, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            src.connect(g); g.connect(master);
+            src.start(t);
+        }
+
+        function hihat(t) {
+            const osc = actx.createOscillator();
+            osc.type = 'square';
+            osc.frequency.value = 10000;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.05);
+        }
+
+        function glitchSound(t) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(Math.random() * 2000 + 500, t);
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.2, t);
+            g.gain.linearRampToValueAtTime(0, t + 0.05);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.05);
+        }
+
+        /* ------------------------------------------------
+           LOGIC & UI
+           ------------------------------------------------ */
+        
+        function setupData() {
+            const container = document.getElementById('data-pile');
+            DATA_POINTS.forEach(dp => {
+                const div = document.createElement('div');
+                div.className = 'data-block';
+                div.innerText = dp.hidden;
+                div.onclick = () => reveal(div, dp.real);
+                container.appendChild(div);
+            });
+        }
+
+        function reveal(el, text) {
+            if (el.classList.contains('revealed')) return;
+            
+            el.innerText = text;
+            el.classList.add('revealed');
+            
+            // Increase Chaos
+            corruptionLevel += 0.15;
+            
+            // Play reveal sound
+            glitchSound(actx.currentTime);
+            
+            // Check for total corruption
+            if (corruptionLevel >= 0.8) {
+                document.getElementById('cam-status').style.display = 'block';
+                document.querySelector('.header').innerHTML = "<div>SYSTEM FAILURE</div><div>GUARDS: ASLEEP</div>";
+            }
+        }
+
+        function hackIn() {
+            document.getElementById('login').style.display = 'none';
+            initAudio();
+            setupData();
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
