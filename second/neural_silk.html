@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEURAL // SILK</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            filter: blur(30px) contrast(1.5); /* The "Liquid" look */
+            opacity: 0.8;
+        }
+
+        #ui {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            color: #ffccdd; /* Soft Pink */
+            mix-blend-mode: screen;
+            cursor: pointer;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 2rem;
+            letter-spacing: 8px;
+            font-weight: 100;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+        
+        .instruction {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            opacity: 0.6;
+        }
+
+        /* Breathing Animation */
+        #ui { animation: breathe 6s infinite ease-in-out; }
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="silk"></canvas>
+
+    <div id="ui" onclick="initSession()">
+        <h1>NEURAL SILK</h1>
+        <div class="instruction">[ HEADPHONES REQUIRED ]</div>
+        <div class="instruction" style="margin-top:5px">CLICK TO DISSOLVE</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('silk');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // FLUID PARTICLES
+        let particles = [];
+        const NUM_PARTICLES = 80;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Drop {
+            constructor() {
+                this.reset();
+                // Random start time offset
+                this.t = Math.random() * 100; 
+            }
+
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.radius = Math.random() * 100 + 50;
+                // Soft colors: Peach, Lavender, Teal
+                const colors = ['#ff9a9e', '#fad0c4', '#a18cd1', '#fbc2eb', '#8fd3f4'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                // Smooth Brownian motion
+                this.vx += (Math.sin(this.t * 0.5) * 0.02);
+                this.vy += (Math.cos(this.t * 0.5) * 0.02);
+                
+                this.x += this.vx;
+                this.y += this.vy;
+                this.t += 0.01;
+
+                // Soft bounds (wrap around)
+                if(this.x < -200) this.x = width + 200;
+                if(this.x > width + 200) this.x = -200;
+                if(this.y < -200) this.y = height + 200;
+                if(this.y > height + 200) this.y = -200;
+            }
+
+            draw() {
+                ctx.beginPath();
+                // Create a soft radial gradient for each particle
+                const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                g.addColorStop(0, this.color);
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                
+                ctx.fillStyle = g;
+                ctx.globalCompositeOperation = 'screen'; // Blends lights together
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // Init Visuals
+        for(let i=0; i<NUM_PARTICLES; i++) particles.push(new Drop());
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            // Clear with very slight trail for "smear" effect
+            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillRect(0, 0, width, height);
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE BRAIN MASSAGE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let lfo; 
+
+        // Frequencies based on 432Hz tuning (Verdi's A)
+        // We use a Major 9th chord spread wide for "Openness"
+        // Db Major 9 (warm, lush)
+        const CHORD = [136.07, 272.14, 342.88, 408.00, 544.29, 611.6];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Compressor to glue it all together like honey
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -20;
+            comp.ratio.value = 10;
+            comp.attack.value = 0.5; // Slow attack for softness
+            
+            master = actx.createGain();
+            master.gain.value = 0; // Fade in
+            
+            master.connect(comp);
+            comp.connect(actx.destination);
+
+            // Fade Master In
+            master.gain.linearRampToValueAtTime(0.5, actx.currentTime + 10);
+
+            // Create the layers
+            CHORD.forEach((freq, i) => {
+                createSilkLayer(freq, i);
+            });
+            
+            // Create the Binaural Theta Wave (Deep relaxation / Trance)
+            createBinauralBeat(100, 106); // 6Hz Theta diff
+        }
+
+        function createSilkLayer(freq, index) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const pan = actx.createStereoPanner();
+            const filter = actx.createBiquadFilter();
+
+            // OSCILLATOR
+            // Sine waves are pure, but Triangle adds a tiny bit of warmth
+            osc.type = index % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.value = freq;
+
+            // PANNING (The "Swirl")
+            // Each note orbits the head at a different speed
+            const panLFO = actx.createOscillator();
+            panLFO.frequency.value = 0.05 + (index * 0.02); // Very slow rotation
+            const panGain = actx.createGain();
+            panGain.gain.value = 0.8; // Wide stereo
+            panLFO.connect(panGain);
+            panGain.connect(pan.pan);
+            panLFO.start();
+
+            // FILTER (The "Breath")
+            // Gently opens and closes to mimic breathing
+            filter.type = 'lowpass';
+            filter.Q.value = 1;
+            const filterLFO = actx.createOscillator();
+            filterLFO.frequency.value = 0.1; // 10 seconds per breath
+            const filterGain = actx.createGain();
+            filterGain.gain.value = 200; // Modulate cutoff by 200Hz
+            
+            filter.frequency.value = freq + 200; // Base cutoff
+            filterLFO.connect(filterGain);
+            filterGain.connect(filter.frequency);
+            filterLFO.start();
+
+            // VOLUME ENVELOPE (The Caress)
+            // Swells in and out randomly
+            setInterval(() => {
+                const now = actx.currentTime;
+                const swellTime = 4 + Math.random() * 4;
+                const targetVol = 0.05 + Math.random() * 0.1; // Never too loud
+                gain.gain.linearRampToValueAtTime(targetVol, now + swellTime/2);
+                gain.gain.linearRampToValueAtTime(0.02, now + swellTime);
+            }, 8000 + (index * 1000));
+
+            // Connections
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(pan);
+            pan.connect(master);
+
+            osc.start();
+        }
+
+        function createBinauralBeat(baseFreq, targetFreq) {
+            // Left Ear
+            const oscL = actx.createOscillator();
+            const panL = actx.createStereoPanner();
+            oscL.frequency.value = baseFreq;
+            oscL.type = 'sine';
+            panL.pan.value = -1; // Hard Left
+            
+            // Right Ear
+            const oscR = actx.createOscillator();
+            const panR = actx.createStereoPanner();
+            oscR.frequency.value = targetFreq;
+            oscR.type = 'sine';
+            panR.pan.value = 1; // Hard Right
+            
+            const gain = actx.createGain();
+            gain.gain.value = 0.05; // Subtle bed
+            
+            oscL.connect(panL); panL.connect(gain);
+            oscR.connect(panR); panR.connect(gain);
+            gain.connect(master);
+            
+            oscL.start(); oscR.start();
+        }
+
+        function initSession() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            initAudio();
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
