@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEKO_OS // INTERACTIVE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;900&display=swap');
+
+        :root {
+            --neon-pink: #ff0055;
+            --neon-blue: #00f3ff;
+            --void: #0a0a12;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            z-index: 1;
+        }
+
+        /* UI OVERLAY */
+        #ui-layer {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        .hud-element {
+            background: var(--glass);
+            border: 1px solid var(--neon-blue);
+            padding: 15px;
+            backdrop-filter: blur(5px);
+            width: 300px;
+            color: var(--neon-blue);
+            font-size: 12px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+        }
+
+        .bar-container {
+            width: 100%; height: 10px; background: #000; margin-top: 5px;
+            border: 1px solid #333;
+        }
+        .bar-fill { height: 100%; width: 0%; transition: width 0.1s; }
+        
+        #mood-fill { background: var(--neon-pink); }
+        #purr-fill { background: var(--neon-blue); }
+
+        /* CHAT BUBBLE */
+        #chat-box {
+            position: absolute;
+            top: 20%; left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            text-shadow: 0 0 10px var(--neon-pink);
+            font-size: 1.5rem;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        /* START BUTTON */
+        #overlay {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            width: 100%; height: 100%;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        button {
+            background: transparent;
+            color: var(--neon-pink);
+            border: 2px solid var(--neon-pink);
+            padding: 20px 60px;
+            font-size: 2rem;
+            font-family: 'Orbitron';
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.3s;
+            box-shadow: 0 0 20px var(--neon-pink);
+        }
+        button:hover {
+            background: var(--neon-pink);
+            color: #000;
+            transform: scale(1.05);
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="neko-canvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="hud-element">
+            <div>DOPAMINE LEVELS</div>
+            <div class="bar-container"><div class="bar-fill" id="mood-fill"></div></div>
+        </div>
+        
+        <div id="chat-box">SYSTEM ONLINE</div>
+
+        <div class="hud-element" style="align-self: flex-end; text-align: right; border-color: var(--neon-pink); color: var(--neon-pink);">
+            <div>PURR ENGINE RPM</div>
+            <div class="bar-container"><div class="bar-fill" id="purr-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h1 style="color:white; margin-bottom:20px;">PROJECT: NEKO</h1>
+        <button onclick="initSystem()">INITIALIZE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('neko-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let mouse = { x: 0, y: 0, vx: 0, vy: 0 };
+        let lastMouse = { x: 0, y: 0 };
+        let time = 0;
+        let isRunning = false;
+
+        // NEKO STATE
+        const neko = {
+            mood: 0,        // 0 to 100
+            purr: 0,        // 0 to 1 (Volume)
+            blink: 0,       // 0 (Open) to 1 (Closed)
+            earTwitch: 0,
+            tailPhase: 0,
+            color: '#ff0055'
+        };
+
+        const PHRASES = [
+            "SYSTEM: PURRING", "INPUT DETECTED", "HEADPAT RECEIVED", 
+            "NYA.EXE RUNNING", "OPTIMIZING...", "MORE.", 
+            "SENSORS ALIGNED", "VIBE CHECK: PASSED"
+        ];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            
+            // Calculate velocity for "Petting" detection
+            const dx = mouse.x - lastMouse.x;
+            const dy = mouse.y - lastMouse.y;
+            const speed = Math.sqrt(dx*dx + dy*dy);
+            
+            // Petting Logic
+            const distToHead = Math.hypot(mouse.x - cx, mouse.y - cy);
+            
+            if (distToHead < 200) {
+                // If moving at a "Petting" speed (not too fast, not stopped)
+                if (speed > 2 && speed < 50) {
+                    neko.mood = Math.min(100, neko.mood + 0.5);
+                    neko.purr = Math.min(1, neko.purr + 0.05);
+                    if(Math.random() > 0.98) speak();
+                }
+            }
+
+            lastMouse.x = mouse.x;
+            lastMouse.y = mouse.y;
+        });
+        
+        window.addEventListener('mousedown', () => {
+            if(isRunning) {
+                neko.mood = Math.min(100, neko.mood + 10);
+                neko.earTwitch = 1.0;
+                triggerMeow();
+                speak();
+            }
+        });
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: PURR SYNTHESIS
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let purrOsc, purrNoise, purrGain;
+        
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+            master.connect(actx.destination);
+
+            // 1. PURR GENERATOR
+            // A purr is breathing (Sine LFO) modulating Noise + Low Frequency Pulse
+            
+            // The Rattle (Brown Noise approximation via Buffer)
+            const bSize = actx.sampleRate * 2;
+            const bBuf = actx.createBuffer(1, bSize, actx.sampleRate);
+            const data = bBuf.getChannelData(0);
+            let lastOut = 0;
+            for (let i = 0; i < bSize; i++) {
+                const white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= 3.5;
+            }
+            purrNoise = actx.createBufferSource();
+            purrNoise.buffer = bBuf;
+            purrNoise.loop = true;
+
+            // Purr Filter (Lowpass)
+            const pFilter = actx.createBiquadFilter();
+            pFilter.type = 'lowpass';
+            pFilter.frequency.value = 80;
+
+            // Purr LFO (Breathing) - AM Modulation
+            const pLFO = actx.createOscillator();
+            pLFO.frequency.value = 25; // The "Rattle" speed
+            const pLFOGain = actx.createGain();
+            pLFOGain.gain.value = 100;
+            
+            purrGain = actx.createGain();
+            purrGain.gain.value = 0;
+
+            purrNoise.connect(pFilter);
+            pFilter.connect(purrGain);
+            
+            // Connect modulation
+            pLFO.connect(pLFOGain);
+            pLFOGain.connect(pFilter.frequency);
+            
+            purrGain.connect(master);
+            
+            purrNoise.start();
+            pLFO.start();
+        }
+
+        function triggerMeow() {
+            if(!actx) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+
+            osc.type = 'sawtooth';
+            // Pitch glide (Me-ow) high to low
+            const now = actx.currentTime;
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(400, now + 0.3);
+            
+            // Formant Filter (Vowel sound)
+            f.type = 'bandpass';
+            f.Q.value = 2;
+            f.frequency.setValueAtTime(1200, now);
+            f.frequency.linearRampToValueAtTime(600, now + 0.3);
+
+            g.gain.setValueAtTime(0.2, now);
+            g.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(); osc.stop(now + 0.4);
+        }
+
+        function updateAudio() {
+            if(!actx) return;
+            // Purr volume based on visual purr level
+            purrGain.gain.setTargetAtTime(neko.purr * 0.5, actx.currentTime, 0.1);
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: NEKO GEOMETRY
+           ------------------------------------------------ */
+        
+        function drawHead() {
+            // Head Bob
+            const bob = Math.sin(time * 2) * 5;
+            
+            // 1. HALO (Ears)
+            ctx.save();
+            ctx.translate(cx, cy + bob);
+            
+            // Calculate Ear Rotation based on Mouse
+            const dx = mouse.x - cx;
+            const lookX = dx * 0.05;
+
+            // EARS (Triangles)
+            ctx.fillStyle = neko.mood > 50 ? '#ff0055' : '#444';
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = 2;
+
+            // Left Ear
+            ctx.beginPath();
+            ctx.moveTo(-80, -80);
+            ctx.lineTo(-130 + (neko.earTwitch*20), -160 + (neko.earTwitch*50));
+            ctx.lineTo(-40, -100);
+            ctx.fill(); ctx.stroke();
+
+            // Right Ear
+            ctx.beginPath();
+            ctx.moveTo(80, -80);
+            ctx.lineTo(130 - (neko.earTwitch*20), -160 + (neko.earTwitch*50));
+            ctx.lineTo(40, -100);
+            ctx.fill(); ctx.stroke();
+
+            // HEAD (Circle)
+            const vibration = Math.random() * neko.purr * 2; // Purr shake
+            
+            // Glow
+            ctx.shadowBlur = 20 + (neko.mood * 0.5);
+            ctx.shadowColor = neko.mood > 50 ? '#ff0055' : '#00f3ff';
+            
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(0 + vibration, 0, 100, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke(); // Outline
+            ctx.shadowBlur = 0;
+
+            // EYES (Reactive)
+            drawEyes(lookX);
+
+            // MOUTH (W shape)
+            ctx.beginPath();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            const smile = neko.mood * 0.1;
+            ctx.moveTo(-10, 40 - smile);
+            ctx.lineTo(0, 45);
+            ctx.lineTo(10, 40 - smile);
+            ctx.stroke();
+
+            // BLUSH (If happy)
+            if (neko.mood > 60) {
+                ctx.fillStyle = 'rgba(255, 0, 85, 0.3)';
+                ctx.beginPath();
+                ctx.ellipse(-50, 20, 20, 10, 0, 0, Math.PI*2);
+                ctx.ellipse(50, 20, 20, 10, 0, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function drawEyes(lookX) {
+            const blinkH = neko.blink > 0 ? 2 : 30;
+            
+            ctx.fillStyle = neko.mood > 80 ? '#ff0055' : '#00f3ff'; // Eye Color
+            
+            // Left Eye
+            ctx.beginPath();
+            ctx.ellipse(-40 + (lookX*0.2), -10, 20, blinkH, 0, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Right Eye
+            ctx.beginPath();
+            ctx.ellipse(40 + (lookX*0.2), -10, 20, blinkH, 0, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Highlghts
+            if(neko.blink === 0) {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(-35 + (lookX*0.2), -15, 5, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(45 + (lookX*0.2), -15, 5, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        function drawTail() {
+            ctx.save();
+            ctx.translate(cx, cy + 100);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = 10;
+            ctx.lineCap = 'round';
+            
+            // Sine Wave Tail
+            // Speed increases with mood
+            const tailSpeed = time * (2 + (neko.mood * 0.1));
+            
+            ctx.moveTo(0, 0);
+            for(let i=0; i<20; i++) {
+                const x = Math.sin(tailSpeed + i * 0.5) * (20 + i*5);
+                const y = i * 10;
+                ctx.lineTo(x + 80, -y + 50); // Curve up and right
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.05;
+            
+            // Decay states
+            neko.purr *= 0.99;
+            neko.mood = Math.max(0, neko.mood - 0.05); // Gets bored slowly
+            neko.earTwitch *= 0.9;
+
+            // Blink Logic
+            if(Math.random() > 0.99) neko.blink = 1;
+            if(neko.blink > 0) neko.blink -= 0.1;
+            if(neko.blink < 0) neko.blink = 0;
+
+            // Clear
+            ctx.fillStyle = 'rgba(10, 10, 18, 0.3)'; // Trail
+            ctx.fillRect(0, 0, width, height);
+
+            drawTail();
+            drawHead();
+
+            // Particles (Hearts if happy)
+            if (neko.mood > 50 && Math.random() > 0.9) {
+                spawnHeart();
+            }
+            updateParticles();
+            
+            // UI
+            document.getElementById('mood-fill').style.width = neko.mood + '%';
+            document.getElementById('purr-fill').style.width = (neko.purr * 100) + '%';
+            
+            updateAudio();
+        }
+        
+        // PARTICLE SYSTEM
+        let particles = [];
+        function spawnHeart() {
+            particles.push({
+                x: cx + (Math.random()-0.5)*100,
+                y: cy - 100,
+                vy: Math.random() * 2 + 1,
+                life: 1.0,
+                char: '♥' // or ⚡ if angry?
+            });
+        }
+        
+        function updateParticles() {
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "#ff0055";
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.y -= p.vy;
+                p.life -= 0.02;
+                ctx.globalAlpha = p.life;
+                ctx.fillText(p.char, p.x, p.y);
+                if(p.life <= 0) particles.splice(i,1);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // TEXT ENGINE
+        function speak() {
+            const box = document.getElementById('chat-box');
+            box.innerText = PHRASES[Math.floor(Math.random() * PHRASES.length)];
+            box.style.opacity = 1;
+            setTimeout(() => box.style.opacity = 0, 2000);
+        }
+
+        function initSystem() {
+            document.getElementById('overlay').style.display = 'none';
+            initAudio();
+            isRunning = true;
+            speak();
+            render();
+        }
+
+    </script>
+</body>
+</html>
