@@ -3,95 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ABARTH 124 // MONZA SIMULATOR</title>
+    <title>ABARTH 124 // MONZA FINAL</title>
     <style>
         :root {
-            --scorp-red: #e31d2b;
-            --scorp-black: #111;
-            --road: #333;
+            --red: #dc002e;
+            --bg: #1a1a1a;
+            --ui: #fff;
         }
 
         body {
             margin: 0;
-            background: var(--scorp-black);
+            background: var(--bg);
             overflow: hidden;
-            font-family: 'Impact', sans-serif;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            font-family: 'Arial Black', sans-serif;
+            color: var(--ui);
+            user-select: none;
         }
 
         canvas {
-            image-rendering: pixelated; /* Retro crispness */
-            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            position: absolute;
+            top: 0; left: 0;
         }
 
         /* DASHBOARD */
-        #dashboard {
+        #hud {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            width: 250px;
-            height: 250px;
+            width: 300px;
+            text-align: right;
             pointer-events: none;
         }
 
-        .gauge {
-            width: 100%; height: 100%;
-            background: radial-gradient(circle, #222 60%, #000 70%);
-            border-radius: 50%;
-            border: 5px solid #555;
+        #tacho-bar {
+            width: 100%;
+            height: 30px;
+            background: #333;
+            border: 4px solid #fff;
+            transform: skew(-20deg);
+            overflow: hidden;
             position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
 
-        .needle {
+        #rpm-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ffff00, #ff0000);
+            transition: width 0.05s linear;
+        }
+
+        #speed-val { font-size: 4rem; line-height: 1; }
+        #gear-val { font-size: 2rem; color: var(--red); }
+
+        /* INPUT DEBUGGER */
+        #input-debug {
             position: absolute;
-            bottom: 50%; left: 50%;
-            width: 4px; height: 45%;
-            background: var(--scorp-red);
-            transform-origin: bottom center;
-            transform: rotate(-135deg); /* -135 to 135 */
-            transition: transform 0.1s ease-out;
-            z-index: 2;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .key {
+            width: 40px; height: 40px;
+            border: 2px solid #555;
+            color: #555;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .key.active {
+            border-color: var(--red);
+            background: var(--red);
+            color: white;
+            box-shadow: 0 0 15px var(--red);
         }
 
-        .center-cap {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px; height: 20px;
-            background: #888;
-            border-radius: 50%;
-            z-index: 3;
-        }
-
-        .rpm-text {
-            position: absolute;
-            top: 65%; width: 100%;
-            text-align: center;
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            font-size: 24px;
-            color: #fff;
-        }
-
-        .redline-zone {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            border-radius: 50%;
-            border: 10px solid transparent;
-            border-right-color: var(--scorp-red);
-            border-bottom-color: var(--scorp-red);
-            transform: rotate(45deg);
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
-        /* MENU */
-        #menu {
+        /* START OVERLAY */
+        #overlay {
             position: absolute;
             width: 100%; height: 100%;
             background: rgba(0,0,0,0.9);
@@ -101,560 +91,374 @@
             align-items: center;
             z-index: 100;
         }
-
-        h1 {
-            font-size: 5rem;
-            font-style: italic;
-            margin: 0;
-            color: #fff;
-            text-shadow: 5px 5px 0 var(--scorp-red);
-        }
         
-        p { color: #aaa; font-family: monospace; font-size: 1.2rem; margin-bottom: 40px; }
-
-        button {
-            padding: 20px 60px;
-            font-size: 2rem;
-            font-family: 'Impact';
-            background: var(--scorp-red);
-            color: white;
+        h1 { font-size: 4rem; color: var(--red); text-transform: uppercase; margin: 0; font-style: italic; }
+        
+        #start-btn {
+            margin-top: 20px;
+            padding: 20px 50px;
+            background: white;
+            color: black;
+            font-size: 1.5rem;
+            font-weight: bold;
             border: none;
             cursor: pointer;
             transform: skew(-10deg);
-            transition: 0.2s;
-            box-shadow: 0 0 30px var(--scorp-red);
         }
-
-        button:hover {
-            background: #fff;
-            color: var(--scorp-red);
-            transform: skew(-10deg) scale(1.1);
-        }
-
-        /* FLASH */
-        #pop-flash {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: white;
-            opacity: 0;
-            pointer-events: none;
-            mix-blend-mode: overlay;
-            transition: opacity 0.05s;
-        }
+        #start-btn:hover { background: var(--red); color: white; }
 
     </style>
 </head>
 <body>
 
-    <div id="pop-flash"></div>
-
-    <canvas id="gameCanvas"></canvas>
-
-    <div id="dashboard">
-        <div class="gauge">
-            <div class="redline-zone"></div>
-            <div class="needle" id="tacho"></div>
-            <div class="center-cap"></div>
-            <div class="rpm-text">ABARTH</div>
-        </div>
+    <div id="overlay">
+        <h1>SCORPION EVO</h1>
+        <div style="margin-top: 10px; font-size: 12px; color: #aaa;">WASD or ARROWS to Drive</div>
+        <button id="start-btn" onclick="bootSystem()">START ENGINE</button>
     </div>
 
-    <div id="menu">
-        <h1>SCORPION TRACK DAY</h1>
-        <p>WASD or ARROWS to Drive // SPACE to Handbrake</p>
-        <button onclick="startGame()">START ENGINE</button>
+    <canvas id="world"></canvas>
+
+    <div id="input-debug">
+        <div class="key" id="k-w">W</div>
+        <div class="key" id="k-a">A</div>
+        <div class="key" id="k-s">S</div>
+        <div class="key" id="k-d">D</div>
+    </div>
+
+    <div id="hud">
+        <div><span id="speed-val">0</span> KMH</div>
+        <div>GEAR <span id="gear-val">N</span></div>
+        <div id="tacho-bar"><div id="rpm-fill"></div></div>
     </div>
 
     <script>
-        const canvas = document.getElementById('gameCanvas');
+        /* 
+         * 1. CORE CONFIGURATION
+         */
+        const canvas = document.getElementById('world');
         const ctx = canvas.getContext('2d', { alpha: false });
-
-        // --- GAME STATE ---
-        let isRunning = false;
-        let width, height;
         
-        // Camera
-        let camX = 0;
-        let camY = 0;
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
 
-        // Inputs
-        const input = { up: false, down: false, left: false, right: false, handbrake: false };
-
-        // Car Physics Object
+        // PHYSICS VARS
         const car = {
             x: 0, y: 0,
-            speed: 0,
-            angle: 0,        // The direction the car is FACING
-            velAngle: 0,     // The direction the car is MOVING (Drift)
-            rpm: 1000,
+            angle: 0,          // Facing direction
+            speed: 0,          // Forward velocity magnitude
+            latSpeed: 0,       // Lateral velocity (Drift)
+            rpm: 800,
             gear: 1,
-            maxSpeed: 35,
-            accel: 0.3,
-            friction: 0.96,
-            turnSpeed: 0.06,
-            driftFactor: 0.0, // 0 = Grip, 1 = Slide
-            color: '#eee'
+            
+            // Specs
+            accel: 0.2,
+            friction: 0.98,
+            turnRate: 0.07,
+            maxSpeed: 40,
+            grip: 0.94         // High = Sticky, Low = Drifty
         };
 
-        // Track
-        const trackWidth = 600;
-        const trackPoints = []; // Generated procedurally
+        const input = { w: false, s: false, a: false, d: false, space: false };
+        let isRunning = false;
 
-        // Particles
-        let particles = [];
-        let skids = [];
-
-        /* ------------------------------------------------
-           SETUP
-           ------------------------------------------------ */
-        function resize() {
-            width = window.innerWidth;
-            height = window.innerHeight;
-            canvas.width = width;
-            canvas.height = height;
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        function generateTrack() {
-            // Generate a giant loop
-            const radius = 2000;
-            const points = 50;
-            for(let i=0; i<points; i++) {
-                const theta = (i / points) * Math.PI * 2;
-                // Add noise to make it a non-perfect circle
-                const r = radius + (Math.sin(theta * 5) * 500) + (Math.cos(theta * 3) * 300);
-                trackPoints.push({
-                    x: Math.cos(theta) * r,
-                    y: Math.sin(theta) * r
-                });
-            }
-            // Set car start
-            car.x = trackPoints[0].x;
-            car.y = trackPoints[0].y;
-            car.angle = Math.PI / 2;
-        }
-
-        /* ------------------------------------------------
-           PHYSICS ENGINE
-           ------------------------------------------------ */
-        function updatePhysics() {
-            // 1. INPUT HANDLING
-            if (input.up) car.speed += car.accel;
-            if (input.down) car.speed -= car.accel * 1.5; // Brakes stronger than engine
-
-            // 2. TURNING
-            // Only turn if moving
-            if (Math.abs(car.speed) > 0.5) {
-                const dir = car.speed > 0 ? 1 : -1;
-                if (input.left) car.angle -= car.turnSpeed * dir;
-                if (input.right) car.angle += car.turnSpeed * dir;
-            }
-
-            // 3. DRIFT LOGIC
-            // If turning hard at speed, or handbrake pulled
-            const isTurning = input.left || input.right;
-            const isFast = Math.abs(car.speed) > 10;
-            
-            if (input.handbrake || (isTurning && isFast && input.up)) {
-                // Enter drift
-                car.driftFactor += 0.05;
-            } else {
-                // Regain grip
-                car.driftFactor -= 0.05;
-            }
-            // Clamp
-            car.driftFactor = Math.max(0, Math.min(1, car.driftFactor));
-
-            // 4. VELOCITY VECTOR
-            // We interpolate between "Car Facing" (Grip) and "Old Velocity" (Drift)
-            
-            // Calculate intended vector
-            const vxGrip = Math.cos(car.angle) * car.speed;
-            const vyGrip = Math.sin(car.angle) * car.speed;
-
-            // Apply to position
-            // Simple arcade physics: We actually just move along the angle, but we visually drift
-            // To make it feel real, we slide the car sideways based on driftFactor
-            
-            car.x += Math.cos(car.angle) * car.speed;
-            car.y += Math.sin(car.angle) * car.speed;
-            
-            // Add slide (centrifugal force)
-            if (isTurning) {
-                const slideDir = input.right ? -1 : 1; // Opposite to turn
-                const slideAmount = car.speed * car.driftFactor * 0.5;
-                car.x += Math.sin(car.angle) * slideAmount * slideDir;
-                car.y -= Math.cos(car.angle) * slideAmount * slideDir;
-                
-                // Spawn Skidmarks
-                if (car.driftFactor > 0.5) spawnSkid();
-                if (car.driftFactor > 0.8) createSmoke(car.x, car.y);
-            }
-
-            // 5. FRICTION
-            car.speed *= car.friction;
-            if (input.handbrake) car.speed *= 0.9; // Fast stop
-
-            // 6. RPM SIMULATION (For Audio)
-            // RPM rises with speed, but also flares if clutch kicked (Handbrake)
-            const targetRPM = 1000 + (Math.abs(car.speed) * 200);
-            
-            if (input.up) {
-                if (car.rpm < targetRPM) car.rpm += (targetRPM - car.rpm) * 0.2; // Rev up fast
-            } else {
-                car.rpm -= 100; // Rev drop
-            }
-            
-            // Idle bounce
-            if (car.rpm < 1000) car.rpm = 950 + Math.random() * 100;
-            // Redline
-            if (car.rpm > 7500) car.rpm = 7400 + Math.random() * 200; // Bouncing limiter
-
-            // Update Gauge
-            updateDashboard();
-        }
-
-        /* ------------------------------------------------
-           AUDIO ENGINE: THE SCORPION
-           ------------------------------------------------ */
+        /* 
+         * 2. AUDIO ENGINE: THE MONZA
+         */
         const AC = window.AudioContext || window.webkitAudioContext;
-        let actx;
-        let masterGain;
-        let osc1, osc2, sub, noise;
+        let actx, master, limiter;
+        
+        // Nodes
+        let osc1, osc2, sub, noise, rasp;
         let filter;
-        let distortion;
-
-        // State tracking for pops
-        let wasGasPressed = false;
 
         function initAudio() {
             actx = new AC();
-            masterGain = actx.createGain();
-            masterGain.gain.value = 0.3;
-            masterGain.connect(actx.destination);
-
-            // ENGINE CORE (Sawtooths for rasp)
-            osc1 = actx.createOscillator(); // Main cylinder tone
-            osc1.type = 'sawtooth';
             
-            osc2 = actx.createOscillator(); // Harmony/Detune
-            osc2.type = 'sawtooth';
-            osc2.detune.value = 15; // Slight chorus
+            // Master Chain
+            master = actx.createGain();
+            master.gain.value = 0; // Start silent, ramp up
+            
+            limiter = actx.createDynamicsCompressor();
+            
+            master.connect(limiter);
+            limiter.connect(actx.destination);
 
-            sub = actx.createOscillator(); // Exhaust rumble
-            sub.type = 'square';
+            // 1. MAIN ENGINE (Sawtooth for bite)
+            osc1 = actx.createOscillator();
+            osc1.type = 'sawtooth';
+            osc1.start();
 
-            // EXHAUST FILTER
+            // 2. HARMONIC (Square for body)
+            osc2 = actx.createOscillator();
+            osc2.type = 'square';
+            osc2.detune.value = 10; // Slight detune
+            osc2.start();
+
+            // 3. SUB (Rumble)
+            sub = actx.createOscillator();
+            sub.type = 'sine';
+            sub.start();
+
+            // 4. EXHAUST FILTER
             filter = actx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.Q.value = 2; // Resonant exhaust tip
+            filter.Q.value = 2;
 
-            // DISTORTION (The Monza Valve Open sound)
-            distortion = actx.createWaveShaper();
-            distortion.curve = makeDistortionCurve(100);
-            distortion.oversample = '4x';
+            // 5. DISTORTION (The Rasp)
+            const dist = actx.createWaveShaper();
+            dist.curve = makeDistortionCurve(400);
 
-            // Chain
+            // Routing
             osc1.connect(filter);
             osc2.connect(filter);
-            sub.connect(filter);
+            sub.connect(master); // Sub bypasses filter/dist for clean bass
             
-            filter.connect(distortion);
-            distortion.connect(masterGain);
+            filter.connect(dist);
+            dist.connect(master);
 
-            osc1.start();
-            osc2.start();
-            sub.start();
+            // Ramp up volume
+            master.gain.setTargetAtTime(0.4, actx.currentTime, 1);
         }
 
         function makeDistortionCurve(amount) {
-            const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+            const k = amount;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
             for (let i = 0; i < n_samples; ++i) {
-                const x = i * 2 / n_samples - 1;
+                const x = (i * 2) / n_samples - 1;
                 curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
             }
             return curve;
         }
 
+        let lastGas = false;
         function updateAudio() {
             if (!actx) return;
-
+            
             const rpm = car.rpm;
-            
-            // Pitch logic (4 cylinder = 2 pulses per rev / 60 sec)
-            // This maps RPM roughly to Hz
-            const baseFreq = rpm / 12; 
-            
-            osc1.frequency.setTargetAtTime(baseFreq, actx.currentTime, 0.05);
-            osc2.frequency.setTargetAtTime(baseFreq * 1.01, actx.currentTime, 0.05); // Detuned
-            sub.frequency.setTargetAtTime(baseFreq * 0.5, actx.currentTime, 0.05); // Sub octave
+            const load = input.w ? 1 : 0;
 
-            // Filter Logic (Valve opening)
-            // At high RPM, filter opens up for the scream
-            const cutoff = 100 + (rpm * 0.8);
+            // Pitch Physics
+            const freq = (rpm / 60) * 2; // 4 cylinder firing rate approximation
+            
+            osc1.frequency.setTargetAtTime(freq, actx.currentTime, 0.05);
+            osc2.frequency.setTargetAtTime(freq * 1.01, actx.currentTime, 0.05);
+            sub.frequency.setTargetAtTime(freq * 0.5, actx.currentTime, 0.05);
+
+            // Filter Logic (Valves opening)
+            const cutoff = 200 + (rpm * 1.2);
             filter.frequency.setTargetAtTime(cutoff, actx.currentTime, 0.1);
 
-            // POPS AND BANGS LOGIC
-            // If we let go of gas (wasGasPressed=true -> false) and RPM is high
-            const gasPressed = input.up;
-            if (wasGasPressed && !gasPressed && rpm > 3500) {
-                triggerBackfire();
+            // POPS AND BANGS
+            if (lastGas && !input.w && rpm > 4000) {
+                triggerPop();
             }
-            wasGasPressed = gasPressed;
+            lastGas = input.w;
         }
 
-        function triggerBackfire() {
-            // Visual Flash
-            const flash = document.getElementById('pop-flash');
-            flash.style.opacity = 0.4;
-            setTimeout(() => flash.style.opacity = 0, 50);
+        function triggerPop() {
+            // Quick noise burst
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.value = 50;
+            osc.frequency.exponentialRampToValueAtTime(10, actx.currentTime + 0.1);
+            
+            g.gain.setValueAtTime(1, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.15);
+            
+            osc.connect(g);
+            g.connect(master);
+            osc.start();
+            osc.stop(actx.currentTime + 0.15);
+        }
 
-            // Audio Crackle
-            const count = Math.floor(Math.random() * 3) + 1;
-            for(let i=0; i<count; i++) {
-                setTimeout(() => {
-                    const boom = actx.createOscillator();
-                    const bg = actx.createGain();
-                    boom.type = 'sawtooth';
-                    boom.frequency.value = 50 + Math.random() * 50;
-                    boom.frequency.exponentialRampToValueAtTime(10, actx.currentTime + 0.1);
-                    
-                    bg.gain.setValueAtTime(1.0, actx.currentTime);
-                    bg.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.15);
-                    
-                    const d = actx.createWaveShaper();
-                    d.curve = makeDistortionCurve(400);
-                    
-                    boom.connect(d); d.connect(bg); bg.connect(masterGain);
-                    boom.start(); boom.stop(actx.currentTime + 0.2);
-                    
-                    spawnExhaustFire();
-                }, i * 120);
+
+        /* 
+         * 3. PHYSICS ENGINE
+         */
+        function updatePhysics() {
+            // Gas / Brake
+            if (input.w) car.speed += car.accel;
+            if (input.s) car.speed -= car.accel;
+
+            // Friction
+            car.speed *= car.friction;
+
+            // Steering (Only when moving)
+            if (Math.abs(car.speed) > 0.1) {
+                // Reverse steering if going backwards
+                const dir = car.speed > 0 ? 1 : -1;
+                if (input.a) car.angle -= car.turnRate * dir;
+                if (input.d) car.angle += car.turnRate * dir;
             }
-        }
 
-        /* ------------------------------------------------
-           RENDER LOOP
-           ------------------------------------------------ */
-        function spawnSkid() {
-            // Add two points for rear tires
-            const backX = car.x - Math.cos(car.angle) * 20;
-            const backY = car.y - Math.sin(car.angle) * 20;
-            
-            // Width of axle
-            const perp = car.angle + Math.PI/2;
-            const w = 12;
-            
-            skids.push({
-                x1: backX + Math.cos(perp) * w,
-                y1: backY + Math.sin(perp) * w,
-                x2: backX - Math.cos(perp) * w,
-                y2: backY - Math.sin(perp) * w,
-                alpha: 0.4
-            });
-            
-            if (skids.length > 500) skids.shift();
-        }
+            // Position Update
+            car.x += Math.cos(car.angle) * car.speed;
+            car.y += Math.sin(car.angle) * car.speed;
 
-        function createSmoke(x, y) {
-            particles.push({
-                x: x + (Math.random()-0.5)*20,
-                y: y + (Math.random()-0.5)*20,
-                size: Math.random()*10 + 5,
-                vx: (Math.random()-0.5)*2,
-                vy: (Math.random()-0.5)*2,
-                life: 1.0,
-                type: 'smoke'
-            });
-        }
-
-        function spawnExhaustFire() {
-            // Back of car
-            const exX = car.x - Math.cos(car.angle) * 25;
-            const exY = car.y - Math.sin(car.angle) * 25;
+            // RPM Simulation
+            const targetRPM = 800 + (Math.abs(car.speed) * 250);
             
-            for(let i=0; i<5; i++) {
-                particles.push({
-                    x: exX, y: exY,
-                    size: Math.random()*5 + 2,
-                    vx: -Math.cos(car.angle)*10 + (Math.random()-0.5)*5,
-                    vy: -Math.sin(car.angle)*10 + (Math.random()-0.5)*5,
-                    life: 1.0,
-                    type: 'fire'
-                });
+            if (input.w) {
+                // Rev up logic
+                if (car.rpm < targetRPM) car.rpm += (targetRPM - car.rpm) * 0.2;
+                else car.rpm = targetRPM;
+            } else {
+                // Rev drop logic
+                car.rpm -= (car.rpm - 800) * 0.05;
             }
+            
+            // Idle jitter
+            if (car.rpm < 800) car.rpm = 800 + Math.random()*50;
+            // Redline
+            if (car.rpm > 7000) car.rpm = 6900 + Math.random()*200;
+        }
+
+
+        /* 
+         * 4. RENDER ENGINE
+         */
+        // Procedural Track
+        const track = [];
+        for(let i=0; i<100; i++) {
+            const a = (i/100) * Math.PI * 2;
+            const r = 1000 + Math.sin(a*5)*300;
+            track.push({x: Math.cos(a)*r, y: Math.sin(a)*r});
         }
 
         function draw() {
-            // 1. CAMERA FOLLOW
-            camX = -car.x + width/2;
-            camY = -car.y + height/2;
-
-            // Clear
-            ctx.fillStyle = '#1a4a1a'; // Grass Color
+            // Clear background (Grass)
+            ctx.fillStyle = '#1b4d1b'; 
             ctx.fillRect(0, 0, width, height);
 
             ctx.save();
-            ctx.translate(camX, camY);
+            
+            // CAMERA: Center the car
+            ctx.translate(width/2 - car.x, height/2 - car.y);
 
-            // 2. DRAW TRACK (Procedural Curve)
-            // We draw a giant thick line for asphalt
+            // DRAW TRACK
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            
-            // Asphalt
+            ctx.strokeStyle = '#333'; // Asphalt
+            ctx.lineWidth = 400;
             ctx.beginPath();
-            ctx.lineWidth = trackWidth;
-            ctx.strokeStyle = '#333';
-            ctx.moveTo(trackPoints[0].x, trackPoints[0].y);
-            for(let i=1; i<trackPoints.length; i++) {
-                ctx.lineTo(trackPoints[i].x, trackPoints[i].y);
-            }
+            ctx.moveTo(track[0].x, track[0].y);
+            for(let p of track) ctx.lineTo(p.x, p.y);
             ctx.closePath();
             ctx.stroke();
 
-            // Curbs (Thinner line on top)
-            ctx.beginPath();
-            ctx.lineWidth = trackWidth + 20;
-            ctx.strokeStyle = '#eee';
+            // DRAW CURBS (Red/White)
+            ctx.strokeStyle = '#d00';
+            ctx.lineWidth = 420;
             ctx.setLineDash([40, 40]);
-            ctx.moveTo(trackPoints[0].x, trackPoints[0].y);
-            for(let i=1; i<trackPoints.length; i++) {
-                ctx.lineTo(trackPoints[i].x, trackPoints[i].y);
-            }
-            ctx.closePath();
             ctx.stroke();
             ctx.setLineDash([]); // Reset
 
-            // Re-draw asphalt to cover inner curb
-            ctx.beginPath();
-            ctx.lineWidth = trackWidth;
+            // Re-draw Asphalt over curbs to make them edge-only
             ctx.strokeStyle = '#333';
-            ctx.moveTo(trackPoints[0].x, trackPoints[0].y);
-            for(let i=1; i<trackPoints.length; i++) {
-                ctx.lineTo(trackPoints[i].x, trackPoints[i].y);
-            }
-            ctx.closePath();
+            ctx.lineWidth = 380;
             ctx.stroke();
 
-            // 3. SKIDMARKS
-            ctx.fillStyle = '#111';
-            for(let s of skids) {
-                ctx.globalAlpha = s.alpha;
-                ctx.fillRect(s.x1, s.y1, 4, 4);
-                ctx.fillRect(s.x2, s.y2, 4, 4);
-                s.alpha -= 0.001;
-            }
-            ctx.globalAlpha = 1.0;
-
-            // 4. DRAW CAR
+            // DRAW CAR
             ctx.save();
             ctx.translate(car.x, car.y);
             ctx.rotate(car.angle);
-            
-            // Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            ctx.fillRect(-20, -10, 50, 30);
 
             // Body (White)
-            ctx.fillStyle = '#eee';
-            ctx.fillRect(-25, -12, 50, 24);
-            
+            ctx.fillStyle = '#f0f0f0';
+            ctx.beginPath();
+            ctx.roundRect(-25, -14, 50, 28, 4);
+            ctx.fill();
+
             // Heritage Hood (Black)
             ctx.fillStyle = '#111';
-            ctx.fillRect(0, -11, 25, 22);
-            
+            ctx.fillRect(-5, -13, 30, 26);
+
             // Windshield
             ctx.fillStyle = '#222';
-            ctx.fillRect(-5, -10, 5, 20);
+            ctx.fillRect(-10, -12, 8, 24);
 
             // Mirrors (Red)
-            ctx.fillStyle = '#e31d2b';
-            ctx.fillRect(2, -14, 5, 3);
-            ctx.fillRect(2, 11, 5, 3);
-            
+            ctx.fillStyle = '#dc002e';
+            ctx.fillRect(0, -16, 6, 3);
+            ctx.fillRect(0, 13, 6, 3);
+
             // Brake Lights
-            if (input.down) {
-                ctx.fillStyle = '#ff0000';
-                ctx.shadowColor = 'red'; ctx.shadowBlur = 10;
-            } else {
-                ctx.fillStyle = '#500';
-                ctx.shadowBlur = 0;
-            }
-            ctx.fillRect(-25, -10, 2, 6);
-            ctx.fillRect(-25, 4, 2, 6);
+            ctx.fillStyle = input.s ? '#ff0000' : '#600';
+            ctx.shadowColor = '#f00';
+            ctx.shadowBlur = input.s ? 20 : 0;
+            ctx.fillRect(-25, -12, 2, 6);
+            ctx.fillRect(-25, 6, 2, 6);
             ctx.shadowBlur = 0;
 
-            // Headlights
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(23, -10, 2, 6);
-            ctx.fillRect(23, 4, 2, 6);
+            // Headlights (Yellow beams)
+            ctx.fillStyle = '#ffffee';
+            ctx.fillRect(23, -12, 2, 6);
+            ctx.fillRect(23, 6, 2, 6);
             
-            ctx.restore();
-
-            // 5. PARTICLES
-            for (let i=particles.length-1; i>=0; i--) {
-                const p = particles[i];
-                p.x += p.vx; p.y += p.vy;
-                p.life -= 0.05;
-                
-                if (p.type === 'fire') {
-                    ctx.fillStyle = `rgba(255, ${p.life*255}, 0, ${p.life})`;
-                } else {
-                    ctx.fillStyle = `rgba(200,200,200, ${p.life*0.5})`;
-                }
-                
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-                ctx.fill();
-                
-                if(p.life <= 0) particles.splice(i, 1);
-            }
+            // Headlight Beams
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = 'rgba(255, 255, 200, 0.3)';
+            ctx.beginPath();
+            ctx.moveTo(25, -10); ctx.lineTo(200, -60); ctx.lineTo(200, 60); ctx.lineTo(25, 10);
+            ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
 
             ctx.restore();
-        }
+            ctx.restore();
 
-        function updateDashboard() {
-            // Rotate Needle: -135 (0 RPM) to 135 (8000 RPM)
-            const pct = car.rpm / 8000;
-            const deg = -135 + (pct * 270);
-            document.getElementById('tacho').style.transform = `rotate(${deg}deg)`;
+            // HUD UPDATE
+            document.getElementById('speed-val').innerText = Math.abs(Math.floor(car.speed * 3));
+            document.getElementById('rpm-fill').style.width = (car.rpm / 8000 * 100) + '%';
+            
+            // Input Debug Vis
+            document.getElementById('k-w').className = input.w ? 'key active' : 'key';
+            document.getElementById('k-a').className = input.a ? 'key active' : 'key';
+            document.getElementById('k-s').className = input.s ? 'key active' : 'key';
+            document.getElementById('k-d').className = input.d ? 'key active' : 'key';
         }
 
         function loop() {
-            if(isRunning) {
-                updatePhysics();
-                updateAudio();
-                draw();
-                requestAnimationFrame(loop);
-            }
+            if (!isRunning) return;
+            updatePhysics();
+            updateAudio();
+            draw();
+            requestAnimationFrame(loop);
         }
 
-        function startGame() {
-            document.getElementById('menu').style.display = 'none';
-            resize();
-            generateTrack();
+        function bootSystem() {
+            document.getElementById('overlay').style.display = 'none';
             initAudio();
             isRunning = true;
             loop();
         }
 
-        // INPUT LISTENERS
+        /* 
+         * 5. INPUT HANDLERS
+         */
         window.addEventListener('keydown', e => {
-            if(e.key === 'ArrowUp' || e.key === 'w') input.up = true;
-            if(e.key === 'ArrowDown' || e.key === 's') input.down = true;
-            if(e.key === 'ArrowLeft' || e.key === 'a') input.left = true;
-            if(e.key === 'ArrowRight' || e.key === 'd') input.right = true;
-            if(e.key === ' ') input.handbrake = true;
+            if(e.code === 'KeyW' || e.code === 'ArrowUp') input.w = true;
+            if(e.code === 'KeyS' || e.code === 'ArrowDown') input.s = true;
+            if(e.code === 'KeyA' || e.code === 'ArrowLeft') input.a = true;
+            if(e.code === 'KeyD' || e.code === 'ArrowRight') input.d = true;
         });
 
         window.addEventListener('keyup', e => {
-            if(e.key === 'ArrowUp' || e.key === 'w') input.up = false;
-            if(e.key === 'ArrowDown' || e.key === 's') input.down = false;
-            if(e.key === 'ArrowLeft' || e.key === 'a') input.left = false;
-            if(e.key === 'ArrowRight' || e.key === 'd') input.right = false;
-            if(e.key === ' ') input.handbrake = false;
+            if(e.code === 'KeyW' || e.code === 'ArrowUp') input.w = false;
+            if(e.code === 'KeyS' || e.code === 'ArrowDown') input.s = false;
+            if(e.code === 'KeyA' || e.code === 'ArrowLeft') input.a = false;
+            if(e.code === 'KeyD' || e.code === 'ArrowRight') input.d = false;
+        });
+
+        window.addEventListener('resize', () => {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
         });
 
     </script>
