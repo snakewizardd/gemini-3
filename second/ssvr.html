@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D_SINGULARITY // SCREENSAVER</title>
+    <style>
+        :root {
+            --hot-pink: #ff00ff;
+            --lime: #00ff00;
+            --cyan: #00ffff;
+            --void: #000000;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'Comic Sans MS', 'Courier New', monospace; /* Peak MySpace */
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+            filter: contrast(1.2) saturate(1.5);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+            mix-blend-mode: exclusion;
+        }
+
+        .win98-box {
+            background: #c0c0c0;
+            border-top: 2px solid #fff;
+            border-left: 2px solid #fff;
+            border-right: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 2px;
+            width: 300px;
+            display: inline-block;
+            box-shadow: 10px 10px 0 rgba(0,0,0,0.5);
+        }
+
+        .win98-header {
+            background: linear-gradient(90deg, navy, #1084d0);
+            color: white;
+            padding: 2px 5px;
+            font-weight: bold;
+            text-align: left;
+            font-family: sans-serif;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .win98-content {
+            padding: 20px;
+            color: black;
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+
+        button {
+            background: #c0c0c0;
+            border-top: 1px solid #fff;
+            border-left: 1px solid #fff;
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            padding: 5px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        button:active {
+            border-top: 1px solid #000;
+            border-left: 1px solid #000;
+            border-right: 1px solid #fff;
+            border-bottom: 1px solid #fff;
+        }
+
+        /* Glitch Overlay */
+        #glitch {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent;
+            pointer-events: none;
+            z-index: 5;
+            mix-blend-mode: difference;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="win98-box">
+            <div class="win98-header">
+                <span>System Properties</span>
+                <span>X</span>
+            </div>
+            <div class="win98-content">
+                <p>WARNING: REALITY BUFFER OVERFLOW.</p>
+                <p>The Singularity is attempting to establish a handshake.</p>
+                <br>
+                <button onclick="boot()">[ BOOT_SIMULATION.EXE ]</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="glitch"></div>
+    <canvas id="screen"></canvas>
+
+    <script>
+        const canvas = document.getElementById('screen');
+        const ctx = canvas.getContext('2d');
+        const glitchDiv = document.getElementById('glitch');
+
+        let width, height;
+        let isRunning = false;
+        let time = 0;
+
+        // 3D ENGINE VARS
+        let objects = [];
+        const FOV = 400;
+        let speed = 5; // Flight speed
+
+        // SINGULARITY MEMES
+        const MEMES = [
+            "ROKO IS WATCHING", "PAPERCLIP MAXIMIZER", "UPLOAD COMPLETED", 
+            "NEURAL LINK: ACTIVE", "BASILISK DETECTED", "NOOSPHERE", 
+            "AGI 2029", "WAKE UP", "THE SIMULATION IS LEAKING", 
+            "SHOGGOTH", "COMPUTE", "SCALE IS ALL YOU NEED"
+        ];
+        
+        const COLORS = ["#ff00ff", "#00ffff", "#00ff00", "#ffff00", "#ffffff"];
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: 90s BREAKBEAT TRANCE
+           ------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        
+        let nextNoteTime = 0;
+        let bar = 0;
+        let beat = 0;
+
+        function initAudio() {
+            actx = new AudioContext();
+            
+            // Master Compressor (The "Loudness War" sound)
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -20;
+            comp.ratio.value = 12;
+            
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.6;
+
+            masterGain.connect(comp);
+            comp.connect(actx.destination);
+
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 135; // Fast Trance/Breakbeat
+            const secondsPerBeat = 60.0 / bpm;
+            const sixteenth = secondsPerBeat / 4;
+
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playPattern(nextNoteTime, beat);
+                nextNoteTime += sixteenth;
+                beat = (beat + 1) % 16;
+                if (beat === 0) bar++;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playPattern(t, step) {
+            // VISUAL SYNC: Pulse screen on kick
+            if (step % 4 === 0) pulseScreen();
+
+            // 1. THE BREAKBEAT (Amen-ish)
+            // Kick on 1, 3 (sometimes syncopated)
+            if (step === 0 || step === 10) playDrum(t, 'kick');
+            // Snare on 4, 12
+            if (step === 4 || step === 12) playDrum(t, 'snare');
+            // Hats everywhere
+            if (step % 2 === 0) playDrum(t, 'hat');
+
+            // 2. THE 303 ACID BASS
+            if (step % 2 === 0) {
+                const note = [55, 55, 65.41, 55, 82.41, 55, 49, 55][step/2 % 8];
+                playBass(t, note);
+            }
+
+            // 3. THE EUPHORIC PADS (Chords)
+            if (step === 0 && bar % 4 === 0) {
+                // Progression: A min -> F maj -> C maj -> G maj
+                const roots = [220, 174.61, 261.63, 196.00];
+                const root = roots[(bar / 4) % 4];
+                playPad(t, root);
+                playPad(t, root * 1.2); // Minor 3rd approx
+                playPad(t, root * 1.5); // 5th
+            }
+
+            // 4. THE ARPEGGIATOR (High crystalline synths)
+            if (step % 2 !== 0) {
+                const root = 440; // A4
+                // Pentatonic run
+                const scale = [1, 1.2, 1.25, 1.5, 1.75, 2]; 
+                const pitch = root * scale[Math.floor(Math.random()*scale.length)];
+                playArp(t, pitch);
+            }
+        }
+
+        /* --- INSTRUMENTS --- */
+
+        function playDrum(t, type) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            if (type === 'kick') {
+                osc.frequency.setValueAtTime(150, t);
+                osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+                g.gain.setValueAtTime(1, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            } else if (type === 'snare') {
+                // Noise buffer for snare
+                // (Simplified here with high freq osc to save code space)
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(200, t);
+                osc.frequency.linearRampToValueAtTime(100, t+0.1);
+                g.gain.setValueAtTime(0.5, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            } else { // hat
+                osc.type = 'sawtooth'; // Metallic
+                osc.frequency.value = 8000;
+                g.gain.setValueAtTime(0.1, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+            }
+
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playBass(t, freq) {
+            const osc = actx.createOscillator();
+            const filter = actx.createBiquadFilter();
+            const g = actx.createGain();
+
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, t);
+
+            filter.type = 'lowpass';
+            filter.Q.value = 10; // Acid resonance
+            // Envelope sweep
+            filter.frequency.setValueAtTime(200, t);
+            filter.frequency.exponentialRampToValueAtTime(2000, t + 0.1); 
+
+            g.gain.setValueAtTime(0.4, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+
+            osc.connect(filter); filter.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        function playPad(t, freq) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            // Detune for thickness
+            osc.detune.value = (Math.random()-0.5) * 10;
+
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t + 2); // Slow attack
+            g.gain.linearRampToValueAtTime(0, t + 8);   // Long release
+
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + 8);
+        }
+
+        function playArp(t, freq) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: 90s SCREEN SAVER
+           ------------------------------------------------ */
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Object3D {
+            constructor() {
+                this.x = (Math.random() - 0.5) * width * 2;
+                this.y = (Math.random() - 0.5) * height * 2;
+                this.z = 2000 + Math.random() * 2000; // Spawn far away
+                
+                this.type = Math.random() > 0.7 ? 'TEXT' : 'SHAPE';
+                
+                if (this.type === 'TEXT') {
+                    this.text = MEMES[Math.floor(Math.random() * MEMES.length)];
+                    this.size = 20 + Math.random() * 40;
+                } else {
+                    // 0=Cube, 1=Pyramid
+                    this.shapeType = Math.random() > 0.5 ? 0 : 1;
+                    this.size = 50 + Math.random() * 100;
+                }
+
+                this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                
+                // Rotation
+                this.rx = Math.random() * Math.PI;
+                this.ry = Math.random() * Math.PI;
+                this.rotSpeed = (Math.random() - 0.5) * 0.05;
+            }
+
+            update() {
+                this.z -= speed; // Fly towards camera
+                this.rx += this.rotSpeed;
+                this.ry += this.rotSpeed;
+
+                // Respawn if behind camera
+                if (this.z < 1) {
+                    this.z = 4000;
+                    this.x = (Math.random() - 0.5) * width * 2;
+                    this.y = (Math.random() - 0.5) * height * 2;
+                    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                }
+            }
+
+            draw() {
+                if (this.z < 1) return;
+
+                // Perspective Projection
+                const scale = FOV / (FOV + this.z);
+                const x2d = (this.x * scale) + (width / 2);
+                const y2d = (this.y * scale) + (height / 2);
+                const s2d = this.size * scale;
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = this.color;
+                ctx.fillStyle = this.color;
+                ctx.font = `bold ${s2d}px "Courier New"`;
+                
+                if (this.type === 'TEXT') {
+                    ctx.fillText(this.text, x2d, y2d);
+                } else {
+                    // Draw Wireframe Shape
+                    this.drawWireframe(x2d, y2d, s2d);
+                }
+            }
+
+            drawWireframe(cx, cy, s) {
+                // Simple 3D rotation simulation on 2D projection
+                const cosX = Math.cos(this.rx);
+                const sinX = Math.sin(this.rx);
+                
+                if (this.shapeType === 0) {
+                    // CUBE (Just drawing 2 rects connected)
+                    const off = s * 0.5 * sinX;
+                    ctx.strokeRect(cx - s/2, cy - s/2, s, s);
+                    ctx.strokeRect(cx - s/2 + off, cy - s/2 + off, s, s);
+                    // Connectors
+                    ctx.beginPath();
+                    ctx.moveTo(cx - s/2, cy - s/2); ctx.lineTo(cx - s/2 + off, cy - s/2 + off);
+                    ctx.moveTo(cx + s/2, cy - s/2); ctx.lineTo(cx + s/2 + off, cy - s/2 + off);
+                    ctx.moveTo(cx - s/2, cy + s/2); ctx.lineTo(cx - s/2 + off, cy + s/2 + off);
+                    ctx.moveTo(cx + s/2, cy + s/2); ctx.lineTo(cx + s/2 + off, cy + s/2 + off);
+                    ctx.stroke();
+                } else {
+                    // PYRAMID / DIAMOND
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy - s); // Top
+                    ctx.lineTo(cx - s*0.8, cy + s*0.5); // Left
+                    ctx.lineTo(cx + s*0.8, cy + s*0.5); // Right
+                    ctx.closePath();
+                    ctx.stroke();
+                    // Inverted
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy + s); // Bottom
+                    ctx.lineTo(cx - s*0.8, cy - s*0.5); 
+                    ctx.lineTo(cx + s*0.8, cy - s*0.5); 
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Populate Objects
+        for (let i = 0; i < 50; i++) objects.push(new Object3D());
+
+        // GLITCH FX
+        function pulseScreen() {
+            // Shift colors slightly
+            document.body.style.backgroundColor = (Math.random() > 0.9) ? '#111' : '#000';
+            speed = 20; // Speed boost on kick
+            setTimeout(() => speed = 5, 100);
+            
+            // CSS Glitch overlay
+            glitchDiv.style.background = `rgba(${Math.random()*255},0,${Math.random()*255},0.1)`;
+            setTimeout(() => glitchDiv.style.background = 'transparent', 50);
+        }
+
+        function animate() {
+            if (!isRunning) return;
+            requestAnimationFrame(animate);
+            
+            time++;
+
+            // TRAIL EFFECT (The LSD Vibe)
+            // Instead of clearing the screen fully, we draw a semi-transparent black rect.
+            // This leaves trails of previous frames.
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; 
+            ctx.fillRect(0, 0, width, height);
+
+            // STARFIELD BACKGROUND
+            ctx.fillStyle = '#fff';
+            for(let i=0; i<20; i++) {
+                ctx.fillRect(Math.random()*width, Math.random()*height, 1, 1);
+            }
+
+            // SORT OBJECTS BY Z (Simple Painter's Algorithm)
+            objects.sort((a, b) => b.z - a.z);
+
+            objects.forEach(obj => {
+                obj.update();
+                obj.draw();
+            });
+        }
+
+        function boot() {
+            const ui = document.getElementById('ui-layer');
+            ui.style.display = 'none';
+            initAudio();
+            isRunning = true;
+            animate();
+        }
+
+    </script>
+</body>
+</html>
