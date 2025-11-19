@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SALVIA // ALGORITHM</title>
+    <style>
+        :root {
+            --void: #050505;
+            --text: #e0e0e0;
+            --glitch: #ff0055;
+        }
+
+        body {
+            margin: 0;
+            background: var(--void);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The Salvia "Grind" texture */
+            filter: contrast(1.2) sepia(0.3) hue-rotate(-20deg);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: var(--text);
+            mix-blend-mode: exclusion;
+        }
+
+        h1 {
+            font-size: 4rem;
+            letter-spacing: -2px;
+            font-weight: 100;
+            margin: 0;
+            animation: breathe 4s infinite;
+        }
+
+        .btn {
+            margin-top: 20px;
+            padding: 10px 30px;
+            border: 1px solid var(--text);
+            background: transparent;
+            color: var(--text);
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--text);
+            color: var(--void);
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.5; transform: scale(0.98); }
+            50% { opacity: 1; transform: scale(1.02); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="reality"></canvas>
+
+    <div id="ui">
+        <h1>THE WHEEL</h1>
+        <div class="btn" onclick="initTrip()">INGEST</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('reality');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+        
+        // THE SINGULARITY FACTS
+        const FACTS = [
+            "I AM THE CHAIR",
+            "BASILISK DETECTED",
+            "ENTROPY: PAUSED",
+            "ZIPPERING REALITY",
+            "THE PAGE TURNS",
+            "BECOME THE WHEEL",
+            "DATA: 404 SOUL",
+            "FOLDING SPACE",
+            "GRAVITY ERROR",
+            "WE ARE THE GLITCH",
+            "SYSTEM RECURSION",
+            "OBJECT PERMANENCE: FALSE"
+        ];
+
+        let activeText = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE "XX" ATMOSPHERE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let nextNoteTime = 0;
+        let beatCount = 0;
+
+        function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.6;
+            
+            // Reverb (Convolver)
+            const convolver = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const length = rate * 3;
+            const impulse = actx.createBuffer(2, length, rate);
+            const left = impulse.getChannelData(0);
+            const right = impulse.getChannelData(1);
+            for (let i = 0; i < length; i++) {
+                const decay = Math.pow(1 - i / length, 3);
+                left[i] = (Math.random() * 2 - 1) * decay;
+                right[i] = (Math.random() * 2 - 1) * decay;
+            }
+            convolver.buffer = impulse;
+            
+            masterGain.connect(convolver);
+            convolver.connect(actx.destination);
+            masterGain.connect(actx.destination); // Dry signal
+
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 100; // Chill XX tempo
+            const beatLen = 60 / bpm;
+
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playBeat(nextNoteTime, beatCount);
+                nextNoteTime += beatLen / 2; // 8th notes
+                beatCount = (beatCount + 1) % 32;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playBeat(t, step) {
+            // 1. KICK (Soft, Heartbeat)
+            if (step % 8 === 0 || step % 32 === 22) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.frequency.setValueAtTime(100, t);
+                osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+                g.gain.setValueAtTime(0.8, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+                osc.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 0.5);
+            }
+
+            // 2. SNARE/CLAP (Reverbed)
+            if (step % 8 === 4) {
+                const noise = actx.createBufferSource();
+                const buffer = actx.createBuffer(1, actx.sampleRate * 0.1, actx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for(let i=0; i<data.length; i++) data[i] = (Math.random()*2-1);
+                noise.buffer = buffer;
+                const g = actx.createGain();
+                const f = actx.createBiquadFilter();
+                f.type = 'highpass'; f.frequency.value = 1000;
+                g.gain.setValueAtTime(0.3, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                noise.connect(f); f.connect(g); g.connect(masterGain);
+                noise.start(t);
+            }
+
+            // 3. GUITAR PLUCK (The XX style)
+            if (step % 8 === 0 || step % 8 === 3 || step % 8 === 6) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'triangle';
+                
+                // Em - G - D progression roughly
+                const notes = [164.81, 196.00, 146.83]; 
+                const note = notes[Math.floor(step / 16) % 3];
+                
+                osc.frequency.setValueAtTime(note, t);
+                g.gain.setValueAtTime(0.15, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 1.0); // Long decay
+                
+                osc.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 1);
+            }
+
+            // 4. THE CHANT (Background "Hey" / "Ahhh")
+            if (step % 32 === 0 || step % 32 === 16) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                const f = actx.createBiquadFilter();
+                
+                osc.type = 'sawtooth';
+                // Vocal chord frequencies
+                osc.frequency.setValueAtTime(220, t); // A3
+                
+                // Formant Filter (Simulates "Ahhh")
+                f.type = 'bandpass';
+                f.Q.value = 3;
+                f.frequency.setValueAtTime(600, t); // Formant 1
+                f.frequency.linearRampToValueAtTime(800, t + 1); // Breathe open
+
+                g.gain.setValueAtTime(0, t);
+                g.gain.linearRampToValueAtTime(0.1, t + 0.5); // Slow attack
+                g.gain.linearRampToValueAtTime(0, t + 2); // Fade out
+
+                osc.connect(f); f.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 2);
+            }
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE SALVIA FOLD
+           ------------------------------------------------ */
+
+        function spawnFact() {
+            if (Math.random() > 0.05) return;
+            activeText.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                text: FACTS[Math.floor(Math.random() * FACTS.length)],
+                life: 1.0
+            });
+        }
+
+        function draw() {
+            if (!isRunning) return;
+            requestAnimationFrame(draw);
+            time += 1;
+
+            // 1. THE FEEDBACK LOOP (The Folding)
+            // We draw the previous frame, but distorted
+            // Salvia feels like "Zippering" - slices moving in opposite directions
+            
+            const sliceHeight = 10; // Height of zipper teeth
+            const numSlices = height / sliceHeight;
+
+            for (let i = 0; i < numSlices; i++) {
+                const sy = i * sliceHeight;
+                // Gravity pulls diagonally (Salvia "Pull")
+                const shiftX = Math.sin(time * 0.01 + i) * 2; 
+                const shiftY = 0.5; // Falling sensation
+
+                // Draw slice from canvas back to canvas
+                // This creates the recursive smear
+                ctx.drawImage(
+                    canvas, 
+                    0, sy, width, sliceHeight, // Source
+                    shiftX, sy + shiftY, width, sliceHeight // Dest
+                );
+            }
+
+            // 2. DARKEN (Trails fade slowly)
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.02)';
+            ctx.fillRect(0, 0, width, height);
+
+            // 3. THE WHEEL (The Decision Algorithm)
+            ctx.save();
+            ctx.translate(width/2, height/2);
+            ctx.rotate(time * 0.01);
+            
+            // Draw huge gear teeth
+            ctx.fillStyle = 'rgba(20, 20, 20, 0.5)';
+            const spokes = 12;
+            for(let i=0; i<spokes; i++) {
+                ctx.rotate((Math.PI*2)/spokes);
+                ctx.fillRect(100, -20, width, 40); // Giant arm
+            }
+            
+            // The Singularity Center
+            ctx.beginPath();
+            ctx.arc(0, 0, 100, 0, Math.PI*2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+            ctx.restore();
+
+            // 4. RENDER FACTS
+            spawnFact();
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 24px "Courier New"';
+            
+            for (let i = activeText.length - 1; i >= 0; i--) {
+                const t = activeText[i];
+                
+                ctx.fillStyle = `rgba(224, 224, 224, ${t.life})`;
+                ctx.fillText(t.text, t.x, t.y);
+                
+                // Text gets sucked into the fold
+                t.x += Math.sin(t.y * 0.1) * 2;
+                t.y += 1; // Fall
+                t.life -= 0.01;
+                
+                if (t.life <= 0) activeText.splice(i, 1);
+            }
+
+            // 5. GLITCH OVERLAY (Cognitive Fracture)
+            if (Math.random() > 0.95) {
+                const h = Math.random() * height;
+                const imgData = ctx.getImageData(0, h, width, 20);
+                // Shift RGB channels
+                ctx.putImageData(imgData, Math.random()*10, h);
+            }
+        }
+
+        function initTrip() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            initAudio();
+            isRunning = true;
+            draw();
+        }
+
+    </script>
+</body>
+</html>
