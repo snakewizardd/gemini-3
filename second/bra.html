@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEO_RIO // MEGABEACH 2099</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=VT323&display=swap');
+
+        :root {
+            --brazil-green: #009c3b;
+            --brazil-yellow: #ffdf00;
+            --brazil-blue: #002776;
+            --neon-pink: #ff00cc;
+        }
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" style="fill:yellow"><circle cx="10" cy="10" r="8"/></svg>'), auto;
+        }
+
+        /* THE STIMULUS LAYERS */
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        #bg-canvas { z-index: 0; } /* Sky and Sun */
+        #mid-canvas { z-index: 1; } /* Ocean and Mountain */
+        #fg-canvas { z-index: 2; } /* The Holo-Crowd */
+
+        /* THE MYSPACE CLUTTER UI */
+        #overlay {
+            position: absolute;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            overflow: hidden;
+        }
+
+        .popup {
+            position: absolute;
+            background: linear-gradient(45deg, var(--brazil-blue), rgba(0,0,0,0.8));
+            border: 2px solid var(--brazil-yellow);
+            color: var(--brazil-green);
+            padding: 10px;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            box-shadow: 5px 5px 0 var(--neon-pink);
+            animation: float 3s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* THE MIXER */
+        #mixer {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border: 2px solid var(--brazil-green);
+            border-radius: 10px;
+            pointer-events: auto;
+        }
+
+        .fader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+            font-size: 0.8rem;
+        }
+
+        .toggle-btn {
+            width: 40px; height: 40px;
+            background: #333;
+            border: 2px solid #555;
+            margin-bottom: 5px;
+            cursor: pointer;
+            box-shadow: 0 0 10px #000;
+        }
+
+        .toggle-btn.active {
+            background: var(--brazil-yellow);
+            box-shadow: 0 0 15px var(--brazil-yellow);
+            border-color: #fff;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 999;
+            color: var(--brazil-yellow);
+        }
+
+        h1 {
+            font-size: 4rem;
+            text-transform: uppercase;
+            text-shadow: 4px 4px 0 var(--brazil-green);
+            margin: 0;
+        }
+        
+        button.mega-btn {
+            background: transparent;
+            color: #fff;
+            font-family: 'Orbitron';
+            font-size: 2rem;
+            border: 3px solid var(--neon-pink);
+            padding: 20px 50px;
+            margin-top: 30px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+        button.mega-btn:hover {
+            background: var(--neon-pink);
+            color: #000;
+            box-shadow: 0 0 50px var(--neon-pink);
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <canvas id="mid-canvas"></canvas>
+    <canvas id="fg-canvas"></canvas>
+
+    <div id="overlay">
+        <!-- Popups injected by JS -->
+    </div>
+
+    <div id="mixer">
+        <div class="fader">
+            <div class="toggle-btn active" onclick="toggleTrack('drums', this)"></div>
+            <span>BATUCADA</span>
+        </div>
+        <div class="fader">
+            <div class="toggle-btn active" onclick="toggleTrack('bass', this)"></div>
+            <span>GRAVE</span>
+        </div>
+        <div class="fader">
+            <div class="toggle-btn active" onclick="toggleTrack('chords', this)"></div>
+            <span>ALMA</span>
+        </div>
+        <div class="fader">
+            <div class="toggle-btn active" onclick="toggleTrack('lead', this)"></div>
+            <span>FUTURO</span>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1>NEO_RIO // MEGABEACH</h1>
+        <p>HYPER-STIMULUS PROTOCOL v9.0</p>
+        <button class="mega-btn" onclick="initExperience()">ENTER PARADISE</button>
+    </div>
+
+    <script>
+        // CANVASES
+        const cvsBG = document.getElementById('bg-canvas');
+        const cvsMid = document.getElementById('mid-canvas');
+        const cvsFG = document.getElementById('fg-canvas');
+        
+        const ctxBG = cvsBG.getContext('2d');
+        const ctxMid = cvsMid.getContext('2d');
+        const ctxFG = cvsFG.getContext('2d');
+
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+
+        // ENTITIES
+        let popups = [];
+        let dancers = [];
+
+        // RESIZE
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            [cvsBG, cvsMid, cvsFG].forEach(c => { c.width = width; c.height = height; });
+            initDancers();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: THE HOLO-CROWD & ENVIRONMENT
+           ------------------------------------------------ */
+
+        // The "Robotomatrix" Dancers
+        // We generate silhouettes made of falling matrix code
+        class HoloDancer {
+            constructor(x, y, scale) {
+                this.x = x;
+                this.y = y;
+                this.scale = scale;
+                this.phase = Math.random() * Math.PI * 2;
+                this.color = Math.random() > 0.5 ? '#ff00cc' : '#00ffff';
+                this.bodyPoints = [];
+                this.generateShape();
+            }
+
+            generateShape() {
+                // Create a simple hourglass/humanoid shape grid
+                for(let i=0; i<20; i++) {
+                    // Hips/Shoulders width logic
+                    let w = (Math.sin(i * 0.3) * 10) + 15;
+                    this.bodyPoints.push({ w: w, char: String.fromCharCode(0x30A0 + Math.random()*96) });
+                }
+            }
+
+            draw(t) {
+                const sway = Math.sin(t * 4 + this.phase) * 20;
+                
+                ctxFG.font = `${12 * this.scale}px monospace`;
+                ctxFG.textAlign = "center";
+                ctxFG.shadowBlur = 10;
+                ctxFG.shadowColor = this.color;
+                ctxFG.fillStyle = this.color;
+
+                // Draw the matrix body
+                for(let i=0; i<this.bodyPoints.length; i++) {
+                    const pt = this.bodyPoints[i];
+                    // Animated matrix text
+                    if(Math.random() > 0.9) pt.char = String.fromCharCode(0x30A0 + Math.random()*96);
+                    
+                    const py = this.y - (i * 10 * this.scale);
+                    const px = this.x + (Math.sin(i * 0.2 + t) * 5) + sway; // Hip sway logic
+                    
+                    // Draw a row of characters to form width
+                    const count = Math.floor(pt.w / 5);
+                    const str = pt.char.repeat(count);
+                    ctxFG.fillText(str, px, py);
+                }
+                
+                ctxFG.shadowBlur = 0;
+            }
+        }
+
+        function initDancers() {
+            dancers = [];
+            // Create a crowd
+            for(let i=0; i<15; i++) {
+                const scale = 1 + Math.random();
+                const x = Math.random() * width;
+                const y = height + 50; // Stand at bottom
+                dancers.push(new HoloDancer(x, y, scale));
+            }
+            // Sort by scale (Painter's algo)
+            dancers.sort((a,b) => a.scale - b.scale);
+        }
+
+        function drawEnvironment() {
+            // 1. SKY (Sunset Gradient)
+            const grad = ctxBG.createLinearGradient(0, 0, 0, height);
+            grad.addColorStop(0, '#000'); // Space
+            grad.addColorStop(0.5, '#20002c'); // Purple
+            grad.addColorStop(1, '#cbb4d4'); // Pink horizon
+            ctxBG.fillStyle = grad;
+            ctxBG.fillRect(0, 0, width, height);
+
+            // 2. SUN (The Brazil Flag Diamond)
+            const cx = width / 2;
+            const cy = height * 0.3;
+            ctxBG.fillStyle = '#ffdf00'; // Yellow
+            ctxBG.beginPath();
+            const sunSize = 100 + Math.sin(time)*10;
+            ctxBG.moveTo(cx, cy - sunSize);
+            ctxBG.lineTo(cx + sunSize*1.5, cy);
+            ctxBG.lineTo(cx, cy + sunSize);
+            ctxBG.lineTo(cx - sunSize*1.5, cy);
+            ctxBG.fill();
+            // Blue orb inside
+            ctxBG.fillStyle = '#002776';
+            ctxBG.beginPath();
+            ctxBG.arc(cx, cy, sunSize * 0.6, 0, Math.PI*2);
+            ctxBG.fill();
+
+            // 3. OCEAN (Wireframe Grid)
+            ctxMid.clearRect(0, 0, width, height);
+            ctxMid.strokeStyle = '#00f3ff';
+            ctxMid.lineWidth = 2;
+            ctxMid.beginPath();
+            
+            // Horizon line
+            const horY = height * 0.5;
+            
+            // Vertical lines moving perspective
+            const moveZ = (time * 100) % 200;
+            
+            for(let x = -width; x < width*2; x+= 100) {
+                // Perspective warp
+                ctxMid.moveTo(x, height);
+                ctxMid.lineTo((x - width/2)*0.1 + width/2, horY);
+            }
+            
+            // Horizontal waves
+            for(let y = horY; y < height; y+= 20) {
+                // Wave logic
+                const waveH = y + Math.sin(y * 0.1 + time * 2) * 10;
+                ctxMid.moveTo(0, waveH);
+                ctxMid.lineTo(width, waveH);
+            }
+            ctxMid.stroke();
+            
+            // 4. MOUNTAIN (Sugarloaf Wireframe)
+            ctxMid.strokeStyle = '#009c3b'; // Green
+            ctxMid.lineWidth = 3;
+            ctxMid.beginPath();
+            const mountX = width * 0.8;
+            const mountY = horY;
+            ctxMid.moveTo(mountX - 100, mountY);
+            ctxMid.bezierCurveTo(mountX - 50, mountY - 200, mountX + 50, mountY - 200, mountX + 100, mountY);
+            // Cross hatching
+            for(let i=0; i<10; i++) {
+                ctxMid.moveTo(mountX - 80 + (i*15), mountY);
+                ctxMid.lineTo(mountX, mountY - 150);
+            }
+            ctxMid.stroke();
+        }
+
+        function drawEntities() {
+            ctxFG.clearRect(0, 0, width, height);
+            dancers.forEach(d => d.draw(time));
+        }
+
+        function loop() {
+            if(!isRunning) return;
+            requestAnimationFrame(loop);
+            time += 0.02;
+            drawEnvironment();
+            drawEntities();
+            managePopups();
+        }
+
+        // MYSPACE CLUTTER GENERATOR
+        function managePopups() {
+            if(Math.random() > 0.98) {
+                const msgs = ["UPLOAD TAN", "DRINK COCONUT", "SAMBA.EXE", "VIBE CHECK", "FRIEND REQUEST", "TOP 8"];
+                const div = document.createElement('div');
+                div.className = 'popup';
+                div.innerText = msgs[Math.floor(Math.random()*msgs.length)];
+                div.style.left = Math.random() * 80 + '%';
+                div.style.top = Math.random() * 80 + '%';
+                document.getElementById('overlay').appendChild(div);
+                
+                // Self destruct
+                setTimeout(() => div.remove(), 3000);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: BOSSA NOVA / BAILE FUNK GENERATOR
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let nextNoteTime = 0;
+        let beat = 0;
+        
+        // MIXER STATE
+        const tracks = {
+            drums: { active: true, gain: null },
+            bass: { active: true, gain: null },
+            chords: { active: true, gain: null },
+            lead: { active: true, gain: null }
+        };
+
+        function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.5;
+            masterGain.connect(actx.destination);
+
+            // Initialize Mixer Gains
+            for(let k in tracks) {
+                const g = actx.createGain();
+                g.gain.value = 1.0;
+                g.connect(masterGain);
+                tracks[k].gain = g;
+            }
+
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 130; // Upbeat Funk
+            const secPerBeat = 60 / bpm;
+            
+            while(nextNoteTime < actx.currentTime + 0.1) {
+                playPattern(nextNoteTime, beat);
+                nextNoteTime += secPerBeat / 4; // 16th notes
+                beat = (beat + 1) % 16;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playPattern(t, s) {
+            // 1. BATUCADA (Drums) - Baile Funk Rhythm (Tamborzão)
+            // Boom - Cha - Boom - Cha
+            // 0    .    .    .   (Kick)
+            // .    .    2    .   (Snare)
+            // .    .    .    3   (Snare)
+            if(tracks.drums.active) {
+                if(s % 16 === 0) playKick(t); // Boom
+                if(s % 16 === 2) playSnare(t); // Cha
+                if(s % 16 === 8) playKick(t); // Boom
+                if(s % 16 === 11) playSnare(t); // Cha
+                // Agogo bells
+                if(s % 4 === 0 && Math.random() > 0.5) playBell(t, 800);
+                if(s % 4 === 2 && Math.random() > 0.5) playBell(t, 600);
+            }
+
+            // 2. BASS (Sub - 808 style)
+            if(tracks.bass.active) {
+                if(s % 16 === 0) playBass(t, 55); // A1
+                if(s % 16 === 8) playBass(t, 55);
+                if(s % 16 === 14) playBass(t, 82.4); // E2
+            }
+
+            // 3. CHORDS (Electric Piano - Jazzy 7ths)
+            if(tracks.chords.active) {
+                if(s === 0) playChord(t, [220, 277.18, 329.63, 415.30]); // Amaj7
+                if(s === 8) playChord(t, [196, 246.94, 293.66, 369.99]); // Gmaj7
+                if(s === 12) playChord(t, [174.61, 220, 261.63, 329.63]); // Fmaj7
+            }
+
+            // 4. LEAD (Arp / Glitch)
+            if(tracks.lead.active && s % 2 === 0) {
+                if(Math.random() > 0.4) playLead(t);
+            }
+        }
+
+        // --- INSTRUMENT SYNTHESIS ---
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(120, t);
+            osc.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            osc.connect(g); g.connect(tracks.drums.gain);
+            osc.start(t); osc.stop(t + 0.3);
+        }
+
+        function playSnare(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.linearRampToValueAtTime(100, t + 0.1);
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.connect(g); g.connect(tracks.drums.gain);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        function playBell(t, freq) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            osc.connect(g); g.connect(tracks.drums.gain);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        function playBass(t, freq) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, t);
+            // 808 slide
+            osc.frequency.linearRampToValueAtTime(freq * 0.8, t + 0.5);
+            g.gain.setValueAtTime(1.0, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            osc.connect(g); g.connect(tracks.bass.gain);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playChord(t, notes) {
+            notes.forEach(freq => {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+                g.gain.setValueAtTime(0.05, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 1.0); // Soft fade
+                osc.connect(g); g.connect(tracks.chords.gain);
+                osc.start(t); osc.stop(t + 1.0);
+            });
+        }
+
+        function playLead(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'square';
+            // Random pentatonic note
+            const scale = [440, 554.37, 659.25, 739.99, 830.61];
+            const freq = scale[Math.floor(Math.random()*scale.length)];
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.05, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            osc.connect(g); g.connect(tracks.lead.gain);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        // --- UI LOGIC ---
+        function toggleTrack(name, btn) {
+            tracks[name].active = !tracks[name].active;
+            btn.classList.toggle('active');
+        }
+
+        function initExperience() {
+            const start = document.getElementById('start-screen');
+            start.style.opacity = 0;
+            setTimeout(() => start.style.display = 'none', 1000);
+            
+            resize();
+            initAudio();
+            isRunning = true;
+            loop();
+        }
+
+        // Initial
+        resize();
+
+    </script>
+</body>
+</html>
