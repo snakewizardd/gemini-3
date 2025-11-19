@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COLLATZ // ORBITAL DATA</title>
+    <style>
+        :root {
+            --bg: #080810;
+            --primary: #00f3ff;
+            --secondary: #ff0055;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.8);
+            border-left: 2px solid var(--primary);
+            padding: 10px;
+            margin-bottom: 5px;
+            font-size: 12px;
+            width: 250px;
+        }
+
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+            color: #fff;
+            text-transform: uppercase;
+        }
+
+        #btn {
+            position: absolute;
+            bottom: 50px; left: 50%;
+            transform: translateX(-50%);
+            pointer-events: auto;
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 15px 40px;
+            font-size: 16px;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: 0.3s;
+            z-index: 20;
+        }
+
+        #btn:hover {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 30px var(--primary);
+        }
+
+        .highlight { color: var(--secondary); font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="stat-box">
+            <h1>DATASET CONFIG</h1>
+            RANGE: 1 - 5000<br>
+            ALGORITHM: 3n + 1<br>
+            RENDER: GOLDEN ANGLE PHYLOTAXIS
+        </div>
+        <div class="stat-box">
+            <h1>REALTIME METRICS</h1>
+            ACTIVE_STEP: <span id="step-val" class="highlight">0</span><br>
+            DENSITY: <span id="density-val">0</span><br>
+            ORBITAL_HZ: <span id="hz-val">0</span>
+        </div>
+    </div>
+
+    <button id="btn" onclick="initSystem()">INITIALIZE DATASET</button>
+    <canvas id="viz"></canvas>
+
+    <script>
+        const canvas = document.getElementById('viz');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let dataset = [];
+        let maxSteps = 0;
+        let isRunning = false;
+        let time = 0;
+
+        // MOUSE TILT
+        let mouse = { x: 0, y: 0 };
+        let tiltX = 0, tiltY = 0;
+
+        // SCANNER
+        let scanRadius = 0;
+
+        /* ------------------------------------------------
+           DATA GENERATION (THE "R" SCRIPT)
+           ------------------------------------------------ */
+        
+        function collatzSteps(n) {
+            let steps = 0;
+            while (n > 1) {
+                if (n % 2 === 0) n = n / 2;
+                else n = 3 * n + 1;
+                steps++;
+            }
+            return steps;
+        }
+
+        function generateData() {
+            dataset = [];
+            maxSteps = 0;
+            
+            // Calculate for first 5000 integers
+            for (let i = 1; i <= 5000; i++) {
+                const steps = collatzSteps(i);
+                if (steps > maxSteps) maxSteps = steps;
+                
+                dataset.push({
+                    num: i,
+                    steps: steps,
+                    // Pre-calculate polar coordinates
+                    // Radius = Steps
+                    // Angle = Golden Angle * Index
+                    angle: i * 2.39996323, // 137.5 degrees in radians
+                    colorHue: (steps * 2) % 360
+                });
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: DATA SONIFICATION
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let oscBank = [];
+
+        function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.4;
+
+            // Delay for space
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.25;
+            const fb = actx.createGain();
+            fb.gain.value = 0.4;
+            
+            masterGain.connect(delay);
+            delay.connect(fb);
+            fb.connect(delay);
+            delay.connect(actx.destination);
+            masterGain.connect(actx.destination);
+        }
+
+        function playDataTone(density, stepIndex) {
+            if (!actx) return;
+            
+            // Logic: More numbers at this step count = Lower, richer tone
+            // Fewer numbers (outliers) = High, piercing tone
+            
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            osc.type = density > 50 ? 'sine' : 'triangle';
+            
+            // Pentatonic mapping based on step index
+            const scale = [261.6, 293.6, 329.6, 392.0, 440.0, 523.2];
+            const note = scale[stepIndex % scale.length];
+            
+            // Octave shift based on density
+            const octave = density < 10 ? 4 : (density < 50 ? 2 : 1);
+            
+            osc.frequency.value = note * (octave * 0.5);
+            
+            // Envelope
+            const now = actx.currentTime;
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.1, now + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            
+            osc.start(now);
+            osc.stop(now + 0.5);
+
+            // UI Update
+            document.getElementById('hz-val').innerText = osc.frequency.value.toFixed(2) + " Hz";
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE KALEIDOSCOPE
+           ------------------------------------------------ */
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = (e.clientX - cx) / cx;
+            mouse.y = (e.clientY - cy) / cy;
+        });
+
+        function draw() {
+            if (!isRunning) return;
+            requestAnimationFrame(draw);
+            
+            time += 0.01;
+            
+            // Soft Tilt Physics
+            tiltX += (mouse.x - tiltX) * 0.05;
+            tiltY += (mouse.y - tiltY) * 0.05;
+
+            // Scanner Logic
+            // Moves from 0 to MaxSteps and loops
+            scanRadius += 0.5; 
+            if (scanRadius > maxSteps) scanRadius = 0;
+            
+            // Update UI text for scanner
+            const currentStep = Math.floor(scanRadius);
+            
+            // Count density at this step for audio trigger
+            let density = 0;
+            // Optimized: In a real app we'd pre-bin this, but for 5k points iteration is fine
+            // We trigger audio only on integer change
+            if (Math.abs(scanRadius - Math.round(scanRadius)) < 0.1) {
+                // Count density
+                density = dataset.filter(d => d.steps === Math.round(scanRadius)).length;
+                if (Math.floor(scanRadius) !== parseInt(document.getElementById('step-val').innerText)) {
+                    document.getElementById('step-val').innerText = Math.round(scanRadius);
+                    document.getElementById('density-val').innerText = density;
+                    if (density > 0) playDataTone(density, Math.round(scanRadius));
+                }
+            }
+
+            // RENDER
+            ctx.fillStyle = '#080810';
+            ctx.fillRect(0, 0, width, height); // No trails, crisp data
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // KALEIDOSCOPE ROTATION
+            ctx.rotate(time * 0.2);
+            
+            // Apply Tilt (Pseudo-3D scale)
+            ctx.scale(1 - Math.abs(tiltY)*0.2, 1 - Math.abs(tiltX)*0.2);
+
+            // Draw all points
+            for (let i = 0; i < dataset.length; i++) {
+                const d = dataset[i];
+                
+                // Polar to Cartesian
+                // Spread radius out for visual clarity
+                const r = d.steps * 4; 
+                
+                const x = Math.cos(d.angle) * r;
+                const y = Math.sin(d.angle) * r;
+
+                // Highlight Logic
+                const distToScan = Math.abs(d.steps - scanRadius);
+                let size = 1.5;
+                let alpha = 0.3;
+                
+                // If being scanned by the wave
+                if (distToScan < 5) {
+                    size = 4;
+                    alpha = 1.0;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = `hsl(${d.colorHue}, 100%, 50%)`;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.fillStyle = `hsla(${d.colorHue}, 80%, 60%, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Draw The Scanner Ring
+            ctx.beginPath();
+            ctx.arc(0, 0, scanRadius * 4, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function initSystem() {
+            document.getElementById('btn').style.display = 'none';
+            generateData();
+            initAudio();
+            isRunning = true;
+            draw();
+        }
+
+    </script>
+</body>
+</html>
