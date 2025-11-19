@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUSKY vs GODZILLA // NES ARENA</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #101010;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+            background: #000;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .bar-container {
+            display: inline-block;
+            width: 300px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #fff;
+            margin: 0 20px;
+            position: relative;
+        }
+
+        .hp-bar {
+            height: 100%;
+            transition: width 0.1s;
+        }
+
+        #husky-hp { background: #00ffff; width: 100%; }
+        #godzilla-hp { background: #00ff00; width: 100%; }
+
+        .name {
+            position: absolute;
+            top: -20px;
+            left: 0;
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        #overlay {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 20;
+        }
+
+        h1 {
+            color: #f0f;
+            font-size: 4rem;
+            text-shadow: 4px 4px 0 #fff;
+            margin: 0;
+            transform: skew(-10deg);
+        }
+
+        .btn {
+            margin-top: 20px;
+            background: #fff;
+            color: #000;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: 4px solid #f0f;
+            text-transform: uppercase;
+        }
+        .btn:hover { background: #f0f; color: #fff; }
+
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="bar-container">
+            <div class="name">THE HUSKY</div>
+            <div class="hp-bar" id="husky-hp"></div>
+        </div>
+        <div class="bar-container">
+            <div class="name">GODZILLA</div>
+            <div class="hp-bar" id="godzilla-hp"></div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h1>KAIJU SLAM</h1>
+        <div class="btn" onclick="startMatch()">INSERT COIN</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        /* ------------------------------------------------
+           ENGINE CONFIG
+           ------------------------------------------------ */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const VIEW_SCALE = 400; // pseudo-3d depth
+        const GRAVITY = 0.6;
+        const FRICTION = 0.9;
+        const RING_SIZE = 300;
+        
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+        let cameraAngle = 0;
+
+        // ENTITIES
+        let husky, godzilla;
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           PHYSICS ENGINE: 3D AABB
+           ------------------------------------------------ */
+        class Fighter {
+            constructor(type, x, z) {
+                this.type = type;
+                this.x = x;
+                this.y = 0; // Height (0 is floor)
+                this.z = z;
+                
+                this.vx = 0;
+                this.vy = 0;
+                this.vz = 0;
+                
+                // Stats
+                if (type === 'HUSKY') {
+                    this.w = 30; this.h = 50;
+                    this.mass = 1.0;
+                    this.speed = 2.0;
+                    this.color = '#00ffff';
+                    this.hp = 100;
+                    this.maxHp = 100;
+                } else {
+                    this.w = 60; this.h = 90;
+                    this.mass = 3.0;
+                    this.speed = 0.8;
+                    this.color = '#00ff00';
+                    this.hp = 200; // Boss HP
+                    this.maxHp = 200;
+                }
+
+                this.state = 'IDLE';
+                this.attackCooldown = 0;
+                this.hitStun = 0;
+                this.facing = 1; // 1 or -1
+            }
+
+            update() {
+                if (this.hitStun > 0) {
+                    this.hitStun--;
+                } else {
+                    this.ai(); // Run Brain
+                }
+
+                // Physics Integration
+                this.vy -= GRAVITY;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+
+                // Floor Collision
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.vy = 0;
+                }
+
+                // Friction
+                if (this.y === 0) {
+                    this.vx *= FRICTION;
+                    this.vz *= FRICTION;
+                }
+
+                // Ring Boundaries (Elastic Ropes)
+                const limit = RING_SIZE;
+                const bounce = 0.8;
+                
+                // If in air, you can fly out (Smash Logic)
+                if (this.y < 100) { 
+                    if (this.x > limit) { this.x = limit; this.vx *= -bounce; }
+                    if (this.x < -limit) { this.x = -limit; this.vx *= -bounce; }
+                    if (this.z > limit) { this.z = limit; this.vz *= -bounce; }
+                    if (this.z < -limit) { this.z = -limit; this.vz *= -bounce; }
+                } else {
+                    // Ring out logic (reset)
+                    if (Math.abs(this.x) > limit * 2 || Math.abs(this.z) > limit * 2 || this.y < -500) {
+                        this.respawn();
+                    }
+                }
+
+                // Visual facing
+                if (Math.abs(this.vx) > 0.1) this.facing = Math.sign(this.vx);
+                
+                if (this.attackCooldown > 0) this.attackCooldown--;
+            }
+
+            ai() {
+                // Simple State Machine
+                const target = this.type === 'HUSKY' ? godzilla : husky;
+                const dx = target.x - this.x;
+                const dz = target.z - this.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+
+                // Face target
+                // Normalized direction
+                const nx = dx / dist;
+                const nz = dz / dist;
+
+                // AGGRO
+                if (dist > 60) {
+                    // Chase
+                    this.vx += nx * (this.speed * 0.2);
+                    this.vz += nz * (this.speed * 0.2);
+                    this.state = 'RUN';
+                } else {
+                    // Attack
+                    if (this.attackCooldown <= 0) {
+                        this.attack();
+                    }
+                    this.vx *= 0.8; // Brake to punch
+                    this.vz *= 0.8;
+                    this.state = 'IDLE';
+                }
+            }
+
+            attack() {
+                this.state = 'ATTACK';
+                this.attackCooldown = 30; // Frames
+                this.vy = 5; // Little hop
+
+                // Hitbox Check
+                const target = this.type === 'HUSKY' ? godzilla : husky;
+                const dx = target.x - this.x;
+                const dz = target.z - this.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+
+                if (dist < 80) {
+                    // HIT!
+                    playHitSound();
+                    spawnParticles(target.x, target.y + target.h/2, target.z);
+                    
+                    // Knockback Calculation
+                    const force = (20 / target.mass);
+                    const angle = Math.atan2(dz, dx);
+                    
+                    target.vx += Math.cos(angle) * force;
+                    target.vz += Math.sin(angle) * force;
+                    target.vy += force; // Uppercut
+                    target.hitStun = 10;
+                    target.hp -= (this.type === 'GODZILLA' ? 15 : 5);
+                    
+                    if (target.hp <= 0) target.respawn();
+                    
+                    updateUI();
+                }
+            }
+
+            respawn() {
+                this.hp = this.maxHp;
+                this.x = (Math.random()-0.5) * 200;
+                this.z = (Math.random()-0.5) * 200;
+                this.y = 200;
+                this.vx = 0; this.vz = 0;
+                playExplosion();
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('husky-hp').style.width = (husky.hp / husky.maxHp * 100) + '%';
+            document.getElementById('godzilla-hp').style.width = (godzilla.hp / godzilla.maxHp * 100) + '%';
+        }
+
+        /* ------------------------------------------------
+           RENDER ENGINE: 2.5D ROTATION
+           ------------------------------------------------ */
+        function project(x, y, z) {
+            // Rotate around Y axis (The Spinning Platform)
+            const cos = Math.cos(cameraAngle);
+            const sin = Math.sin(cameraAngle);
+            
+            const rx = x * cos - z * sin;
+            const rz = z * cos + x * sin;
+
+            // 3D Projection
+            const depth = 600; // Distance from camera
+            const scale = VIEW_SCALE / (depth + rz);
+            
+            return {
+                x: (width / 2) + (rx * scale),
+                y: (height / 2) - (y * scale) + (100 * scale), // Camera tilt
+                s: scale,
+                z: rz // For z-sorting
+            };
+        }
+
+        function drawRing() {
+            const corners = [
+                {x: -RING_SIZE, z: -RING_SIZE},
+                {x: RING_SIZE, z: -RING_SIZE},
+                {x: RING_SIZE, z: RING_SIZE},
+                {x: -RING_SIZE, z: RING_SIZE}
+            ];
+
+            // Draw Floor
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            corners.forEach((c, i) => {
+                const p = project(c.x, 0, c.z);
+                if(i===0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw Ropes
+            ctx.strokeStyle = '#f0f'; // Neon ropes
+            ctx.lineWidth = 3;
+            
+            // Top Ropes
+            ctx.beginPath();
+            corners.forEach((c, i) => {
+                const p = project(c.x, 60, c.z); // Height 60
+                if(i===0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+            ctx.closePath();
+            ctx.stroke();
+
+            // Posts
+            corners.forEach(c => {
+                const b = project(c.x, 0, c.z);
+                const t = project(c.x, 60, c.z);
+                ctx.beginPath();
+                ctx.moveTo(b.x, b.y);
+                ctx.lineTo(t.x, t.y);
+                ctx.stroke();
+            });
+            
+            // WWE Logo on Mat
+            const center = project(0, 0, 0);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, 50 * center.s, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function drawFighter(f) {
+            const p = project(f.x, f.y, f.z);
+            const s = p.s;
+            
+            const w = f.w * s;
+            const h = f.h * s;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, w/2, w/4, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Sprite Logic (Pixel art via Rects)
+            ctx.translate(0, -h); // Anchor at feet
+            
+            // Flash white on hit
+            if (f.hitStun > 0 && Math.floor(time/2)%2===0) {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(-w/2, 0, w, h);
+            } else {
+                if (f.type === 'HUSKY') drawHuskySprite(ctx, w, h, f.facing);
+                else drawGodzillaSprite(ctx, w, h, f.facing);
+            }
+            
+            ctx.restore();
+            return p.z;
+        }
+
+        function drawHuskySprite(c, w, h, dir) {
+            // ANTHRO HUSKY
+            c.fillStyle = '#ddd'; // Fur
+            c.fillRect(-w/2, 0, w, h); 
+            
+            // Trunks
+            c.fillStyle = '#00ffff'; 
+            c.fillRect(-w/2, h*0.6, w, h*0.2);
+            
+            // Ears
+            c.fillStyle = '#fff';
+            c.beginPath();
+            c.moveTo(-w*0.4, 0); c.lineTo(-w*0.2, -h*0.2); c.lineTo(0, 0);
+            c.fill();
+            c.beginPath();
+            c.moveTo(w*0.4, 0); c.lineTo(w*0.2, -h*0.2); c.lineTo(0, 0);
+            c.fill();
+
+            // Mask/Eyes
+            c.fillStyle = '#333';
+            c.fillRect(-w*0.3, h*0.2, w*0.6, h*0.1);
+        }
+
+        function drawGodzillaSprite(c, w, h, dir) {
+            // KAIJU
+            c.fillStyle = '#2e8b57'; // Skin
+            c.fillRect(-w/2, 0, w, h);
+            
+            // Dorsal Fins
+            c.fillStyle = '#55aa77';
+            c.beginPath();
+            c.moveTo(-w/2, h*0.2);
+            c.lineTo(-w*0.8, h*0.4);
+            c.lineTo(-w/2, h*0.6);
+            c.fill();
+            
+            // Eye
+            c.fillStyle = 'yellow';
+            c.fillRect(dir > 0 ? w*0.1 : -w*0.3, h*0.1, w*0.2, h*0.1);
+        }
+
+        function spawnParticles(x, y, z) {
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: x, y: y, z: z,
+                    vx: (Math.random()-0.5)*10,
+                    vy: (Math.random()-0.5)*10,
+                    vz: (Math.random()-0.5)*10,
+                    life: 1.0
+                });
+            }
+        }
+
+        function drawParticles() {
+            for(let i=particles.length-1; i>=0; i--) {
+                const pt = particles[i];
+                const p = project(pt.x, pt.y, pt.z);
+                
+                ctx.fillStyle = `rgba(255, 255, 0, ${pt.life})`;
+                const s = 5 * p.s;
+                ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
+
+                pt.x += pt.vx;
+                pt.y += pt.vy;
+                pt.z += pt.vz;
+                pt.life -= 0.05;
+                if(pt.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            // Clear
+            ctx.fillStyle = '#101010';
+            ctx.fillRect(0, 0, width, height);
+
+            // Update Physics
+            husky.update();
+            godzilla.update();
+
+            // Rotate Camera
+            cameraAngle += 0.005;
+            time++;
+
+            // 3D Sorting (Painter's Algo)
+            // We need to draw the back of the ring, then entities, then front of ring ropes
+            // Simplified: Draw Floor -> Entities -> Ropes
+            
+            // Draw Floor Plane
+            drawRing();
+
+            // Draw Fighters sorted by Z depth
+            const entities = [husky, godzilla];
+            entities.sort((a, b) => {
+                // Simple z sort based on rotated position
+                const pa = project(a.x, a.y, a.z);
+                const pb = project(b.x, b.y, b.z);
+                return pb.z - pa.z;
+            });
+
+            entities.forEach(e => drawFighter(e));
+            
+            drawParticles();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: NES ENDLESS THEME
+           ------------------------------------------------ */
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        let nextNoteTime = 0;
+        let noteIndex = 0;
+
+        // NES-like Scale (Minor Pentatonic + Chromatics)
+        // Mega Man style high energy
+        const MELODY = [
+            330, 330, 0, 330, 392, 330, 294, 247, 
+            220, 220, 0, 247, 294, 330, 294, 0,
+            330, 330, 440, 330, 392, 330, 294, 247,
+            196, 196, 220, 247, 262, 294, 330, 392
+        ];
+
+        function initAudio() {
+            actx = new AudioContext();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.15; // Keep volume safe
+            masterGain.connect(actx.destination);
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            const tempo = 150; // High speed
+            const secondsPerBeat = 60.0 / tempo;
+            const noteRate = secondsPerBeat / 4; // 16th notes
+
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playNote(MELODY[noteIndex], nextNoteTime);
+                playBass(noteIndex, nextNoteTime);
+                nextNoteTime += noteRate;
+                noteIndex = (noteIndex + 1) % MELODY.length;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playNote(freq, t) {
+            if (freq === 0) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'square'; // NES Lead
+            osc.frequency.value = freq;
+            
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            
+            osc.connect(g); g.connect(masterGain);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        function playBass(idx, t) {
+            // Triangle wave bass on offbeats
+            if (idx % 4 === 0) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'triangle'; // NES Bass
+                osc.frequency.value = 110; // A2
+                g.gain.setValueAtTime(0.8, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                osc.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 0.2);
+            }
+            // Noise snare
+            if (idx % 8 === 4) {
+                const bufferSize = actx.sampleRate * 0.05;
+                const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = actx.createBufferSource();
+                noise.buffer = buffer;
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.5, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+                noise.connect(g); g.connect(masterGain);
+                noise.start(t);
+            }
+        }
+
+        function playHitSound() {
+            if(!actx) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100, actx.currentTime);
+            osc.frequency.linearRampToValueAtTime(50, actx.currentTime + 0.1);
+            g.gain.setValueAtTime(0.5, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.1);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(); osc.stop(actx.currentTime + 0.1);
+        }
+        
+        function playExplosion() {
+            if(!actx) return;
+            const bufferSize = actx.sampleRate * 0.5;
+            const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = actx.createBufferSource();
+            noise.buffer = buffer;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(1, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.5);
+            noise.connect(g); g.connect(masterGain);
+            noise.start();
+        }
+
+        function startMatch() {
+            document.getElementById('overlay').style.display = 'none';
+            initAudio();
+            husky = new Fighter('HUSKY', -50, 0);
+            godzilla = new Fighter('GODZILLA', 50, 0);
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
