@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>124 ABARTH // MONZA SIMULATOR</title>
+    <style>
+        :root {
+            --abarth-red: #dc002e;
+            --asphalt: #2a2a2a;
+            --grass: #1a4a1a;
+            --ui-bg: rgba(0, 0, 0, 0.8);
+        }
+
+        body {
+            margin: 0;
+            background: #111;
+            overflow: hidden;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+
+        canvas {
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        /* UI OVERLAY */
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+        }
+
+        .tachometer {
+            width: 200px;
+            height: 100px;
+            background: var(--ui-bg);
+            border-top-left-radius: 100px;
+            border-top-right-radius: 100px;
+            border: 4px solid #555;
+            border-bottom: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .rpm-dial {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 4px;
+            height: 90px;
+            background: var(--abarth-red);
+            transform-origin: bottom center;
+            transform: rotate(-90deg); /* -90 to 90 range */
+            transition: transform 0.1s cubic-bezier(0.1, 0.7, 1.0, 0.1);
+            z-index: 2;
+        }
+
+        .tacho-face {
+            position: absolute;
+            bottom: 10px; width: 100%; text-align: center;
+            font-weight: bold; font-style: italic; font-size: 20px;
+        }
+
+        .redline {
+            position: absolute;
+            bottom: 0; right: 20px;
+            width: 40px; height: 40px;
+            background: var(--abarth-red);
+            opacity: 0.5;
+            border-radius: 50%;
+            filter: blur(10px);
+        }
+
+        /* START SCREEN */
+        #start-screen {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+
+        h1 {
+            font-size: 4rem;
+            text-transform: uppercase;
+            font-style: italic;
+            margin: 0;
+            text-shadow: 4px 4px 0 var(--abarth-red);
+        }
+
+        h2 { color: #aaa; font-weight: normal; margin-bottom: 40px; }
+
+        .logo {
+            width: 100px; height: 120px;
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 20% 100%);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3rem;
+            color: black;
+            font-weight: bold;
+            border: 2px solid white;
+        }
+
+        button {
+            padding: 20px 50px;
+            font-size: 1.5rem;
+            background: var(--abarth-red);
+            color: white;
+            border: none;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+            transition: 0.2s;
+            transform: skew(-10deg);
+        }
+
+        button:hover {
+            background: white;
+            color: var(--abarth-red);
+            transform: skew(-10deg) scale(1.05);
+            box-shadow: 0 0 20px var(--abarth-red);
+        }
+
+        .controls {
+            margin-top: 20px;
+            font-family: monospace;
+            color: #888;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="tachometer">
+            <div class="redline"></div>
+            <div class="rpm-dial" id="needle"></div>
+            <div class="tacho-face">
+                <span id="gear">N</span> <span style="font-size: 12px">x1000</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <div class="logo">🦂</div>
+        <h1>ABARTH 124</h1>
+        <h2>MONZA EXHAUST SIMULATION</h2>
+        <button onclick="startEngine()">IGNITION</button>
+        <div class="controls">
+            [ARROW KEYS] to Drive  |  [SPACE] Handbrake
+        </div>
+    </div>
+
+    <canvas id="track"></canvas>
+
+    <script>
+        const canvas = document.getElementById('track');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height;
+        let isRunning = false;
+
+        // INPUT
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
+
+        /* ------------------------------------------------
+           PHYSICS ENGINE: RWD DYNAMICS
+           ------------------------------------------------ */
+        const car = {
+            x: 0, y: 0,
+            speed: 0,
+            maxSpeed: 22,
+            acceleration: 0.4, // Turbo lag simulated via logic below
+            friction: 0.96,
+            angle: 0,
+            driftAngle: 0, // Visual angle vs Movement angle
+            grip: 0.15,
+            rpm: 0, // 0 to 8000
+            gear: 1
+        };
+
+        // Track Logic (Offscreen collision map)
+        let trackCanvas, trackCtx;
+        
+        function initTrack() {
+            trackCanvas = document.createElement('canvas');
+            trackCanvas.width = 2000;
+            trackCanvas.height = 2000;
+            trackCtx = trackCanvas.getContext('2d');
+            
+            // Draw Asphalt
+            trackCtx.fillStyle = '#1a4a1a'; // Grass
+            trackCtx.fillRect(0, 0, 2000, 2000);
+            
+            // Draw Circuit
+            trackCtx.lineCap = 'round';
+            trackCtx.lineJoin = 'round';
+            
+            // The Track Path
+            trackCtx.beginPath();
+            trackCtx.lineWidth = 300;
+            trackCtx.strokeStyle = '#2a2a2a'; // Asphalt
+            
+            // Layout: A twisted figure-8 ish GP track
+            trackCtx.moveTo(200, 200);
+            trackCtx.lineTo(1000, 200); // Straight
+            trackCtx.bezierCurveTo(1400, 200, 1400, 600, 1000, 600); // Hairpin
+            trackCtx.lineTo(500, 600);
+            trackCtx.bezierCurveTo(200, 600, 200, 1000, 500, 1000); // Chicane entry
+            trackCtx.lineTo(1500, 1000); // Back straight
+            trackCtx.bezierCurveTo(1800, 1000, 1800, 1500, 1500, 1500); // Sweeper
+            trackCtx.lineTo(500, 1500);
+            trackCtx.bezierCurveTo(100, 1500, 100, 200, 200, 200); // Final turn
+            trackCtx.stroke();
+
+            // Draw Curbs (Red/White)
+            trackCtx.lineWidth = 320;
+            trackCtx.strokeStyle = '#cc0000'; // Red curb base
+            trackCtx.setLineDash([20, 20]);
+            trackCtx.stroke();
+            
+            trackCtx.lineWidth = 300;
+            trackCtx.strokeStyle = '#2a2a2a'; // Redraw asphalt over curbs
+            trackCtx.setLineDash([]);
+            trackCtx.stroke();
+
+            // Start Line
+            trackCtx.save();
+            trackCtx.translate(300, 200);
+            trackCtx.fillStyle = '#fff';
+            for(let i=0; i<10; i++) {
+                trackCtx.fillRect(0, -150 + (i*30), 20, 15);
+                trackCtx.fillRect(20, -150 + (i*30) + 15, 20, 15);
+            }
+            trackCtx.restore();
+
+            // Set Car Start
+            car.x = 300;
+            car.y = 200;
+        }
+
+        function updatePhysics() {
+            // 1. CONTROLS
+            if (keys.ArrowUp) car.speed += car.acceleration;
+            if (keys.ArrowDown) car.speed -= car.acceleration * 1.5; // Brakes
+
+            // 2. STEERING & DRIFT
+            // Car turns slower at high speed (stability) but oversteers if input is hard
+            const turnFactor = Math.max(0.02, 0.08 - (Math.abs(car.speed) * 0.002));
+            
+            if (Math.abs(car.speed) > 0.5) {
+                if (keys.ArrowLeft) car.driftAngle -= turnFactor;
+                if (keys.ArrowRight) car.driftAngle += turnFactor;
+            }
+
+            // 3. PHYSICS VECTORS
+            // The car moves towards its 'angle', but 'driftAngle' rotates faster
+            // We lerp the actual movement angle towards the visual angle (Grip)
+            
+            // Loose rear end logic:
+            let grip = car.grip;
+            // If turning hard while accelerating, lose grip (Oversteer)
+            if (keys.ArrowUp && Math.abs(car.driftAngle - car.angle) > 0.5) {
+                grip = 0.02; // Sliding
+                triggerSkid(true);
+            } else {
+                triggerSkid(false);
+            }
+
+            car.angle += (car.driftAngle - car.angle) * grip;
+
+            // 4. FRICTION
+            car.speed *= car.friction;
+
+            // 5. SURFACE DETECTION
+            // Check pixel color under car
+            const pixel = trackCtx.getImageData(car.x, car.y, 1, 1).data;
+            // If Green (Grass)
+            if (pixel[1] > 60 && pixel[0] < 50) {
+                car.speed *= 0.9; // Grass slows you down
+            }
+
+            // 6. UPDATE POSITION
+            car.x += Math.cos(car.angle) * car.speed;
+            car.y += Math.sin(car.angle) * car.speed;
+
+            // 7. RPM LOGIC (Audio Sync)
+            // RPM is roughly speed * gear ratio
+            const targetRPM = Math.abs(car.speed) * 350;
+            // Rev hang simulation
+            if (targetRPM > car.rpm) car.rpm += (targetRPM - car.rpm) * 0.2;
+            else car.rpm += (targetRPM - car.rpm) * 0.05; // Slow drop
+            
+            // Idle
+            if (car.rpm < 900) car.rpm = 900 + Math.random() * 50; // Lumpy idle
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE "MONZA" EXHAUST
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, masterGain;
+        let engineOsc1, engineOsc2, engineMod, noiseNode;
+        let filterNode, turboNode, turboGain;
+        
+        // Pop Logic
+        let lastThrottle = false;
+
+        function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.4;
+            masterGain.connect(actx.destination);
+
+            // 1. THE ENGINE (Rough Sawtooths)
+            engineOsc1 = actx.createOscillator();
+            engineOsc2 = actx.createOscillator();
+            engineOsc1.type = 'sawtooth';
+            engineOsc2.type = 'square'; // Adds body
+            
+            // Modulator for that "Lumpy" uneven firing sound
+            engineMod = actx.createOscillator();
+            engineMod.type = 'sawtooth';
+            const modGain = actx.createGain();
+            modGain.gain.value = 50; // FM Depth
+            
+            engineMod.connect(modGain);
+            modGain.connect(engineOsc1.frequency);
+
+            // Lowpass Filter (Muffles sound at low RPM)
+            filterNode = actx.createBiquadFilter();
+            filterNode.type = 'lowpass';
+            filterNode.Q.value = 2; // Resonance
+
+            // Distortion (The Monza Grit)
+            const dist = actx.createWaveShaper();
+            dist.curve = makeDistortionCurve(200);
+            dist.oversample = '4x';
+
+            engineOsc1.connect(filterNode);
+            engineOsc2.connect(filterNode);
+            filterNode.connect(dist);
+            dist.connect(masterGain);
+
+            engineOsc1.start();
+            engineOsc2.start();
+            engineMod.start();
+
+            // 2. THE TURBO (Whistle)
+            turboNode = actx.createOscillator();
+            turboNode.type = 'sine';
+            turboGain = actx.createGain();
+            turboGain.gain.value = 0;
+            turboNode.connect(turboGain);
+            turboGain.connect(masterGain);
+            turboNode.start();
+
+            audioLoop();
+        }
+
+        function makeDistortionCurve(amount) {
+            const k = amount;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        function audioLoop() {
+            if(!isRunning) return;
+            requestAnimationFrame(audioLoop);
+
+            const rpm = car.rpm;
+            const load = keys.ArrowUp ? 1 : 0;
+
+            // Pitch Calculation (Base + RPM)
+            // The Fiat 1.4L sounds buzzy and high pitched at top end
+            const baseFreq = 80 + (rpm * 0.08);
+            
+            engineOsc1.frequency.setTargetAtTime(baseFreq, actx.currentTime, 0.05);
+            engineOsc2.frequency.setTargetAtTime(baseFreq * 0.5, actx.currentTime, 0.05); // Sub harmonic
+            
+            // Modulator speed increases with RPM (Firing rate)
+            engineMod.frequency.value = baseFreq / 2; 
+
+            // Filter opens with RPM
+            filterNode.frequency.value = 200 + (rpm * 1.5);
+
+            // Turbo Logic
+            if (load && rpm > 2500) {
+                turboGain.gain.setTargetAtTime(0.1, actx.currentTime, 0.5);
+                turboNode.frequency.setTargetAtTime(2000 + (rpm * 0.5), actx.currentTime, 0.1);
+            } else {
+                turboGain.gain.setTargetAtTime(0, actx.currentTime, 0.2);
+            }
+
+            // POPS AND BANGS LOGIC
+            // If we release throttle at high RPM
+            if (lastThrottle && !keys.ArrowUp && rpm > 4000) {
+                triggerBackfire();
+            }
+            lastThrottle = keys.ArrowUp;
+        }
+
+        function triggerBackfire() {
+            // Create short bursts of noise
+            const count = Math.floor(Math.random() * 3) + 1;
+            
+            for(let i=0; i<count; i++) {
+                setTimeout(() => {
+                    const osc = actx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = 100;
+                    
+                    const g = actx.createGain();
+                    g.gain.value = 1.0;
+                    g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.1);
+                    
+                    const d = actx.createWaveShaper();
+                    d.curve = makeDistortionCurve(1000); // Extreme clipping
+
+                    osc.connect(d);
+                    d.connect(g);
+                    g.connect(masterGain);
+                    
+                    osc.start();
+                    osc.stop(actx.currentTime + 0.1);
+                    
+                    // Visual Pop
+                    spawnExhaustFlame();
+                }, i * 150);
+            }
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE
+           ------------------------------------------------ */
+        let skidParticles = [];
+        let flameParticles = [];
+
+        function triggerSkid(isSkidding) {
+            if(isSkidding && Math.random() > 0.5) {
+                // Add skid marks
+                skidParticles.push({
+                    x: car.x, y: car.y, 
+                    angle: car.driftAngle,
+                    life: 1.0
+                });
+            }
+        }
+
+        function spawnExhaustFlame() {
+            // Back of car position
+            const exX = car.x - Math.cos(car.driftAngle) * 20;
+            const exY = car.y - Math.sin(car.driftAngle) * 20;
+            
+            flameParticles.push({
+                x: exX, y: exY, life: 1.0
+            });
+        }
+
+        function drawCar() {
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.driftAngle);
+
+            // Body (White)
+            ctx.fillStyle = '#eee';
+            // Main Chassis
+            ctx.fillRect(-20, -10, 40, 20);
+            
+            // Heritage Black Hood
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, -9, 18, 18);
+
+            // Red Mirrors
+            ctx.fillStyle = '#dc002e';
+            ctx.fillRect(5, -12, 4, 2);
+            ctx.fillRect(5, 10, 4, 2);
+
+            // Windshield
+            ctx.fillStyle = '#333';
+            ctx.fillRect(-5, -9, 5, 18);
+
+            // Driver Head
+            ctx.fillStyle = '#ffccaa';
+            ctx.beginPath(); ctx.arc(-5, 0, 4, 0, Math.PI*2); ctx.fill();
+
+            // Exhausts (Quad tips)
+            ctx.fillStyle = '#555';
+            ctx.fillRect(-22, -6, 2, 4);
+            ctx.fillRect(-22, 2, 2, 4);
+
+            // Brake Lights (Brighten when slowing)
+            if (keys.ArrowDown) {
+                ctx.fillStyle = '#ff0000';
+                ctx.shadowBlur = 10; ctx.shadowColor = 'red';
+            } else {
+                ctx.fillStyle = '#880000';
+                ctx.shadowBlur = 0;
+            }
+            ctx.fillRect(-20, -9, 2, 4);
+            ctx.fillRect(-20, 5, 2, 4);
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+
+            // Camera Logic: Center Car
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
+            ctx.clearRect(0,0,width,height);
+            
+            const camX = width/2 - car.x;
+            const camY = height/2 - car.y;
+            
+            ctx.translate(camX, camY);
+
+            // Draw Track
+            ctx.drawImage(trackCanvas, 0, 0);
+
+            // Draw Skids
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = 'rgba(20,20,20,0.3)';
+            for(let i=0; i<skidParticles.length; i++) {
+                const p = skidParticles[i];
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                ctx.beginPath();
+                ctx.moveTo(-5, -5); ctx.lineTo(5, -5);
+                ctx.moveTo(-5, 5); ctx.lineTo(5, 5);
+                ctx.stroke();
+                ctx.restore();
+                p.life -= 0.01;
+            }
+            skidParticles = skidParticles.filter(p => p.life > 0);
+
+            drawCar();
+
+            // Draw Flames
+            for(let i=0; i<flameParticles.length; i++) {
+                const f = flameParticles[i];
+                ctx.fillStyle = `rgba(255, ${f.life*200}, 0, ${f.life})`;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 5 + Math.random()*5, 0, Math.PI*2);
+                ctx.fill();
+                f.life -= 0.1;
+            }
+            flameParticles = flameParticles.filter(f => f.life > 0);
+
+            // UI Updates
+            // Needle Rotation: -90deg (0) to 90deg (8000)
+            const rpmPct = car.rpm / 8000;
+            const deg = -90 + (rpmPct * 180);
+            document.getElementById('needle').style.transform = `rotate(${deg}deg)`;
+            
+            // Gear Logic (Visual)
+            let gear = 'N';
+            if(car.speed > 1) gear = '1';
+            if(car.speed > 8) gear = '2';
+            if(car.speed > 15) gear = '3';
+            if(car.rpm > 7000) document.querySelector('.redline').style.opacity = 1;
+            else document.querySelector('.redline').style.opacity = 0.5;
+            document.getElementById('gear').innerText = gear;
+        }
+
+        // SYSTEM
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function startEngine() {
+            document.getElementById('start-screen').style.display = 'none';
+            initTrack();
+            initAudio();
+            isRunning = true;
+            render();
+        }
+    </script>
+</body>
+</html>
