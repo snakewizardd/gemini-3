@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALTMAN vs MUSK // RIVALS</title>
+    <title>RIVER BATTLE // ALTMAN vs MUSK</title>
     <style>
         body {
             margin: 0;
-            background: #000;
+            background-color: #111;
             overflow: hidden;
-            font-family: 'Impact', sans-serif;
+            font-family: 'Verdana', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -17,547 +17,573 @@
         }
 
         canvas {
-            image-rendering: pixelated;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            background: #333;
         }
 
-        #ui-layer {
+        /* UI OVERLAY */
+        #ui {
             position: absolute;
             top: 20px;
-            width: 100%;
+            width: 90%;
             display: flex;
             justify-content: space-between;
-            padding: 0 50px;
-            box-sizing: border-box;
             pointer-events: none;
             z-index: 10;
         }
 
-        .hud-box {
-            background: rgba(0, 0, 0, 0.8);
-            border: 4px solid #fff;
-            padding: 10px;
-            width: 400px;
-            transform: skew(-10deg);
+        .hud-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 3px solid #fff;
+            padding: 10px 20px;
+            width: 300px;
+            transform: skew(-15deg);
         }
 
-        .name { color: #fff; font-size: 2rem; margin-bottom: 5px; text-transform: uppercase; }
-        
-        .hp-track { width: 100%; height: 20px; background: #333; border: 2px solid #555; }
-        .hp-fill { height: 100%; transition: width 0.1s linear; }
-        
-        #p1-fill { background: linear-gradient(90deg, #00f, #0ff); width: 100%; }
-        #p2-fill { background: linear-gradient(90deg, #f00, #ff0); width: 100%; }
+        .name {
+            color: white;
+            font-weight: 900;
+            font-size: 24px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 0 #000;
+        }
 
-        #start-screen {
+        .bar-track {
+            width: 100%;
+            height: 20px;
+            background: #444;
+            border: 2px solid #000;
+        }
+
+        .bar-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.1s;
+        }
+
+        /* START SCREEN */
+        #menu {
             position: absolute;
-            background: rgba(0,0,0,0.85);
             width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 20;
-            color: white;
         }
 
-        h1 { font-size: 5rem; color: #ffcc00; text-shadow: 5px 5px 0 #d40000; margin: 0; font-style: italic;}
-        
+        h1 {
+            color: #ffd700;
+            font-size: 5rem;
+            text-transform: uppercase;
+            text-shadow: 5px 5px 0 #ff0000;
+            margin: 0;
+            font-style: italic;
+        }
+
         button {
-            margin-top: 30px;
-            padding: 20px 60px;
+            margin-top: 40px;
+            padding: 20px 50px;
             font-size: 2rem;
-            font-family: 'Impact';
-            background: #ffcc00;
+            font-weight: bold;
+            background: #ff0000;
+            color: #fff;
             border: 4px solid #fff;
             cursor: pointer;
             transform: skew(-10deg);
             transition: 0.1s;
         }
-        button:hover { transform: skew(-10deg) scale(1.1); background: #fff; }
+
+        button:hover {
+            background: #fff;
+            color: #ff0000;
+            transform: skew(-10deg) scale(1.1);
+        }
 
     </style>
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div class="hud-box" style="border-color: #00f;">
-            <div class="name">SAM A.</div>
-            <div class="hp-track"><div class="hp-fill" id="p1-fill"></div></div>
+    <div id="ui">
+        <div class="hud-panel" style="border-color: cyan;">
+            <div class="name" style="color: cyan;">SAM A.</div>
+            <div class="bar-track"><div class="bar-fill" id="hp1" style="background: cyan;"></div></div>
         </div>
-        <div class="hud-box" style="border-color: #f00; text-align: right;">
-            <div class="name">ELON M.</div>
-            <div class="hp-track"><div class="hp-fill" id="p2-fill" style="float:right;"></div></div>
+        <div class="hud-panel" style="border-color: red; text-align: right;">
+            <div class="name" style="color: red;">ELON M.</div>
+            <div class="bar-track"><div class="bar-fill" id="hp2" style="background: red; float: right;"></div></div>
         </div>
     </div>
 
-    <div id="start-screen">
-        <h1>BATTLE FOR THE FUTURE</h1>
-        <p style="font-size: 1.5rem; color: #aaa;">NORTH CAROLINA RIVER STAGE</p>
-        <button onclick="startBattle()">FIGHT!</button>
+    <div id="menu">
+        <h1>SILICON RIVALS</h1>
+        <p style="color: white; font-size: 1.2rem; letter-spacing: 2px;">NORTH CAROLINA RIVER STAGE</p>
+        <button onclick="startGame()">FIGHT!</button>
     </div>
 
-    <canvas id="stage"></canvas>
+    <canvas id="game"></canvas>
 
     <script>
-        const canvas = document.getElementById('stage');
-        const ctx = canvas.getContext('2d');
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d', { alpha: false });
 
-        let width, height;
+        // GLOBAL STATE
+        let width, height, floorY;
         let isRunning = false;
         let time = 0;
-        
-        // Camera Shake
         let shake = 0;
+        let timeScale = 1.0; // For hitstop effect
 
-        // Entities
+        // ASSETS
         let p1, p2;
         let particles = [];
-        let riverOffset = 0;
-
+        
+        /* ------------------------------------------------
+           INIT & RESIZE
+           ------------------------------------------------ */
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
             canvas.width = width;
             canvas.height = height;
-            // Floor height
-            floorY = height - 100;
+            floorY = height - 120; // Ensure floor is visible
+            
+            // Reset fighter positions if they exist so they don't fall into void
+            if(p1) p1.y = floorY;
+            if(p2) p2.y = floorY;
         }
         window.addEventListener('resize', resize);
         resize();
-        let floorY = height - 100;
 
         /* ------------------------------------------------
-           ADVANCED PARTICLE SYSTEM (THE FIX)
+           PARTICLE PHYSICS (THE FIX)
            ------------------------------------------------ */
         class Particle {
-            constructor(x, y, type, angleMagnitude) {
-                this.x = x;
+            constructor(x, y, angle) {
+                this.x = x; 
                 this.y = y;
-                this.type = type; // 'HIT', 'DUST', 'PLASMA'
                 
-                // PHYSICS: Directional Burst
-                // We take the impact angle and add randomness (Cone spread)
-                const angle = angleMagnitude.angle + (Math.random() - 0.5); 
-                const speed = (Math.random() * 10) + 5; // Explosive speed
+                // BURST LOGIC: Cone shape opposite to impact
+                // Add randomness to angle (+/- 30 degrees)
+                const spread = (Math.random() - 0.5); 
+                const finalAngle = angle + spread;
                 
-                this.vx = Math.cos(angle) * speed;
-                this.vy = Math.sin(angle) * speed;
+                const force = Math.random() * 15 + 5;
+                this.vx = Math.cos(finalAngle) * force;
+                this.vy = Math.sin(finalAngle) * force;
                 
                 this.life = 1.0;
                 this.decay = 0.02 + Math.random() * 0.03;
-                this.gravity = 0.5;
-                this.drag = 0.9; // Air resistance
                 this.size = Math.random() * 8 + 4;
+                this.colorType = Math.random(); // 0-1 for gradient
             }
 
             update() {
-                // Integration
                 this.x += this.vx;
                 this.y += this.vy;
-                
-                // Forces
-                this.vx *= this.drag; // Slow down over time
-                this.vy += this.gravity; // Fall
-                
-                // Floor bounce
-                if (this.y > floorY) {
-                    this.y = floorY;
-                    this.vy *= -0.5; // Bounce dampening
-                    this.vx *= 0.8;  // Ground friction
-                }
-
+                this.vy += 0.8; // Gravity
+                this.vx *= 0.9; // Air resistance
                 this.life -= this.decay;
+
+                // Floor bounce
+                if(this.y > floorY) {
+                    this.y = floorY;
+                    this.vy *= -0.5;
+                }
             }
 
-            draw(ctx) {
-                // COLOR SHIFTING (Heat to Smoke)
-                let r, g, b;
-                
-                if (this.type === 'HIT') {
-                    // White -> Yellow -> Red -> Grey
-                    if (this.life > 0.8) { r=255; g=255; b=255; }
-                    else if (this.life > 0.5) { r=255; g=255; b=0; }
-                    else if (this.life > 0.2) { r=255; g=50; b=0; }
-                    else { r=100; g=100; b=100; }
-                } else if (this.type === 'PLASMA') {
-                    // Cyan -> Blue -> Purple
-                    r = 0; 
-                    g = Math.floor(this.life * 255);
-                    b = 255;
-                }
+            draw() {
+                // Color shift: White (Hot) -> Yellow -> Grey (Smoke)
+                let c;
+                if (this.life > 0.7) c = `rgba(255, 255, 255, ${this.life})`;
+                else if (this.life > 0.4) c = `rgba(255, 200, 0, ${this.life})`;
+                else c = `rgba(100, 100, 100, ${this.life})`;
 
-                // NON-LINEAR EASING
-                // We square the life so it fades slowly then pops out quickly
-                const alpha = Math.pow(this.life, 3); 
+                // Non-linear size (Shrink fast at end)
+                const s = this.size * Math.pow(this.life, 0.5);
                 
-                ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI*2);
-                ctx.fill();
+                ctx.fillStyle = c;
+                ctx.fillRect(this.x, this.y, s, s);
             }
         }
 
-        function spawnHitEffect(x, y, impactAngle) {
-            // Screenshake
-            shake = 15;
-            
-            // Direction opposite to hit
-            const bounceAngle = impactAngle + Math.PI; 
-            
-            for(let i=0; i<20; i++) {
-                particles.push(new Particle(x, y, 'HIT', {angle: bounceAngle}));
+        function spawnImpact(x, y, directionOfImpact) {
+            // Particles fly opposite to impact
+            const angle = directionOfImpact === 1 ? Math.PI : 0; 
+            for(let i=0; i<15; i++) {
+                particles.push(new Particle(x, y, angle));
             }
         }
 
         /* ------------------------------------------------
-           FIGHTER LOGIC (Sam vs Elon)
+           FIGHTER CLASS
            ------------------------------------------------ */
         class Fighter {
-            constructor(name, x, color) {
-                this.name = name;
-                this.x = x;
+            constructor(id, startX) {
+                this.id = id; // 'SAM' or 'ELON'
+                this.x = startX;
                 this.y = floorY;
                 this.vx = 0;
                 this.vy = 0;
                 this.hp = 100;
-                this.color = color;
-                this.state = 'IDLE';
-                this.w = 60;
-                this.h = 120;
-                this.attackTimer = 0;
-                this.facing = name === 'SAM' ? 1 : -1;
+                this.state = 'IDLE'; // IDLE, RUN, ATTACK, HIT
+                this.timer = 0;
+                this.facing = id === 'SAM' ? 1 : -1;
+                
+                // Stats
+                this.speed = id === 'SAM' ? 1.2 : 0.8; // Sam faster
+                this.mass = id === 'SAM' ? 1.0 : 1.5;  // Elon heavier
             }
 
-            update(target) {
-                // AI BRAIN
-                const dist = Math.abs(target.x - this.x);
-                const dir = Math.sign(target.x - this.x);
+            update(enemy) {
+                // 1. AI LOGIC
+                const dx = enemy.x - this.x;
+                const dist = Math.abs(dx);
                 
+                // Always face enemy
+                if (this.state !== 'HIT') {
+                    this.facing = Math.sign(dx) || 1;
+                }
+
+                // Decisions
                 if (this.state === 'IDLE' || this.state === 'RUN') {
-                    this.facing = dir;
-                    if (dist > 100) {
-                        this.vx += dir * 1.5; // Accelerate
+                    if (dist > 80) {
+                        // Chase
+                        this.vx += this.facing * this.speed;
                         this.state = 'RUN';
                     } else {
+                        // Close enough to hit?
                         this.vx *= 0.8; // Brake
-                        // Attack chance
-                        if (this.attackTimer <= 0 && Math.random() > 0.95) {
-                            this.attack(target);
+                        if (this.timer <= 0 && Math.random() > 0.94) {
+                            this.attack();
                         }
                     }
                 }
 
-                // ATTACK PHYSICS
-                if (this.state === 'ATTACK') {
-                    this.vx = this.facing * 15; // Lunge
-                    if (this.attackTimer < 10) { // End attack
-                        this.state = 'IDLE';
-                        this.attackTimer = 30; // Cooldown
-                    }
-                }
-
-                // PHYSICS INTEGRATION
+                // 2. PHYSICS
                 this.vy += 1.5; // Gravity
                 this.x += this.vx;
                 this.y += this.vy;
-                this.vx *= 0.85; // Ground Friction
+                this.vx *= 0.85; // Friction
 
-                // Floor Collision
+                // Floor
                 if (this.y > floorY) {
                     this.y = floorY;
                     this.vy = 0;
                 }
 
-                // Cooldowns
-                if (this.attackTimer > 0) this.attackTimer--;
-
                 // Bounds
-                if (this.x < 0) this.x = 0;
-                if (this.x > width) this.x = width;
+                if (this.x < 50) this.x = 50;
+                if (this.x > width - 50) this.x = width - 50;
+
+                // Timers
+                if (this.timer > 0) this.timer--;
+                if (this.timer === 0 && this.state !== 'IDLE') this.state = 'IDLE';
             }
 
-            attack(target) {
+            attack() {
                 this.state = 'ATTACK';
-                this.attackTimer = 20;
-                playSfx('SWOOSH');
-
-                // HIT DETECTION
-                // Simple AABB check during attack frame
-                setTimeout(() => {
-                    const dx = Math.abs(this.x - target.x);
-                    const dy = Math.abs(this.y - target.y);
-                    
-                    if (dx < 100 && dy < 100) {
-                        // HIT!
-                        const angle = Math.atan2(target.y - this.y, target.x - this.x);
-                        
-                        target.vx = Math.cos(angle) * 30; // Knockback
-                        target.vy = -15; // Uppercut
-                        target.hp -= 10;
-                        
-                        spawnHitEffect(target.x, target.y - target.h/2, angle);
-                        playSfx('HIT');
-                        updateHP();
-                        
-                        // Hitstop freeze
-                        timeScale = 0;
-                        setTimeout(() => timeScale = 1, 50); 
-                    }
-                }, 100);
+                this.timer = 20; // Duration
+                this.vx = this.facing * 20; // Lunge
+                playSynth('SWOOSH');
             }
 
-            draw(ctx) {
+            takeHit(damage, knockbackDir) {
+                this.state = 'HIT';
+                this.timer = 15; // Stun time
+                this.hp -= damage;
+                this.vx = knockbackDir * (30 / this.mass); // Physics based knockback
+                this.vy = -10; // Pop up
+                
+                shake = 10;
+                timeScale = 0.1; // Hitstop
+                setTimeout(() => timeScale = 1.0, 50);
+
+                spawnImpact(this.x, this.y - 60, knockbackDir);
+                playSynth('HIT');
+                updateUI();
+            }
+
+            checkHit(enemy) {
+                // Only hit if attacking and within active frames
+                if (this.state === 'ATTACK' && this.timer > 10 && this.timer < 18) {
+                    const dist = Math.abs(this.x - enemy.x);
+                    // Hitbox check
+                    if (dist < 80 && Math.abs(this.y - enemy.y) < 50 && enemy.state !== 'HIT') {
+                        enemy.takeHit(10, this.facing);
+                    }
+                }
+            }
+
+            draw() {
                 ctx.save();
                 ctx.translate(this.x, this.y);
-                ctx.scale(this.facing, 1); // Flip sprite
+                ctx.scale(this.facing, 1); // Flip if facing left
 
-                // SHADOW
+                // Shadow
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
                 ctx.beginPath();
                 ctx.ellipse(0, 0, 40, 10, 0, 0, Math.PI*2);
                 ctx.fill();
 
-                // CHARACTER SPRITE (Procedural)
-                if (this.name === 'SAM') {
-                    // Suit Body
-                    ctx.fillStyle = '#2c3e50';
-                    ctx.fillRect(-20, -120, 40, 70);
-                    // Legs
-                    ctx.fillRect(-20, -50, 15, 50);
-                    ctx.fillRect(5, -50, 15, 50);
-                    // Head
-                    ctx.fillStyle = '#f1c40f'; // Blonde-ish
-                    ctx.fillRect(-15, -150, 30, 30);
-                    // OpenAI Eye
-                    ctx.fillStyle = '#00ffff';
-                    ctx.fillRect(0, -140, 10, 5);
-                    
-                    // Effect: Scale Beam (if attacking)
-                    if (this.state === 'ATTACK') {
-                        ctx.fillStyle = 'rgba(0,255,255,0.5)';
-                        ctx.fillRect(20, -100, 100, 20);
-                    }
-
-                } else {
-                    // Elon Armor
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(-25, -125, 50, 75);
-                    // Cyber Legs
-                    ctx.fillStyle = '#7f8c8d';
-                    ctx.fillRect(-25, -50, 20, 50);
-                    ctx.fillRect(5, -50, 20, 50);
-                    // Head
-                    ctx.fillStyle = '#ecf0f1';
-                    ctx.fillRect(-20, -155, 40, 30);
-                    // X Visor
-                    ctx.fillStyle = '#ff0000';
-                    ctx.beginPath();
-                    ctx.moveTo(-10, -145); ctx.lineTo(10, -135); ctx.stroke();
-                    
-                    // Effect: Rocket Punch
-                    if (this.state === 'ATTACK') {
-                        ctx.fillStyle = 'rgba(255,0,0,0.5)';
-                        ctx.beginPath();
-                        ctx.arc(50, -90, 30, 0, Math.PI*2);
-                        ctx.fill();
-                    }
-                }
+                // Sprite Drawing
+                if (this.id === 'SAM') this.drawSam();
+                else this.drawElon();
 
                 ctx.restore();
             }
-        }
 
-        let timeScale = 1;
+            drawSam() {
+                // Lean into attack
+                if(this.state === 'ATTACK') ctx.rotate(0.2);
+                if(this.state === 'HIT') ctx.rotate(-0.5);
 
-        function updateHP() {
-            document.getElementById('p1-fill').style.width = Math.max(0, p1.hp) + "%";
-            document.getElementById('p2-fill').style.width = Math.max(0, p2.hp) + "%";
-            
-            if (p1.hp <= 0 || p2.hp <= 0) {
-                setTimeout(resetMatch, 2000);
-            }
-        }
+                // Legs
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(-15, -40, 10, 40); // Back leg
+                ctx.fillRect(5, -40, 10, 40);   // Front leg
+                
+                // Body (Suit)
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(-20, -110, 40, 70);
+                
+                // Tie
+                ctx.fillStyle = 'cyan';
+                ctx.fillRect(-5, -110, 10, 40);
 
-        function resetMatch() {
-            p1.hp = 100; p2.hp = 100;
-            p1.x = width * 0.3; p2.x = width * 0.7;
-            updateHP();
-        }
+                // Head
+                ctx.fillStyle = '#ffccaa';
+                ctx.fillRect(-15, -140, 30, 30);
 
-        /* ------------------------------------------------
-           VISUAL ENGINE: NC RIVER SCENE
-           ------------------------------------------------ */
-        
-        function drawBackground() {
-            // 1. SKY (Blue Ridge Gradient)
-            const grad = ctx.createLinearGradient(0, 0, 0, height);
-            grad.addColorStop(0, '#4ca1af');
-            grad.addColorStop(1, '#c4e0e5');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, width, height);
-
-            // 2. MOUNTAINS (Parallax)
-            drawMountains(height * 0.6, '#2c3e50', 0.2); // Back
-            drawMountains(height * 0.7, '#34495e', 0.5); // Mid
-
-            // 3. RIVER (The "Full On" NC Scene)
-            // Sine wave distortion for rushing water
-            const riverY = height - 150;
-            ctx.fillStyle = '#2980b9';
-            ctx.beginPath();
-            ctx.moveTo(0, height);
-            for (let x = 0; x <= width; x+=20) {
-                const y = riverY + Math.sin(x * 0.01 + time * 0.05) * 10;
-                ctx.lineTo(x, y);
-            }
-            ctx.lineTo(width, height);
-            ctx.fill();
-            
-            // White Water Rapids
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-            ctx.lineWidth = 3;
-            for(let i=0; i<5; i++) {
-                ctx.beginPath();
-                for (let x = 0; x <= width; x+=30) {
-                    const y = riverY + 20 + (i*20) + Math.sin(x * 0.02 + time * 0.1 + i) * 5;
-                    ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-            }
-
-            // 4. TREES (Foreground Parallax)
-            drawTrees();
-        }
-
-        function drawMountains(yBase, color, parallax) {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(0, height);
-            for (let x = 0; x <= width; x += 50) {
-                // Noise based mountain shape
-                const noise = Math.sin(x * 0.005) * Math.cos(x * 0.01) * 200;
-                // Parallax scroll
-                const scroll = Math.sin(time * 0.01 * parallax) * 50;
-                ctx.lineTo(x, yBase - Math.abs(noise) + scroll);
-            }
-            ctx.lineTo(width, height);
-            ctx.fill();
-        }
-
-        function drawTrees() {
-            // Simple Triangles moving fast
-            const treeSpeed = (time * 2) % 200;
-            ctx.fillStyle = '#145a32'; // Pine Green
-            for (let x = -200; x < width + 200; x += 150) {
-                const px = x - treeSpeed;
-                const py = height - 100;
-                if (px > -50 && px < width + 50) {
+                // Eyes (Laser eyes)
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(0, -135, 10, 5);
+                
+                // Effect: Energy Blade on arm
+                if (this.state === 'ATTACK') {
+                    ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
                     ctx.beginPath();
-                    ctx.moveTo(px, py);
-                    ctx.lineTo(px + 25, py - 100);
-                    ctx.lineTo(px + 50, py);
+                    ctx.moveTo(10, -80);
+                    ctx.lineTo(100, -60);
+                    ctx.lineTo(20, -40);
+                    ctx.fill();
+                }
+            }
+
+            drawElon() {
+                if(this.state === 'ATTACK') ctx.rotate(0.2);
+                if(this.state === 'HIT') ctx.rotate(-0.5);
+
+                // Legs (Mech)
+                ctx.fillStyle = '#555';
+                ctx.fillRect(-20, -50, 15, 50); 
+                ctx.fillRect(5, -50, 15, 50);
+
+                // Body (Armor)
+                ctx.fillStyle = '#000';
+                ctx.fillRect(-25, -120, 50, 70);
+                // Chest Logo X
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-10, -100); ctx.lineTo(10, -80);
+                ctx.moveTo(10, -100); ctx.lineTo(-10, -80);
+                ctx.stroke();
+
+                // Head
+                ctx.fillStyle = '#ffccaa';
+                ctx.fillRect(-15, -150, 30, 30);
+                
+                // Visor
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(-15, -145, 30, 5);
+
+                // Effect: Rocket Punch
+                if (this.state === 'ATTACK') {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                    ctx.beginPath();
+                    ctx.arc(50, -80, 25, 0, Math.PI*2);
                     ctx.fill();
                 }
             }
         }
 
+        function updateUI() {
+            document.getElementById('hp1').style.width = Math.max(0, p1.hp) + '%';
+            document.getElementById('hp2').style.width = Math.max(0, p2.hp) + '%';
+            
+            if(p1.hp <= 0 || p2.hp <= 0) {
+                setTimeout(resetMatch, 2000);
+            }
+        }
+        
+        function resetMatch() {
+            p1.hp = 100; p2.hp = 100;
+            p1.x = width * 0.2; p2.x = width * 0.8;
+            updateUI();
+        }
+
         /* ------------------------------------------------
-           AUDIO ENGINE: POKEMON BATTLE THEME
+           VISUAL ENGINE: NORTH CAROLINA RIVER
+           ------------------------------------------------ */
+        function drawBackground() {
+            // 1. Sky
+            const grad = ctx.createLinearGradient(0, 0, 0, height);
+            grad.addColorStop(0, '#2980b9');
+            grad.addColorStop(1, '#6dd5fa');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. Blue Ridge Mountains (Parallax)
+            drawMountains(height * 0.5, '#1a5276', 0.2);
+            drawMountains(height * 0.6, '#21618c', 0.5);
+            drawMountains(height * 0.75, '#2874a6', 0.8);
+
+            // 3. The River
+            const riverY = height - 180;
+            
+            // River Base
+            ctx.fillStyle = '#2e86c1';
+            ctx.fillRect(0, riverY, width, height - riverY);
+
+            // Flowing Water Effect
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                for (let x = 0; x <= width; x+=20) {
+                    // Sine wave + Time
+                    const y = riverY + 30 + (i*30) + Math.sin(x * 0.01 + time * 0.05 + i) * 10;
+                    if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                }
+                ctx.stroke();
+            }
+            
+            // Trees on bank
+            ctx.fillStyle = '#145a32'; // Pine
+            for (let x = 0; x < width; x+= 80) {
+                const treeH = 80 + Math.sin(x)*20;
+                const y = riverY;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + 20, y - treeH);
+                ctx.lineTo(x + 40, y);
+                ctx.fill();
+            }
+        }
+
+        function drawMountains(yBase, color, speedMult) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(0, height);
+            for (let x = 0; x <= width; x+=10) {
+                // Perlin-ish noise
+                const noise = Math.sin(x * 0.005) * Math.cos(x * 0.02) * 150;
+                const parallax = Math.sin(time * 0.01 * speedMult) * 50;
+                ctx.lineTo(x, yBase - Math.abs(noise) + parallax);
+            }
+            ctx.lineTo(width, height);
+            ctx.fill();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: POKEMON BATTLE
            ------------------------------------------------ */
         const AC = window.AudioContext || window.webkitAudioContext;
         let actx;
-        let nextNoteTime = 0;
+        let nextNote = 0;
         let beat = 0;
-        
-        // Chromatic Pokemon Gym style bass run
-        const BASSLINE = [110, 110, 116, 116, 123, 123, 116, 116]; 
-        // High Arps
-        const ARP = [440, 554, 659, 880, 659, 554];
+
+        const BASS = [110, 110, 116, 116, 123, 123, 116, 116];
+        const LEAD = [440, 554, 659, 880, 659, 554];
 
         function initAudio() {
             actx = new AC();
-            nextNoteTime = actx.currentTime;
-            scheduler();
+            nextNote = actx.currentTime;
+            scheduleAudio();
         }
 
-        function scheduler() {
-            const tempo = 170; // Intense
-            const secondsPerBeat = 60.0 / tempo;
-            const sixteenth = secondsPerBeat / 4;
+        function scheduleAudio() {
+            const bpm = 170;
+            const secPerBeat = 60 / bpm;
+            const sixteenth = secPerBeat / 4;
 
-            while (nextNoteTime < actx.currentTime + 0.1) {
-                playBeat(nextNoteTime, beat);
-                nextNoteTime += sixteenth;
+            while (nextNote < actx.currentTime + 0.1) {
+                playTrack(nextNote, beat);
+                nextNote += sixteenth;
                 beat = (beat + 1) % 32;
             }
-            setTimeout(scheduler, 25);
+            setTimeout(scheduleAudio, 25);
         }
 
-        function playBeat(t, s) {
-            // BASS (Driving 8th notes)
-            if (s % 4 === 0) {
-                const freq = BASSLINE[Math.floor(s/4) % BASSLINE.length];
+        function playTrack(t, b) {
+            const master = actx.createGain();
+            master.gain.value = 0.1; // Keep safe volume
+            master.connect(actx.destination);
+
+            // Bass (Square Wave - driving)
+            if (b % 4 === 0) {
                 const osc = actx.createOscillator();
-                const g = actx.createGain();
                 osc.type = 'square';
-                osc.frequency.value = freq;
-                g.gain.setValueAtTime(0.3, t);
+                const idx = Math.floor(b/4) % BASS.length;
+                osc.frequency.setValueAtTime(BASS[idx], t);
+                
+                const g = actx.createGain();
+                g.gain.setValueAtTime(1, t);
                 g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
-                osc.connect(g); g.connect(actx.destination);
+                
+                osc.connect(g); g.connect(master);
                 osc.start(t); osc.stop(t + 0.1);
             }
 
-            // DRUMS (Snare on 4, 12...)
-            if (s % 8 === 4) playNoise(t);
-
-            // LEAD ARP (Fast 16ths)
-            const osc = actx.createOscillator();
-            const g = actx.createGain();
-            osc.type = 'sawtooth';
-            const note = ARP[s % ARP.length];
-            osc.frequency.setValueAtTime(note, t);
-            // Vibrato
-            osc.frequency.linearRampToValueAtTime(note + 10, t + 0.1);
-            
-            g.gain.setValueAtTime(0.1, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.connect(g); g.connect(actx.destination);
-            osc.start(t); osc.stop(t + 0.1);
-        }
-
-        function playNoise(t) {
-            const buf = actx.createBuffer(1, actx.sampleRate*0.1, actx.sampleRate);
-            const d = buf.getChannelData(0);
-            for(let i=0; i<d.length; i++) d[i] = Math.random()*2-1;
-            const src = actx.createBufferSource();
-            src.buffer = buf;
-            const g = actx.createGain();
-            g.gain.setValueAtTime(0.4, t);
-            g.gain.exponentialRampToValueAtTime(0.01, t+0.1);
-            src.connect(g); g.connect(actx.destination);
-            src.start(t);
-        }
-        
-        function playSfx(type) {
-            if(!actx) return;
-            const osc = actx.createOscillator();
-            const g = actx.createGain();
-            
-            if(type === 'HIT') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(150, actx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(50, actx.currentTime+0.1);
-                g.gain.value = 0.3;
-            } else {
-                osc.type = 'triangle'; // Swoosh
-                osc.frequency.setValueAtTime(400, actx.currentTime);
-                osc.frequency.linearRampToValueAtTime(100, actx.currentTime+0.1);
-                g.gain.value = 0.1;
+            // Arp (Sawtooth - intense)
+            if (b % 2 === 0) {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                const note = LEAD[b % LEAD.length];
+                osc.frequency.setValueAtTime(note, t);
+                
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.3, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                
+                osc.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t + 0.1);
             }
             
-            osc.connect(g); g.connect(actx.destination);
-            osc.start(); osc.stop(actx.currentTime+0.1);
+            // Noise Snare
+            if (b % 8 === 4) {
+                const buf = actx.createBuffer(1, actx.sampleRate*0.05, actx.sampleRate);
+                const d = buf.getChannelData(0);
+                for(let i=0; i<d.length; i++) d[i]=Math.random()*2-1;
+                const src = actx.createBufferSource();
+                src.buffer = buf;
+                src.connect(master);
+                src.start(t);
+            }
+        }
+
+        function playSynth(type) {
+            if (!actx) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            g.gain.value = 0.1;
+            g.connect(actx.destination);
+
+            if (type === 'HIT') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, actx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, actx.currentTime + 0.2);
+            } else {
+                osc.type = 'triangle'; // Swoosh
+                osc.frequency.setValueAtTime(600, actx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, actx.currentTime + 0.1);
+            }
+            
+            osc.connect(g);
+            osc.start(); osc.stop(actx.currentTime + 0.2);
         }
 
         /* ------------------------------------------------
@@ -565,46 +591,50 @@
            ------------------------------------------------ */
         function loop() {
             if (!isRunning) return;
-            
-            // Apply Screenshake (offset canvas context)
+            requestAnimationFrame(loop);
+
+            // Logic update based on timescale (Hitstop)
+            if (timeScale > 0.5) {
+                time++;
+                p1.update(p2);
+                p2.update(p1);
+                p1.checkHit(p2);
+                p2.checkHit(p1);
+            }
+
+            // Screenshake offset
             let sx = 0, sy = 0;
             if (shake > 0) {
                 sx = (Math.random() - 0.5) * shake;
                 sy = (Math.random() - 0.5) * shake;
-                shake *= 0.9; // Decay shake
+                shake *= 0.9;
             }
 
             ctx.save();
             ctx.translate(sx, sy);
 
             drawBackground();
-
-            // Update & Draw Particles (The Fix)
-            if (timeScale > 0) {
-                for (let i = particles.length - 1; i >= 0; i--) {
-                    particles[i].update();
-                    particles[i].draw(ctx);
-                    if (particles[i].life <= 0) particles.splice(i, 1);
-                }
+            
+            // Draw Particles (Fix: Non-linear fade)
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if(particles[i].life <= 0) particles.splice(i, 1);
             }
 
-            // Update & Draw Fighters
-            if (timeScale > 0) {
-                p1.update(p2);
-                p2.update(p1);
-            }
-            p1.draw(ctx);
-            p2.draw(ctx);
+            p1.draw();
+            p2.draw();
 
             ctx.restore();
-            requestAnimationFrame(loop);
         }
 
-        function startBattle() {
-            document.getElementById('start-screen').style.display = 'none';
+        function startGame() {
+            document.getElementById('menu').style.display = 'none';
+            
+            p1 = new Fighter('SAM', width * 0.3);
+            p2 = new Fighter('ELON', width * 0.7);
+            
             initAudio();
-            p1 = new Fighter('SAM', width * 0.3, '#00f');
-            p2 = new Fighter('ELON', width * 0.7, '#f00');
             isRunning = true;
             loop();
         }
