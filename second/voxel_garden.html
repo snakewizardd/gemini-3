@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSRS_VOXEL_GARDEN // ARCHITECT</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #121212;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            cursor: crosshair; /* The classic RPG feel */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            image-rendering: pixelated;
+        }
+
+        #ui {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .slot {
+            width: 50px;
+            height: 50px;
+            background: #3d3d3d;
+            border: 2px solid #5b5b5b;
+            box-shadow: inset 2px 2px 0 #222, inset -2px -2px 0 #777;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #ffff00;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .slot.active {
+            border-color: #ffff00;
+            background: #4a4a4a;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 20;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            color: #ffff00; /* OSRS Yellow */
+            text-shadow: 2px 2px 0 #000;
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            background: #5b5b5b;
+            border: 2px solid #000;
+            padding: 15px 30px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: inset 2px 2px 0 #888, inset -2px -2px 0 #222;
+        }
+        .btn:hover { background: #6d6d6d; }
+
+        /* Retro Chat Box */
+        #chat {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            color: #ffff00;
+            text-shadow: 1px 1px 0 #000;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1>VOXEL GENESIS</h1>
+        <div class="btn" onclick="initWorld()">CLICK TO SPAWN</div>
+    </div>
+
+    <canvas id="world"></canvas>
+    <div id="chat">Welcome to the machine, Architect.</div>
+
+    <div id="ui">
+        <div class="slot" id="slot-stats">BPM: <span id="bpm-disp">120</span></div>
+        <div class="slot" id="slot-time">DAY</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('world');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const chat = document.getElementById('chat');
+
+        // WORLD CONFIG
+        const GRID_SIZE = 24; // Map size (24x24)
+        const TILE_W = 32;    // Isometric tile width
+        const TILE_H = 16;    // Isometric tile height
+        
+        let width, height;
+        let offsetX, offsetY;
+        let map = [];
+        let particles = [];
+        let time = 0;
+        let isRunning = false;
+        
+        // MOUSE INTERACTION
+        let mouse = { x: 0, y: 0 };
+        let hoveredTile = null;
+
+        // PALETTE (OSRS / Minecraft Style)
+        const COLORS = {
+            GRASS_TOP: '#4C8034', GRASS_SIDE: '#365E23',
+            DIRT_TOP: '#76552B', DIRT_SIDE: '#543B1C',
+            WATER_TOP: '#005F8C', WATER_SIDE: '#004364',
+            STONE_TOP: '#686868', STONE_SIDE: '#4A4A4A',
+            HIGHLIGHT: 'rgba(255, 255, 255, 0.3)',
+            SHADOW: 'rgba(0, 0, 0, 0.3)'
+        };
+
+        /* ------------------------------------------------
+           WORLD GENERATION (Perlin-ish)
+           ------------------------------------------------ */
+        
+        function initMap() {
+            map = [];
+            for (let x = 0; x < GRID_SIZE; x++) {
+                map[x] = [];
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    // Simplex-style noise generation
+                    const heightNoise = Math.sin(x * 0.2) + Math.cos(y * 0.2) + Math.sin((x+y)*0.1);
+                    let h = Math.floor(heightNoise * 2) + 2;
+                    
+                    let type = 'GRASS';
+                    if (h <= 0) { type = 'WATER'; h = 0; } // Sea level
+                    else if (h > 3) { type = 'STONE'; } // Mountains
+
+                    map[x][y] = {
+                        h: h,       // Height (Stacks of blocks)
+                        baseH: h,   // Original height for resetting
+                        type: type,
+                        bounce: 0   // Audio reactivity offset
+                    };
+                }
+            }
+        }
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            // Center the isometric grid
+            offsetX = width / 2;
+            offsetY = height / 4; 
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           RENDER ENGINE: ISOMETRIC PAINTER
+           ------------------------------------------------ */
+
+        function isoToScreen(x, y, z) {
+            return {
+                x: (x - y) * TILE_W + offsetX,
+                y: (x + y) * TILE_H - (z * TILE_H * 1.5) + offsetY
+            };
+        }
+
+        function drawBlock(x, y, z, type, highlight = false) {
+            const pos = isoToScreen(x, y, z);
+            
+            let cTop, cSide;
+            
+            if (type === 'GRASS') { cTop = COLORS.GRASS_TOP; cSide = COLORS.GRASS_SIDE; }
+            else if (type === 'WATER') { cTop = COLORS.WATER_TOP; cSide = COLORS.WATER_SIDE; }
+            else if (type === 'STONE') { cTop = COLORS.STONE_TOP; cSide = COLORS.STONE_SIDE; }
+            else { cTop = '#ff00ff'; cSide = '#aa00aa'; } // Error pink
+
+            // If highlighted (hovered)
+            if (highlight) {
+                ctx.fillStyle = '#ffff00'; // Selection color
+            } else {
+                ctx.fillStyle = cTop;
+            }
+
+            // TOP FACE
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            ctx.lineTo(pos.x + TILE_W, pos.y + TILE_H);
+            ctx.lineTo(pos.x, pos.y + TILE_H * 2);
+            ctx.lineTo(pos.x - TILE_W, pos.y + TILE_H);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Highlight Overlay
+            if(highlight) {
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.fill();
+            }
+
+            // SIDES (Right)
+            ctx.fillStyle = cSide;
+            // Darken slightly
+            ctx.filter = 'brightness(0.8)'; 
+            ctx.beginPath();
+            ctx.moveTo(pos.x + TILE_W, pos.y + TILE_H);
+            ctx.lineTo(pos.x + TILE_W, pos.y + TILE_H * 2.5); // Height of block
+            ctx.lineTo(pos.x, pos.y + TILE_H * 3.5);
+            ctx.lineTo(pos.x, pos.y + TILE_H * 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // SIDES (Left)
+            ctx.filter = 'brightness(0.6)'; // Darker side
+            ctx.beginPath();
+            ctx.moveTo(pos.x - TILE_W, pos.y + TILE_H);
+            ctx.lineTo(pos.x - TILE_W, pos.y + TILE_H * 2.5);
+            ctx.lineTo(pos.x, pos.y + TILE_H * 3.5);
+            ctx.lineTo(pos.x, pos.y + TILE_H * 2);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.filter = 'none'; // Reset
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+
+            // Clear Background (Sky Color)
+            const dayCycle = (Math.sin(time * 0.1) + 1) / 2; // 0 to 1
+            const skyR = Math.floor(20 + (dayCycle * 100));
+            const skyG = Math.floor(20 + (dayCycle * 180));
+            const skyB = Math.floor(40 + (dayCycle * 215));
+            ctx.fillStyle = `rgb(${skyR}, ${skyG}, ${skyB})`;
+            ctx.fillRect(0, 0, width, height);
+
+            // Update UI Time
+            document.getElementById('slot-time').innerText = dayCycle > 0.5 ? "DAY" : "NIGHT";
+            document.getElementById('slot-time').style.color = dayCycle > 0.5 ? "#ffff00" : "#5555ff";
+
+            time += 0.02;
+
+            // Reset Hover
+            hoveredTile = null;
+
+            // DRAW GRID (Painter's Algorithm: Back to Front)
+            for (let x = 0; x < GRID_SIZE; x++) {
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    const block = map[x][y];
+                    
+                    // Audio/Physics Animation
+                    let renderH = block.h;
+                    
+                    if (block.type === 'WATER') {
+                        // Ripple effect
+                        renderH = 0.2 * Math.sin(x * 0.5 + y * 0.5 + time * 2);
+                    } else {
+                        // Bounce effect from music
+                        if (block.bounce > 0) {
+                            renderH += block.bounce;
+                            block.bounce *= 0.9; // Decay
+                        }
+                    }
+
+                    // Hit detection (Rough approximation for isometry)
+                    // Calculate center of top face
+                    const screenPos = isoToScreen(x, y, renderH);
+                    const dx = Math.abs(mouse.x - screenPos.x);
+                    const dy = Math.abs(mouse.y - (screenPos.y + TILE_H));
+                    
+                    const isHovered = (dx < TILE_W && dy < TILE_H);
+                    if (isHovered) hoveredTile = { x, y };
+
+                    drawBlock(x, y, renderH, block.type, isHovered);
+                }
+            }
+
+            // DRAW PARTICLES
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                const pos = isoToScreen(p.x, p.y, p.z);
+                
+                ctx.fillStyle = p.color;
+                ctx.fillRect(pos.x, pos.y, p.size, p.size);
+                
+                p.z += p.velZ;
+                p.velZ -= 0.02; // Gravity
+                p.life -= 0.02;
+                
+                if (p.life <= 0 || p.z < 0) particles.splice(i, 1);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: MEDIEVAL TECHNO SEQUENCER
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let masterGain;
+        
+        let nextNoteTime = 0;
+        let beat = 0;
+        const BPM = 128;
+        
+        // SCALES (D Dorian - Folk/Medieval feel)
+        const SCALE = [146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63, 293.66];
+
+        function initAudio() {
+            actx = new AC();
+            masterGain = actx.createGain();
+            masterGain.gain.value = 0.5;
+            masterGain.connect(actx.destination);
+            
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playStep(nextNoteTime, beat);
+                nextNoteTime += 60 / BPM / 4; // 16th notes
+                beat = (beat + 1) % 16;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playStep(t, step) {
+            // 1. KICK (Blocky Square Wave)
+            if (step % 4 === 0) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(100, t);
+                osc.frequency.exponentialRampToValueAtTime(10, t + 0.2);
+                g.gain.setValueAtTime(0.5, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                osc.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 0.2);
+                
+                // VISUAL TRIGGER: Bounce random blocks
+                const rx = Math.floor(Math.random()*GRID_SIZE);
+                const ry = Math.floor(Math.random()*GRID_SIZE);
+                if(map[rx][ry].type !== 'WATER') map[rx][ry].bounce = 1.5;
+            }
+
+            // 2. HI-HAT (Noise)
+            if (step % 2 !== 0) {
+                // Simple noise burst
+                // (Simulated with high freq wave for code brevity)
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(8000, t);
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.1, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+                osc.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 0.05);
+            }
+
+            // 3. MELODY (The Flute - Triangle Wave)
+            // Random walk on scale
+            if (Math.random() > 0.6) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                
+                osc.type = 'triangle';
+                const note = SCALE[Math.floor(Math.random() * SCALE.length)];
+                // 8-bit Arpeggio effect
+                osc.frequency.setValueAtTime(note, t);
+                osc.frequency.setValueAtTime(note * 2, t + 0.1); 
+
+                g.gain.setValueAtTime(0.2, t);
+                g.gain.linearRampToValueAtTime(0, t + 0.2);
+                
+                osc.connect(g); g.connect(masterGain);
+                osc.start(t); osc.stop(t + 0.2);
+            }
+        }
+
+        /* ------------------------------------------------
+           INTERACTION
+           ------------------------------------------------ */
+        
+        canvas.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        canvas.addEventListener('mousedown', () => {
+            if (hoveredTile) {
+                const block = map[hoveredTile.x][hoveredTile.y];
+                
+                // INTERACTION FX
+                block.bounce = -1; // Press down
+                spawnParticles(hoveredTile.x, hoveredTile.y, block.h, block.type);
+                playMineSound();
+                
+                // Chat feedback
+                const msgs = ["xp drop", "mining lvl up", "nice rhythm", "block secured"];
+                chat.innerText = msgs[Math.floor(Math.random() * msgs.length)];
+                chat.style.left = mouse.x + "px";
+                chat.style.top = mouse.y - 50 + "px";
+            }
+        });
+
+        function spawnParticles(x, y, z, type) {
+            let color = '#fff';
+            if (type === 'GRASS') color = '#4C8034';
+            if (type === 'STONE') color = '#686868';
+            if (type === 'WATER') color = '#005F8C';
+
+            for (let i = 0; i < 5; i++) {
+                particles.push({
+                    x: x + (Math.random()-0.5),
+                    y: y + (Math.random()-0.5),
+                    z: z + 1,
+                    velZ: Math.random() * 0.5,
+                    color: color,
+                    size: Math.random() * 5 + 2,
+                    life: 1.0
+                });
+            }
+        }
+
+        function playMineSound() {
+            if (!actx) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(400, actx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(100, actx.currentTime + 0.1);
+            g.gain.setValueAtTime(0.2, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.1);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(); osc.stop(actx.currentTime + 0.1);
+        }
+
+        function initWorld() {
+            document.getElementById('overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 1000);
+            
+            resize();
+            initMap();
+            initAudio();
+            isRunning = true;
+            render();
+        }
+
+        // Init call
+        resize();
+
+    </script>
+</body>
+</html>
