@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUN OFF // &lt;3</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Impact&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(2.0) saturate(2.0); /* DEEP FRIED VISUALS */
+        }
+
+        /* VIGNETTE & SCANLINES */
+        #screen-fx {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,1) 100%);
+            background-size: 100% 4px, 100% 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 20;
+            text-align: center;
+            mix-blend-mode: difference;
+        }
+
+        #btn {
+            background: #fff;
+            color: #000;
+            border: 4px solid #ff0055;
+            padding: 20px 50px;
+            font-family: 'Impact', sans-serif;
+            font-size: 2rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transform: skew(-10deg);
+            transition: 0.1s;
+            box-shadow: 10px 10px 0 #ff0055;
+        }
+
+        #btn:hover {
+            transform: skew(-10deg) scale(1.1) translate(-5px, -5px);
+            box-shadow: 15px 15px 0 #ff0055;
+            background: #ff0055;
+            color: #fff;
+        }
+
+        #btn:active {
+            transform: skew(-10deg) scale(0.95);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="screen-fx"></div>
+    <canvas id="world"></canvas>
+    
+    <div id="ui">
+        <button id="btn" onclick="startMeme()">INITIATE TOXICITY</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('world');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+        let isRunning = false;
+        let mouse = { x: -9999, y: -9999 };
+        let time = 0;
+
+        // CONFIG
+        const TEXT = "RUN OFF\nLITTLE BITCH\n<3";
+        const DENSITY = 4; // Lower = More pixels (Careful)
+        const FONT_SIZE = 120;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            if(isRunning) initParticles();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        /* ------------------------------------------------
+           PARTICLE ENGINE
+           ------------------------------------------------ */
+        class Particle {
+            constructor(x, y) {
+                this.originX = x;
+                this.originY = y;
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = 0;
+                this.vy = 0;
+                this.size = Math.random() * 3 + 1;
+                // Random Neon Colors
+                const colors = ['#ff0055', '#00ffcc', '#ffff00', '#ffffff'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.friction = 0.9;
+                this.ease = Math.random() * 0.1 + 0.05;
+            }
+
+            update() {
+                // 1. RETURN TO ORIGIN FORCE
+                const dx = this.originX - this.x;
+                const dy = this.originY - this.y;
+                
+                this.vx += dx * this.ease;
+                this.vy += dy * this.ease;
+
+                // 2. MOUSE REPULSION (The "Run Off" Mechanic)
+                const mdx = mouse.x - this.x;
+                const mdy = mouse.y - this.y;
+                const dist = Math.sqrt(mdx*mdx + mdy*mdy);
+                const radius = 150;
+
+                if (dist < radius) {
+                    const force = (radius - dist) / radius;
+                    const angle = Math.atan2(mdy, mdx);
+                    const push = force * 50; // Strong repulsion
+                    
+                    this.vx -= Math.cos(angle) * push;
+                    this.vy -= Math.sin(angle) * push;
+                }
+
+                // 3. PHYSICS
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Jitter (Glitch effect)
+                this.x += (Math.random() - 0.5) * 2;
+                this.y += (Math.random() - 0.5) * 2;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            
+            // 1. Draw Text to Offscreen Canvas
+            const tmpCanvas = document.createElement('canvas');
+            const tCtx = tmpCanvas.getContext('2d');
+            tmpCanvas.width = width;
+            tmpCanvas.height = height;
+            
+            tCtx.fillStyle = 'white';
+            tCtx.font = `900 ${FONT_SIZE}px 'Impact', sans-serif`;
+            tCtx.textAlign = 'center';
+            tCtx.textBaseline = 'middle';
+            
+            // Handle multiline
+            const lines = TEXT.split('\n');
+            const lineHeight = FONT_SIZE * 0.9;
+            const startY = height/2 - ((lines.length-1)*lineHeight)/2;
+            
+            lines.forEach((line, i) => {
+                tCtx.fillText(line, width/2, startY + (i*lineHeight));
+            });
+
+            // 2. Scan Pixels
+            const imgData = tCtx.getImageData(0, 0, width, height).data;
+            
+            for (let y = 0; y < height; y += DENSITY) {
+                for (let x = 0; x < width; x += DENSITY) {
+                    const index = (y * width + x) * 4;
+                    const alpha = imgData[index + 3];
+                    
+                    if (alpha > 128) {
+                        particles.push(new Particle(x, y));
+                    }
+                }
+            }
+        }
+
+        /* ------------------------------------------------
+           RENDER LOOP
+           ------------------------------------------------ */
+        function animate() {
+            if(!isRunning) return;
+            requestAnimationFrame(animate);
+            
+            time++;
+
+            // Clear with fade for trails
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Additive Blending for HYPERGLOW
+            ctx.globalCompositeOperation = 'lighter';
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Random Screen Glitch
+            if (Math.random() > 0.95) {
+                const h = Math.random() * height;
+                const img = ctx.getImageData(0, h, width, 20);
+                ctx.putImageData(img, Math.random()*20 - 10, h);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: MEMATIC BASS BOOST
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+
+        function initAudio() {
+            actx = new AC();
+            playBassDrop();
+        }
+
+        function playBassDrop() {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const dist = actx.createWaveShaper();
+
+            // DISTORTION CURVE
+            const k = 400, n_samples = 44100, curve = new Float32Array(n_samples);
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+            }
+            dist.curve = curve;
+
+            // OSCILLATOR
+            osc.type = 'sawtooth'; // Aggressive
+            osc.frequency.setValueAtTime(150, actx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(30, actx.currentTime + 1.5); // THE DROP
+
+            // GAIN
+            g.gain.setValueAtTime(1.0, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 1.5);
+
+            osc.connect(dist);
+            dist.connect(g);
+            g.connect(actx.destination);
+
+            osc.start();
+            osc.stop(actx.currentTime + 1.5);
+
+            // Add a high pitched "GLITCH" squeal
+            const squeal = actx.createOscillator();
+            const sg = actx.createGain();
+            squeal.type = 'square';
+            squeal.frequency.setValueAtTime(1000, actx.currentTime);
+            squeal.frequency.linearRampToValueAtTime(2000, actx.currentTime + 0.1);
+            sg.gain.setValueAtTime(0.2, actx.currentTime);
+            sg.gain.linearRampToValueAtTime(0, actx.currentTime + 0.1);
+            
+            squeal.connect(sg);
+            sg.connect(actx.destination);
+            squeal.start();
+        }
+
+        function startMeme() {
+            const btn = document.getElementById('ui');
+            btn.style.display = 'none';
+            initParticles();
+            initAudio();
+            isRunning = true;
+            animate();
+        }
+
+    </script>
+</body>
+</html>
