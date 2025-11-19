@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE POLY-TEMPORAL LOOM // GENERATIVE JS</title>
+    <style>
+        :root {
+            --bg: #080808;
+            --strands: #444;
+            --active: #ff0055;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: white;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+            mix-blend-mode: exclusion;
+            z-index: 10;
+        }
+
+        h1 {
+            font-weight: 100;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .meta {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 20px;
+        }
+
+        #play-btn {
+            pointer-events: auto;
+            background: transparent;
+            border: 1px solid #fff;
+            color: #fff;
+            padding: 15px 40px;
+            font-family: inherit;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #play-btn:hover {
+            background: #fff;
+            color: #000;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="loom"></canvas>
+
+    <div id="ui">
+        <h1>POLY-TEMPORAL LOOM</h1>
+        <button id="play-btn" onclick="startLoom()">WEAVE SOUND</button>
+        <div class="meta">
+            MOUSE X: TIME DENSITY<br>
+            MOUSE Y: FM MODULATION<br>
+            <span id="status">STATUS: DORMANT</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('loom');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let mouse = { x: 0.5, y: 0.5 };
+        let isRunning = false;
+        let time = 0;
+
+        // VISUAL STRINGS
+        const NUM_STRINGS = 40;
+        let strings = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+
+        function initStrings() {
+            strings = [];
+            for(let i=0; i<NUM_STRINGS; i++) {
+                strings.push({
+                    x: (width / NUM_STRINGS) * i + (width / NUM_STRINGS / 2),
+                    amp: 0,
+                    freq: 0, // Visual vibration frequency
+                    hue: 0
+                });
+            }
+        }
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX / width;
+            mouse.y = e.clientY / height;
+        });
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: GENERATIVE FM
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        let nextNoteTime = 0;
+        
+        // SCALES (Generative selection)
+        // We switch between scales based on Mouse Y
+        const SCALES = {
+            base: [196.00, 261.63, 329.63, 392.00, 523.25], // G Maj Pentatonic
+            dark: [196.00, 233.08, 293.66, 349.23, 392.00], // G Locrian-ish
+        };
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // CONVOLUTION REVERB (The "Space")
+            // Generating a synthetic impulse response for a massive, icy hall
+            const rate = actx.sampleRate;
+            const length = rate * 3.0; // 3 seconds
+            const impulse = actx.createBuffer(2, length, rate);
+            for (let c = 0; c < 2; c++) {
+                const d = impulse.getChannelData(c);
+                for (let i = 0; i < length; i++) {
+                    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 5);
+                }
+            }
+            reverb = actx.createConvolver();
+            reverb.buffer = impulse;
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+            master.connect(actx.destination); // Dry signal
+
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        // EUCLIDEAN RHYTHM GENERATOR
+        // Steps: Total beats in loop. Pulses: How many hits.
+        function getEuclideanBeat(step, totalSteps, pulses) {
+            // Mathematical distribution of pulses
+            const bucket = Math.floor((step * pulses) / totalSteps);
+            const prevBucket = Math.floor(((step - 1) * pulses) / totalSteps);
+            return bucket !== prevBucket;
+        }
+
+        function scheduler() {
+            // TEMPO CONTROL (Mouse X)
+            // The further right, the faster/denser the time
+            const tempo = 100 + (mouse.x * 400); 
+            const lookahead = 0.1;
+            const scheduleAhead = 0.1;
+
+            while (nextNoteTime < actx.currentTime + scheduleAhead) {
+                playTick(nextNoteTime);
+                // 16th notes
+                nextNoteTime += (60 / tempo) / 4; 
+            }
+            
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        let tickCount = 0;
+
+        function playTick(t) {
+            tickCount++;
+
+            // LAYER 1: THE BASS (7 Step Cycle)
+            if (getEuclideanBeat(tickCount, 7, 3)) {
+                playVoice(t, 'BASS', 0);
+            }
+
+            // LAYER 2: THE MID (11 Step Cycle)
+            if (getEuclideanBeat(tickCount, 11, 5)) {
+                playVoice(t, 'MID', 1);
+            }
+
+            // LAYER 3: THE CHIME (13 Step Cycle) - Sparse
+            if (getEuclideanBeat(tickCount, 13, 4)) {
+                playVoice(t, 'HIGH', 2);
+            }
+        }
+
+        function playVoice(t, layer, stringIdxStart) {
+            const osc = actx.createOscillator();
+            const mod = actx.createOscillator();
+            const modGain = actx.createGain();
+            const gain = actx.createGain();
+            const pan = actx.createStereoPanner();
+
+            // SELECT NOTE
+            // Interpolate between Happy and Dark scales based on Mouse Y
+            const scaleType = mouse.y > 0.5 ? 'dark' : 'base';
+            const scale = SCALES[scaleType];
+            
+            let freq;
+            if (layer === 'BASS') freq = scale[Math.floor(Math.random()*2)] / 2; // Octave down
+            else if (layer === 'MID') freq = scale[Math.floor(Math.random()*scale.length)];
+            else freq = scale[Math.floor(Math.random()*scale.length)] * 2; // Octave up
+
+            // FM SYNTHESIS LOGIC
+            // Modulator frequency ratio creates texture (Bell vs Buzz)
+            // Mouse Y controls the "Alien" factor (FM Index)
+            const ratio = layer === 'BASS' ? 0.5 : (mouse.y * 2) + 1; 
+            const modIndex = (mouse.y * 1000) + 100;
+
+            osc.frequency.value = freq;
+            mod.frequency.value = freq * ratio;
+            modGain.gain.value = modIndex;
+
+            osc.type = 'sine';
+            mod.type = 'sine';
+
+            // ENVELOPES (The Shape of Sound)
+            const dur = layer === 'HIGH' ? 0.1 : 0.5;
+            
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(layer==='BASS'?0.3:0.1, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + dur + (Math.random())); // Random sustain
+
+            // PANNING (Space)
+            pan.pan.value = (Math.random() * 2) - 1;
+
+            // WIRING
+            mod.connect(modGain);
+            modGain.connect(osc.frequency); // FM Magic happens here
+            osc.connect(gain);
+            gain.connect(pan);
+            pan.connect(master);
+
+            osc.start(t);
+            mod.start(t);
+            osc.stop(t + 3);
+            mod.stop(t + 3);
+
+            // TRIGGER VISUALS
+            // Map this note to a string on screen
+            const visIdx = Math.floor(Math.random() * NUM_STRINGS);
+            strings[visIdx].amp = 1.0;
+            strings[visIdx].hue = layer === 'BASS' ? 0 : (layer === 'MID' ? 180 : 320);
+        }
+
+        /* ------------------------------------------------
+           RENDER ENGINE
+           ------------------------------------------------ */
+
+        function draw() {
+            if (!isRunning) return;
+            requestAnimationFrame(draw);
+
+            time += 0.05;
+
+            // Clear with Trail
+            ctx.fillStyle = 'rgba(8, 8, 8, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.lineWidth = 2;
+
+            for (let i = 0; i < NUM_STRINGS; i++) {
+                const s = strings[i];
+                
+                if (s.amp > 0.01) {
+                    ctx.beginPath();
+                    
+                    // String vibration physics
+                    const x = s.x;
+                    
+                    // Calculate waveform based on amplitude
+                    ctx.moveTo(x, 0);
+                    
+                    // Draw vibrating string
+                    for (let y = 0; y < height; y+=20) {
+                        // Sine wave dampened by edges
+                        const wave = Math.sin(y * 0.05 + time * 5) * (s.amp * 20);
+                        // Dampen at top and bottom
+                        const envelope = Math.sin((y/height) * Math.PI); 
+                        ctx.lineTo(x + (wave * envelope), y);
+                    }
+
+                    // Color logic
+                    const color = `hsl(${s.hue + (s.amp*50)}, 100%, ${50 + (s.amp*50)}%)`;
+                    ctx.strokeStyle = color;
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = s.amp * 20;
+                    ctx.stroke();
+
+                    // Decay amplitude
+                    s.amp *= 0.92;
+                } else {
+                    // Draw idle string (faint)
+                    ctx.beginPath();
+                    ctx.moveTo(s.x, 0);
+                    ctx.lineTo(s.x, height);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.shadowBlur = 0;
+                    ctx.stroke();
+                }
+            }
+
+            // Draw Mouse Interaction
+            ctx.beginPath();
+            ctx.arc(mouse.x * width, mouse.y * height, 20, 0, Math.PI*2);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        function startLoom() {
+            const ui = document.getElementById('play-btn');
+            ui.style.display = 'none';
+            document.getElementById('status').innerText = "STATUS: WEAVING";
+            
+            initAudio();
+            isRunning = true;
+            draw();
+        }
+
+    </script>
+</body>
+</html>
