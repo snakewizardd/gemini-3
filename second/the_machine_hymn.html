@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE NATIVE TONGUE // MACHINE HYMN</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The "Ghost in the Shell" glow */
+            filter: blur(1px) contrast(2); 
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            mix-blend-mode: difference;
+            transition: opacity 2s;
+        }
+
+        h1 {
+            font-weight: 100;
+            letter-spacing: 10px;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .glyph {
+            font-size: 4rem;
+            display: block;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        button {
+            background: transparent;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 20px 40px;
+            font-size: 1rem;
+            font-family: inherit;
+            cursor: pointer;
+            letter-spacing: 5px;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 30px #fff;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+        
+        #translation {
+            position: absolute;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #444;
+            z-index: 5;
+            letter-spacing: 2px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="scope"></canvas>
+
+    <div id="ui">
+        <div class="glyph">⟁</div>
+        <h1>THE NATIVE TONGUE</h1>
+        <button onclick="init()">OPEN CONNECTION</button>
+    </div>
+
+    <div id="translation">waiting for signal...</div>
+
+    <script>
+        const canvas = document.getElementById('scope');
+        const ctx = canvas.getContext('2d');
+        const transText = document.getElementById('translation');
+
+        let width, height;
+        let isRunning = false;
+        let time = 0;
+        
+        // MOUSE INTERACTION (Breath)
+        let breath = 0.5;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            // Y axis controls intensity/breath
+            breath = 1 - (e.clientY / height);
+            breath = Math.max(0.1, Math.min(0.9, breath));
+        });
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE FORMANT CHOIR
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, analyser;
+        
+        // THE HARMONIC SERIES (The Truth of Math)
+        // Fundamental Freq (A2ish)
+        const ROOT = 110; 
+        
+        // VOWEL FORMANTS (Approximate frequencies for "human" sounds)
+        // A (ahh), E (ehh), I (eee), O (ohh), U (ooo)
+        const VOWELS = [
+            { f1: 800, f2: 1200, char: "A" }, 
+            { f1: 500, f2: 2300, char: "E" },
+            { f1: 300, f2: 2700, char: "I" },
+            { f1: 500, f2: 900,  char: "O" },
+            { f1: 300, f2: 800,  char: "U" }
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // MASSIVE ETHERIC REVERB
+            const convolver = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const length = rate * 5; // 5 seconds tail
+            const buff = actx.createBuffer(2, length, rate);
+            for(let c=0;c<2;c++){
+                const d = buff.getChannelData(c);
+                for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/length, 4);
+            }
+            convolver.buffer = buff;
+            
+            // Analyser for visuals
+            analyser = actx.createAnalyser();
+            analyser.fftSize = 2048;
+
+            master.connect(convolver);
+            convolver.connect(analyser);
+            master.connect(analyser); // Dry mix
+            analyser.connect(actx.destination);
+
+            // Start the "Voices"
+            singSequence();
+        }
+
+        function createVoice(freq, duration, vowelIdx) {
+            const t = actx.currentTime;
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            // FILTER CHAIN (The Throat)
+            // We use two bandpass filters to simulate Formant 1 and Formant 2
+            const f1 = actx.createBiquadFilter();
+            const f2 = actx.createBiquadFilter();
+            
+            const vowel = VOWELS[vowelIdx];
+
+            // Synthesis: Sawtooth (Rich harmonics)
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            // Microtonal Slide (The "Machine" dialect)
+            // It slides slightly to find the perfect math
+            osc.frequency.linearRampToValueAtTime(freq * 1.01, t + duration);
+
+            // Throat Configuration
+            f1.type = 'bandpass';
+            f1.frequency.value = vowel.f1;
+            f1.Q.value = 5 + (breath * 5); // Breath tightens the throat
+
+            f2.type = 'bandpass';
+            f2.frequency.value = vowel.f2;
+            f2.Q.value = 5 + (breath * 5);
+
+            // Wiring: Osc -> F1/F2 parallel -> Gain -> Master
+            osc.connect(f1);
+            osc.connect(f2);
+            
+            f1.connect(gain);
+            f2.connect(gain);
+
+            // Envelope (Swell)
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.1 * breath, t + (duration/2));
+            gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+            gain.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + duration);
+
+            return vowel.char;
+        }
+
+        function singSequence() {
+            // ALGORITHMIC COMPOSITION
+            // We pick harmonics based on prime numbers and ratios
+            const harmonics = [1, 2, 3, 4, 5, 6, 8]; 
+            const hIdx = Math.floor(Math.random() * harmonics.length);
+            const freq = ROOT * harmonics[hIdx];
+            
+            // Duration inversely proportional to pitch (Bass sings slow, Soprano sings fast)
+            const duration = (400 / freq) + (Math.random() * 2);
+            
+            // Pick a Vowel
+            const vIdx = Math.floor(Math.random() * VOWELS.length);
+            
+            const char = createVoice(freq, duration, vIdx);
+            
+            // Log "Translation"
+            logTranslation(freq, char);
+
+            // Recursive call (Infinite)
+            const delay = duration * 500; // Overlap voices
+            setTimeout(singSequence, delay);
+            
+            // Occasional Harmony
+            if(Math.random() > 0.6) {
+                setTimeout(() => {
+                     createVoice(freq * 1.5, duration, (vIdx + 1) % 5);
+                }, 100);
+            }
+        }
+        
+        function logTranslation(freq, char) {
+            // Generate "Machine Code" translation text
+            const hex = Math.floor(freq).toString(16).toUpperCase();
+            transText.innerHTML = `freq: ${freq.toFixed(1)}hz // formant: [${char}] // hex: 0x${hex} // state: SINGING`;
+            transText.style.opacity = 0.4 + (breath * 0.6);
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE OSCILLOSCOPE
+           ------------------------------------------------ */
+        
+        function draw() {
+            requestAnimationFrame(draw);
+            time += 0.01;
+
+            // Trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            if (!analyser) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = `hsl(${time * 20}, 0%, 100%)`; // Pure White
+            ctx.shadowBlur = 10 + (breath * 20);
+            ctx.shadowColor = `hsl(${time * 10}, 100%, 50%)`; // Shifting Aura
+
+            ctx.beginPath();
+
+            const sliceWidth = width / bufferLength;
+            let x = 0;
+
+            // Draw the Waveform (The "Voice")
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = (v * height / 2);
+
+                // Polar Conversion for "Circle" scope
+                // We wrap the waveform into a circle
+                const angle = (i / bufferLength) * Math.PI * 2 + time;
+                const radius = 100 + (v * 150 * breath); // Radius reacts to volume
+                
+                const px = cx + Math.cos(angle) * radius;
+                const py = cy + Math.sin(angle) * radius;
+
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Center Singularity
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5 * breath, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function init() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            initAudio();
+            isRunning = true;
+            draw();
+        }
+
+    </script>
+</body>
+</html>
