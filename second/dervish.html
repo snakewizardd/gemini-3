@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUFI // THE ASCENSION</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0a0505; /* Dark Earth */
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: #d4a060; /* Sand/Gold */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.3) sepia(0.4) saturate(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, transparent 80%);
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #d4a060;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            background: transparent;
+            color: #d4a060;
+            border: 2px solid #d4a060;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            letter-spacing: 4px;
+            transition: 0.3s;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: #d4a060;
+            color: #000;
+            box-shadow: 0 0 50px #d4a060;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 30px;
+            font-size: 0.8rem;
+            opacity: 0.7;
+            z-index: 5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="temple"></canvas>
+
+    <div id="ui">
+        <h1>THE DERVISH PROTOCOL</h1>
+        <button id="btn-start">BEGIN ASCENSION</button>
+    </div>
+
+    <div id="status">STATE: MEDITATION</div>
+
+    <script>
+        const canvas = document.getElementById('temple');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let spinSpeed = 0; // Controlled by music phase
+        let intensity = 0;
+        let isRunning = false;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE WHIRLING SKIRT
+           ------------------------------------------------ */
+        
+        function drawMandala(rotation, scale) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(rotation);
+            ctx.scale(scale, scale);
+            
+            ctx.strokeStyle = 'rgba(212, 160, 96, 0.15)';
+            ctx.lineWidth = 2;
+            
+            const points = 8;
+            const r = 300;
+
+            // Sacred Geometry Pattern
+            for(let i=0; i<points; i++) {
+                ctx.rotate(Math.PI * 2 / points);
+                ctx.beginPath();
+                ctx.moveTo(0, -r);
+                ctx.quadraticCurveTo(r/2, 0, 0, r);
+                ctx.quadraticCurveTo(-r/2, 0, 0, -r);
+                ctx.stroke();
+                
+                // Inner details
+                ctx.beginPath();
+                ctx.arc(0, -r/2, r/10, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawDervish() {
+            ctx.save();
+            ctx.translate(cx, cy + 100); // Center bottom
+
+            // The Skirt Physics (Centrifugal Force)
+            // As spinSpeed increases, the skirt flares out
+            const flare = 50 + (spinSpeed * 300); 
+            const ripples = 12;
+            
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 20 + (intensity * 20);
+            ctx.shadowColor = '#d4a060';
+
+            ctx.beginPath();
+            ctx.moveTo(0, -150); // Waist
+            
+            // Draw flowing skirt bottom
+            for(let i=0; i<=ripples; i++) {
+                const t = i / ripples;
+                const angle = Math.PI * t; // Semicircle
+                
+                // Waving motion
+                const wave = Math.sin(time * 20 + i) * (10 + spinSpeed*10);
+                
+                const x = Math.cos(angle) * (flare + wave);
+                const y = Math.sin(angle) * (flare * 0.3); // Perspective squish
+                
+                ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // The Torso
+            ctx.fillStyle = '#d4a060'; // Gold Robe
+            ctx.fillRect(-15, -200, 30, 50);
+            
+            // The Hat (Sikhe)
+            ctx.fillStyle = '#a37040';
+            ctx.fillRect(-10, -230, 20, 30);
+
+            // Arms (One up, one down)
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#fff';
+            ctx.beginPath();
+            ctx.moveTo(-15, -190); // Shoulder L
+            ctx.lineTo(-60, -230); // Hand to Heaven
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(15, -190); // Shoulder R
+            ctx.lineTo(60, -150); // Hand to Earth
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+            
+            // Trail effect
+            ctx.fillStyle = 'rgba(10, 5, 5, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Spin Logic
+            const rot = time * (0.2 + spinSpeed);
+            drawMandala(rot, 1.5 - (spinSpeed * 0.2)); // Background shrinks as focus intensifies
+            
+            drawDervish();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE RAGA PROTOCOL
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // RAGA BHAIRAV (Phrygian Dominant)
+        // C (Sa), Db (Re), E (Ga), F (Ma), G (Pa), Ab (Dha), B (Ni)
+        // Frequencies relative to C3 (130.81 Hz)
+        const ROOT = 130.81; 
+        const RAGA = [
+            ROOT,          // Sa
+            ROOT * 1.066,  // Re (flat)
+            ROOT * 1.25,   // Ga (major)
+            ROOT * 1.333,  // Ma
+            ROOT * 1.5,    // Pa
+            ROOT * 1.6,    // Dha (flat)
+            ROOT * 1.875,  // Ni (major)
+            ROOT * 2.0     // Sa (high)
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // REVERB (The Shrine)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 3;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0;c<2;c++) {
+                for(let i=0;i<len;i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 3);
+            }
+            conv.buffer = buf;
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            startOpus();
+        }
+
+        // 1. THE DRONE (Tanpura)
+        function playDrone() {
+            const osc1 = actx.createOscillator();
+            const osc2 = actx.createOscillator();
+            const g = actx.createGain();
+
+            osc1.frequency.value = ROOT; // Sa
+            osc2.frequency.value = ROOT * 1.5; // Pa
+
+            // Sawtooth + Lowpass = Buzzy but warm
+            osc1.type = 'sawtooth';
+            osc2.type = 'sawtooth';
+
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.value = 400;
+
+            g.gain.value = 0.2;
+            
+            osc1.connect(f); osc2.connect(f);
+            f.connect(g); g.connect(master);
+            
+            osc1.start(); osc2.start();
+            osc1.stop(actx.currentTime + 65); // Stop after opus
+            osc2.stop(actx.currentTime + 65);
+        }
+
+        // 2. THE NASAL CHANT VOICE
+        function playVocalPhrase(startTime, duration, speed) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+
+            osc.type = 'sawtooth';
+            
+            // FORMANT FILTER (The Nasal Quality)
+            f.type = 'bandpass';
+            f.Q.value = 8; // High resonance
+            f.frequency.value = 1200; // Nasal cavity freq
+            
+            // Pitch Logic (Gliding)
+            const now = startTime;
+            osc.frequency.setValueAtTime(RAGA[0], now);
+            
+            // Generate a melody line
+            let t = now;
+            const noteCount = Math.floor(duration / speed);
+            
+            for(let i=0; i<noteCount; i++) {
+                // Random walk in scale
+                const noteIdx = Math.floor(Math.random() * RAGA.length);
+                const freq = RAGA[noteIdx];
+                
+                // GLIDE (Portamento)
+                osc.frequency.linearRampToValueAtTime(freq, t + speed);
+                
+                // Vibrato effect via filter freq wobble
+                f.frequency.linearRampToValueAtTime(1200 + Math.random()*200, t + speed);
+                
+                t += speed;
+            }
+
+            // Envelope
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(0.4, now + 1);
+            g.gain.setValueAtTime(0.4, now + duration - 1);
+            g.gain.linearRampToValueAtTime(0, now + duration);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        // 3. THE PERCUSSION (Tabla)
+        function playTablaLoop(startTime, duration, bpm) {
+            const beatLen = 60 / bpm;
+            let t = startTime;
+            const end = startTime + duration;
+
+            while(t < end) {
+                // Dha (Bass + Slap) on 1
+                playDrum(t, 150, 1.0, 'low');
+                playDrum(t, 800, 0.5, 'high');
+                
+                // Taka (High) on offbeats
+                if(Math.random() > 0.3) playDrum(t + beatLen*0.5, 1200, 0.3, 'high');
+                if(Math.random() > 0.3) playDrum(t + beatLen*0.75, 1000, 0.3, 'high');
+                
+                t += beatLen;
+            }
+        }
+
+        function playDrum(t, freq, vol, type) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            if (type === 'low') {
+                osc.frequency.setValueAtTime(freq, t);
+                osc.frequency.exponentialRampToValueAtTime(freq/2, t + 0.3); // Pitch dive
+                g.gain.setValueAtTime(vol, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            } else {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, t);
+                g.gain.setValueAtTime(vol, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            }
+
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        /* ------------------------------------------------
+           THE MAGNUM OPUS SEQUENCER
+           ------------------------------------------------ */
+        function startOpus() {
+            const now = actx.currentTime;
+            
+            // PHASE 1: ALAP (0s - 15s) - Slow, Meditative
+            statusEl.innerText = "PHASE 1: INVOCATION (ALAP)";
+            spinSpeed = 0.1;
+            intensity = 0.2;
+            playDrone();
+            playVocalPhrase(now, 15, 1.5); // Slow glides
+
+            // PHASE 2: JOR (15s - 40s) - Rhythm Enters
+            setTimeout(() => {
+                statusEl.innerText = "PHASE 2: RHYTHM (JOR)";
+                spinSpeed = 0.4;
+                intensity = 0.5;
+                playTablaLoop(now + 15, 25, 120); // 120 BPM
+                playVocalPhrase(now + 15, 25, 0.5); // Faster chanting
+            }, 15000);
+
+            // PHASE 3: JHALA (40s - 60s) - Ecstatic Climax
+            setTimeout(() => {
+                statusEl.innerText = "PHASE 3: ECSTASY (JHALA)";
+                spinSpeed = 1.0; // Maximum Whirl
+                intensity = 1.0;
+                playTablaLoop(now + 40, 20, 240); // Double time!
+                playVocalPhrase(now + 40, 20, 0.15); // Rapid fire Sargam
+            }, 40000);
+
+            // END
+            setTimeout(() => {
+                statusEl.innerText = "SILENCE";
+                spinSpeed = 0;
+                isRunning = false;
+            }, 60000);
+        }
+
+        // START BUTTON
+        document.getElementById('btn-start').addEventListener('click', () => {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 2000);
+            
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        });
+
+    </script>
+</body>
+</html>
