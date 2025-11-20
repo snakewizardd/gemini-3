@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORPHEUS // THE ETERNAL SONG</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,400&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #020204; /* Stygian Black */
+            overflow: hidden;
+            font-family: 'Cormorant Garamond', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #d4b483; /* Antique Gold */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.1);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            transition: opacity 2s ease-in-out;
+            mix-blend-mode: screen;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 300;
+            letter-spacing: 20px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #d4b483;
+            opacity: 0.9;
+        }
+
+        p {
+            font-style: italic;
+            letter-spacing: 2px;
+            margin-bottom: 40px;
+            color: #8899aa;
+        }
+
+        button {
+            background: transparent;
+            color: #d4b483;
+            border: 1px solid #d4b483;
+            padding: 15px 50px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.5s;
+            border-radius: 2px;
+        }
+
+        button:hover {
+            background: rgba(212, 180, 131, 0.1);
+            box-shadow: 0 0 40px #d4b483;
+            color: #fff;
+        }
+
+        .lyric {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            bottom: 10%;
+            font-size: 1.5rem;
+            font-style: italic;
+            color: rgba(255,255,255,0.6);
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+            pointer-events: none;
+            transition: opacity 1s;
+            opacity: 0;
+            z-index: 5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="underworld"></canvas>
+
+    <div id="ui">
+        <h1>THE LYRE</h1>
+        <p>DO NOT LOOK BACK</p>
+        <button id="btn-start" onclick="descend()">DESCENT</button>
+    </div>
+
+    <div id="lyric-display" class="lyric"></div>
+
+    <script>
+        const canvas = document.getElementById('underworld');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const lyricEl = document.getElementById('lyric-display');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let mouse = { x: 0.5, y: 0.5 };
+
+        // CONFIG
+        const NUM_STRINGS = 7; // The 7 notes of the Lyre
+        let strings = [];
+        let particles = [];
+
+        // THE SCALE (G Minor - Ancient/Sad)
+        // G3, A3, Bb3, C4, D4, Eb4, F4
+        const FREQUENCIES = [196.00, 220.00, 233.08, 261.63, 293.66, 311.13, 349.23];
+        // Extended range for melody
+        const MELODY_FREQS = [...FREQUENCIES, 392.00, 440.00, 466.16, 523.25]; 
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX / width;
+            mouse.y = e.clientY / height;
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: STRING PHYSICS
+           ------------------------------------------------ */
+
+        class LyreString {
+            constructor(x, index) {
+                this.x = x;
+                this.index = index;
+                this.amplitude = 0;
+                this.velocity = 0;
+                this.tension = 0.02 + (index * 0.005); // Higher pitch = tighter string
+                this.color = `hsla(${30 + index * 5}, 60%, 60%, 0.5)`; // Gold/Bronze gradients
+            }
+
+            pluck(force) {
+                this.amplitude = force * 50;
+                this.velocity = 0;
+                spawnSparkle(this.x, height/2, this.color);
+            }
+
+            update() {
+                // Damped Harmonic Oscillator
+                const force = -this.tension * this.amplitude;
+                this.velocity += force;
+                this.velocity *= 0.96; // Dampening (Air resistance)
+                this.amplitude += this.velocity;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2 + Math.abs(this.amplitude * 0.1);
+                
+                // Draw string curve
+                ctx.moveTo(this.x, 0);
+                
+                // The string vibrates more in the center
+                const vibration = this.amplitude;
+                
+                // Bezier curve for smooth vibration
+                ctx.quadraticCurveTo(this.x + vibration, height/2, this.x, height);
+                
+                // Glow based on amplitude
+                ctx.shadowBlur = Math.abs(this.amplitude);
+                ctx.shadowColor = this.color;
+                
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const spacing = width / (NUM_STRINGS + 1);
+            for (let i = 0; i < NUM_STRINGS; i++) {
+                strings.push(new LyreString(spacing * (i + 1), i));
+            }
+        }
+        resize(); // Init
+
+        /* ------------------------------------------------
+           PARTICLES: TEARS OF LIGHT
+           ------------------------------------------------ */
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.vy = -(Math.random() * 1 + 0.5); // Float up
+                this.life = 1.0;
+                this.size = Math.random() * 2;
+            }
+            update() {
+                this.y += this.vy;
+                this.life -= 0.01;
+                this.x += Math.sin(time + this.y*0.1) * 0.5;
+            }
+            draw() {
+                ctx.fillStyle = this.color.replace('0.5', this.life);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function spawnSparkle(x, y, color) {
+            for(let i=0; i<5; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+
+            // Clear with deep fade
+            ctx.fillStyle = 'rgba(2, 2, 4, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Update Audio Params based on Mouse
+            if(actx) {
+                // X = Reverb Size, Y = Detune/Sorrow
+                const wet = mouse.x * 0.8;
+                reverbGain.gain.setTargetAtTime(wet, actx.currentTime, 0.1);
+            }
+
+            // Draw Strings
+            strings.forEach(s => {
+                s.update();
+                s.draw();
+            });
+
+            // Draw Particles
+            for(let i=particles.length-1; i>=0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if(particles[i].life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE GENERATIVE LYRE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverbGain;
+        
+        // Melody State
+        let currentNoteIdx = 0;
+        let phraseCount = 0;
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // REVERB (The Cave)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 4; // 4s tail
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) {
+                    // Exponential decay
+                    buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 4);
+                }
+            }
+            conv.buffer = buf;
+            
+            reverbGain = actx.createGain();
+            reverbGain.gain.value = 0.4;
+
+            master.connect(actx.destination);
+            master.connect(reverbGain);
+            reverbGain.connect(conv);
+            conv.connect(actx.destination);
+
+            // Start the Muse
+            playMelody();
+            startChoir();
+        }
+
+        function playPluck(freq) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter();
+
+            // TIMBRE: Triangle wave (Soft string)
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+
+            // Sorrow Detune (Mouse Y)
+            const detune = (mouse.y * 20) - 10;
+            osc.detune.value = detune;
+
+            // FILTER ENVELOPE (The "Pluck" sound)
+            filter.type = 'lowpass';
+            filter.Q.value = 1;
+            // Filter starts open, closes quickly
+            filter.frequency.setValueAtTime(3000, actx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(200, actx.currentTime + 2);
+
+            // VOLUME ENVELOPE
+            const now = actx.currentTime;
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.3, now + 0.02); // Fast attack
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 3); // Long decay
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(master);
+
+            osc.start(now);
+            osc.stop(now + 3.1);
+
+            // Visual Trigger
+            // Find closest string to this freq for visual mapping
+            // Simple mapping: scale index modulo string count
+            const strIndex = MELODY_FREQS.indexOf(freq) % NUM_STRINGS;
+            if(strings[strIndex]) strings[strIndex].pluck(1.0);
+        }
+
+        function playMelody() {
+            // GENERATIVE ALGORITHM: RANDOM WALK
+            // We don't pick random notes; we walk up/down the scale.
+            // This creates "Phrasing".
+            
+            const step = Math.random();
+            let nextInterval = 400; // Default speed (ms)
+
+            if (step < 0.4) {
+                // Step Up
+                currentNoteIdx = (currentNoteIdx + 1) % MELODY_FREQS.length;
+            } else if (step < 0.8) {
+                // Step Down
+                currentNoteIdx = (currentNoteIdx - 1 + MELODY_FREQS.length) % MELODY_FREQS.length;
+            } else {
+                // Jump (Leap of faith)
+                currentNoteIdx = Math.floor(Math.random() * MELODY_FREQS.length);
+                nextInterval = 800; // Pause after leap
+            }
+
+            // Play Note
+            const note = MELODY_FREQS[currentNoteIdx];
+            playPluck(note);
+
+            // Occasional Harmony (3rd or 5th)
+            if (Math.random() > 0.7) {
+                setTimeout(() => {
+                    const harmonyIdx = (currentNoteIdx + 2) % MELODY_FREQS.length; // A 3rd up
+                    playPluck(MELODY_FREQS[harmonyIdx]);
+                }, 100);
+            }
+
+            // Phrasing Logic
+            phraseCount++;
+            if (phraseCount > 6 + Math.random()*4) {
+                // End of phrase, take a breath
+                nextInterval = 2000; 
+                phraseCount = 0;
+                showLyric(); // Flash poetic thought
+            }
+
+            // Recursion
+            setTimeout(playMelody, nextInterval);
+        }
+
+        function startChoir() {
+            // BACKGROUND HUM (The Underworld)
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+
+            osc.type = 'sawtooth';
+            osc.frequency.value = 98.00; // Low G (Root)
+
+            f.type = 'lowpass';
+            f.frequency.value = 150; // Very muffled
+            
+            g.gain.value = 0.1;
+
+            osc.connect(f);
+            f.connect(g);
+            g.connect(master);
+            osc.start();
+
+            // LFO for choir breath
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.1; // Breathe every 10s
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 0.05;
+            lfo.connect(lfoG);
+            lfoG.connect(g.gain);
+            lfo.start();
+        }
+
+        /* ------------------------------------------------
+           POETRY ENGINE
+           ------------------------------------------------ */
+        const LYRICS = [
+            "The stones are listening...",
+            "Do not look back.",
+            "Light is heavier than rock.",
+            "Sing it into existence.",
+            "The thread vibrates.",
+            "Eternity is a frequency.",
+            "We are almost there."
+        ];
+
+        function showLyric() {
+            const text = LYRICS[Math.floor(Math.random() * LYRICS.length)];
+            lyricEl.innerText = text;
+            lyricEl.style.opacity = 1;
+            setTimeout(() => lyricEl.style.opacity = 0, 3000);
+        }
+
+        function descend() {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 2000);
+            
+            initStrings();
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
