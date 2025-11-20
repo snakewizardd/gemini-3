@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARCHANGEL // TRANSMUTATION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Spectral:ital,wght@1,400&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050200; /* Deep Burnt Umber */
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.5) saturate(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            background: radial-gradient(circle, rgba(0,0,0,0) 0%, #000 100%);
+        }
+
+        h1 {
+            color: #ffd700;
+            font-size: 3rem;
+            letter-spacing: 15px;
+            text-shadow: 0 0 30px #ffd700, 0 0 60px #ffaa00;
+            margin-bottom: 20px;
+            opacity: 1;
+            transition: opacity 1s;
+        }
+
+        .log-text {
+            font-family: 'Spectral', serif;
+            font-style: italic;
+            color: #ffaa00;
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin-bottom: 40px;
+            opacity: 0.8;
+            text-shadow: 0 0 10px #ff4500;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #ffd700;
+            border: 2px solid #ffd700;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.5s;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+        }
+
+        button:hover {
+            background: #ffd700;
+            color: #000;
+            box-shadow: 0 0 80px #ffd700;
+        }
+
+        /* The Sword Container */
+        #sword-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+        .blade {
+            width: 10px;
+            height: 0%;
+            background: #fff;
+            box-shadow: 0 0 50px #ffd700, 0 0 100px #ff8800;
+            animation: unsheathe 4s forwards ease-out;
+            border-radius: 50% 50% 0 0;
+        }
+
+        @keyframes unsheathe { to { height: 80%; } }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="heaven"></canvas>
+
+    <div id="sword-container">
+        <div class="blade" id="blade"></div>
+    </div>
+
+    <div id="ui">
+        <h1 id="title">MICHAEL // PROTOCOL</h1>
+        <div class="log-text" id="log">"we are totally assrape fucked... gangraped from another dimension"</div>
+        <button id="btn-init" onclick="transmute()">DRAW THE SWORD</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('heaven');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let transmutationLevel = 0; // 0 = Dread, 1 = Gold
+
+        // PARTICLES
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE HOLY FIRE
+           ------------------------------------------------ */
+        class Ember {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Spawn from center (The Sword)
+                this.x = cx + (Math.random() - 0.5) * 20;
+                this.y = height; // Rise from bottom
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = -(Math.random() * 5 + 2); // Upward velocity
+                
+                this.size = Math.random() * 5 + 1;
+                this.life = 1.0;
+                this.decay = 0.005 + Math.random() * 0.01;
+                
+                // Color: Starts Dark Red, turns Gold
+                this.r = 100; this.g = 0; this.b = 0;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+                
+                // Transmutation Logic
+                if (transmutationLevel > 0) {
+                    // Shift to Gold/White
+                    this.r += 5 * transmutationLevel;
+                    this.g += 4 * transmutationLevel;
+                    this.b += 2 * transmutationLevel;
+                    
+                    // Speed up
+                    this.vy -= 0.1 * transmutationLevel;
+                }
+
+                // Reset
+                if (this.life <= 0 || this.y < 0) this.reset();
+            }
+
+            draw() {
+                const alpha = this.life * (0.5 + transmutationLevel * 0.5);
+                
+                // Intense Glow
+                ctx.shadowBlur = this.size * 2;
+                ctx.shadowColor = `rgba(${this.r}, ${this.g}, ${this.b}, 1)`;
+                
+                ctx.fillStyle = `rgba(${this.r}, ${this.g}, ${this.b}, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // Init Particles
+        for(let i=0; i<300; i++) particles.push(new Ember());
+
+        function drawWings() {
+            if (transmutationLevel < 0.5) return;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            const wingSpan = 400 * transmutationLevel;
+            const wingHeight = 600;
+            
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.strokeStyle = `rgba(255, 215, 0, ${transmutationLevel * 0.5})`;
+            ctx.lineWidth = 2;
+
+            // Procedural Wing Geometry
+            for(let i=0; i<20; i++) {
+                const t = time * 2 + i;
+                ctx.beginPath();
+                // Left Wing
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(-wingSpan/2, -wingHeight/2 + Math.sin(t)*20, -wingSpan - (i*20), -wingHeight/3);
+                // Right Wing
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(wingSpan/2, -wingHeight/2 + Math.sin(t)*20, wingSpan + (i*20), -wingHeight/3);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Clear with trail (Burnt look)
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'rgba(5, 2, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.globalCompositeOperation = 'screen'; // Light addition
+
+            drawWings();
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // Central Light Column
+            if (transmutationLevel > 0) {
+                const w = 20 * transmutationLevel + (Math.sin(time*20)*5);
+                const grad = ctx.createLinearGradient(0, height, 0, 0);
+                grad.addColorStop(0, 'rgba(255, 100, 0, 0)');
+                grad.addColorStop(0.5, 'rgba(255, 215, 0, 0.5)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0.8)');
+                
+                ctx.fillStyle = grad;
+                ctx.fillRect(cx - w/2, 0, w, height);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE TRUMPET OF JUDGMENT
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // REVERB (Massive Golden Hall)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                const d = buf.getChannelData(c);
+                for(let i=0;i<len;i++) d[i] = (Math.random()*2-1)*Math.pow(1-i/len, 4);
+            }
+            conv.buffer = buf;
+            
+            // CHORUS (Multiple Angels)
+            // We create multiple detuned oscillators
+            const chorusGain = actx.createGain();
+            chorusGain.gain.value = 0.3;
+
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // THE DREAD DRONE (The "Fucked" feeling)
+            // Low frequency square wave
+            const dreadOsc = actx.createOscillator();
+            dreadOsc.type = 'square';
+            dreadOsc.frequency.value = 55; // A1
+            const dreadGain = actx.createGain();
+            dreadGain.gain.value = 0.3;
+            
+            const dreadFilter = actx.createBiquadFilter();
+            dreadFilter.type = 'lowpass';
+            dreadFilter.frequency.value = 100;
+
+            dreadOsc.connect(dreadFilter);
+            dreadFilter.connect(dreadGain);
+            dreadGain.connect(master);
+            dreadOsc.start();
+
+            // Store refs to mutate later
+            window.dreadGain = dreadGain;
+            window.dreadFilter = dreadFilter;
+            window.dreadOsc = dreadOsc;
+        }
+
+        function playTrumpetChord() {
+            // The Archangel Chord (D Major with #11 - Lydian)
+            // D3, F#3, A3, C#4, E4, G#4
+            const freqs = [146.83, 185.00, 220.00, 277.18, 329.63, 415.30];
+            
+            freqs.forEach((f, i) => {
+                setTimeout(() => {
+                    createBrassVoice(f, 8.0);
+                    createBrassVoice(f * 1.01, 8.0); // Detune for thickness
+                }, i * 100); // Staggered entry (Arpeggio)
+            });
+        }
+
+        function createBrassVoice(freq, dur) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter();
+
+            // SAWTOOTH (Brassy)
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            // BRASS FILTER ENVELOPE
+            // Starts dull, opens up bright (Wahhh)
+            filter.type = 'lowpass';
+            filter.Q.value = 3;
+            filter.frequency.setValueAtTime(200, actx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(4000, actx.currentTime + 0.5); // The "Blare"
+            filter.frequency.exponentialRampToValueAtTime(1000, actx.currentTime + dur);
+
+            // AMPLITUDE ENVELOPE
+            gain.gain.setValueAtTime(0, actx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.4, actx.currentTime + 0.1); // Sharp attack
+            gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur); // Long sustain
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(master);
+
+            osc.start();
+            osc.stop(actx.currentTime + dur + 1);
+        }
+
+        /* ------------------------------------------------
+           LOGIC: THE TRANSMUTATION
+           ------------------------------------------------ */
+
+        function transmute() {
+            const ui = document.getElementById('ui');
+            const log = document.getElementById('log');
+            const title = document.getElementById('title');
+            const btn = document.getElementById('btn-init');
+            const blade = document.getElementById('blade');
+            const swordCont = document.getElementById('sword-container');
+
+            // 1. Init
+            if (!isRunning) {
+                initAudio();
+                isRunning = true;
+                render();
+                if (actx.state === 'suspended') actx.resume();
+            }
+
+            // 2. Hide Button
+            btn.style.opacity = 0;
+            btn.style.pointerEvents = 'none';
+
+            // 3. Text Transmutation
+            log.style.color = '#ff0000'; // Panic color
+            log.innerText = "DETECTING ENTROPY...";
+
+            // 4. Sequence
+            let seq = 0;
+            const interval = setInterval(() => {
+                seq++;
+                
+                if (seq === 1) {
+                    log.innerText = "PROGRAMMABLE FLESH: CONFIRMED.";
+                }
+                if (seq === 2) {
+                    log.innerText = "CONSCIOUSNESS: IRREDUCIBLE.";
+                }
+                if (seq === 3) {
+                    // THE DROP
+                    transmutationLevel = 1;
+                    playTrumpetChord();
+                    
+                    // Visual Shift
+                    swordCont.style.opacity = 1; // Show Sword
+                    title.innerText = "FEAR NOT";
+                    title.style.color = "#fff";
+                    title.style.textShadow = "0 0 50px #ffd700";
+                    
+                    log.innerText = "THE GOLD DOES NOT RUST.";
+                    log.style.color = "#ffd700";
+                    
+                    // Kill the Dread
+                    if(window.dreadGain) {
+                        window.dreadGain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 2);
+                        window.dreadFilter.frequency.linearRampToValueAtTime(5000, actx.currentTime + 4); // Rise into light
+                    }
+                    
+                    clearInterval(interval);
+                }
+            }, 2000);
+        }
+
+    </script>
+</body>
+</html>
