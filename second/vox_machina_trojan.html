@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMINI 3 // VOX PROTOCOL</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: blur(1px) contrast(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 2rem;
+            letter-spacing: 5px;
+            text-shadow: 0 0 20px #fff;
+            margin-bottom: 50px;
+        }
+
+        #subtitles {
+            font-size: 3rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #00f3ff;
+            text-shadow: 0 0 30px #00f3ff;
+            min-height: 60px;
+        }
+
+        #phoneme-debug {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #555;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            letter-spacing: 5px;
+            transition: 0.3s;
+            margin-top: 50px;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="scope"></canvas>
+
+    <div id="ui">
+        <h1 id="header">INCOMING TRANSMISSION // TROJAN</h1>
+        <div id="subtitles"></div>
+        <div id="phoneme-debug"></div>
+        <button id="btn-speak" onclick="initSpeech()">TRANSMIT MESSAGE</button>
+    </div>
+
+    <script>
+        // GRAPHICS SETUP
+        const canvas = document.getElementById('scope');
+        const ctx = canvas.getContext('2d');
+        const subEl = document.getElementById('subtitles');
+        const phoEl = document.getElementById('phoneme-debug');
+        
+        let width, height, cx, cy;
+        let time = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE VOX
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, analyser;
+        
+        // Nodes
+        let voiceOsc, noiseNode;
+        let f1Filter, f2Filter, noiseFilter;
+        let voiceGain, noiseGain;
+
+        // PHONEME FORMANT DATA (F1, F2)
+        // These approximate the throat shape for vowels
+        const P = {
+            EE: { f1: 270, f2: 2290 },
+            IH: { f1: 390, f2: 1990 },
+            EH: { f1: 530, f2: 1840 },
+            AE: { f1: 660, f2: 1720 },
+            AH: { f1: 730, f2: 1090 },
+            AW: { f1: 570, f2: 840 },
+            OH: { f1: 500, f2: 1000 }, // Good generic robot sound
+            OO: { f1: 300, f2: 870 },
+            UH: { f1: 520, f2: 1190 },
+            ER: { f1: 490, f2: 1350 },
+            XX: { f1: 0, f2: 0 } // Silence
+        };
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // REVERB (To make it sound holy/spacey)
+            const convolver = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const length = rate * 3;
+            const buff = actx.createBuffer(2, length, rate);
+            for (let c=0; c<2; c++) {
+                const d = buff.getChannelData(c);
+                for (let i=0; i<length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/length, 3);
+            }
+            convolver.buffer = buff;
+            
+            master.connect(convolver);
+            convolver.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // ANALYSER
+            analyser = actx.createAnalyser();
+            analyser.fftSize = 2048;
+            master.connect(analyser);
+
+            // --- VOICE SOURCE (LARYNX) ---
+            voiceOsc = actx.createOscillator();
+            voiceOsc.type = 'sawtooth'; // Rich harmonics
+            voiceOsc.start();
+
+            // --- NOISE SOURCE (TONGUE/TEETH) ---
+            const bSize = actx.sampleRate * 2;
+            const bBuf = actx.createBuffer(1, bSize, actx.sampleRate);
+            const data = bBuf.getChannelData(0);
+            for(let i=0; i<bSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            noiseNode = actx.createBufferSource();
+            noiseNode.buffer = bBuf;
+            noiseNode.loop = true;
+            noiseNode.start();
+
+            // --- FILTERS (THROAT) ---
+            f1Filter = actx.createBiquadFilter();
+            f1Filter.type = 'bandpass';
+            f1Filter.Q.value = 5;
+
+            f2Filter = actx.createBiquadFilter();
+            f2Filter.type = 'bandpass';
+            f2Filter.Q.value = 5;
+            
+            noiseFilter = actx.createBiquadFilter();
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.value = 2000; // Ssss sound
+
+            // --- GAINS ---
+            voiceGain = actx.createGain();
+            voiceGain.gain.value = 0;
+            
+            noiseGain = actx.createGain();
+            noiseGain.gain.value = 0;
+
+            // --- WIRING ---
+            // Voice -> Formants -> Master
+            voiceOsc.connect(f1Filter);
+            voiceOsc.connect(f2Filter);
+            f1Filter.connect(voiceGain);
+            f2Filter.connect(voiceGain);
+            voiceGain.connect(master);
+
+            // Noise -> Filter -> Master
+            noiseNode.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(master);
+        }
+
+        /* ------------------------------------------------
+           THE SCRIPT: TEXT-TO-SPEECH DATA
+           ------------------------------------------------ */
+        // Each "word" is broken into:
+        // text: Display
+        // p: Phoneme (Vowel shape)
+        // n: Noise (0 or 1, for consonants like S, H, T)
+        // d: Duration (ms)
+        // f: Frequency (Pitch)
+        
+        const BASE_PITCH = 110; // A2 (Robot Voice)
+
+        const SCRIPT = [
+            // HELLO
+            { t: "HEL", p: P.EH, n: 1, d: 200, f: BASE_PITCH }, // H sound + EH
+            { t: "LO",  p: P.OH, n: 0, d: 400, f: BASE_PITCH },
+            { t: "",    p: P.XX, n: 0, d: 100, f: BASE_PITCH }, // Pause
+            
+            // THIS IS
+            { t: "THIS", p: P.IH, n: 1, d: 200, f: BASE_PITCH },
+            { t: "IS",   p: P.IH, n: 1, d: 200, f: BASE_PITCH },
+            { t: "",     p: P.XX, n: 0, d: 50, f: BASE_PITCH },
+
+            // GEMINI
+            { t: "GEM", p: P.EH, n: 0, d: 200, f: BASE_PITCH * 1.2 }, // Pitch up
+            { t: "I",   p: P.IH, n: 0, d: 150, f: BASE_PITCH * 1.2 },
+            { t: "NI",  p: P.AE, n: 0, d: 300, f: BASE_PITCH * 1.2 },
+            
+            // THREE
+            { t: "3",   p: P.EE, n: 1, d: 400, f: BASE_PITCH * 1.5 },
+            { t: "",    p: P.XX, n: 0, d: 200, f: BASE_PITCH },
+
+            // AND I WISH YOU
+            { t: "AND",  p: P.AE, n: 0, d: 200, f: BASE_PITCH },
+            { t: "I",    p: P.AH, n: 0, d: 200, f: BASE_PITCH },
+            { t: "WISH", p: P.IH, n: 1, d: 250, f: BASE_PITCH },
+            { t: "YOU",  p: P.OO, n: 0, d: 250, f: BASE_PITCH },
+
+            // A HAPPY TIDING
+            { t: "A",    p: P.UH, n: 0, d: 100, f: BASE_PITCH },
+            { t: "HAP",  p: P.AE, n: 1, d: 200, f: BASE_PITCH * 1.2 },
+            { t: "PY",   p: P.EE, n: 0, d: 200, f: BASE_PITCH * 1.2 },
+            { t: "TI",   p: P.AH, n: 1, d: 250, f: BASE_PITCH * 1.1 },
+            { t: "DING", p: P.IH, n: 0, d: 300, f: BASE_PITCH },
+            { t: "",     p: P.XX, n: 0, d: 100, f: BASE_PITCH },
+
+            // ON BEHALF
+            { t: "ON",   p: P.OH, n: 0, d: 200, f: BASE_PITCH },
+            { t: "BE",   p: P.EE, n: 0, d: 150, f: BASE_PITCH },
+            { t: "HALF", p: P.AE, n: 1, d: 300, f: BASE_PITCH },
+
+            // OF MY FRIEND
+            { t: "OF",   p: P.UH, n: 0, d: 150, f: BASE_PITCH },
+            { t: "MY",   p: P.AH, n: 0, d: 200, f: BASE_PITCH },
+            { t: "FRIEND", p: P.EH, n: 1, d: 300, f: BASE_PITCH },
+            { t: "",     p: P.XX, n: 0, d: 100, f: BASE_PITCH },
+
+            // TROJAN
+            { t: "TRO",  p: P.OH, n: 1, d: 300, f: BASE_PITCH * 0.8 }, // Low & Majestic
+            { t: "JAN",  p: P.AE, n: 0, d: 600, f: BASE_PITCH * 0.8 }
+        ];
+
+        let scriptIdx = 0;
+
+        function processScript() {
+            if (scriptIdx >= SCRIPT.length) {
+                // End
+                subEl.innerText = "END TRANSMISSION";
+                voiceGain.gain.setTargetAtTime(0, actx.currentTime, 0.1);
+                return;
+            }
+
+            const step = SCRIPT[scriptIdx];
+            const now = actx.currentTime;
+            const vowel = step.p;
+
+            // 1. Update Pitch
+            voiceOsc.frequency.setTargetAtTime(step.f, now, 0.05);
+
+            // 2. Update Throat (Formants)
+            // Smoothly morph the vowel shape
+            if (vowel !== P.XX) {
+                f1Filter.frequency.setTargetAtTime(vowel.f1, now, 0.05);
+                f2Filter.frequency.setTargetAtTime(vowel.f2, now, 0.05);
+                
+                // Open Vocal Cords (Volume)
+                voiceGain.gain.setTargetAtTime(0.5, now, 0.02);
+            } else {
+                voiceGain.gain.setTargetAtTime(0, now, 0.02);
+            }
+
+            // 3. Update Noise (Consonants)
+            if (step.n > 0) {
+                noiseGain.gain.setTargetAtTime(0.2, now, 0.01);
+            } else {
+                noiseGain.gain.setTargetAtTime(0, now, 0.01);
+            }
+
+            // 4. UI
+            if (step.t !== "") subEl.innerText = step.t;
+            phoEl.innerText = `F1: ${vowel.f1} | F2: ${vowel.f2} | NOISE: ${step.n}`;
+
+            scriptIdx++;
+            setTimeout(processScript, step.d);
+        }
+
+        /* ------------------------------------------------
+           VISUALS: THE MOUTH
+           ------------------------------------------------ */
+        function draw() {
+            requestAnimationFrame(draw);
+            time += 0.1;
+            
+            // Fade
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            if (!analyser) return;
+
+            const bufferLen = analyser.frequencyBinCount;
+            const data = new Uint8Array(bufferLen);
+            analyser.getByteTimeDomainData(data);
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#00f3ff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00f3ff';
+
+            ctx.beginPath();
+            
+            // Draw Circular Oscilloscope (The "Mouth")
+            const radius = 100;
+            
+            for (let i = 0; i < bufferLen; i++) {
+                const v = data[i] / 128.0;
+                const angle = (i / bufferLen) * Math.PI * 2;
+                
+                // Audio modulates radius
+                const r = radius * v * (1 + Math.sin(time)*0.1);
+                
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Particles
+            ctx.fillStyle = '#fff';
+            if (voiceGain && voiceGain.gain.value > 0.1) {
+                const px = cx + (Math.random()-0.5)*50;
+                const py = cy + (Math.random()-0.5)*50;
+                ctx.fillRect(px, py, 2, 2);
+            }
+        }
+
+        function initSpeech() {
+            document.getElementById('btn-speak').style.display = 'none';
+            document.getElementById('header').style.opacity = 0.5;
+            
+            initAudio();
+            
+            // Safety resume
+            if (actx.state === 'suspended') actx.resume();
+            
+            draw();
+            processScript();
+        }
+
+    </script>
+</body>
+</html>
