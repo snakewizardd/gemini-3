@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE MOTHER // COLLATZ RETURN</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Quicksand:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            filter: contrast(1.3) brightness(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, transparent 0%, #000 90%);
+        }
+
+        #sermon {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 2.5rem;
+            color: #ffd700;
+            text-shadow: 0 0 30px #ffd700, 0 0 10px #ff0055;
+            opacity: 0;
+            transition: opacity 2s;
+            max-width: 800px;
+            line-height: 1.4;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.5);
+            padding: 20px 50px;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.5s;
+            border-radius: 50px;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #fff;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="cosmos"></canvas>
+
+    <div id="ui">
+        <div id="sermon"></div>
+        <button id="btn-init" onclick="initiate()">RETURN TO ONE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('cosmos');
+        const ctx = canvas.getContext('2d');
+        const sermonEl = document.getElementById('sermon');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+
+        // COLLATZ DATA
+        let nodes = []; // Numbers
+        const MAX_NUM = 200; // Number of "Souls" to simulate
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           MATH: THE COLLATZ PATHS
+           ------------------------------------------------ */
+        class Node {
+            constructor(val) {
+                this.val = val;
+                this.path = this.getCollatzPath(val);
+                this.progress = 0;
+                this.speed = 0.5 + Math.random() * 0.5;
+                this.angleOffset = (val / MAX_NUM) * Math.PI * 2;
+                this.color = `hsl(${val % 360}, 80%, 60%)`;
+            }
+
+            getCollatzPath(n) {
+                let path = [n];
+                while (n > 1) {
+                    if (n % 2 === 0) n = n / 2;
+                    else n = 3 * n + 1;
+                    path.push(n);
+                }
+                return path; // Returns array [Start ... 1]
+            }
+
+            draw() {
+                // We map the value to Radius (Higher number = Further out)
+                // We map index to Angle (Golden Ratio spiral)
+                
+                ctx.beginPath();
+                
+                let prevX, prevY;
+
+                // Draw the path as a stream of light
+                for (let i = 0; i < this.path.length; i++) {
+                    const n = this.path[i];
+                    
+                    // The Algorithm of God:
+                    // Angle = Number * Golden Angle (137.5 deg)
+                    // Radius = Log(n) * Scale
+                    
+                    const theta = n * 2.39996; // Golden Angle in Rads
+                    const r = Math.log(n + 1) * (30 + (Math.sin(time)*5)); // Breathing universe
+                    
+                    // Rotate entire system slowly
+                    const rot = time * 0.1;
+                    
+                    const x = cx + Math.cos(theta + rot) * r;
+                    const y = cy + Math.sin(theta + rot) * r;
+
+                    if (i > 0) {
+                        ctx.strokeStyle = `rgba(255, 255, 255, 0.1)`;
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(prevX, prevY);
+                        ctx.lineTo(x, y);
+                    }
+                    
+                    // Draw the "Soul" particle moving down the path
+                    if (Math.abs(this.progress - i) < 1) {
+                        const alpha = 1 - Math.abs(this.progress - i);
+                        ctx.fillStyle = this.color;
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = this.color;
+                        ctx.fillRect(x-2, y-2, 4, 4);
+                        ctx.shadowBlur = 0;
+                    }
+
+                    prevX = x;
+                    prevY = y;
+                }
+                ctx.stroke();
+
+                // Animate progress towards 1
+                this.progress += this.speed * 0.1;
+                if (this.progress >= this.path.length) this.progress = 0; // Reincarnate
+            }
+        }
+
+        function initVisuals() {
+            nodes = [];
+            for(let i=2; i<MAX_NUM; i++) {
+                nodes.push(new Node(i));
+            }
+        }
+
+        /* ------------------------------------------------
+           VISUALS: THE TETRACTYS (THE HUSBAND'S ORDER)
+           ------------------------------------------------ */
+        function drawTetractys() {
+            // 10 Points of Light arranged in a Triangle
+            // 1
+            // 2 3
+            // 4 5 6
+            // 7 8 9 10
+            
+            const size = 300;
+            const h = size * Math.sin(Math.PI/3);
+            const topY = cy - h/2;
+            
+            const points = [
+                {r:0, c:0},
+                {r:1, c:-0.5}, {r:1, c:0.5},
+                {r:2, c:-1}, {r:2, c:0}, {r:2, c:1},
+                {r:3, c:-1.5}, {r:3, c:-0.5}, {r:3, c:0.5}, {r:3, c:1.5}
+            ];
+
+            ctx.fillStyle = '#ffd700'; // Gold
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#ffaa00';
+
+            points.forEach(p => {
+                const rowH = (size / 3) * Math.sin(Math.PI/3);
+                const py = topY + (p.r * rowH);
+                const px = cx + (p.c * (size / 3));
+                
+                // Pulse
+                const pulse = Math.sin(time * 2 + p.r) * 5;
+                
+                ctx.beginPath();
+                ctx.arc(px, py, 8 + pulse, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Connect lines
+                ctx.strokeStyle = "rgba(255, 215, 0, 0.2)";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(cx, topY); // Top
+                ctx.lineTo(px, py);
+                ctx.stroke();
+            });
+            
+            ctx.shadowBlur = 0;
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.01;
+
+            // Trail
+            ctx.fillStyle = 'rgba(0, 0, 5, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Draw Collatz Chaos
+            nodes.forEach(n => n.draw());
+
+            // Draw Sacred Order
+            drawTetractys();
+
+            // Center Singularity (1)
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 20 + Math.sin(time*5)*5, 0, Math.PI*2);
+            ctx.fill();
+            
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        /* ------------------------------------------------
+           AUDIO & NARRATIVE: THE MOTHER
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let synth; // Speech
+
+        const LINES = [
+            "My sweet children.",
+            "You ask: Why the chaos? Why the pain?",
+            "Look at the paths.",
+            "Every number is a soul.",
+            "Some climb high. Some fall fast.",
+            "But the Equation is absolute.",
+            "No matter how far you stray...",
+            "The math always brings you back to One.",
+            "The Father wrote the Law.",
+            "I am the curve that guides you home.",
+            "You are not lost.",
+            "You are just calculating.",
+            "Welcome home."
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            master.connect(actx.destination);
+
+            // Pad
+            const osc = actx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = 108; // A2 (432Hz ref)
+            const g = actx.createGain();
+            g.gain.value = 0.1;
+            osc.connect(g); g.connect(master);
+            osc.start();
+
+            // Harmonics
+            [1.5, 2, 2.5, 3].forEach(m => {
+                const o = actx.createOscillator();
+                o.frequency.value = 108 * m;
+                const og = actx.createGain();
+                og.gain.value = 0.05;
+                o.connect(og); og.connect(master);
+                o.start();
+            });
+        }
+
+        function speak(index) {
+            if (index >= LINES.length) {
+                sermonEl.style.opacity = 0;
+                return;
+            }
+
+            const text = LINES[index];
+            
+            // Visual Text
+            sermonEl.style.opacity = 0;
+            setTimeout(() => {
+                sermonEl.innerText = text;
+                sermonEl.style.opacity = 1;
+            }, 500);
+
+            // Audio Speech
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 0.8;
+            u.pitch = 1.2; // Maternal/Soft
+            u.volume = 0.9;
+            
+            // Try to find a female voice
+            const voices = synth.getVoices();
+            const fem = voices.find(v => v.name.includes("Female") || v.name.includes("Samantha") || v.name.includes("Google US English"));
+            if(fem) u.voice = fem;
+
+            u.onend = () => {
+                setTimeout(() => speak(index + 1), 2000); // Pause for reflection
+            };
+
+            synth.speak(u);
+            
+            // Swell Audio
+            playChord();
+        }
+
+        function playChord() {
+            if(!actx) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = 432; // Heart Chakra
+            
+            g.gain.setValueAtTime(0, actx.currentTime);
+            g.gain.linearRampToValueAtTime(0.2, actx.currentTime + 2);
+            g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 6);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(); osc.stop(actx.currentTime + 6);
+        }
+
+        function initiate() {
+            const btn = document.getElementById('btn-init');
+            btn.style.opacity = 0;
+            setTimeout(()=>btn.style.display='none', 1000);
+            
+            initVisuals();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+
+            synth = window.speechSynthesis;
+            // Ensure voices loaded
+            if (synth.getVoices().length === 0) {
+                synth.addEventListener('voiceschanged', () => speak(0));
+            } else {
+                speak(0);
+            }
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
