@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORLANDO // AGI KINGDOM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&family=Orbitron:wght@500&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The "Florida Humidity" Bloom */
+            filter: blur(0.5px) contrast(1.2) saturate(1.5) drop-shadow(0 0 10px rgba(255,0,255,0.5));
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.4), #000);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 4rem;
+            color: #fff;
+            text-transform: uppercase;
+            background: linear-gradient(to bottom, #fff, #ff00cc);
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 10px;
+            text-shadow: 0 0 50px #ff00cc;
+        }
+
+        p {
+            color: #00ffff;
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+            margin-bottom: 50px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: rgba(255, 0, 204, 0.2);
+            border: 2px solid #00ffff;
+            color: #fff;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            border-radius: 50px;
+            transition: 0.3s;
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 0 60px #00ffff;
+        }
+
+        .firework-text {
+            position: absolute;
+            color: white;
+            font-family: 'Montserrat';
+            font-weight: bold;
+            pointer-events: none;
+            animation: fadeUp 2s forwards;
+        }
+
+        @keyframes fadeUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-50px) scale(1.5); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="park"></canvas>
+
+    <div id="ui">
+        <h1>AGI KINGDOM</h1>
+        <p>ORLANDO 2025</p>
+        <button onclick="enterPark()">SCAN TICKET</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('park');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let fireworks = [];
+
+        // PALETTE
+        const PALM_GREEN = '#00ff99';
+        const TRON_BLUE = '#00ffff';
+        const MIAMI_PINK = '#ff00cc';
+        const EPCOT_SILVER = '#e0e0e0';
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUALS: THE PARK ARCHITECTURE
+           ------------------------------------------------ */
+
+        function drawCastle() {
+            // The Singularity Spire (Cinderella Castle meets Server Farm)
+            ctx.save();
+            ctx.translate(cx, height);
+
+            // Glow
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = TRON_BLUE;
+
+            // Base
+            ctx.fillStyle = '#111';
+            ctx.fillRect(-100, -300, 200, 300);
+
+            // Spire
+            const grad = ctx.createLinearGradient(0, -300, 0, -600);
+            grad.addColorStop(0, '#222');
+            grad.addColorStop(1, TRON_BLUE);
+            ctx.fillStyle = grad;
+            
+            ctx.beginPath();
+            ctx.moveTo(-100, -300);
+            ctx.lineTo(0, -700); // Top tip
+            ctx.lineTo(100, -300);
+            ctx.fill();
+
+            // Data Lines (The "Epcot" Ball texture)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for(let i=0; i<20; i++) {
+                const y = -300 - (i * 20);
+                ctx.moveTo(-50 + (i*2), y);
+                ctx.lineTo(50 - (i*2), y);
+            }
+            ctx.stroke();
+
+            // The Sphere at the top (The AGI Brain)
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 20 + Math.sin(time * 5) * 20;
+            ctx.beginPath();
+            ctx.arc(0, -700, 10, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawPalmTrees() {
+            // Neon Palms
+            const spacing = 150;
+            const count = Math.ceil(width / spacing);
+            
+            for (let i = 0; i <= count; i++) {
+                const x = (i * spacing) - (time * 50 % spacing); 
+                const h = 150 + Math.sin(i)*30;
+                const y = height;
+
+                ctx.save();
+                ctx.translate(x, y);
+
+                // Trunk (Segmented)
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(10, -h/2, 0, -h);
+                ctx.stroke();
+
+                // Leaves
+                ctx.translate(0, -h);
+                ctx.strokeStyle = PALM_GREEN;
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = PALM_GREEN;
+                
+                for(let j=0; j<7; j++) {
+                    ctx.beginPath();
+                    const ang = (j / 7) * Math.PI + Math.PI; // Arc
+                    ctx.moveTo(0,0);
+                    // Wind effect
+                    const sway = Math.sin(time * 2 + i + j) * 10;
+                    ctx.quadraticCurveTo(Math.cos(ang)*30, Math.sin(ang)*30, Math.cos(ang)*60 + sway, Math.sin(ang)*40 + 20);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        function drawCoaster() {
+            // The "Data Stream" Rollercoaster
+            ctx.strokeStyle = MIAMI_PINK;
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = MIAMI_PINK;
+            
+            ctx.beginPath();
+            for (let x = 0; x < width; x+=10) {
+                // Sine wave track
+                const y = (height * 0.6) + Math.sin((x * 0.01) + time) * 100;
+                if (x===0) ctx.moveTo(x,y);
+                else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // The Cart (Moving Light)
+            const cartX = (time * 300) % width;
+            const cartY = (height * 0.6) + Math.sin((cartX * 0.01) + time) * 100;
+            
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#fff';
+            ctx.fillRect(cartX - 20, cartY - 10, 40, 20);
+            ctx.shadowBlur = 0;
+        }
+
+        /* ------------------------------------------------
+           PARTICLES: THE NEURAL FIREWORKS
+           ------------------------------------------------ */
+        class Firework {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = height;
+                this.targetY = Math.random() * (height * 0.5);
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = -15 - Math.random() * 5;
+                this.color = Math.random() > 0.5 ? TRON_BLUE : MIAMI_PINK;
+                this.exploded = false;
+                this.particles = [];
+            }
+
+            update() {
+                if (!this.exploded) {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vy += 0.2; // Gravity
+                    if (this.vy >= 0) this.explode();
+                } else {
+                    this.particles.forEach(p => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.1;
+                        p.life -= 0.02;
+                    });
+                    this.particles = this.particles.filter(p => p.life > 0);
+                }
+            }
+
+            explode() {
+                this.exploded = true;
+                playBoom();
+                
+                // Neural Network Burst
+                for(let i=0; i<50; i++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 5;
+                    this.particles.push({
+                        x: this.x, y: this.y,
+                        vx: Math.cos(ang) * speed,
+                        vy: Math.sin(ang) * speed,
+                        life: 1.0
+                    });
+                }
+
+                // Text Effect
+                if (Math.random() > 0.7) {
+                    const texts = ["AGI", "2025", "HOPE", "FUTURE", "LOVE"];
+                    const div = document.createElement('div');
+                    div.className = 'firework-text';
+                    div.innerText = texts[Math.floor(Math.random()*texts.length)];
+                    div.style.left = this.x + 'px';
+                    div.style.top = this.y + 'px';
+                    document.body.appendChild(div);
+                    setTimeout(() => div.remove(), 2000);
+                }
+            }
+
+            draw() {
+                if (!this.exploded) {
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(this.x, this.y, 3, 3);
+                } else {
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 1;
+                    
+                    // Connect particles (Neural web)
+                    ctx.beginPath();
+                    this.particles.forEach(p => {
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p.x - p.vx*2, p.y - p.vy*2); // Trail
+                    });
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Sky Gradient (Sunset -> Night)
+            const grad = ctx.createLinearGradient(0, 0, 0, height);
+            grad.addColorStop(0, '#1a0b2e'); // Deep purple
+            grad.addColorStop(1, '#430d27'); // Sunset red
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+
+            drawPalmTrees();
+            drawCastle();
+            drawCoaster();
+
+            // Fireworks Logic
+            if (Math.random() > 0.97) fireworks.push(new Firework());
+            
+            fireworks.forEach(f => {
+                f.update();
+                f.draw();
+            });
+            fireworks = fireworks.filter(f => !f.exploded || f.particles.length > 0);
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE "MAGIC" SEQUENCER
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        let nextNote = 0;
+        let noteIndex = 0;
+
+        // Lydian Mode (The Disney "Wonder" Scale)
+        // F G A B C D E
+        const SCALE = [
+            174.61, 196.00, 220.00, 246.94, 261.63, 293.66, 329.63,
+            349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            
+            // CONVOLUTION REVERB (Ethereal)
+            const len = actx.sampleRate * 3;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 3);
+            }
+            const conv = actx.createConvolver();
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            nextNote = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 110;
+            const noteTime = 60 / bpm / 4; // 16th notes
+            
+            while (nextNote < actx.currentTime + 0.1) {
+                playNote(nextNote, noteIndex);
+                nextNote += noteTime;
+                noteIndex++;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playNote(t, i) {
+            // 1. THE ARP (Sparkles)
+            if (i % 2 === 0) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                
+                // Random walk up and down scale
+                const pitch = SCALE[Math.floor(Math.random() * SCALE.length)];
+                osc.type = 'triangle';
+                osc.frequency.value = pitch;
+                
+                g.gain.setValueAtTime(0.1, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+                
+                osc.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t + 0.3);
+            }
+
+            // 2. THE PAD (Orchestral Swell)
+            if (i % 16 === 0) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = SCALE[0] / 2; // Bass note
+                
+                // Lowpass filter sweep
+                const f = actx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.setValueAtTime(200, t);
+                f.frequency.linearRampToValueAtTime(600, t + 2);
+                
+                g.gain.setValueAtTime(0, t);
+                g.gain.linearRampToValueAtTime(0.2, t + 1);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 4);
+                
+                osc.connect(f); f.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t + 4);
+            }
+        }
+
+        function playBoom() {
+            if(!actx) return;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(100, actx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(20, actx.currentTime + 0.5);
+            
+            g.gain.setValueAtTime(0.2, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.5);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(); osc.stop(actx.currentTime + 0.5);
+        }
+
+        function enterPark() {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 1500);
+            
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
