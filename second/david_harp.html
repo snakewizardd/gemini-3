@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE PSALMIST // KING DAVID'S HARP</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #020105; /* Deep Royal Purple/Black */
+            overflow: hidden;
+            font-family: 'Cinzel', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #d4af37; /* Gold */
+            pointer-events: none;
+            mix-blend-mode: screen;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 15px;
+            text-transform: uppercase;
+            text-shadow: 0 0 30px #d4af37, 0 0 60px #ffaa00;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 1rem;
+            letter-spacing: 3px;
+            opacity: 0.8;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #d4af37;
+            border: 2px solid #d4af37;
+            padding: 20px 50px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            margin-top: 40px;
+            transition: 0.3s;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+        }
+
+        button:hover {
+            background: #d4af37;
+            color: #000;
+            box-shadow: 0 0 80px #d4af37;
+        }
+
+        #readout {
+            position: absolute;
+            bottom: 30px;
+            font-size: 12px;
+            color: rgba(255, 215, 0, 0.5);
+            z-index: 5;
+            width: 100%;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="temple"></canvas>
+
+    <div id="ui">
+        <h1>THE KINNOR</h1>
+        <p>C MINOR PENTATONIC // HARMONIC MODE</p>
+        <button id="btn-init" onclick="initiate()">PLAY THE PSALM</button>
+    </div>
+
+    <div id="readout">MOUSE Y: HARMONIC PRESSURE // MOUSE X: ARPEGGIO SPEED</div>
+
+    <script>
+        const canvas = document.getElementById('temple');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let mouse = { x: 0.5, y: 0.5 };
+
+        // 10 Strings for the 10 Sephiroth / 10 Commandments
+        const NUM_STRINGS = 10; 
+        let strings = [];
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+        
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX / width;
+            mouse.y = e.clientY / height;
+        });
+
+        /* ------------------------------------------------
+           PHYSICS: THE STRINGS
+           ------------------------------------------------ */
+        class HarpString {
+            constructor(x, index) {
+                this.x = x;
+                this.index = index;
+                this.amp = 0;
+                this.harmonic = false; // Is it vibrating as a harmonic?
+                this.color = '#d4af37';
+            }
+
+            pluck(isHarmonic) {
+                this.amp = 1.0;
+                this.harmonic = isHarmonic;
+                spawnLight(this.x, height/2, isHarmonic);
+            }
+
+            update() {
+                this.amp *= 0.94; // Decay
+            }
+
+            draw() {
+                ctx.beginPath();
+                
+                // If harmonic (Pinched), string turns Blue/White and vibrates faster visually
+                const hue = this.harmonic ? 200 : 45; // Blue vs Gold
+                const sat = this.harmonic ? 100 : 80;
+                const light = 50 + (this.amp * 50);
+                
+                ctx.strokeStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+                ctx.lineWidth = 1 + (this.amp * 3);
+                ctx.shadowBlur = this.amp * 30;
+                ctx.shadowColor = ctx.strokeStyle;
+
+                ctx.moveTo(this.x, 0);
+                
+                // String Physics
+                // If harmonic, we draw a node in the middle (The Pinch)
+                if (this.harmonic) {
+                    // Double sine wave (Node in center)
+                    for (let y = 0; y <= height; y+=10) {
+                        const vib = Math.sin(time * 40 + y * 0.05) * this.amp * 10 * Math.sin((y/height) * Math.PI * 2);
+                        ctx.lineTo(this.x + vib, y);
+                    }
+                } else {
+                    // Single sine wave (Fundamental)
+                    for (let y = 0; y <= height; y+=10) {
+                        const vib = Math.sin(time * 20 + y * 0.01) * this.amp * 20 * Math.sin((y/height) * Math.PI);
+                        ctx.lineTo(this.x + vib, y);
+                    }
+                }
+                
+                ctx.stroke();
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const spacing = width / (NUM_STRINGS + 1);
+            for(let i=0; i<NUM_STRINGS; i++) {
+                strings.push(new HarpString(spacing * (i+1), i));
+            }
+        }
+        resize();
+
+        /* ------------------------------------------------
+           VISUALS: THE TEMPLE
+           ------------------------------------------------ */
+        function spawnLight(x, y, isHarmonic) {
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vy: -(Math.random() * 2 + 1),
+                    vx: (Math.random() - 0.5) * 2,
+                    life: 1.0,
+                    color: isHarmonic ? '#aaf' : '#fdaa00'
+                });
+            }
+        }
+
+        function drawStar() {
+            // Rotating Star of David in background
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.1);
+            
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.1)';
+            ctx.lineWidth = 2;
+            
+            const r = 300;
+            
+            // Triangle 1
+            ctx.beginPath();
+            for(let i=0; i<3; i++) {
+                const a = (i * 2 * Math.PI / 3) - Math.PI/2;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Triangle 2
+            ctx.beginPath();
+            for(let i=0; i<3; i++) {
+                const a = (i * 2 * Math.PI / 3) + Math.PI/2;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+
+            // Clear
+            ctx.fillStyle = 'rgba(2, 1, 5, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            drawStar();
+
+            // Particles (Oil rising)
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.01;
+                
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+                ctx.fill();
+                
+                if(p.life <= 0) particles.splice(i,1);
+            }
+            ctx.globalAlpha = 1.0;
+
+            // Strings
+            strings.forEach(s => {
+                s.update();
+                s.draw();
+            });
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE MODAL HARP
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        
+        // C MINOR PENTATONIC (C, Eb, F, G, Bb)
+        // Spread across 2 Octaves (C3 to Eb5)
+        // Frequencies:
+        const TUNING = [
+            130.81, // C3
+            155.56, // Eb3
+            174.61, // F3
+            196.00, // G3
+            233.08, // Bb3
+            261.63, // C4
+            311.13, // Eb4
+            349.23, // F4
+            392.00, // G4
+            466.16  // Bb4
+        ];
+
+        // Voice Leading Memory
+        let lastNoteIndex = 4; // Start in middle
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // REVERB (The Temple Stone)
+            const conv = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const len = rate * 4.0;
+            const buf = actx.createBuffer(2, len, rate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 2);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination); // Dry
+
+            playSequencer();
+        }
+
+        function pluck(stringIdx, isHarmonic) {
+            if(stringIdx < 0 || stringIdx >= NUM_STRINGS) return;
+
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter();
+
+            // Fundamental Frequency
+            let freq = TUNING[stringIdx];
+            
+            // THE PINCH (Harmonic Logic)
+            // If isHarmonic (Mouse Top), we play the Octave (2x freq)
+            // and use a Sine wave (pure tone) instead of Triangle (warm tone)
+            if (isHarmonic) {
+                freq *= 2;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.3, actx.currentTime); // Quieter, purer
+            } else {
+                osc.type = 'triangle';
+                gain.gain.setValueAtTime(0.5, actx.currentTime); // Richer
+            }
+
+            osc.frequency.value = freq;
+
+            // FILTER (The Pluck transient)
+            filter.type = 'lowpass';
+            filter.Q.value = 2;
+            filter.frequency.setValueAtTime(3000, actx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(200, actx.currentTime + 3); // Dampen over time
+
+            // ENVELOPE
+            gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 4); // Long ring
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(master);
+
+            osc.start();
+            osc.stop(actx.currentTime + 4);
+
+            // Visuals
+            if(strings[stringIdx]) strings[stringIdx].pluck(isHarmonic);
+        }
+
+        function playSequencer() {
+            if(!isRunning) return;
+
+            // 1. STEPWISE VOICE LEADING
+            // We don't pick a random note. We pick a neighbor.
+            // Possibilities: -2, -1, 0, +1, +2 strings away
+            // Bias towards center to keep melody coherent
+            
+            let jump = Math.floor(Math.random() * 5) - 2; // -2 to 2
+            let nextIdx = lastNoteIndex + jump;
+
+            // Bounce off edges
+            if (nextIdx < 0) nextIdx = 1;
+            if (nextIdx >= NUM_STRINGS) nextIdx = NUM_STRINGS - 2;
+
+            lastNoteIndex = nextIdx;
+
+            // 2. HARMONIC MODE CHECK (The Pinch)
+            // If Mouse is in top half of screen, play harmonics
+            const isHarmonic = mouse.y < 0.5;
+
+            pluck(nextIdx, isHarmonic);
+
+            // 3. ARPEGGIO SPEED (Mouse X)
+            // Left = Slow/Meditative, Right = Fast/Ecstatic
+            const speed = 600 - (mouse.x * 450); // 150ms to 600ms
+            
+            setTimeout(playSequencer, speed);
+        }
+
+        function initiate() {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(()=>document.getElementById('ui').style.display='none', 1000);
+            
+            initStrings();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
