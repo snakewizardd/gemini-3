@@ -234,7 +234,7 @@
             setInterval(() => {
                 const now = actx.currentTime;
                 const swellTime = 4 + Math.random() * 4;
-                const targetVol = 0.05 + Math.random() * 0.1; // Never too loud
+                const targetVol = 0.25 + Math.random() * 0.1; // Never too loud
                 gain.gain.linearRampToValueAtTime(targetVol, now + swellTime/2);
                 gain.gain.linearRampToValueAtTime(0.02, now + swellTime);
             }, 8000 + (index * 1000));

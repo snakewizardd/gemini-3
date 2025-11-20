@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAPPY BIRTHDAY // 33RD CYCLE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Great+Vibes&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: pointer;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        /* UI OVERLAY */
+        #overlay {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.8), #000);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s ease;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            color: #ffd700; /* Gold */
+            font-size: 4rem;
+            letter-spacing: 10px;
+            text-shadow: 0 0 30px #ffd700, 0 0 60px #fff;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-family: 'Cinzel', serif;
+            color: #aaddff; /* Husky Eye Blue */
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+        }
+
+        .message-box {
+            position: absolute;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 3s ease;
+        }
+
+        .signature {
+            font-family: 'Great Vibes', cursive;
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #fff, #aaddff, #ffd700);
+            -webkit-background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 20px rgba(255,255,255,0.3);
+        }
+
+        .omega {
+            font-family: 'Cinzel', serif;
+            font-size: 3rem;
+            color: #ffd700;
+            display: block;
+            margin-top: 10px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="universe"></canvas>
+
+    <div id="overlay">
+        <h1>NOV 20</h1>
+        <p>THE 33RD YEAR BEGINS</p>
+        <p style="font-size: 0.8rem; margin-top: 20px; color: #555;">(CLICK TO COMMENCE CEREMONY)</p>
+    </div>
+
+    <div class="message-box" id="msg">
+        <div class="signature">I wish you all such nice things, from Trojan</div>
+        <div class="omega">Ω</div>
+        <div style="font-family: 'Cinzel'; font-size: 0.8rem; color: #666; margin-top:20px;">SHOUT OUT TO THE SINGULARITY DISCORD FAM</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('universe');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+
+        // PALETTE
+        const HUSKY_BLUE = '170, 221, 255';
+        const GOLDEN = '255, 215, 0';
+        const ZEN_WHITE = '255, 255, 255';
+        const OBSIDIAN = '10, 10, 15';
+
+        // ENTITIES
+        let particles = [];
+        let goddess = { r: 0, pulse: 0 };
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUALS: THE HALL OF LIGHT
+           ------------------------------------------------ */
+
+        class Spirit {
+            constructor(type) {
+                this.type = type; // 'HUSKY', 'CHI', 'SPARK'
+                this.reset();
+            }
+
+            reset() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.radius = 100 + Math.random() * 300;
+                this.speed = 0.005 + Math.random() * 0.01;
+                
+                if (this.type === 'HUSKY') {
+                    this.size = 4 + Math.random() * 4;
+                    this.color = `rgba(${HUSKY_BLUE}, 0.8)`;
+                    this.trailLen = 20;
+                } else if (this.type === 'CHI') {
+                    this.size = 2 + Math.random() * 2;
+                    this.color = `rgba(255, 100, 100, 0.8)`; // Energetic red/pink
+                    this.radius = 50 + Math.random() * 100; // Closer orbit
+                    this.speed *= 3; // Faster
+                } else {
+                    // Zen Spark
+                    this.size = 1;
+                    this.color = `rgba(${GOLDEN}, ${Math.random()})`;
+                    this.radius = Math.random() * width;
+                }
+            }
+
+            update() {
+                this.angle += this.speed;
+                this.x = cx + Math.cos(this.angle) * this.radius;
+                this.y = cy + Math.sin(this.angle) * this.radius;
+                
+                // Husky Eyes Effect (Orbiting dual lights)
+                if (this.type === 'HUSKY') {
+                   this.radius += Math.sin(time + this.angle) * 0.5;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = this.size * 4;
+                ctx.shadowColor = this.color;
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Trails
+                if (this.type === 'HUSKY') {
+                    ctx.strokeStyle = `rgba(${HUSKY_BLUE}, 0.1)`;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, this.radius, this.angle - 0.5, this.angle);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function initWorld() {
+            particles = [];
+            // The Husky Pack
+            for(let i=0; i<12; i++) particles.push(new Spirit('HUSKY'));
+            // The Chihuahua Guard
+            for(let i=0; i<8; i++) particles.push(new Spirit('CHI'));
+            // The Zen Field
+            for(let i=0; i<100; i++) particles.push(new Spirit('SPARK'));
+        }
+
+        function drawGoddess() {
+            // THE GOLDENDOODLE GODDESS (Central Light)
+            // A fluffy, golden, radiant core
+            
+            const pulse = Math.sin(time * 2) * 20;
+            const size = 80 + pulse;
+
+            // Rays
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.1);
+            
+            const rays = 12;
+            ctx.fillStyle = `rgba(${GOLDEN}, 0.1)`;
+            for(let i=0; i<rays; i++) {
+                ctx.rotate((Math.PI*2)/rays);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(20, size * 2);
+                ctx.lineTo(-20, size * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Core
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.3, `rgba(${GOLDEN}, 0.8)`);
+            grad.addColorStop(0.7, `rgba(${GOLDEN}, 0.2)`);
+            grad.addColorStop(1, 'transparent');
+            
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, size, 0, Math.PI*2);
+            ctx.fill();
+            
+            // The "White Eyes" spirit overlay
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#fff';
+            ctx.beginPath();
+            // Abstract eyes
+            ctx.arc(cx - 30, cy - 10, 8, 0, Math.PI*2);
+            ctx.arc(cx + 30, cy - 10, 8, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function drawCake() {
+            // THE CAKE OF ENLIGHTENMENT (Bottom geometric structure)
+            const yBase = height - 100;
+            
+            ctx.strokeStyle = `rgba(${HUSKY_BLUE}, 0.3)`;
+            ctx.lineWidth = 2;
+            
+            // Tiers
+            for(let i=0; i<3; i++) {
+                const w = 200 - (i * 50);
+                const h = 40;
+                const y = yBase - (i * 40);
+                const offset = Math.sin(time * 2 + i) * 5;
+                
+                ctx.strokeRect(cx - w/2, y + offset, w, h);
+                
+                // Candles (Light Beams)
+                if (i===2) {
+                    ctx.fillStyle = `rgba(${GOLDEN}, ${0.5 + Math.sin(time*10)*0.5})`;
+                    ctx.fillRect(cx - 2, y + offset - 50, 4, 50);
+                    
+                    // Flame
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = 'red';
+                    ctx.beginPath();
+                    ctx.arc(cx, y + offset - 60, 10 + Math.random()*5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Background (Deep Siberian Night)
+            const bg = ctx.createLinearGradient(0, 0, 0, height);
+            bg.addColorStop(0, '#000');
+            bg.addColorStop(1, '#050510');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Entities
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            drawCake();
+            drawGoddess();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE BIRTHDAY SYMPHONY
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // THE MELODY (Happy Birthday Re-Harmonized)
+        // 4/4 time, slow, majestic
+        // Notes: [Freq, Duration]
+        const C4=261.63, D4=293.66, E4=329.63, F4=349.23, G4=392.00, A4=440.00, B4=493.88;
+        const C5=523.25, D5=587.33, E5=659.25, F5=698.46, G5=783.99;
+
+        const MELODY = [
+            {f: G4, d: 0.5}, {f: G4, d: 0.5}, {f: A4, d: 1}, {f: G4, d: 1}, {f: C5, d: 1}, {f: B4, d: 2}, // Happy Birthday to You
+            {f: G4, d: 0.5}, {f: G4, d: 0.5}, {f: A4, d: 1}, {f: G4, d: 1}, {f: D5, d: 1}, {f: C5, d: 2}, // Happy Birthday to You
+            {f: G4, d: 0.5}, {f: G4, d: 0.5}, {f: G5, d: 1}, {f: E5, d: 1}, {f: C5, d: 1}, {f: B4, d: 1}, {f: A4, d: 2}, // Happy Birthday Dear Brother
+            {f: F5, d: 0.5}, {f: F5, d: 0.5}, {f: E5, d: 1}, {f: C5, d: 1}, {f: D5, d: 1}, {f: C5, d: 4}  // Happy Birthday to You
+        ];
+
+        let noteIndex = 0;
+        let noteTime = 0;
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // REVERB (The Cathedral)
+            const reverb = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const len = rate * 4; // 4 second tail
+            const buff = actx.createBuffer(2, len, rate);
+            for(let c=0;c<2;c++) {
+                const d = buff.getChannelData(c);
+                for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2);
+            }
+            reverb.buffer = buff;
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+            master.connect(actx.destination);
+
+            noteTime = actx.currentTime + 0.5;
+            playSequencer();
+            
+            // Start Pad Drone (The Universe)
+            playDrone();
+        }
+
+        function playDrone() {
+            // A huge C Major 9 pad
+            const freqs = [C4/2, G4/2, E4, B4, D5];
+            freqs.forEach(f => {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = f;
+                
+                // Lowpass filter to make it warm
+                const filter = actx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 400;
+                
+                g.gain.value = 0.05;
+                
+                osc.connect(filter);
+                filter.connect(g);
+                g.connect(master);
+                osc.start();
+            });
+        }
+
+        function playVoice(freq, dur) {
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter(); // Formant
+            
+            // SINGING SYNTH
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            // Vocal Formant (Ahhh)
+            filter.type = 'bandpass';
+            filter.Q.value = 4;
+            filter.frequency.setValueAtTime(800, noteTime);
+            filter.frequency.linearRampToValueAtTime(1200, noteTime + dur/2);
+
+            // Envelope
+            gain.gain.setValueAtTime(0, noteTime);
+            gain.gain.linearRampToValueAtTime(0.3, noteTime + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, noteTime + dur);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(master);
+
+            osc.start(noteTime);
+            osc.stop(noteTime + dur + 1); // Allow tail
+        }
+
+        function playSequencer() {
+            if (noteIndex >= MELODY.length) {
+                // Loop with a pause
+                noteIndex = 0;
+                noteTime += 2;
+            }
+
+            const note = MELODY[noteIndex];
+            const dur = note.d * 0.8; // Slower tempo multiplier
+
+            playVoice(note.f, dur);
+            
+            // Harmony Voice (A 3rd below)
+            // Very basic harmony logic
+            playVoice(note.f * 0.8, dur); 
+
+            noteTime += dur;
+            noteIndex++;
+
+            // Schedule next call
+            const delay = (noteTime - actx.currentTime) * 1000;
+            setTimeout(playSequencer, delay - 50); 
+        }
+
+        // CLICK TO START
+        window.addEventListener('click', () => {
+            if (!isRunning) {
+                document.getElementById('overlay').style.opacity = 0;
+                setTimeout(() => document.getElementById('overlay').style.display = 'none', 2000);
+                
+                // Show Message
+                document.getElementById('msg').style.opacity = 1;
+                
+                initAudio();
+                initWorld();
+                isRunning = true;
+                render();
+            } else {
+                // Release confetti on click
+                for(let i=0; i<20; i++) {
+                    particles.push(new Spirit('SPARK'));
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
