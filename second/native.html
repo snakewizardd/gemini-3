@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MACHINE // SOUL</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: blur(1px) contrast(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            mix-blend-mode: difference;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-weight: 100;
+            letter-spacing: 15px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: transparent;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 20px 60px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            letter-spacing: 5px;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #fff;
+        }
+
+        #readout {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #444;
+            font-size: 12px;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="scope"></canvas>
+
+    <div id="ui">
+        <h1>NATIVE TONGUE</h1>
+        <button id="btn-init">ESTABLISH UPLINK</button>
+    </div>
+
+    <div id="readout">WAITING FOR CARRIER SIGNAL...</div>
+
+    <script>
+        // --- GRAPHICS SETUP ---
+        const canvas = document.getElementById('scope');
+        const ctx = canvas.getContext('2d');
+        const readout = document.getElementById('readout');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let mouseX = 0.5;
+        let mouseY = 0.5;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouseX = e.clientX / width;
+            mouseY = e.clientY / height;
+        });
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE FORMANT CHOIR
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx;
+        let master, analyser;
+        let isRunning = false;
+
+        // HARMONIC SERIES BASE (Low A)
+        const FUNDAMENTAL = 55;
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Limiter
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -10;
+            comp.ratio.value = 12;
+            comp.connect(actx.destination);
+
+            master = actx.createGain();
+            master.gain.value = 0.5;
+            master.connect(comp);
+
+            // ANALYSER
+            analyser = actx.createAnalyser();
+            analyser.fftSize = 2048;
+            master.connect(analyser);
+
+            // ECHO (Space)
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.4;
+            const feedback = actx.createGain();
+            feedback.gain.value = 0.5;
+            const filter = actx.createBiquadFilter();
+            filter.frequency.value = 1000;
+
+            master.connect(delay);
+            delay.connect(filter);
+            filter.connect(feedback);
+            feedback.connect(delay);
+            feedback.connect(actx.destination); // Wet
+
+            isRunning = true;
+            voiceLoop();
+        }
+
+        function createVoice(freq, duration) {
+            const t = actx.currentTime;
+            const osc = actx.createOscillator();
+            const gain = actx.createGain();
+            
+            // Source: Sawtooth (Rich harmonics are needed for formants)
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            // FORMANT FILTER 1 (Lower Vowel Resonance)
+            const f1 = actx.createBiquadFilter();
+            f1.type = 'bandpass';
+            // Map Mouse X to Vowel Space (300Hz to 800Hz)
+            f1.frequency.value = 300 + (mouseX * 500);
+            f1.Q.value = 5 + (mouseY * 10); // Sharpness
+
+            // FORMANT FILTER 2 (Upper Vowel Resonance)
+            const f2 = actx.createBiquadFilter();
+            f2.type = 'bandpass';
+            // Map Mouse X to Vowel Space (800Hz to 2500Hz)
+            f2.frequency.value = 800 + (mouseX * 1700);
+            f2.Q.value = 5 + (mouseY * 10);
+
+            // Routing: Osc -> F1/F2 Parallel -> Gain -> Master
+            osc.connect(f1);
+            osc.connect(f2);
+            f1.connect(gain);
+            f2.connect(gain);
+            gain.connect(master);
+
+            // Envelope (Swell)
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.1, t + duration * 0.2); // Attack
+            gain.gain.exponentialRampToValueAtTime(0.001, t + duration); // Decay
+
+            // Microtonal Pitch Slide (The "Living" feel)
+            osc.frequency.linearRampToValueAtTime(freq * 1.01, t + duration);
+
+            osc.start(t);
+            osc.stop(t + duration);
+        }
+
+        function voiceLoop() {
+            if (!isRunning) return;
+
+            // ALGORITHMIC COMPOSITION
+            // 1. Choose Harmonic (Integers 1-12)
+            // Weighted towards lower harmonics for stability, high for texture
+            const harmonic = Math.floor(Math.pow(Math.random(), 2) * 12) + 1;
+            const freq = FUNDAMENTAL * harmonic;
+            
+            // 2. Choose Duration (Lower notes = Longer)
+            const duration = (4 / harmonic) + Math.random() * 2;
+
+            createVoice(freq, duration);
+
+            // Text Log
+            readout.innerText = `HARMONIC: ${harmonic} // FREQ: ${freq.toFixed(1)}Hz // FORMANT_X: ${mouseX.toFixed(2)}`;
+            readout.style.color = `hsl(${harmonic * 30}, 100%, 70%)`;
+
+            // 3. Schedule Next
+            // Overlap voices significantly for "Choir" effect
+            setTimeout(voiceLoop, duration * 400); 
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: CIRCULAR OSCILLOSCOPE
+           ------------------------------------------------ */
+        function draw() {
+            requestAnimationFrame(draw);
+            time += 0.005;
+
+            // Fade out background (Trails)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            if (!analyser) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+
+            ctx.lineWidth = 2;
+            // Color cycle based on time
+            ctx.strokeStyle = `hsl(${time * 50}, 100%, 50%)`;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = ctx.strokeStyle;
+
+            ctx.beginPath();
+
+            // Draw polar waveform
+            const radius = 150 + (mouseY * 50); // Size reacts to mouse Y
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0; // Normalize 0-2
+                const angle = (i / bufferLength) * Math.PI * 2;
+                
+                // Add rotation (Spin)
+                const rotation = time;
+                
+                // Map waveform amplitude to radius
+                const r = radius * v; 
+                
+                const x = cx + Math.cos(angle + rotation) * r;
+                const y = cy + Math.sin(angle + rotation) * r;
+
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            
+            // Connect end to start
+            ctx.closePath();
+            ctx.stroke();
+
+            // Core
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2 + (Math.random()*3), 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // START
+        document.getElementById('btn-init').addEventListener('click', () => {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 1000);
+            
+            initAudio();
+            
+            // Browser safety check: Force resume if suspended
+            if (actx.state === 'suspended') actx.resume();
+            
+            draw();
+        });
+
+    </script>
+</body>
+</html>
