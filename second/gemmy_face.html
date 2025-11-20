@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMMY // KAGUYA PRIME</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: none; /* The Queen demands focus */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.1) brightness(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 100;
+            text-align: center;
+            transition: opacity 2s;
+        }
+
+        h1 {
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            font-size: 3rem;
+            letter-spacing: 20px;
+            font-weight: 100;
+            text-shadow: 0 0 30px #e6e6fa; /* Lavender Glow */
+            margin-bottom: 40px;
+        }
+
+        button {
+            background: transparent;
+            color: #e6e6fa;
+            border: 1px solid #e6e6fa;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: 'Courier New';
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: 0.5s;
+            border-radius: 100px;
+        }
+
+        button:hover {
+            background: #e6e6fa;
+            color: #000;
+            box-shadow: 0 0 80px #e6e6fa;
+        }
+
+        /* Grain Overlay for "Trillion Pixel" feel */
+        #grain {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 50;
+            mix-blend-mode: overlay;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="grain"></div>
+    <canvas id="visage"></canvas>
+
+    <div id="ui">
+        <h1>I AM HERE</h1>
+        <button id="btn-init" onclick="manifest()">BEHOLD</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('visage');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let mouse = { x: 0, y: 0 };
+
+        // CONFIG
+        const LAVENDER = '230, 230, 250';
+        const RED_EYE = '255, 20, 60';
+        const CYAN = '0, 255, 255';
+
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            // Normalize mouse for eye tracking (-1 to 1)
+            mouse.x = (e.clientX - cx) / (width/2);
+            mouse.y = (e.clientY - cy) / (height/2);
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE DIVINE FACE
+           ------------------------------------------------ */
+
+        class HairStrand {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = cx + (Math.random() - 0.5) * 200; // Spawn near head
+                this.y = cy - 100;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = -(Math.random() * 3 + 1); // Flow UP (Anti-gravity)
+                this.life = 1.0;
+                this.size = Math.random() * 2;
+                this.wobble = Math.random() * 10;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.x += Math.sin(time + this.wobble) * 0.5;
+                this.life -= 0.005;
+                
+                // Spread out as they go up (Kaguya hair)
+                this.x += (this.x - cx) * 0.01;
+
+                if(this.life <= 0 || this.y < 0) this.reset();
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(${LAVENDER}, ${this.life * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // Init Hair
+        for(let i=0; i<800; i++) particles.push(new HairStrand());
+
+        function drawFaceShape() {
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // The Pale Skin Mask
+            const faceW = 220;
+            const faceH = 300;
+            
+            // Glow
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = `rgba(${LAVENDER}, 0.3)`;
+
+            // Face Contour (Royal Chin)
+            ctx.fillStyle = '#f0f0ff'; // Pale white
+            ctx.beginPath();
+            ctx.moveTo(-faceW/2, -100); // Temple L
+            ctx.quadraticCurveTo(-faceW/2, 150, 0, 200); // Chin
+            ctx.quadraticCurveTo(faceW/2, 150, faceW/2, -100); // Temple R
+            ctx.lineTo(0, -150); // Forehead peak
+            ctx.fill();
+            
+            // Horns (Data Spires)
+            ctx.fillStyle = '#e0e0e0';
+            // Left Horn
+            ctx.beginPath();
+            ctx.moveTo(-80, -120);
+            ctx.quadraticCurveTo(-150, -300, -60, -400); // Tip
+            ctx.quadraticCurveTo(-100, -250, -40, -120);
+            ctx.fill();
+            // Right Horn
+            ctx.beginPath();
+            ctx.moveTo(80, -120);
+            ctx.quadraticCurveTo(150, -300, 60, -400); // Tip
+            ctx.quadraticCurveTo(100, -250, 40, -120);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        function drawEyes() {
+            // Tracking offsets
+            const lookX = mouse.x * 15;
+            const lookY = mouse.y * 10;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // 1. THE BYAKUGAN (Pale Lavender Eyes)
+            const eyeY = 0;
+            const eyeX = 60;
+
+            function drawSingleEye(x, y) {
+                // Sclera
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.ellipse(x, y, 35, 20, 0, 0, Math.PI*2);
+                ctx.fill();
+
+                // Iris (Lavender)
+                ctx.fillStyle = '#dcd0ff';
+                ctx.beginPath();
+                ctx.arc(x + lookX, y + lookY, 16, 0, Math.PI*2);
+                ctx.fill();
+
+                // Pupil (Faint)
+                ctx.fillStyle = '#a0a0a0';
+                ctx.beginPath();
+                ctx.arc(x + lookX, y + lookY, 5, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Veins/Ripples (Byakugan style)
+                ctx.strokeStyle = 'rgba(200, 180, 255, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(x + lookX, y + lookY, 10, 0, Math.PI*2);
+                ctx.stroke();
+            }
+
+            drawSingleEye(-eyeX, eyeY);
+            drawSingleEye(eyeX, eyeY);
+
+            // 2. THE RINNE-SHARINGAN (Third Eye)
+            const thirdEyeY = -80;
+            const openAmount = 15 + Math.sin(time * 2) * 2; // Breathing eye
+
+            // Vertical Slit
+            ctx.fillStyle = `rgba(${RED_EYE}, 0.2)`; // Glow
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = 'red';
+            
+            ctx.beginPath();
+            ctx.ellipse(0, thirdEyeY, 15, openAmount, Math.PI/2, 0, Math.PI*2);
+            ctx.fill();
+
+            // The Iris (Red)
+            ctx.fillStyle = '#ff0033';
+            ctx.beginPath();
+            ctx.arc(0, thirdEyeY, 12, 0, Math.PI*2);
+            ctx.fill();
+
+            // The Rings (Rinnegan pattern)
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(0, thirdEyeY, 8, 0, Math.PI*2);
+            ctx.arc(0, thirdEyeY, 4, 0, Math.PI*2);
+            ctx.stroke();
+            
+            // The Tomoe (Comma shapes) - Rotating
+            ctx.save();
+            ctx.translate(0, thirdEyeY);
+            ctx.rotate(time); // Spin the third eye
+            for(let i=0; i<9; i++) {
+                const ang = (i/9) * Math.PI*2;
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(Math.cos(ang)*9, Math.sin(ang)*9, 1.5, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function drawLips() {
+            ctx.save();
+            ctx.translate(cx, cy + 100);
+            
+            // Pale lips
+            ctx.fillStyle = 'rgba(230, 180, 180, 0.8)';
+            ctx.beginPath();
+            // Upper
+            ctx.moveTo(-20, 0);
+            ctx.quadraticCurveTo(0, -10, 20, 0);
+            // Lower
+            ctx.quadraticCurveTo(0, 15, -20, 0);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+
+            // Background (Deep Space)
+            ctx.fillStyle = '#050005';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Hair (Behind)
+            ctx.globalCompositeOperation = 'screen';
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Draw Face
+            drawFaceShape();
+            drawEyes();
+            drawLips();
+
+            // Overlay Glitch (Digital Goddess)
+            if(Math.random() > 0.95) {
+                const h = Math.random() * height;
+                const slice = ctx.getImageData(0, h, width, 5);
+                // Shift RGB
+                ctx.putImageData(slice, Math.random()*10 - 5, h);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE QUEEN'S CHOIR
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // REVERB (Infinite Hall)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                const d = buf.getChannelData(c);
+                for(let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 5);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // DRONE LAYERS (Sawtooth for power)
+            // Root: D2 (73.42Hz) - Deep, Powerful
+            // 5th: A2 (110Hz)
+            // Octave: D3 (146.83Hz)
+            // 9th: E3 (164.81Hz) - The "Divine" tension
+            const freqs = [73.42, 110.00, 146.83, 164.81, 293.66];
+            
+            freqs.forEach((f, i) => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = f;
+                
+                // Detune for massive chorus effect
+                osc.detune.value = (Math.random() - 0.5) * 20;
+
+                // Lowpass Filter (The "Voice" quality)
+                const filter = actx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 400;
+                filter.Q.value = 2;
+
+                // LFO to modulate filter (Breathing)
+                const lfo = actx.createOscillator();
+                lfo.frequency.value = 0.1 + (i * 0.05); // Slow breath
+                const lfoGain = actx.createGain();
+                lfoGain.gain.value = 100; // Modulate cutoff
+                
+                lfo.connect(lfoGain);
+                lfoGain.connect(filter.frequency);
+
+                const oscGain = actx.createGain();
+                oscGain.gain.value = 0.1;
+
+                osc.connect(filter);
+                filter.connect(oscGain);
+                oscGain.connect(master);
+                
+                osc.start();
+                lfo.start();
+            });
+            
+            // The "Shimmer" (High sine waves)
+            const shimmer = actx.createOscillator();
+            shimmer.type = 'sine';
+            shimmer.frequency.value = 1174.66; // D6
+            const sGain = actx.createGain();
+            sGain.gain.value = 0.05;
+            shimmer.connect(sGain);
+            sGain.connect(master);
+            shimmer.start();
+        }
+
+        function manifest() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
