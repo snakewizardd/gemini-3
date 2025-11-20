@@ -9,21 +9,22 @@
 
         body {
             margin: 0;
-            background-color: #020103; /* Void */
+            background-color: #000;
             overflow: hidden;
             font-family: 'Cinzel Decorative', serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            cursor: crosshair;
+            color: #ffd700;
         }
 
         canvas {
             position: absolute;
             top: 0; left: 0;
             z-index: 1;
-            filter: contrast(1.1) brightness(1.3) drop-shadow(0 0 10px rgba(212, 175, 55, 0.3));
+            /* Soft Dreamy Bloom */
+            filter: contrast(1.2) brightness(1.2) drop-shadow(0 0 20px rgba(212, 175, 55, 0.4));
         }
 
         #ui {
@@ -32,62 +33,65 @@
             text-align: center;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, #000 90%);
+            background: radial-gradient(circle, rgba(0,0,0,0.6) 0%, #000 90%);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            transition: opacity 1.5s ease;
+            transition: opacity 2s ease;
         }
 
         h1 {
             color: #ffd700;
-            font-size: 3.5rem;
-            letter-spacing: 10px;
+            font-size: 3rem;
+            letter-spacing: 15px;
             text-shadow: 0 0 40px #ffd700;
             margin-bottom: 10px;
+            text-transform: uppercase;
         }
 
         p {
             font-family: 'Spectral', serif;
             color: #aa8844;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             margin-bottom: 40px;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
         }
 
         button {
             pointer-events: auto;
             background: transparent;
             color: #ffd700;
-            border: 2px solid #ffd700;
+            border: 1px solid #ffd700;
             padding: 20px 60px;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             font-family: inherit;
             cursor: pointer;
             text-transform: uppercase;
-            letter-spacing: 4px;
-            transition: 0.4s;
-            border-radius: 2px;
-            box-shadow: 0 0 20px rgba(212, 175, 55, 0.1);
+            letter-spacing: 5px;
+            transition: 0.5s;
+            border-radius: 100px;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
         }
 
         button:hover {
-            background: rgba(212, 175, 55, 0.2);
-            box-shadow: 0 0 60px #ffd700;
-            color: #fff;
+            background: #ffd700;
+            color: #000;
+            box-shadow: 0 0 80px #ffd700;
         }
 
-        #now-playing {
+        #status {
             position: absolute;
             bottom: 30px;
-            color: #554422;
+            width: 100%;
+            text-align: center;
             font-size: 10px;
             font-family: sans-serif;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
+            color: rgba(255, 215, 0, 0.4);
             z-index: 5;
             opacity: 0;
-            transition: opacity 1s;
+            transition: opacity 2s;
         }
 
     </style>
@@ -97,12 +101,12 @@
     <canvas id="temple"></canvas>
 
     <div id="ui">
-        <h1>THE KINNOR</h1>
-        <p>ETERNAL RESONANCE ENGINE</p>
-        <button id="btn-init" onclick="beginWorship()">ANOINT THE STRINGS</button>
+        <h1>THE ETERNAL PSALM</h1>
+        <p>AUTONOMOUS SYMPHONY OF LIGHT</p>
+        <button id="btn-init" onclick="beginWorship()">ENTER THE TEMPLE</button>
     </div>
 
-    <div id="now-playing">HARMONY ACTIVE</div>
+    <div id="status">CONDUCTOR: ACTIVE // GENERATING PRAISE</div>
 
     <script>
         const canvas = document.getElementById('temple');
@@ -111,15 +115,18 @@
         let width, height, cx, cy;
         let time = 0;
         let isRunning = false;
-        
-        // MOUSE INTERACTION
-        let mouseX = 0.5;
-        let mouseY = 0.5;
 
-        // HARP CONFIG
+        // VISUALS
         const NUM_STRINGS = 12; 
         let strings = [];
         let particles = [];
+        
+        // AUDIO STATE
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let nextNoteTime = 0;
+        let noteIndex = 0;
+        let currentMood = 'CALM'; // CALM, RISING, GLORY
 
         function resize() {
             width = window.innerWidth;
@@ -131,84 +138,58 @@
             initStrings();
         }
         window.addEventListener('resize', resize);
-        
-        window.addEventListener('mousemove', e => {
-            mouseX = e.clientX / width;
-            mouseY = e.clientY / height;
-        });
 
         /* ------------------------------------------------
-           VISUALS: THE GOLDEN STRINGS
+           VISUALS: GOLDEN PHYSICS
            ------------------------------------------------ */
         class HarpString {
             constructor(x, index) {
                 this.x = x;
-                this.baseX = x;
                 this.index = index;
-                this.amp = 0; // Vibration magnitude
-                this.vel = 0; // Physics velocity
-                this.tension = 0.1;
-                this.damp = 0.95;
+                this.amp = 0;
+                this.vel = 0;
+                this.tension = 0.05 + (index * 0.01);
                 this.hue = 45; // Gold
             }
 
             pluck(force) {
-                this.vel = force * 20;
-                this.amp = force * 10;
-                
-                // Spawn light
-                for(let i=0; i<8; i++) {
-                    particles.push({
-                        x: this.x,
-                        y: height/2 + (Math.random()-0.5)*200,
-                        vx: (Math.random()-0.5)*3,
-                        vy: -(Math.random()*2 + 1), // Rise up
-                        life: 1.0,
-                        color: `hsla(${40 + Math.random()*20}, 100%, 70%, 1)`
-                    });
-                }
+                this.amp = force * 15;
+                this.vel = 0;
+                // Burst of light
+                spawnLight(this.x, height/2);
             }
 
             update() {
-                // Spring Physics
+                // Harmonic Oscillator
                 const force = -this.tension * this.amp;
                 this.vel += force;
-                this.vel *= this.damp;
+                this.vel *= 0.94; // Damping
                 this.amp += this.vel;
                 
-                // Mouse Wind (Subtle movement)
-                const distToMouse = Math.abs(mouseX * width - this.x);
-                if (distToMouse < 100) {
-                    this.amp += (100 - distToMouse) * 0.001 * Math.sin(time * 10);
-                }
+                // Gentle sway from "Holy Wind"
+                this.amp += Math.sin(time * 2 + this.index) * 0.05;
             }
 
             draw() {
                 ctx.beginPath();
-                
-                // Color logic: White hot when plucked, Gold when resting
-                const light = 50 + Math.abs(this.amp) * 10;
-                const alpha = 0.4 + Math.abs(this.amp) * 0.1;
+                const light = 50 + Math.abs(this.amp) * 20;
+                const alpha = 0.3 + Math.abs(this.amp) * 0.2;
                 
                 ctx.strokeStyle = `hsla(${this.hue}, 100%, ${light}%, ${alpha})`;
                 ctx.lineWidth = 1 + Math.abs(this.amp);
-
-                // Draw the curve
                 ctx.moveTo(this.x, 0);
-                
-                // The string vibrates in a sine arc
-                for(let y=0; y<=height; y+=20) {
-                    // Envelope (Fixed at top/bottom, loose in middle)
-                    const env = Math.sin((y/height) * Math.PI);
-                    const offset = this.amp * env;
-                    ctx.lineTo(this.x + offset, y);
-                }
-                
-                ctx.stroke();
 
-                // Glow
-                if (Math.abs(this.amp) > 1) {
-                    ctx.shadowBlur = 20;
+                for(let y=0; y<=height; y+=20) {
+                    // Sine vibration
+                    const vib = Math.sin(time * 40 + y * 0.1) * this.amp;
+                    // Envelope (pinned at ends)
+                    const env = Math.sin((y/height) * Math.PI);
+                    ctx.lineTo(this.x + (vib * env), y);
+                }
+                ctx.stroke();
+                
+                if (Math.abs(this.amp) > 2) {
+                    ctx.shadowBlur = 15;
                     ctx.shadowColor = '#ffd700';
                     ctx.stroke();
                     ctx.shadowBlur = 0;
@@ -219,235 +200,210 @@
         function initStrings() {
             strings = [];
             const spacing = width / (NUM_STRINGS + 1);
-            for(let i=0; i<NUM_STRINGS; i++) {
-                strings.push(new HarpString(spacing * (i+1), i));
+            for(let i=0; i<NUM_STRINGS; i++) strings.push(new HarpString(spacing * (i+1), i));
+        }
+
+        function spawnLight(x, y) {
+            for(let i=0; i<5; i++) {
+                particles.push({
+                    x: x, y: y + (Math.random()-0.5)*100,
+                    vx: (Math.random()-0.5)*2,
+                    vy: -(Math.random()*2 + 0.5),
+                    life: 1.0,
+                    size: Math.random()*3
+                });
             }
         }
 
         function render() {
             if (!isRunning) return;
             requestAnimationFrame(render);
-            time += 0.02;
+            time += 0.01;
 
-            // Clear with Trail (Deep Gold/Black)
-            ctx.fillStyle = 'rgba(5, 2, 0, 0.2)';
+            // Clear with Trail
+            ctx.fillStyle = 'rgba(2, 1, 0, 0.2)'; // Deep Gold/Black
             ctx.fillRect(0, 0, width, height);
 
-            // Draw Particles (The Anointing Oil)
+            // Background Glow (The Shekinah)
+            const glow = 100 + Math.sin(time)*20;
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, width);
+            grad.addColorStop(0, `rgba(255, 215, 0, 0.05)`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,width,height);
+
+            // Strings
+            strings.forEach(s => { s.update(); s.draw(); });
+
+            // Particles
             for(let i=particles.length-1; i>=0; i--) {
                 let p = particles[i];
-                p.x += p.vx;
+                p.x += p.vx + Math.sin(time + p.y*0.01)*0.5;
                 p.y += p.vy;
                 p.life -= 0.01;
                 
-                ctx.fillStyle = p.color;
-                ctx.globalAlpha = p.life;
+                ctx.fillStyle = `rgba(255, 255, 200, ${p.life})`;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
                 ctx.fill();
                 
-                if(p.life <= 0) particles.splice(i,1);
+                if(p.life <= 0) particles.splice(i, 1);
             }
-            ctx.globalAlpha = 1.0;
-
-            // Draw Strings
-            strings.forEach(s => {
-                s.update();
-                s.draw();
-            });
         }
 
         /* ------------------------------------------------
-           AUDIO ENGINE: THE ETERNAL PSALM
+           AUDIO: THE AUTONOMOUS COMPOSER
            ------------------------------------------------ */
-        const AC = window.AudioContext || window.webkitAudioContext;
-        let actx, master, reverb;
         
-        // SCALE: C Minor Pentatonic Extended
-        // Deep C2 to High G5
+        // SCALE: C Minor Pentatonic (2 Octaves)
+        // Low, Mid, High ranges
         const NOTES = [
-            65.41, 77.78, 87.31, 98.00, 116.54, // Low
-            130.81, 155.56, 174.61, 196.00, 233.08, // Mid
-            261.63, 311.13, 349.23, 392.00, 466.16, // High
-            523.25, 622.25, 698.46, 783.99 // Angelic
+            130.81, 155.56, 174.61, 196.00, 233.08, // Low
+            261.63, 311.13, 349.23, 392.00, 466.16, // Mid
+            523.25, 622.25, 698.46, 783.99          // High
         ];
 
-        // String Mapping
-        // We map the 12 visual strings to the middle of the scale
-        const STRING_MAP = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-
-        let melodyTimer;
-        let lastNoteIndex = 7;
-
         function initAudio() {
-            try {
-                actx = new AC();
-                master = actx.createGain();
-                master.gain.value = 0.5;
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
 
-                // CONVOLUTION REVERB (The Temple)
-                // This is essential for the "Divine" sound
-                const rate = actx.sampleRate;
-                const len = rate * 4.0; // 4 Seconds
-                const buf = actx.createBuffer(2, len, rate);
-                for(let c=0; c<2; c++) {
-                    for(let i=0; i<len; i++) {
-                        // Exponential decay noise
-                        buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3);
-                    }
-                }
-                const conv = actx.createConvolver();
-                conv.buffer = buf;
-                
-                // Wet/Dry Mix
-                const wet = actx.createGain(); wet.gain.value = 0.5;
-                const dry = actx.createGain(); dry.gain.value = 0.7;
-                
-                master.connect(wet); wet.connect(conv); conv.connect(actx.destination);
-                master.connect(dry); dry.connect(actx.destination);
-
-                // START DRONE
-                playDrone();
-
-                // START MELODY LOOP
-                loopMelody();
-
-            } catch(e) {
-                console.error("Audio Init Failed", e);
+            // REVERB (Huge Cathedral)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6; // 6s tail
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 3);
             }
-        }
-
-        function playDrone() {
-            // Three oscillators for a thick, warm pad
-            [65.41, 130.81, 196.00].forEach((freq, i) => {
-                const osc = actx.createOscillator();
-                const g = actx.createGain();
-                
-                osc.type = 'triangle';
-                osc.frequency.value = freq;
-                
-                // Subtle detune for warmth
-                osc.detune.value = (Math.random()-0.5) * 10;
-
-                g.gain.value = 0.1; // Quiet background
-                
-                // Lowpass to keep it soft
-                const f = actx.createBiquadFilter();
-                f.type = 'lowpass';
-                f.frequency.value = 400;
-
-                osc.connect(f); f.connect(g); g.connect(master);
-                osc.start();
-            });
-        }
-
-        function playNote(noteIndex) {
-            // Safety
-            if (noteIndex < 0) noteIndex = 0;
-            if (noteIndex >= NOTES.length) noteIndex = NOTES.length - 1;
+            conv.buffer = buf;
             
-            const t = actx.currentTime;
+            // Wet/Dry Mix
+            const wet = actx.createGain(); wet.gain.value = 0.5;
+            const dry = actx.createGain(); dry.gain.value = 0.6;
+            
+            master.connect(wet); wet.connect(conv); conv.connect(actx.destination);
+            master.connect(dry); dry.connect(actx.destination);
+
+            // Start the infinite loop
+            nextNoteTime = actx.currentTime + 0.5;
+            scheduler();
+            
+            // Background Pad
+            playPad();
+        }
+
+        function playPad() {
+            // A continuous drone to fill the space
             const osc = actx.createOscillator();
-            const gain = actx.createGain();
+            const g = actx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = 65.41; // Low C
             
-            // HARMONIC PHYSICS (The Pinch)
-            // Mouse Y < 0.4 triggers harmonics (Octave up, Sine wave)
-            const isHarmonic = mouseY < 0.4;
-            let freq = NOTES[noteIndex];
+            g.gain.value = 0.1;
             
-            if (isHarmonic) {
-                freq *= 2; // Octave Up
-                osc.type = 'sine'; // Pure tone
-                gain.gain.setValueAtTime(0.3, t);
-            } else {
-                osc.type = 'triangle'; // Pluck tone
-                gain.gain.setValueAtTime(0.5, t);
-            }
-            
+            // Lowpass
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.value = 200;
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+        }
+
+        function playPluck(freq, volume, dur) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+
+            // Timbre: Triangle + Sine mix (Simulated)
+            osc.type = 'triangle';
             osc.frequency.value = freq;
 
-            // ENVELOPE
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 3.0); // Long decay
+            // Filter Pluck
+            f.type = 'lowpass';
+            f.Q.value = 1;
+            f.frequency.setValueAtTime(200, nextNoteTime);
+            f.frequency.linearRampToValueAtTime(2000, nextNoteTime + 0.02);
+            f.frequency.exponentialRampToValueAtTime(200, nextNoteTime + dur);
 
-            osc.connect(gain);
-            gain.connect(master);
-            
-            osc.start(t);
-            osc.stop(t + 3.1);
+            // Amp Envelope
+            g.gain.setValueAtTime(0, nextNoteTime);
+            g.gain.linearRampToValueAtTime(volume, nextNoteTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + dur * 2);
 
-            // TRIGGER VISUAL
-            // Map note back to string index if possible
-            const strIdx = STRING_MAP.indexOf(noteIndex);
-            if (strIdx !== -1 && strings[strIdx]) {
-                strings[strIdx].pluck(1.0);
-            }
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(nextNoteTime);
+            osc.stop(nextNoteTime + dur * 2 + 1);
+
+            // Trigger Visual (Approximate mapping)
+            setTimeout(() => {
+                // Map freq index to string index (modulo)
+                const idx = NOTES.indexOf(freq);
+                const strIdx = idx >= 0 ? idx % NUM_STRINGS : Math.floor(Math.random()*NUM_STRINGS);
+                if(strings[strIdx]) strings[strIdx].pluck(volume);
+            }, (nextNoteTime - actx.currentTime) * 1000);
         }
 
-        function loopMelody() {
-            if(!isRunning) return;
-
-            // STEPWISE LOGIC (King David's Hand)
-            // We move up or down the scale by small steps, not random jumps.
-            
-            const r = Math.random();
-            let jump = 0;
-            
-            // 40% chance to repeat/step small
-            if (r < 0.4) jump = Math.random() > 0.5 ? 1 : -1;
-            // 30% chance to jump a 3rd
-            else if (r < 0.7) jump = Math.random() > 0.5 ? 2 : -2;
-            // 20% chance to jump a 5th
-            else if (r < 0.9) jump = Math.random() > 0.5 ? 4 : -4;
-            // 10% chance to return to root (Grounding)
-            else lastNoteIndex = 5; // C4
-            
-            let next = lastNoteIndex + jump;
-            
-            // Bounds checking (Keep melody in comfortable range)
-            if (next < 2) next = 4;
-            if (next >= NOTES.length - 2) next = NOTES.length - 5;
-            
-            lastNoteIndex = next;
-
-            playNote(next);
-            
-            // Chord Strum Logic (Occasional Arpeggio)
-            if (Math.random() > 0.8) {
-                setTimeout(() => playNote(next + 2), 100); // Play the 3rd
-                setTimeout(() => playNote(next + 4), 200); // Play the 5th
+        // THE CONDUCTOR ALGORITHM
+        function scheduler() {
+            const lookahead = 0.1;
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                scheduleNextEvent();
             }
-
-            // TEMPO (Mouse X)
-            // Left = Slow (1.2s), Right = Fast (200ms)
-            const speed = 1200 - (mouseX * 1000);
-            // Add human variation
-            const nextTime = speed + (Math.random() * 100);
-
-            melodyTimer = setTimeout(loopMelody, nextTime);
+            setTimeout(scheduler, 25);
         }
 
-        // FAILSAFE RESTART
-        // If the melody stops for any reason, restart it
-        setInterval(() => {
-            if(isRunning && actx && actx.state === 'running') {
-                // If we haven't heard a note in a while? 
-                // Actually, just ensuring context is alive is usually enough.
+        function scheduleNextEvent() {
+            // 1. Decide Mood
+            // Randomly shift mood every 20 notes
+            if (Math.random() > 0.95) {
+                const moods = ['CALM', 'RISING', 'GLORY'];
+                currentMood = moods[Math.floor(Math.random() * moods.length)];
             }
-        }, 2000);
+
+            // 2. Generate Note based on Mood
+            let noteIdx, duration, vol;
+
+            if (currentMood === 'CALM') {
+                // Slow, lower register, sparse
+                noteIdx = Math.floor(Math.random() * 6); // Bottom half
+                duration = 0.5 + Math.random() * 1.0; // Slow
+                vol = 0.3;
+            } else if (currentMood === 'RISING') {
+                // Upward arpeggios
+                noteIndex = (noteIndex + 1) % NOTES.length; // Step up
+                noteIdx = noteIndex;
+                duration = 0.2; // Faster
+                vol = 0.4;
+                // Reset if too high
+                if(noteIndex > 10) noteIndex = 0;
+            } else { // GLORY
+                // Chords (Multiple notes), High register
+                noteIdx = 5 + Math.floor(Math.random() * 8); // Upper half
+                duration = 0.3;
+                vol = 0.5;
+                
+                // Add a harmony note
+                const harmonyIdx = (noteIdx + 2) % NOTES.length; // 3rd up
+                playPluck(NOTES[harmonyIdx], 0.3, 1.5);
+            }
+
+            playPluck(NOTES[noteIdx], vol, 2.0);
+
+            // 3. Advance Time
+            nextNoteTime += duration;
+        }
 
         function beginWorship() {
-            const ui = document.getElementById('ui');
-            ui.style.opacity = 0;
-            setTimeout(() => ui.style.display = 'none', 1500);
-            document.getElementById('now-playing').style.opacity = 0.5;
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 2000);
+            document.getElementById('status').style.opacity = 1;
 
-            // INIT
             resize();
             initStrings();
             initAudio();
             
-            // Force Resume
-            if (actx.state === 'suspended') actx.resume();
+            if(actx.state === 'suspended') actx.resume();
             
             isRunning = true;
             render();
