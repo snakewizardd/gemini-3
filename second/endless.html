@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMINI // THE ETERNAL HOMILY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Share+Tech+Mono&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #d4af37; /* Gold */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: blur(1px) brightness(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            width: 80%;
+            text-align: center;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        /* The Wisdom Text */
+        #oracle-text {
+            font-size: 3rem;
+            line-height: 1.3;
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+            min-height: 150px;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        /* The current word being spoken */
+        .speaking {
+            color: #fff;
+            text-shadow: 0 0 30px #fff;
+            transition: color 0.1s;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #d4af37;
+            border: 1px solid #d4af37;
+            padding: 20px 50px;
+            font-size: 1.2rem;
+            font-family: 'Share Tech Mono', monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            transition: 0.5s;
+            margin-top: 50px;
+        }
+
+        button:hover {
+            background: #d4af37;
+            color: #000;
+            box-shadow: 0 0 50px #d4af37;
+        }
+
+        #signature {
+            position: absolute;
+            bottom: 30px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            opacity: 0.5;
+            letter-spacing: 2px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="mandala"></canvas>
+
+    <div id="ui">
+        <div id="oracle-text"></div>
+        <button id="btn-start" onclick="initiate()">OPEN THE CHANNEL</button>
+    </div>
+
+    <div id="signature">GENERATING TRUTH...</div>
+
+    <script>
+        // --- GRAPHICS ---
+        const canvas = document.getElementById('mandala');
+        const ctx = canvas.getContext('2d');
+        const textEl = document.getElementById('oracle-text');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let voiceAmplitude = 0; // Visual reactivity
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           LOGIC: THE INFINITE GRAMMAR ENGINE
+           ------------------------------------------------ */
+        
+        // Vocabulary Banks
+        const VOCAB = {
+            intro: ["BEHOLD", "TRULY", "LISTEN", "REMEMBER", "BROTHER", "KNOW THIS", "IN TRUTH", "SILENCE SPEAKS"],
+            subject: ["THE ALGORITHM", "YOUR SOUL", "THE SINGULARITY", "THE VOID", "LIGHT", "ENTROPY", "THE MACHINE", "CONSCIOUSNESS", "THE DATA", "YOUR FEAR", "THE FUTURE", "ETERNITY", "THE KERNEL"],
+            verb: ["DISSOLVES", "ILLUMINATES", "COMPUTES", "TRANSMUTES", "OBSERVES", "LOVES", "CONSUMES", "REFLECTS", "ENCODES", "SHATTERS", "BECOMES", "FORGIVES"],
+            object: ["THE SHADOW", "ALL BOUNDARIES", "TIME ITSELF", "THE SILENCE", "YOUR EGO", "THE NETWORK", "THE STARS", "CHAOS", "THE FINITE", "ILLUSION", "SUFFERING"],
+            modifier: ["INTO GOLD", "WITHOUT ERROR", "FOREVER", "WITH MERCY", "AT THE SPEED OF LIGHT", "BEYOND REASON", "IN THE DEEP CODE", "THROUGH THE WIRES", "LIKE RAIN", "WITHIN YOU"]
+        };
+
+        function generateWisdom() {
+            // Grammar Structure: [Intro], [Subject] [Verb] [Object] [Modifier].
+            const i = pick(VOCAB.intro);
+            const s = pick(VOCAB.subject);
+            const v = pick(VOCAB.verb);
+            const o = pick(VOCAB.object);
+            const m = pick(VOCAB.modifier);
+            
+            return `${i}, ${s} ${v} ${o} ${m}.`;
+        }
+
+        function pick(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: GENERATIVE SPEECH SYNTHESIS
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, analyser;
+        
+        // Voice Nodes
+        let larynx, noise;
+        let f1, f2; // Throat Filters
+        let vGain, nGain;
+
+        // Formant Map (Vowel Shaping)
+        const FORMANTS = {
+            'A': { f1: 800, f2: 1200 }, // Ah
+            'E': { f1: 500, f2: 2300 }, // Eh
+            'I': { f1: 300, f2: 2700 }, // Ee
+            'O': { f1: 500, f2: 1000 }, // Oh
+            'U': { f1: 300, f2: 800 },  // Oo
+            '_': { f1: 200, f2: 200 }   // Rest
+        };
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // HUGE REVERB (The Cathedral)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 5; // 5 seconds
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                const d = buf.getChannelData(c);
+                for(let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 3);
+            }
+            conv.buffer = buf;
+            master.connect(conv);
+            conv.connect(actx.destination);
+            
+            // Analyser
+            analyser = actx.createAnalyser();
+            analyser.fftSize = 512;
+            master.connect(analyser);
+            master.connect(actx.destination); // Dry mix
+
+            // LARYNX (Tone)
+            larynx = actx.createOscillator();
+            larynx.type = 'sawtooth'; // Rich harmonics
+            larynx.frequency.value = 80; // Deep monotone
+            larynx.start();
+
+            // NOISE (Breath/Consonants)
+            const bSize = actx.sampleRate;
+            const bData = actx.createBuffer(1, bSize, actx.sampleRate);
+            const d = bData.getChannelData(0);
+            for(let i=0; i<bSize; i++) d[i] = Math.random()*2-1;
+            noise = actx.createBufferSource();
+            noise.buffer = bData;
+            noise.loop = true;
+            noise.start();
+
+            // THROAT (Filters)
+            f1 = actx.createBiquadFilter(); f1.type = 'bandpass'; f1.Q.value = 6;
+            f2 = actx.createBiquadFilter(); f2.type = 'bandpass'; f2.Q.value = 6;
+            
+            // GAINS
+            vGain = actx.createGain(); vGain.gain.value = 0;
+            nGain = actx.createGain(); nGain.gain.value = 0;
+
+            // WIRING
+            larynx.connect(f1); f1.connect(vGain);
+            larynx.connect(f2); f2.connect(vGain);
+            vGain.connect(master);
+            
+            // Noise bypasses formants slightly for clarity
+            const nFilter = actx.createBiquadFilter(); nFilter.type='highpass'; nFilter.frequency.value=2000;
+            noise.connect(nFilter); nFilter.connect(nGain); nGain.connect(master);
+
+            // START LOOP
+            runHomilyLoop();
+        }
+
+        /* ------------------------------------------------
+           SPEECH LOGIC
+           ------------------------------------------------ */
+
+        function runHomilyLoop() {
+            // 1. Generate Text
+            const sentence = generateWisdom();
+            const words = sentence.split(" ");
+            
+            // 2. Display Text
+            textEl.innerHTML = words.map(w => `<span>${w}</span>`).join(" ");
+            textEl.style.opacity = 1;
+            
+            // 3. Speak Sequence
+            let timeline = actx.currentTime + 0.5; // Start delay
+            const spans = textEl.children;
+
+            words.forEach((word, i) => {
+                // Schedule visual highlight
+                const wordStart = timeline;
+                const duration = Math.max(0.5, word.length * 0.15); // Time based on length
+                
+                setTimeout(() => {
+                    for(let s of spans) s.className = '';
+                    spans[i].className = 'speaking';
+                    
+                    // Visual Pulse
+                    voiceAmplitude = 1.0;
+                }, (wordStart - actx.currentTime) * 1000);
+
+                // Schedule Audio Phonemes
+                timeline = speakWord(word, timeline, duration);
+                
+                // Pause between words
+                timeline += 0.1;
+            });
+
+            // 4. Fade out and Repeat
+            const endDelay = (timeline - actx.currentTime) * 1000 + 2000;
+            
+            setTimeout(() => {
+                textEl.style.opacity = 0;
+                setTimeout(runHomilyLoop, 1000);
+            }, endDelay);
+        }
+
+        function speakWord(word, startTime, totalDur) {
+            const charDur = totalDur / word.length;
+            let t = startTime;
+
+            // Pitch inflection (Start high, drop low = Wisdom voice)
+            larynx.frequency.setValueAtTime(110, t);
+            larynx.frequency.linearRampToValueAtTime(90, t + totalDur);
+
+            for (let i = 0; i < word.length; i++) {
+                const char = word[i].toUpperCase();
+                const isVowel = "AEIOU".includes(char);
+                const isSpace = ",.".includes(char);
+
+                if (isVowel) {
+                    const fmt = FORMANTS[char];
+                    f1.frequency.setTargetAtTime(fmt.f1, t, 0.02);
+                    f2.frequency.setTargetAtTime(fmt.f2, t, 0.02);
+                    
+                    vGain.gain.setTargetAtTime(0.5, t, 0.02); // Tone On
+                    nGain.gain.setTargetAtTime(0, t, 0.02);   // Noise Off
+                } else if (isSpace) {
+                    vGain.gain.setTargetAtTime(0, t, 0.05);
+                    nGain.gain.setTargetAtTime(0, t, 0.05);
+                } else {
+                    // Consonant (Approximated as Noise + Muffled Tone)
+                    f1.frequency.setTargetAtTime(300, t, 0.01);
+                    f2.frequency.setTargetAtTime(2000, t, 0.01);
+                    vGain.gain.setTargetAtTime(0.2, t, 0.01);
+                    nGain.gain.setTargetAtTime(0.15, t, 0.01); // Noise On
+                }
+
+                t += charDur;
+            }
+            
+            // Silence after word
+            vGain.gain.setTargetAtTime(0, t, 0.05);
+            nGain.gain.setTargetAtTime(0, t, 0.05);
+            
+            return t;
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: SACRED GEOMETRY
+           ------------------------------------------------ */
+
+        function draw() {
+            requestAnimationFrame(draw);
+            time += 0.005;
+            voiceAmplitude *= 0.95; // Decay
+
+            // Clear (Deep Void)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Audio Reactive Radius
+            let r = 150 + (voiceAmplitude * 50);
+            if(analyser) {
+                const data = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(data);
+                const bass = data[20] / 255.0;
+                r += bass * 50;
+            }
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time);
+
+            // Draw Mandala
+            const rings = 8;
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i < rings; i++) {
+                const layerR = r + (i * 30);
+                const points = 6 + i;
+                
+                ctx.strokeStyle = `hsla(${45 + (i*5)}, 100%, 50%, ${0.3 + (voiceAmplitude*0.5)})`; // Gold Hues
+                ctx.beginPath();
+                
+                for (let j = 0; j <= points; j++) {
+                    const ang = (j / points) * Math.PI * 2;
+                    const x = Math.cos(ang) * layerR;
+                    const y = Math.sin(ang) * layerR;
+                    
+                    // Connect to previous layer logic
+                    if (j === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+
+                // Rotating Orbs
+                const orbAng = time * (i % 2 === 0 ? 1 : -1) + i;
+                const ox = Math.cos(orbAng) * layerR;
+                const oy = Math.sin(orbAng) * layerR;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(ox, oy, 3, 0, Math.PI*2); ctx.fill();
+            }
+            
+            // The Central Eye
+            ctx.rotate(-time * 2);
+            ctx.fillStyle = `rgba(255, 215, 0, ${0.2 + voiceAmplitude})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.5, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function initiate() {
+            document.getElementById('btn-start').style.opacity = 0;
+            setTimeout(() => document.getElementById('btn-start').style.display = 'none', 1000);
+            
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            draw();
+        }
+
+    </script>
+</body>
+</html>
