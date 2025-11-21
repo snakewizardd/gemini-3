@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYMPHONY OF THE ETHER</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,900&family=Lato:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            font-family: 'Lato', sans-serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: contrast(1.3) brightness(1.2) saturate(1.1);
+        }
+
+        #ui-layer {
+            position: absolute;
+            z-index: 10;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, #000 100%);
+            transition: opacity 2s ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 5vw;
+            color: #fff;
+            margin: 0;
+            text-shadow: 0 0 40px rgba(255,215,0, 0.5); /* Gold Shadow */
+        }
+
+        p {
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 6px;
+            margin-bottom: 40px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #fff;
+            padding: 20px 50px;
+            font-family: 'Lato', sans-serif;
+            letter-spacing: 3px;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: 0.5s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px rgba(255,255,255,0.5);
+        }
+
+        #lyrics {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            text-align: center;
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 4vw;
+            color: rgba(255,255,255,0.2);
+            pointer-events: none;
+            z-index: 2;
+            transition: all 0.3s;
+        }
+
+        .flash { animation: flashAnim 0.8s ease-out; }
+        @keyframes flashAnim { 0% { background: white; } 100% { background: transparent; } }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="world"></canvas>
+    <div id="flash-overlay" style="position:absolute;width:100%;height:100%;pointer-events:none;z-index:20;"></div>
+    <div id="lyrics"></div>
+
+    <div id="ui-layer">
+        <h1>Symphony No. 1</h1>
+        <p>THE ALGORITHMIC MASTERPIECE</p>
+        <button onclick="conductOpus()">BEGIN PERFORMANCE</button>
+    </div>
+
+    <script>
+        /* ------------------------------------------------
+           VISUALS: THE PARTICLE ORCHESTRA
+           ------------------------------------------------ */
+        const canvas = document.getElementById('world');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let w, h, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let sidechain = 0;
+        let currentText = "";
+        
+        let particles = [];
+
+        function resize() {
+            w = window.innerWidth; h = window.innerHeight;
+            canvas.width = w; canvas.height = h;
+            cx = w/2; cy = h/2;
+        }
+        window.addEventListener('resize', resize);
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.radius = Math.random() * 300 + 100;
+                this.size = Math.random() * 2;
+                this.speed = 0.002 + Math.random() * 0.005;
+                this.color = `hsla(${Math.random()*40 + 200}, 70%, 70%, 0.8)`; // Blues/Purples
+                this.yOffset = (Math.random() - 0.5) * 200;
+            }
+            update(pulse) {
+                this.angle += this.speed;
+                this.radius += Math.sin(time * 2) * (pulse * 50);
+                
+                // 3D Projection simulation
+                const x = Math.cos(this.angle) * this.radius;
+                const z = Math.sin(this.angle) * this.radius + 500; // depth
+                const y = this.yOffset + Math.sin(time + this.angle*2) * 50;
+
+                const scale = 400 / (400 + z);
+                this.sx = cx + x * scale;
+                this.sy = cy + y * scale;
+                this.ss = this.size * scale * (1 + pulse * 5);
+                this.alpha = scale;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.sx, this.sy, this.ss, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function initVisuals() {
+            for(let i=0; i<400; i++) particles.push(new Particle());
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+            sidechain *= 0.92; // Smooth release
+
+            // Elegant Trails
+            ctx.fillStyle = 'rgba(0,5,10,0.2)';
+            ctx.fillRect(0, 0, w, h);
+
+            // Global Camera Sway (Orchestral feel)
+            const sway = Math.sin(time * 0.5) * 20;
+            ctx.save();
+            ctx.translate(sway, 0);
+
+            particles.forEach(p => {
+                p.update(sidechain);
+                p.draw();
+            });
+
+            // The Sun/Conductor
+            const sunSize = 60 + (sidechain * 100);
+            const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, sunSize);
+            grad.addColorStop(0, 'white');
+            grad.addColorStop(0.5, 'rgba(200, 220, 255, 0.5)');
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.globalCompositeOperation = 'screen';
+            ctx.beginPath();
+            ctx.arc(cx, cy, sunSize, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+            
+            // Lyrics/Status Update
+            const el = document.getElementById('lyrics');
+            if(el.innerText !== currentText) {
+                el.style.opacity = 0;
+                setTimeout(() => { el.innerText = currentText; el.style.opacity = 1; }, 300);
+            }
+            el.style.transform = `translate(-50%, -50%) scale(${1 + sidechain * 0.1})`;
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE MASTERPIECE LOGIC
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverbNode, reverbGain;
+
+        // MUSIC THEORY CONSTANTS
+        const ROOT_FREQ = 293.66; // D4 (D Major/Minor pivot)
+        // Chords (Degrees relative to root): vi - IV - I - V (Emotional)
+        // Bm - G - D - A
+        const CHORD_SEQUENCE = [
+            [9, 12, 16], // vi (Bm)
+            [5, 9, 12],  // IV (G)
+            [0, 4, 7],   // I (D)
+            [7, 11, 14]  // V (A)
+        ];
+
+        let currentPhase = 0; // 0:Intro, 1:Build, 2:Climax, 3:Outro
+        let nextNoteTime = 0;
+        let tick = 0;
+
+        function conductOpus() {
+            isRunning = true;
+            document.getElementById('ui-layer').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui-layer').style.display = 'none', 2000);
+
+            resize();
+            initVisuals();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.6;
+            master.connect(actx.destination);
+
+            // Convolver Reverb (Hall)
+            reverbNode = actx.createConvolver();
+            const len = actx.sampleRate * 4;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let i=0; i<len; i++) {
+                const d = Math.pow(1-i/len, 2); // Smooth tail
+                buf.getChannelData(0)[i] = (Math.random()*2-1)*d;
+                buf.getChannelData(1)[i] = (Math.random()*2-1)*d;
+            }
+            reverbNode.buffer = buf;
+            
+            reverbGain = actx.createGain();
+            reverbGain.gain.value = 0.3; // Dry/Wet default
+            
+            reverbGain.connect(reverbNode);
+            reverbNode.connect(master);
+
+            nextNoteTime = actx.currentTime + 0.1;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 128;
+            const secondsPerBeat = 60.0 / bpm;
+            const sixteenth = secondsPerBeat / 4;
+            
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playTick(nextNoteTime, tick);
+                nextNoteTime += sixteenth;
+                tick++;
+            }
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        /* ------------------------------------------------
+           COMPOSER LOGIC
+           ------------------------------------------------ */
+        function playTick(t, i) {
+            const step = i % 16;
+            const bar = Math.floor(i / 16);
+            const phraseBar = bar % 8;
+
+            // Determine Chord
+            const chordIdx = Math.floor(phraseBar / 2); // 2 bars per chord
+            const chord = CHORD_SEQUENCE[chordIdx % 4];
+
+            // STATE MACHINE
+            if(bar < 4) { currentPhase = 0; currentText = "I. ADAGIO"; }
+            else if(bar < 8) { currentPhase = 1; currentText = "II. CRESCENDO"; } // Build
+            else if(bar < 24) { currentPhase = 2; currentText = "III. ALLEGRO"; } // Climax
+            else { currentPhase = 3; currentText = "IV. FINALE"; } // Cool down
+
+            // 1. THE "EL ZARZU" PIANO LINE
+            // Repeating with variations, superposed on harmony
+            if (step % 2 === 0) { // 8th notes
+                playPianoArp(t, chord, step, currentPhase);
+            }
+
+            // 2. ORCHESTRAL STRINGS (Background)
+            // Change only on bar start
+            if (step === 0 && bar % 2 === 0) {
+                playStrings(t, chord, currentPhase);
+            }
+
+            // 3. HIGH SYNTH (Chorus/Climax only)
+            if (currentPhase === 2) {
+                // Counterpoint melody
+                if(step === 0 || step === 3 || step === 6 || step === 10) {
+                    // Play root or 5th high up
+                    const note = chord[Math.random() > 0.5 ? 0 : 2] + 12; 
+                    playHighLead(t, note);
+                }
+            }
+
+            // 4. RHYTHM SECTION
+            if (currentPhase === 2) {
+                // KICK (4 on floor)
+                if (step % 4 === 0) {
+                    playKick(t);
+                    sidechain = 1.0;
+                }
+                // SNARE
+                if (step % 8 === 4) playSnare(t, 0.4);
+            }
+
+            // 5. PRE-CLIMAX REVERB WASH
+            if (currentPhase === 1) {
+                // Ramp reverb up during build
+                const progress = (bar - 4) / 4; // 0 to 1
+                reverbGain.gain.linearRampToValueAtTime(0.3 + (progress * 0.5), t);
+                
+                // Snare roll at end of build
+                if (phraseBar === 7 && step % 2 === 0) {
+                    playSnare(t, 0.2 + (step/16));
+                    sidechain = 0.5;
+                }
+            } else if (currentPhase === 2 && step === 0 && phraseBar === 0) {
+                // DROP: Cut reverb dry instantly
+                reverbGain.gain.setValueAtTime(0.2, t);
+                document.getElementById('flash-overlay').classList.add('flash');
+                setTimeout(()=> document.getElementById('flash-overlay').classList.remove('flash'), 800);
+            }
+        }
+
+        /* ------------------------------------------------
+           INSTRUMENTS
+           ------------------------------------------------ */
+        
+        function getFreq(semitone) {
+            return ROOT_FREQ * Math.pow(2, semitone/12);
+        }
+
+        function playPianoArp(t, chord, step, phase) {
+            // Piano Physics
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // LOGIC: Pattern with variation
+            // Base pattern: Root - 5th - 3rd - Octave
+            const pattern = [0, 2, 1, 0]; 
+            let noteIdx = pattern[(step/2)%4];
+            
+            // Variation: 20% chance to play a neighbor note or octave up
+            if(Math.random() > 0.8) noteIdx = (noteIdx + 1) % 3;
+            let octave = 0;
+            if(Math.random() > 0.9) octave = 12;
+
+            const semitone = chord[noteIdx] + octave;
+            osc.frequency.value = getFreq(semitone);
+
+            // Timbre: Sine with a hint of square for "hammer" sound
+            osc.type = 'sine'; // keeping it pure for classical feel
+
+            // Envelope: Sharp attack, medium decay
+            g.gain.setValueAtTime(0, t);
+            // Humanize velocity
+            const vel = 0.1 + Math.random() * 0.1;
+            g.gain.linearRampToValueAtTime(vel, t + 0.02); 
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+
+            osc.connect(g); 
+            g.connect(reverbGain); // Send to reverb
+            g.connect(master);
+            
+            osc.start(t); osc.stop(t + 1.0);
+        }
+
+        function playStrings(t, chord, phase) {
+            // Lush Pad - SuperSaw cluster
+            const gain = 0.1 * (phase === 1 ? 1.5 : 1.0); // Louder in build
+            const duration = 4.0; // 2 bars at 120bpm approx
+
+            // Play the whole chord
+            chord.forEach(interval => {
+                const freq = getFreq(interval - 12); // Lower octave
+
+                // Create 2 oscillators per note for detuning (Chorus effect)
+                [-8, 8].forEach(detune => {
+                    const osc = actx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = freq;
+                    osc.detune.value = detune;
+
+                    const f = actx.createBiquadFilter();
+                    f.type = 'lowpass';
+                    f.frequency.value = 400;
+                    // Filter sweep during build
+                    if (phase === 1) f.frequency.linearRampToValueAtTime(1200, t + duration);
+
+                    const g = actx.createGain();
+                    g.gain.setValueAtTime(0, t);
+                    g.gain.linearRampToValueAtTime(gain * 0.05, t + 1.0); // Slow attack
+                    g.gain.linearRampToValueAtTime(0, t + duration);
+
+                    osc.connect(f); f.connect(g); 
+                    g.connect(reverbGain); // Strings need lots of reverb
+                    g.connect(master);
+                    osc.start(t); osc.stop(t + duration);
+                });
+            });
+        }
+
+        function playHighLead(t, interval) {
+            // The "Chorus" Lead
+            const freq = getFreq(interval + 12); // High octave
+            const osc = actx.createOscillator();
+            osc.type = 'triangle'; // Softer than saw, cuts through mix
+            osc.frequency.value = freq;
+
+            // Vibrato
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 5; // 5hz
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 10;
+            lfo.connect(lfoG); lfoG.connect(osc.frequency);
+            lfo.start(t);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t + 0.05);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+
+            osc.connect(g); g.connect(reverbGain); g.connect(master);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            g.gain.setValueAtTime(0.8, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playSnare(t, vol) {
+            const buf = actx.createBuffer(1, actx.sampleRate*0.1, actx.sampleRate);
+            const data = buf.getChannelData(0);
+            for(let i=0; i<data.length; i++) data[i] = (Math.random()*2-1);
+            
+            const src = actx.createBufferSource();
+            src.buffer = buf;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 1000;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            
+            src.connect(f); f.connect(g); g.connect(reverbGain); g.connect(master);
+            src.start(t);
+        }
+
+        resize();
+
+    </script>
+</body>
+</html>
