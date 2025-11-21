@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE MAGNUM OPUS // EXISTENCE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Orbitron:wght@900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: none; /* The void needs no pointer */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The "God Ray" Filter */
+            filter: contrast(1.2) brightness(1.3) saturate(1.5);
+        }
+
+        #interface {
+            position: absolute;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(0,0,0,0.8) 0%, #000 100%);
+            transition: opacity 3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: default;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 5vw;
+            color: transparent;
+            background: linear-gradient(to bottom, #fff, #888);
+            -webkit-background-clip: text;
+            margin: 0;
+            letter-spacing: 20px;
+            text-transform: uppercase;
+            filter: drop-shadow(0 0 30px rgba(255,255,255,0.5));
+            animation: breathe 4s infinite ease-in-out;
+        }
+
+        p {
+            font-family: 'Cinzel', serif;
+            color: #666;
+            letter-spacing: 8px;
+            margin-top: 20px;
+            font-size: 1.2rem;
+        }
+
+        button {
+            margin-top: 50px;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 30px 100px;
+            font-family: 'Cinzel', serif;
+            font-size: 1.5rem;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: all 0.6s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+
+        button:hover {
+            border-color: #fff;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.3);
+            letter-spacing: 10px;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        #readout {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="cosmos"></canvas>
+
+    <div id="interface">
+        <h1>GENESIS</h1>
+        <p>MATH. MUSIC. MATTER.</p>
+        <button onclick="ignite()">IGNITE SINGULARITY</button>
+    </div>
+
+    <div id="readout">
+        SYSTEM: CHAOS ENGINE<br>
+        TUNING: 432HZ PYTHAGOREAN<br>
+        GEOMETRY: HYPERSPHERE
+    </div>
+
+    <script>
+        /* ------------------------------------------------------------------
+           THE CORE CONSTANTS & STATE
+           ------------------------------------------------------------------ */
+        const canvas = document.getElementById('cosmos');
+        const ctx = canvas.getContext('2d', { alpha: false }); // High Performance
+        
+        let width, height, cx, cy;
+        let isRunning = false;
+        let t = 0; // Global Time
+
+        // PHYSICS & CAMERA
+        const PHI = 1.61803398875; // The Golden Ratio
+        let cameraZ = 0;
+        let rotation = { x: 0, y: 0, z: 0 };
+        let mouse = { x: 0, y: 0 };
+
+        // AUDIO ANALYIS (For Visualization Sync)
+        let analyser, dataArray;
+        let bassEnergy = 0;
+        let midEnergy = 0;
+
+        /* ------------------------------------------------------------------
+           THE VISUAL ENGINE: 4D HYPER-GEOMETRY
+           ------------------------------------------------------------------ */
+        let particles = [];
+        let connections = [];
+
+        class Node3D {
+            constructor(x, y, z) {
+                this.x = x; this.y = y; this.z = z;
+                this.ox = x; this.oy = y; this.oz = z; // Originals
+                this.id = Math.random();
+            }
+
+            project() {
+                // Rotation Matrices
+                let x = this.x, y = this.y, z = this.z;
+
+                // Rotate Y
+                let x1 = x * Math.cos(rotation.y) - z * Math.sin(rotation.y);
+                let z1 = z * Math.cos(rotation.y) + x * Math.sin(rotation.y);
+                
+                // Rotate X
+                let y2 = y * Math.cos(rotation.x) - z1 * Math.sin(rotation.x);
+                let z2 = z1 * Math.cos(rotation.x) + y * Math.sin(rotation.x);
+
+                // Perspective Projection
+                const fov = 600 + (bassEnergy * 100); // Pump with bass
+                const scale = fov / (fov + z2 + cameraZ);
+                
+                return {
+                    x: cx + x1 * scale,
+                    y: cy + y2 * scale,
+                    scale: scale,
+                    z: z2
+                };
+            }
+
+            update(time) {
+                // Breathing effect based on Sine and Audio
+                const dist = Math.sqrt(this.ox**2 + this.oy**2 + this.oz**2);
+                const breathe = 1 + Math.sin(time * 0.5 + dist * 0.01) * 0.1 + (midEnergy * 0.02);
+                
+                this.x = this.ox * breathe;
+                this.y = this.oy * breathe;
+                this.z = this.oz * breathe;
+
+                // Mouse Warp
+                this.x += (mouse.x * 500 - this.x) * 0.01;
+                this.y += (mouse.y * 500 - this.y) * 0.01;
+            }
+        }
+
+        function initGeometry() {
+            particles = [];
+            connections = [];
+            
+            // FIBONACCI SPHERE ALGORITHM
+            // Creates perfectly distributed points on a sphere
+            const samples = 300;
+            for (let i = 0; i < samples; i++) {
+                const y = 1 - (i / (samples - 1)) * 2; // y goes from 1 to -1
+                const radius = Math.sqrt(1 - y * y); // radius at y
+                
+                const theta = PHI * Math.PI * i; // Golden angle increment
+                
+                const x = Math.cos(theta) * radius;
+                const z = Math.sin(theta) * radius;
+
+                const size = 300; // Sphere radius
+                particles.push(new Node3D(x * size, y * size, z * size));
+            }
+
+            // Connect neighbors based on distance
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const d = Math.hypot(
+                        particles[i].ox - particles[j].ox,
+                        particles[i].oy - particles[j].oy,
+                        particles[i].oz - particles[j].oz
+                    );
+                    if (d < 60) { // Threshold for connection
+                        connections.push([i, j]);
+                    }
+                }
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+
+            t += 0.005;
+            
+            // Auto-Rotate
+            rotation.y += 0.002;
+            rotation.x = Math.sin(t * 0.5) * 0.2;
+
+            // Get Audio Data
+            analyser.getByteFrequencyData(dataArray);
+            // Calculate energy bands (0-255)
+            bassEnergy = dataArray.slice(0, 10).reduce((a,b)=>a+b,0) / 10 / 255; 
+            midEnergy = dataArray.slice(10, 100).reduce((a,b)=>a+b,0) / 90 / 255;
+
+            // Clear
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.3)'; // Trail effect
+            ctx.fillRect(0, 0, width, height);
+
+            // Update Points
+            const projected = particles.map(p => {
+                p.update(t);
+                return p.project();
+            });
+
+            // Draw Connections (The Net)
+            ctx.lineWidth = 1;
+            connections.forEach(pair => {
+                const a = projected[pair[0]];
+                const b = projected[pair[1]];
+                
+                // Z-culling logic (don't draw lines behind camera)
+                if (a.scale < 0 || b.scale < 0) return;
+
+                // Depth fog
+                const zDepth = (a.z + b.z) / 2;
+                const alpha = Math.max(0, (1 - zDepth/800) * 0.3);
+                
+                // Color Shift based on Mid/High energy
+                const hue = 200 + (midEnergy * 120); // Blue -> Purple -> Pink
+                
+                ctx.strokeStyle = `hsla(${hue}, 60%, 50%, ${alpha + (bassEnergy * 0.2)})`;
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            });
+
+            // Draw Nodes (The Stars)
+            projected.forEach((p, i) => {
+                if (p.scale < 0) return;
+                
+                const size = (2 * p.scale) + (bassEnergy * 5 * p.scale);
+                const alpha = Math.max(0, 1 - p.z/800);
+                
+                ctx.fillStyle = '#fff';
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, size, 0, Math.PI*2);
+                ctx.fill();
+
+                // "God Mode" - Occasional flash
+                if (Math.random() > 0.999) {
+                    ctx.shadowBlur = 50;
+                    ctx.shadowColor = '#fff';
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        /* ------------------------------------------------------------------
+           THE AUDIO ENGINE: GENERATIVE COSMOLOGY (432Hz)
+           ------------------------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        let nextNoteTime = 0;
+        let tick = 0;
+
+        // 432Hz TUNING - C# Minor Pentatonic (Ancient/Cosmic)
+        // Frequencies derived relative to A=432
+        // C#3, E3, F#3, G#3, B3
+        const SCALE_BASS = [136.1, 161.8, 181.9, 203.9, 242.2]; 
+        const SCALE_MID  = [272.2, 323.6, 363.8, 407.8, 484.4];
+        const SCALE_HIGH = [544.4, 647.2, 727.6, 815.6, 968.8];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // MASTER CHAIN
+            const limiter = actx.createDynamicsCompressor();
+            limiter.threshold.value = -10;
+            limiter.ratio.value = 20;
+
+            master = actx.createGain();
+            master.gain.value = 0.6;
+
+            // ANALYSER (Eyes)
+            analyser = actx.createAnalyser();
+            analyser.fftSize = 256;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            // REVERB (Space)
+            const conv = actx.createConvolver();
+            generateImpulse(3, conv); // 3 second tail
+
+            // Routing
+            master.connect(limiter);
+            limiter.connect(analyser); // Visuals read from here
+            limiter.connect(actx.destination);
+            
+            // Send to reverb
+            const revSend = actx.createGain();
+            revSend.gain.value = 0.4;
+            master.connect(revSend);
+            revSend.connect(conv);
+            conv.connect(actx.destination);
+
+            // START THE ENGINE
+            nextNoteTime = actx.currentTime + 0.1;
+            scheduler();
+            
+            // Start Drone Layer
+            playDrone();
+        }
+
+        function generateImpulse(duration, convNode) {
+            const rate = actx.sampleRate;
+            const len = rate * duration;
+            const buffer = actx.createBuffer(2, len, rate);
+            for (let i = 0; i < len; i++) {
+                // Pink Noise Decay
+                const decay = Math.pow(1 - i / len, 4);
+                buffer.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay;
+                buffer.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay;
+            }
+            convNode.buffer = buffer;
+        }
+
+        function playDrone() {
+            // The "Om" - A deep C# pad
+            const osc1 = actx.createOscillator();
+            const osc2 = actx.createOscillator();
+            const filter = actx.createBiquadFilter();
+            const gain = actx.createGain();
+
+            osc1.type = 'sawtooth'; osc1.frequency.value = 68.05; // Low C#
+            osc2.type = 'triangle'; osc2.frequency.value = 68.05; 
+            osc2.detune.value = 10; // Chorus effect
+
+            filter.type = 'lowpass';
+            filter.frequency.value = 150;
+            
+            // Slow filter modulation
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.1; // Breathe every 10s
+            const lfoGain = actx.createGain();
+            lfoGain.gain.value = 100;
+            lfo.connect(lfoGain); lfoGain.connect(filter.frequency);
+
+            gain.gain.value = 0.3;
+
+            osc1.connect(filter); osc2.connect(filter);
+            filter.connect(gain); gain.connect(master);
+            lfo.start(); osc1.start(); osc2.start();
+        }
+
+        /* --- THE BRAIN: GENERATIVE SEQUENCER --- */
+        function scheduler() {
+            const bpm = 90;
+            const lookahead = 0.1;
+            const beatLen = 60 / bpm;
+            const sixteenth = beatLen / 4;
+
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                playTick(nextNoteTime, tick);
+                nextNoteTime += sixteenth;
+                tick++;
+            }
+            if (isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playTick(t, i) {
+            // 1. EUCLIDEAN KICK (The Heartbeat) - Pattern 5 hits in 16 steps (3,3,3,3,4)
+            const kickPattern = [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0]; 
+            if (kickPattern[i % 16]) {
+                playKick(t);
+            }
+
+            // 2. POLYRHYTHMIC ARP (The Mind) - Prime number loops (7 against 16)
+            if (i % 7 === 0 || Math.random() > 0.85) {
+                const note = SCALE_MID[Math.floor(Math.random() * SCALE_MID.length)];
+                playPluck(t, note, 0.1);
+            }
+
+            // 3. CELESTIAL BELLS (The Spirit) - Fibonacci logic
+            // Only play if step is a Fibonacci number (approx) in local loop
+            const fibSteps = [0, 1, 2, 3, 5, 8, 13];
+            if (fibSteps.includes(i % 16) && Math.random() > 0.6) {
+                const note = SCALE_HIGH[Math.floor(Math.random() * SCALE_HIGH.length)];
+                playBell(t, note);
+            }
+
+            // 4. DEEP BASS SWELL (The Ground) - Every 32 steps
+            if (i % 32 === 0) {
+                const note = SCALE_BASS[Math.floor(Math.random() * 3)]; // Low root/third/fifth
+                playBassSwell(t, note);
+            }
+        }
+
+        /* --- INSTRUMENT SYNTHESIS --- */
+        
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            g.gain.setValueAtTime(0.8, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playPluck(t, freq, vol) {
+            // Marimba/Harp style
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(vol, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playBell(t, freq) {
+            // FM Synthesis for metallic texture
+            const carrier = actx.createOscillator();
+            const modulator = actx.createOscillator();
+            const modGain = actx.createGain();
+            const vol = actx.createGain();
+
+            carrier.type = 'sine';
+            carrier.frequency.value = freq;
+            
+            modulator.type = 'sine';
+            modulator.frequency.value = freq * 2.5; // Non-integer ratio = metallic
+            modGain.gain.setValueAtTime(500, t);
+            modGain.gain.exponentialRampToValueAtTime(1, t + 1.5);
+
+            modulator.connect(modGain);
+            modGain.connect(carrier.frequency);
+
+            vol.gain.setValueAtTime(0, t);
+            vol.gain.linearRampToValueAtTime(0.15, t + 0.1);
+            vol.gain.exponentialRampToValueAtTime(0.001, t + 3.0); // Long tail
+
+            carrier.connect(vol); vol.connect(master);
+            
+            carrier.start(t); carrier.stop(t + 3);
+            modulator.start(t); modulator.stop(t + 3);
+        }
+
+        function playBassSwell(t, freq) {
+            const osc = actx.createOscillator();
+            const filter = actx.createBiquadFilter();
+            const g = actx.createGain();
+
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(50, t);
+            filter.frequency.linearRampToValueAtTime(400, t + 1); // Wah effect
+            filter.frequency.linearRampToValueAtTime(50, t + 3);
+
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.4, t + 1.5);
+            g.gain.linearRampToValueAtTime(0, t + 4);
+
+            osc.connect(filter); filter.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 4);
+        }
+
+
+        /* ------------------------------------------------------------------
+           SYSTEM INITIALIZATION
+           ------------------------------------------------------------------ */
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = (e.clientX / width) - 0.5;
+            mouse.y = (e.clientY / height) - 0.5;
+        });
+
+        function ignite() {
+            // 1. STATE LOCK
+            isRunning = true;
+
+            // 2. UI TRANSITION
+            const ui = document.getElementById('interface');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 3000);
+            document.getElementById('readout').style.opacity = 1;
+
+            // 3. SYSTEM BOOT
+            resize();
+            initGeometry();
+            
+            // 4. AUDIO BOOT (With browser safety check)
+            if (!actx) initAudio();
+            if (actx.state === 'suspended') actx.resume();
+
+            // 5. VISUAL LOOP
+            render();
+        }
+
+        // Initial Setup
+        resize();
+
+    </script>
+</body>
+</html>
