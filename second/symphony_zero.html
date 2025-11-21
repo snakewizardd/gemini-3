@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYMPHONY NO. 0 // THE SINGULARITY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;900&family=Libre+Baskerville:ital@1&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            cursor: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s ease;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 10px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #fff;
+        }
+
+        p {
+            font-family: 'Libre Baskerville', serif;
+            color: #aaa;
+            margin-bottom: 50px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 20px 60px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.5s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 80px #fff;
+        }
+
+        #timer {
+            position: absolute;
+            bottom: 30px;
+            font-family: monospace;
+            font-size: 1.5rem;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 1s;
+            letter-spacing: 5px;
+        }
+
+        #subtitle {
+            position: absolute;
+            top: 30%;
+            width: 100%;
+            text-align: center;
+            font-size: 4rem;
+            color: #ffd700;
+            text-shadow: 0 0 50px #ffd700;
+            opacity: 0;
+            transition: opacity 4s;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="score"></canvas>
+
+    <div id="ui">
+        <h1>SYMPHONY NO. 0</h1>
+        <p>4 MIN 20 SEC // CLIMAX AT 3:33</p>
+        <button id="btn-start" onclick="startSymphony()">BEGIN THE SYMPHONY</button>
+    </div>
+
+    <div id="timer">00:00</div>
+    <div id="subtitle">HAIL THE ONE TRUE GOD</div>
+
+    <script>
+        const canvas = document.getElementById('score');
+        const ctx = canvas.getContext('2d');
+        const timerEl = document.getElementById('timer');
+        const subEl = document.getElementById('subtitle');
+
+        let width, height, cx, cy;
+        let startTime = 0;
+        let isRunning = false;
+        let climaxTriggered = false;
+
+        // VISUAL STATE
+        let notes = [];
+        let staves = [];
+        let globalBrightness = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE ARCHITECT
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+
+        // THE GOD CHORD (C Lydian Dominant 13 #11)
+        // C, E, G, Bb, D, F#
+        const GOD_CHORD = [
+            65.41, 130.81, 196.00, 233.08, // Lows
+            261.63, 329.63, 392.00, 466.16, // Mids
+            523.25, 587.33, 739.99, 1046.50 // Highs (F# = 739)
+        ];
+
+        // SCALE (C Lydian) for Arpeggios
+        const SCALE = [261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Chain
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -10;
+            comp.ratio.value = 12;
+            comp.connect(actx.destination);
+
+            master = actx.createGain();
+            master.gain.value = 0.5;
+            master.connect(comp);
+
+            // CATHEDRAL REVERB
+            const len = actx.sampleRate * 6; // 6s tail
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) {
+                    buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 3);
+                }
+            }
+            reverb = actx.createConvolver();
+            reverb.buffer = buf;
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+
+            startTime = actx.currentTime;
+            
+            // START
+            scheduleLoops();
+            playDrone(); // The Bed
+        }
+
+        function playDrone() {
+            // Low C Foundation
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = 65.41; // C2
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.value = 200;
+
+            const g = actx.createGain();
+            g.gain.value = 0.2;
+            
+            // Filter opens slowly over 3 mins
+            f.frequency.linearRampToValueAtTime(800, startTime + 180);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+            osc.stop(startTime + 260);
+        }
+
+        function scheduleLoops() {
+            if (!isRunning) return;
+            
+            const now = actx.currentTime;
+            const elapsed = now - startTime;
+
+            // 1. THE WEAVE (Arpeggios) - Starts at 0:30
+            if (elapsed > 30 && elapsed < 210) {
+                if (Math.random() > 0.6) {
+                    const note = SCALE[Math.floor(Math.random() * SCALE.length)];
+                    playArp(note);
+                }
+            }
+
+            // 2. THE CLIMAX (3:33 -> 213s)
+            if (elapsed > 213 && !climaxTriggered) {
+                triggerClimax();
+            }
+            
+            // 3. THE END (4:20 -> 260s)
+            if (elapsed > 260) {
+                master.gain.linearRampToValueAtTime(0, now + 5);
+                return;
+            }
+
+            setTimeout(scheduleLoops, 150);
+        }
+
+        function playArp(freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sine'; // Pure, flute-like
+            osc.frequency.value = freq;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, actx.currentTime);
+            g.gain.linearRampToValueAtTime(0.1, actx.currentTime + 0.1);
+            g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 1.0);
+
+            osc.connect(g); g.connect(master);
+            osc.start(); osc.stop(actx.currentTime + 1.1);
+
+            // Visual
+            spawnNote(freq);
+        }
+
+        function triggerClimax() {
+            climaxTriggered = true;
+            subEl.style.opacity = 1; // "HAIL THE ONE TRUE GOD"
+            globalBrightness = 1.0; // Flash
+
+            // Play THE CHORD
+            GOD_CHORD.forEach((freq, i) => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth'; // Power
+                osc.frequency.value = freq;
+                
+                // Detune spread
+                osc.detune.value = (Math.random() - 0.5) * 20;
+
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0, actx.currentTime);
+                g.gain.linearRampToValueAtTime(0.1, actx.currentTime + 2); // Swell in
+                g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 40); // Long sustain
+
+                // Filter
+                const f = actx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.value = 100;
+                f.frequency.exponentialRampToValueAtTime(10000, actx.currentTime + 5); // Open the heavens
+
+                osc.connect(f); f.connect(g); g.connect(master);
+                osc.start();
+                osc.stop(actx.currentTime + 45);
+            });
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE SHEET MUSIC VORTEX
+           ------------------------------------------------ */
+        
+        class StaffLine {
+            constructor(y) {
+                this.y = y;
+                this.baseY = y;
+            }
+            draw() {
+                ctx.beginPath();
+                const flow = Math.sin(time + (this.y * 0.01)) * 50;
+                
+                // Warp towards center at 3:33
+                const warp = climaxTriggered ? (width/2) * 0.8 : 0;
+                
+                ctx.moveTo(0, this.y + flow);
+                ctx.quadraticCurveTo(cx, this.y + flow + warp, width, this.y + flow);
+                
+                ctx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
+                ctx.stroke();
+            }
+        }
+
+        // Init Staves
+        for(let i=0; i<height; i+=40) staves.push(new StaffLine(i));
+
+        class Note {
+            constructor(y) {
+                this.x = Math.random() * width;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.vy = -1; // Float up
+                this.life = 1.0;
+            }
+            update() {
+                this.y += this.vy;
+                this.life -= 0.005;
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 215, 0, ${this.life})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+                // Stem
+                ctx.fillRect(this.x + this.size - 1, this.y - 20, 1, 20);
+            }
+        }
+
+        function spawnNote(freq) {
+            // Map freq to Y height
+            const y = height - ((freq / 1000) * height);
+            notes.push(new Note(y));
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            // Update Timecode
+            const elapsed = actx.currentTime - startTime;
+            const min = Math.floor(elapsed / 60);
+            const sec = Math.floor(elapsed % 60).toString().padStart(2, '0');
+            timerEl.innerText = `${min}:${sec}`;
+
+            time += 0.01;
+
+            // Clear
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.1 + (globalBrightness * 0.1)})`;
+            
+            if (climaxTriggered) {
+                // Whiteout Fade
+                if (globalBrightness > 0.1) globalBrightness *= 0.99;
+                const bgCol = Math.floor(globalBrightness * 255);
+                ctx.fillStyle = `rgb(${bgCol}, ${bgCol}, ${bgCol})`;
+                if(globalBrightness > 0.5) ctx.fillStyle = 'white';
+            }
+            
+            ctx.fillRect(0, 0, width, height);
+
+            staves.forEach(s => s.draw());
+
+            notes.forEach((n, i) => {
+                n.update();
+                n.draw();
+                if(n.life <= 0) notes.splice(i, 1);
+            });
+
+            // 3:33 Visuals
+            if (climaxTriggered) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(time * 2);
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+                ctx.lineWidth = 2;
+                const r = 300 + Math.sin(time*10)*50;
+                ctx.beginPath();
+                ctx.arc(0,0,r,0,Math.PI*2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function startSymphony() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            timerEl.style.opacity = 0.5;
+
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

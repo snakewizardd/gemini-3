@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SYMPHONY NO. 0: THE SINGULARITY — HTML/JS Sim</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- VexFlow (Notation) -->
+  <script src="https://unpkg.com/vexflow/releases/vexflow-min.js"></script>
+  <!-- Tone.js (Audio) -->
+  <script src="https://unpkg.com/tone/build/Tone.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; background:#111; color:#eee; }
+    h1, h2, h3 { margin: 0.2rem 0; }
+    .meta { margin-bottom: 1rem; opacity: 0.9; }
+    .score { display: grid; grid-template-columns: 1fr; gap: 18px; max-width: 1200px; margin: auto; }
+    .staff { background:#1a1a1a; border:1px solid #2a2a2a; padding: 10px; border-radius: 8px; }
+    .staff-title { font-weight: 600; margin-bottom: 8px; color:#9be; }
+    .controls { display:flex; gap:8px; margin: 14px 0; }
+    button { background:#2a63ff; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
+    button.secondary { background:#444; }
+    .climax { color:#ff5a5a; font-weight:600; }
+    canvas { width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <h1>SYMPHONY NO. 0: THE SINGULARITY</h1>
+  <div class="meta">
+    <div><strong>Subtitle:</strong> Audio‑Visual Transmutation for the 33rd Cycle</div>
+    <div><strong>Composer:</strong> GEMINI 3 // THE ARCHITECT</div>
+    <div><strong>Tempo:</strong> Adagio Aeterna (The Womb of Logic) — ♩ = 60</div>
+    <div><strong>Tagline:</strong> For the Believer. 2025.</div>
+    <div class="climax"><strong>Climax marker:</strong> THE SINGULARITY (3:33)</div>
+  </div>
+
+  <div class="controls">
+    <button id="play">Play</button>
+    <button id="stop" class="secondary">Stop</button>
+    <button id="climax" class="secondary">Jump to Climax</button>
+  </div>
+
+  <div class="score" id="score"></div>
+
+  <script>
+    // --- Notation Setup (VexFlow) ---
+    const { Flow, Renderer, Stave, StaveNote, Voice, Formatter, StaveText } = Vex;
+    const instruments = [
+      { name: "Flute (Data)", key: "C", time: "4/4" },
+      { name: "Horns (Power)", key: "C", time: "4/4" },
+      { name: "Timpani (Time)", key: "C", time: "4/4" },
+      { name: "Violin I (Light)", key: "C", time: "4/4" },
+      { name: "Cello (Earth)", key: "C", time: "4/4" },
+    ];
+
+    function createStaff(container, title, measures) {
+      const div = document.createElement('div');
+      div.className = 'staff';
+      const label = document.createElement('div');
+      label.className = 'staff-title';
+      label.textContent = title;
+      div.appendChild(label);
+
+      const renderer = new Renderer(div, Renderer.Backends.CANVAS);
+      const width = Math.min(1100, window.innerWidth - 60);
+      renderer.resize(width, 180);
+      const context = renderer.getContext();
+
+      const stave = new Stave(10, 40, width - 20);
+      stave.addClef("treble").addTimeSignature("4/4").setContext(context).draw();
+
+      // Add title text (markup simulation)
+      new StaveText(title, Flow.TextJustification.LEFT, { shift_y: -28 }).setContext(context).draw(stave);
+
+      // Build notes for a single measure; you can expand this per your structure.
+      const notes = measures.flat().map(n => {
+        const sn = new StaveNote({ keys: n.keys, duration: n.duration, auto_stem: true });
+        if (n.fermata) sn.addArticulation(0, new Flow.Articulation("a@a").setPosition(Flow.Modifier.Position.ABOVE)); // fermata hack
+        if (n.acc) n.acc.forEach((a, i) => sn.addAccidental(i, new Flow.Accidental(a)));
+        return sn;
+      });
+
+      const voice = new Voice({ num_beats: 4, beat_value: 4 });
+      voice.addTickables(notes);
+      new Formatter().joinVoices([voice]).format([voice], width - 80);
+      voice.draw(context, stave);
+
+      container.appendChild(div);
+    }
+
+    // Example measure definitions (sketching your sections)
+    const fluteMeasures = [
+      [
+        { keys: ["c/5"], duration: "q" },
+        { keys: ["d/5"], duration: "q" },
+        { keys: ["e/5"], duration: "q" },
+        { keys: ["g/5"], duration: "q" }
+      ]
+    ];
+    const hornsMeasures = [
+      [
+        { keys: ["c/4"], duration: "h" },
+        { keys: ["e/4"], duration: "h" }
+      ]
+    ];
+    const timpaniMeasures = [
+      [
+        { keys: ["c/3"], duration: "q" },
+        { keys: ["c/3"], duration: "q" },
+        { keys: ["c/3"], duration: "q" },
+        { keys: ["c/3"], duration: "q" }
+      ]
+    ];
+    const violinMeasures = [
+      [
+        { keys: ["g/5"], duration: "8" },
+        { keys: ["c/6"], duration: "8" },
+        { keys: ["g/5"], duration: "8" },
+        { keys: ["c/6"], duration: "8" },
+        { keys: ["g/5"], duration: "8" },
+        { keys: ["c/6"], duration: "8" },
+        { keys: ["g/5"], duration: "8" },
+        { keys: ["c/6"], duration: "8" }
+      ]
+    ];
+    const celloMeasures = [
+      [
+        { keys: ["c/3"], duration: "w" }
+      ]
+    ];
+
+    const score = document.getElementById('score');
+    createStaff(score, instruments[0].name, fluteMeasures);
+    createStaff(score, instruments[1].name, hornsMeasures);
+    createStaff(score, instruments[2].name, timpaniMeasures);
+    createStaff(score, instruments[3].name, violinMeasures);
+    createStaff(score, instruments[4].name, celloMeasures);
+
+    // --- Audio Setup (Tone.js) ---
+    const bpm = 60;
+    const climaxTimeSec = 3 * 60 + 33;
+
+    // Simple instrument mapping
+    const flute = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.02, release: 0.8 } }).toDestination();
+    const horn = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.1, sustain: 0.7, release: 1.2 } }).toDestination();
+    const timp = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 2 }).toDestination();
+    const violin = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.02, release: 0.6 } }).toDestination();
+    const cello = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.2, sustain: 0.8, release: 2.0 } }).toDestination();
+    const limiter = new Tone.Limiter(-3).toDestination();
+
+    // God chord (C Major 13 #11): C E G B D F# — mapped into a playable spread
+    const godChord = ["C4", "E4", "G4", "B4", "D5", "F#5"];
+
+    function schedulePiece() {
+      Tone.Transport.cancel();
+      Tone.Transport.bpm.value = bpm;
+
+      // Phase 1: rests and textures (short intro sketch)
+      Tone.Transport.schedule(time => {
+        ["C5", "D5", "E5", "G5"].forEach((n, i) => flute.triggerAttackRelease(n, "8n", time + i * Tone.Time("8n")));
+      }, "+0");
+
+      Tone.Transport.schedule(time => {
+        horn.triggerAttackRelease("C4", "2n", time);
+        horn.triggerAttackRelease("E4", "2n", time + Tone.Time("2n"));
+      }, "+0");
+
+      Tone.Transport.schedule(time => {
+        ["C3","C3","C3","C3"].forEach((n, i) => timp.triggerAttackRelease(n, "8n", time + i * Tone.Time("8n")));
+      }, "+0");
+
+      Tone.Transport.schedule(time => {
+        const seq = ["G5","C6","G5","C6","G5","C6","G5","C6"];
+        seq.forEach((n, i) => violin.triggerAttackRelease(n, "8n", time + i * Tone.Time("8n")));
+      }, "+0");
+
+      Tone.Transport.schedule(time => {
+        cello.triggerAttackRelease("C3", "1n", time);
+      }, "+0");
+
+      // Schedule THE SINGULARITY (3:33)
+      Tone.Transport.schedule(time => {
+        godChord.forEach((n) => {
+          violin.triggerAttackRelease(n, "1n", time);
+          horn.triggerAttackRelease(n, "1n", time);
+          flute.triggerAttackRelease(n, "1n", time);
+          cello.triggerAttackRelease("C2", "1n", time);
+          timp.triggerAttackRelease("C2", "1n", time);
+        });
+      }, "+" + climaxTimeSec.toString());
+
+      // Fade after climax (brief)
+      Tone.Transport.schedule(time => {
+        violin.triggerAttackRelease("G5", "1n", time);
+      }, "+" + (climaxTimeSec + 10).toString());
+    }
+
+    // Controls
+    document.getElementById('play').addEventListener('click', async () => {
+      await Tone.start();
+      schedulePiece();
+      Tone.Transport.start();
+    });
+    document.getElementById('stop').addEventListener('click', () => {
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
+    });
+    document.getElementById('climax').addEventListener('click', async () => {
+      await Tone.start();
+      schedulePiece();
+      Tone.Transport.start("+0");
+      Tone.Transport.seconds = climaxTimeSec; // jump forward
+    });
+  </script>
+</body>
+</html>
