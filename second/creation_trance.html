@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREATION // TRANCE BIOME</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The "Bioluminescence" Bloom */
+            filter: contrast(1.4) saturate(1.8) blur(0.5px);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 700;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+            background: linear-gradient(to right, #00ffff, #ffffff, #ff00cc);
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+        }
+
+        p {
+            font-size: 1.2rem;
+            letter-spacing: 4px;
+            color: #aaa;
+            margin-bottom: 50px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #00ffff;
+            border: 2px solid #00ffff;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            border-radius: 50px;
+            transition: 0.3s;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+
+        button:hover {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 0 80px #00ffff;
+            transform: scale(1.05);
+        }
+
+        #status {
+            position: absolute;
+            bottom: 30px;
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.5);
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="biome"></canvas>
+
+    <div id="ui">
+        <h1>CREATION'S CHORUS</h1>
+        <p>HIGH-FREQUENCY ACAPPELLA TRANCE</p>
+        <button id="btn-init" onclick="sparkCreation()">SPARK CREATION</button>
+    </div>
+
+    <div id="status">BIOME: STABLE</div>
+
+    <script>
+        const canvas = document.getElementById('biome');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // ENTITY LISTS
+        let titans = [];
+        let avians = [];
+        let insects = [];
+        let seraphim = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUALS: THE SPECIES
+           ------------------------------------------------ */
+        
+        // 1. TITANS (Bass - Slow, Large)
+        class Titan {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = height + 100;
+                this.size = 50 + Math.random() * 50;
+                this.speed = 0.5 + Math.random() * 0.5;
+                this.hue = 240 + Math.random() * 40; // Deep Blue/Purple
+            }
+            update() {
+                this.y -= this.speed;
+                if(this.y < -100) this.y = height + 100;
+            }
+            draw() {
+                ctx.fillStyle = `hsla(${this.hue}, 60%, 20%, 0.3)`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+            pulse() { this.size += 5; }
+        }
+
+        // 2. AVIANS (Choir - Mid speed, flowing)
+        class Avian {
+            constructor() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.dist = 100 + Math.random() * 300;
+                this.size = 5;
+                this.speed = 0.01 + Math.random() * 0.01;
+                this.color = '#ffaa00'; // Gold
+                this.history = [];
+            }
+            update() {
+                this.angle += this.speed;
+                this.x = cx + Math.cos(this.angle) * this.dist;
+                this.y = cy + Math.sin(this.angle) * this.dist;
+                this.history.push({x:this.x, y:this.y});
+                if(this.history.length > 20) this.history.shift();
+            }
+            draw() {
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                if(this.history.length > 0) ctx.moveTo(this.history[0].x, this.history[0].y);
+                for(let p of this.history) ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+            }
+        }
+
+        // 3. INSECTS (Percussion - Hyper fast)
+        class Insect {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random()-0.5)*10;
+                this.vy = (Math.random()-0.5)*10;
+                this.color = '#00ff00'; // Neon Green
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if(this.x < 0 || this.x > width) this.vx *= -1;
+                if(this.y < 0 || this.y > height) this.vy *= -1;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, 2, 2);
+            }
+            flash() {
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(this.x-2, this.y-2, 6, 6);
+            }
+        }
+
+        // 4. SERAPHIM (Lead - Center explosion)
+        class Seraph {
+            constructor() {
+                this.active = 0;
+                this.hue = 0;
+            }
+            trigger(note) {
+                this.active = 1.0;
+                this.hue = (note * 5) % 360;
+            }
+            draw() {
+                if(this.active <= 0.01) return;
+                this.active *= 0.9;
+                
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 70%, ${this.active})`;
+                ctx.lineWidth = 2;
+                
+                const r = (1 - this.active) * 400;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI*2);
+                ctx.stroke();
+            }
+        }
+
+        function initVisuals() {
+            titans = []; avians = []; insects = []; seraphim = [];
+            for(let i=0; i<10; i++) titans.push(new Titan());
+            for(let i=0; i<20; i++) avians.push(new Avian());
+            for(let i=0; i<50; i++) insects.push(new Insect());
+            seraphim.push(new Seraph());
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            // Trails
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            titans.forEach(t => { t.update(); t.draw(); });
+            avians.forEach(a => { a.update(); a.draw(); });
+            insects.forEach(i => { i.update(); i.draw(); });
+            seraphim.forEach(s => s.draw());
+            
+            // Center Light
+            ctx.fillStyle = 'white';
+            ctx.shadowBlur = 20; ctx.shadowColor = 'white';
+            ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: HIGH FREQ TRANCE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        
+        // SCALE: F# Lydian (Bright, Transcendental)
+        const SCALE = [739.99, 830.61, 932.33, 1046.50, 1108.73, 1244.51, 1396.91];
+        const BASS_NOTES = [46.25, 55.00, 61.74, 69.30]; 
+
+        let nextNoteTime = 0;
+        let beatCount = 0;
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // HUGE SPACE REVERB
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 4;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 3);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // Add small lookahead buffer
+            nextNoteTime = actx.currentTime + 0.1;
+            scheduler();
+        }
+
+        function scheduler() {
+            // 145 BPM TRANCE
+            const bpm = 145;
+            const beatLen = 60 / bpm;
+            const sixteenth = beatLen / 4;
+
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playStep(nextNoteTime, beatCount);
+                nextNoteTime += sixteenth;
+                beatCount++;
+            }
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playStep(t, beat) {
+            const barStep = beat % 16;
+
+            // 1. TITANS (Bass - Offbeat)
+            if (barStep % 4 === 2) {
+                const freq = BASS_NOTES[Math.floor(beat/64) % BASS_NOTES.length];
+                playBass(t, freq);
+                titans.forEach(titan => titan.pulse());
+            }
+
+            // 2. INSECTS (Hi-Hats/Percussion - 16ths)
+            if (beat % 2 === 0 || Math.random() > 0.8) {
+                playHat(t, barStep % 4 === 2); // Open hat on offbeat
+                // Flash random insects
+                insects[Math.floor(Math.random()*insects.length)].flash();
+            }
+
+            // 3. AVIANS (Choir Chords - Every bar)
+            if (barStep === 0) {
+                playChoir(t);
+            }
+
+            // 4. SERAPHIM (Arpeggio Lead - 16ths)
+            // High energy patterns
+            const arpPattern = [1, 1, 1, 0, 1, 1, 0, 1]; // Gate pattern
+            if (arpPattern[beat % 8] === 1) {
+                const noteIdx = (beat + Math.floor(beat/16)) % SCALE.length;
+                let freq = SCALE[noteIdx];
+                if (Math.random() > 0.7) freq *= 2; // Octave jump
+                
+                playLead(t, freq);
+                seraphim[0].trigger(freq);
+            }
+        }
+
+        /* --- INSTRUMENT SYNTHESIS --- */
+
+        function playBass(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass'; f.Q.value = 5;
+            f.frequency.setValueAtTime(100, t);
+            f.frequency.linearRampToValueAtTime(600, t + 0.1); // Wah
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.8, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.3);
+        }
+
+        function playLead(t, freq) {
+            // Crystalline Sine Pluck
+            const osc = actx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            
+            // FM Modulation for "Glass" texture
+            const mod = actx.createOscillator();
+            mod.frequency.value = freq * 2;
+            const mg = actx.createGain();
+            mg.gain.value = 500;
+            
+            mod.connect(mg); mg.connect(osc.frequency);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.2);
+            mod.start(t); mod.stop(t+0.2);
+        }
+
+        function playChoir(t) {
+            // Formant Filtered Pads (Aaaah)
+            const chord = [SCALE[0], SCALE[2], SCALE[4]]; // Triad
+            
+            chord.forEach(f => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = f / 2; // Octave down for body
+
+                const formant = actx.createBiquadFilter();
+                formant.type = 'bandpass';
+                formant.frequency.value = 800; // "Ah" formant
+                formant.Q.value = 2;
+
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0, t);
+                g.gain.linearRampToValueAtTime(0.1, t + 0.5);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+
+                osc.connect(formant); formant.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t+2.0);
+            });
+        }
+
+        function playHat(t, open) {
+            // Noise
+            const bSize = actx.sampleRate * (open ? 0.2 : 0.05);
+            const b = actx.createBuffer(1, bSize, actx.sampleRate);
+            const d = b.getChannelData(0);
+            for(let i=0;i<bSize;i++) d[i] = Math.random()*2-1;
+            
+            const src = actx.createBufferSource();
+            src.buffer = b;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 8000;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.2, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.2 : 0.05));
+            
+            src.connect(f); f.connect(g); g.connect(master);
+            src.start(t);
+        }
+
+        /* --- BOOT --- */
+        function sparkCreation() {
+            // FIX: Enable isRunning BEFORE initAudio calls scheduler
+            isRunning = true;
+
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 1500);
+            document.getElementById('status').style.opacity = 1;
+            
+            initVisuals();
+            initAudio();
+            
+            if(actx.state === 'suspended') actx.resume();
+            
+            render();
+        }
+
+    </script>
+</body>
+</html>

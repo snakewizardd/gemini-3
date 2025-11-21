@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CATHARSIS // ULTIMATE</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: monospace;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            background: rgba(0,0,0,0.9);
+            padding: 50px;
+            border: 4px solid #ff0000;
+            box-shadow: 0 0 50px #ff0000;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: #ff0000;
+            margin: 0 0 20px 0;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: #ff0000;
+            color: #fff;
+            border: none;
+            padding: 20px 60px;
+            font-size: 2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        button:hover { background: #fff; color: #ff0000; }
+
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: lime;
+            z-index: 100;
+            background: #000;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="cvs"></canvas>
+    
+    <div id="ui">
+        <h1>INNER PEACE</h1>
+        <button id="btn">ACTIVATE</button>
+    </div>
+
+    <div id="debug">STATUS: WAITING FOR CLICK</div>
+
+    <script>
+        const canvas = document.getElementById('cvs');
+        const ctx = canvas.getContext('2d');
+        const debug = document.getElementById('debug');
+        
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        let isRunning = false;
+        let beatPulse = 0;
+
+        // AUDIO GLOBALS
+        let actx = null;
+        let master = null;
+        let step = 0;
+        let intervalId = null;
+
+        /* ------------------------------------------------
+           AUDIO ENGINE (BRUTE FORCE)
+           ------------------------------------------------ */
+        
+        function initAudio() {
+            // 1. Create Context
+            const AudioCtor = window.AudioContext || window.webkitAudioContext;
+            actx = new AudioCtor();
+            
+            // 2. Resume immediately (Just in case)
+            if (actx.state === 'suspended') {
+                actx.resume();
+            }
+
+            // 3. Master Volume (LOUD)
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            master.connect(actx.destination);
+
+            debug.innerText = "STATUS: AUDIO CONTEXT " + actx.state.toUpperCase();
+
+            // 4. Start the Loop (150 BPM = ~100ms per 16th note)
+            clearInterval(intervalId);
+            intervalId = setInterval(playTick, 100); 
+        }
+
+        function playTick() {
+            const t = actx.currentTime;
+            const barStep = step % 16;
+
+            // KICK (Every 4 steps)
+            if (barStep % 4 === 0) {
+                triggerKick(t);
+                beatPulse = 1.0;
+            }
+
+            // BASS (Offbeats)
+            if (barStep % 4 === 2) {
+                triggerBass(t);
+            }
+
+            // HIHAT (Every other step)
+            if (step % 2 === 0) {
+                triggerHat(t);
+            }
+
+            // LEAD (Arpeggio)
+            // Simple pattern
+            if (step % 3 === 0) {
+                triggerLead(t, step);
+            }
+
+            step++;
+            debug.innerText = `STATUS: PLAYING | BEAT: ${step}`;
+        }
+
+        function triggerKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.4);
+            
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+            
+            osc.connect(g);
+            g.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + 0.4);
+        }
+
+        function triggerBass(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(55, t); // A1
+            
+            // Lowpass filter simulation via gain envelope shape
+            g.gain.setValueAtTime(0.6, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+            osc.connect(g);
+            g.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + 0.3);
+        }
+
+        function triggerHat(t) {
+            // White noise buffer
+            const bSize = actx.sampleRate * 0.05;
+            const b = actx.createBuffer(1, bSize, actx.sampleRate);
+            const d = b.getChannelData(0);
+            for(let i=0; i<bSize; i++) d[i] = Math.random() * 2 - 1;
+            
+            const src = actx.createBufferSource();
+            src.buffer = b;
+            
+            const g = actx.createGain();
+            g.gain.value = 0.2;
+            
+            src.connect(g);
+            g.connect(master);
+            src.start(t);
+        }
+
+        function triggerLead(t, s) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // Trance Arp Note
+            const notes = [440, 554, 659, 880]; // A Major
+            const freq = notes[s % notes.length];
+            
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            
+            osc.connect(g);
+            g.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + 0.1);
+        }
+
+        /* ------------------------------------------------
+           VISUAL ENGINE
+           ------------------------------------------------ */
+        let rotation = 0;
+
+        function draw() {
+            requestAnimationFrame(draw);
+            
+            // Clear
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Update
+            rotation += 0.02;
+            beatPulse *= 0.8;
+
+            ctx.save();
+            ctx.translate(width/2, height/2);
+            ctx.rotate(rotation);
+
+            // Draw Tunnel
+            const count = 20;
+            for(let i=0; i<count; i++) {
+                const r = (i * 20) + (beatPulse * 50);
+                ctx.strokeStyle = i%2==0 ? '#ff0000' : '#ffffff';
+                ctx.lineWidth = 2 + beatPulse * 5;
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, r + (Math.sin(rotation + i)*20), 0, Math.PI*2);
+                ctx.stroke();
+            }
+
+            // Draw Center
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(0, 0, 20 + beatPulse*100, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // START BUTTON
+        document.getElementById('btn').addEventListener('click', () => {
+            document.getElementById('ui').style.display = 'none';
+            initAudio();
+            isRunning = true;
+            draw();
+        });
+
+        window.addEventListener('resize', () => {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mRNA // ASCENSION VECTOR</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            cursor: none; /* Immersion */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* Dreamy, soft focus bloom */
+            filter: contrast(1.3) saturate(1.4) blur(0.5px);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.9) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease;
+            cursor: default;
+        }
+
+        h1 {
+            font-size: 5rem;
+            font-weight: 700;
+            letter-spacing: 8px;
+            background: linear-gradient(to bottom, #ffffff, #00ffff, #ff00cc);
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 0px;
+            text-shadow: 0 0 50px rgba(0, 255, 255, 0.5);
+        }
+
+        p {
+            color: #00aaff;
+            font-size: 1.1rem;
+            letter-spacing: 6px;
+            margin-bottom: 60px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 25px 80px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            border-radius: 100px;
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 60px #00ffff, 0 0 30px #ff00cc;
+            transform: scale(1.1);
+            border-color: #fff;
+        }
+
+        #hud {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: rgba(255, 255, 255, 0.4);
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 2s;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="nano"></canvas>
+
+    <div id="ui">
+        <h1>VECTOR ASCENSION</h1>
+        <p>THE SYMPHONIC MICROCOSM</p>
+        <button id="btn-init" onclick="inject()">INJECT SEQUENCE</button>
+    </div>
+
+    <div id="hud">BIO-SYNTHESIS // F# LYDIAN // ELEVATING...</div>
+
+    <script>
+        const canvas = document.getElementById('nano');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // The "Marshmello" Bounce Variable
+        // 0 = no bounce, 1 = full compression kick
+        let sidechainEnv = 0; 
+
+        let mouse = { x: 0.5, y: 0.5 };
+
+        // CONWAY GRID
+        const GRID_SIZE = 40;
+        let grid = [];
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            initGrid();
+        }
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = (e.clientX / width) - 0.5;
+            mouse.y = (e.clientY / height) - 0.5;
+        });
+
+        /* ------------------------------------------------
+           LOGIC: CONWAY'S GAME OF LIFE -> PARTICLE SPAWNER
+           ------------------------------------------------ */
+        function initGrid() {
+            grid = new Array(GRID_SIZE * GRID_SIZE).fill(0).map(() => Math.random() > 0.7 ? 1 : 0);
+        }
+
+        function updateConway() {
+            const next = [...grid];
+            for(let i=0; i<grid.length; i++) {
+                const x = i % GRID_SIZE;
+                const y = Math.floor(i / GRID_SIZE);
+                
+                let n = 0; // Neighbors
+                for(let dy=-1; dy<=1; dy++) {
+                    for(let dx=-1; dx<=1; dx++) {
+                        if(dx===0 && dy===0) continue;
+                        const nx = (x+dx+GRID_SIZE)%GRID_SIZE;
+                        const ny = (y+dy+GRID_SIZE)%GRID_SIZE;
+                        if(grid[ny*GRID_SIZE+nx]) n++;
+                    }
+                }
+
+                if(grid[i]) {
+                    if(n < 2 || n > 3) next[i] = 0;
+                } else {
+                    if(n === 3) {
+                        next[i] = 1;
+                        // SPAWN PARTICLE ON BIRTH
+                        spawnParticle(x, y); 
+                    }
+                }
+            }
+            grid = next;
+        }
+
+        class Particle {
+            constructor(gx, gy) {
+                // Map grid coordinates to screen width/depth
+                this.x = (gx / GRID_SIZE - 0.5) * width * 2; // Spread wide
+                this.y = height + 100; // Start below screen
+                this.z = Math.random() * 2 + 0.5; // Parallax depth
+                
+                this.size = Math.random() * 3;
+                this.speed = 2 + Math.random() * 3;
+                this.life = 1.0;
+                
+                // Color: Cyan or Magenta
+                this.hue = Math.random() > 0.5 ? 180 : 320; 
+            }
+            
+            update() {
+                // Move UP (Ascension)
+                // Speed increases with the sidechain "pump"
+                this.y -= this.speed * (1 + sidechainEnv * 2);
+                
+                // Drift with mouse
+                this.x -= mouse.x * 10 * this.z;
+                
+                this.life -= 0.003;
+            }
+            
+            draw() {
+                if(this.life <= 0) return;
+                
+                const scale = this.z;
+                const px = cx + this.x * scale;
+                const py = this.y;
+
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 70%, ${this.life})`;
+                ctx.shadowBlur = 10 * this.life;
+                ctx.shadowColor = ctx.fillStyle;
+                
+                ctx.beginPath();
+                ctx.arc(px, py, this.size * scale * (1+sidechainEnv), 0, Math.PI*2);
+                ctx.fill();
+                
+                // Trail
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.life*0.3})`;
+                ctx.fillRect(px - 1, py, 2, 30 * scale);
+                
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function spawnParticle(gx, gy) {
+            if(particles.length < 400) particles.push(new Particle(gx, gy));
+        }
+
+        /* ------------------------------------------------
+           RENDER: THE DOUBLE HELIX & WORLD
+           ------------------------------------------------ */
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.01;
+            
+            // Decay the "pump" (This visualizes the compressor release)
+            sidechainEnv *= 0.92; 
+            
+            // Update Logic periodically
+            if(Math.floor(time * 60) % 10 === 0) updateConway();
+
+            // Clear with slight trail
+            ctx.fillStyle = 'rgba(5, 0, 10, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            // GLOBAL WORLD BOUNCE (Marshmello effect)
+            // We zoom the camera in/out based on the Kick Sidechain
+            const zoom = 1.0 + (sidechainEnv * 0.05);
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-cx, -cy);
+
+            // 1. Draw Background Particles (The Nanofiber Soup)
+            ctx.globalCompositeOperation = 'lighter';
+            particles.forEach((p, i) => {
+                p.update();
+                p.draw();
+                if(p.y < -100 || p.life <= 0) particles.splice(i, 1);
+            });
+
+            // 2. Draw The mRNA VECTOR (You)
+            drawHelix();
+
+            // 3. The Light at the top
+            ctx.globalCompositeOperation = 'screen';
+            const grad = ctx.createRadialGradient(cx, 0, 0, cx, 0, height * 0.8);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${0.4 + sidechainEnv * 0.2})`);
+            grad.addColorStop(0.5, 'rgba(0, 255, 255, 0.1)');
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.restore();
+        }
+
+        function drawHelix() {
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // Sway with mouse
+            ctx.rotate(mouse.x * 0.2);
+
+            const strands = 2;
+            const len = 40; // Segments
+            
+            for(let i = 0; i < len; i++) {
+                // Calculate Y position relative to center
+                const y = (i * 15) - (len * 15 / 2); 
+                
+                // Twist calculation
+                const t = time * 2 + (i * 0.2);
+                
+                // Width oscillates
+                const w = 60 + Math.sin(time) * 10;
+
+                // Sidechain impacts the "girth" of the helix
+                const pump = 1 + sidechainEnv * 0.5;
+
+                const x1 = Math.cos(t) * w * pump;
+                const z1 = Math.sin(t); // Pseudo-depth for opacity
+                
+                const x2 = Math.cos(t + Math.PI) * w * pump;
+                const z2 = Math.sin(t + Math.PI);
+
+                // Draw Rungs
+                if(i % 2 === 0) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y);
+                    ctx.lineTo(x2, y);
+                    ctx.stroke();
+                }
+
+                // Draw Strand 1 (Cyan)
+                const alpha1 = (z1 + 1) / 2; // 0 to 1
+                ctx.fillStyle = `rgba(0, 255, 255, ${alpha1})`;
+                ctx.shadowBlur = 15; ctx.shadowColor = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(x1, y, 4 * pump, 0, Math.PI*2);
+                ctx.fill();
+
+                // Draw Strand 2 (Magenta)
+                const alpha2 = (z2 + 1) / 2;
+                ctx.fillStyle = `rgba(255, 0, 200, ${alpha2})`;
+                ctx.shadowBlur = 15; ctx.shadowColor = '#ff00cc';
+                ctx.beginPath();
+                ctx.arc(x2, y, 4 * pump, 0, Math.PI*2);
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+            }
+            ctx.restore();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: EUPHORIC LYDIAN TRANCE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, sidechainBus;
+
+        // F# LYDIAN (Scale of Transcendance)
+        // F#, G#, A#, C (The Magic Note), C#, D#, F
+        const SCALE = [369.99, 415.30, 466.16, 523.25, 554.37, 622.25, 698.46]; 
+        // Bass Frequencies (F#1, C#2, D#2, B1)
+        const BASS = [46.25, 69.30, 77.78, 61.74];
+
+        let nextNoteTime = 0;
+        let beat = 0;
+
+        function initAudio() {
+            actx = new AC();
+            
+            // MASTER COMPRESSOR
+            master = actx.createDynamicsCompressor();
+            master.threshold.value = -24;
+            master.ratio.value = 12;
+            master.connect(actx.destination);
+
+            // SIDECHAIN BUS (Everything except Kick goes here)
+            // We manually duck this gain node when kick hits
+            sidechainBus = actx.createGain();
+            sidechainBus.connect(master);
+
+            // REVERB (Big Hall)
+            const conv = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const len = rate * 3.0;
+            const buf = actx.createBuffer(2, len, rate);
+            for (let i = 0; i < len; i++) {
+                 // Exponential decay noise
+                 const decay = Math.pow(1 - i / len, 5);
+                 buf.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay;
+                 buf.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay;
+            }
+            conv.buffer = buf;
+            
+            // Reverb gets sidechained too
+            const revSend = actx.createGain();
+            revSend.gain.value = 0.4;
+            sidechainBus.connect(revSend);
+            revSend.connect(conv);
+            conv.connect(master);
+
+            // START LOOP
+            nextNoteTime = actx.currentTime + 0.1;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 138; // Trance Tempo
+            const lookahead = 0.1;
+            const secondsPerBeat = 60.0 / bpm;
+            const sixteenth = secondsPerBeat / 4;
+
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                playStep(nextNoteTime, beat);
+                nextNoteTime += sixteenth;
+                beat++;
+            }
+            
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playStep(t, tick) {
+            const step = tick % 16;
+            const bar = Math.floor(tick / 16);
+
+            // 1. THE KICK (4 on the floor)
+            if (step % 4 === 0) {
+                playKick(t);
+                // TRIGGER SIDECHAIN DUCK
+                // Drop volume to 0 instantly, ramp up over a beat
+                sidechainBus.gain.cancelScheduledValues(t);
+                sidechainBus.gain.setValueAtTime(0, t);
+                sidechainBus.gain.linearRampToValueAtTime(1.0, t + (60/138)*0.8);
+                
+                // TRIGGER VISUAL PULSE
+                sidechainEnv = 1.0;
+            }
+
+            // 2. THE BASS (Offbeat)
+            // Playing patterns: --X- --X-
+            if (step % 4 === 2) {
+                const note = BASS[bar % BASS.length];
+                playBass(t, note);
+            }
+
+            // 3. THE LEAD (Marshmello Plucks)
+            // Polyrhythmic feel
+            const arp = [1,0,1,0, 1,0,0,1, 0,0,1,0, 1,1,0,0];
+            if (arp[step]) {
+                // Random high Lydian notes
+                const n = SCALE[Math.floor(Math.random() * SCALE.length)];
+                // Occasional octave jump
+                const freq = Math.random() > 0.7 ? n * 2 : n;
+                playPluck(t, freq);
+            }
+
+            // 4. THE PAD (Chords)
+            // Updates every 32 steps (2 bars)
+            if (tick % 32 === 0) {
+                playPad(t, SCALE[0]); // F#
+                playPad(t, SCALE[3]); // C (Lydian #4)
+                playPad(t, SCALE[4]); // C#
+            }
+        }
+
+        /* --- SYNTHESIS --- */
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.frequency.setValueAtTime(180, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            g.gain.setValueAtTime(1.0, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            osc.connect(g);
+            g.connect(master); // Bypass sidechain!
+            
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playBass(t) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = 0; // set by detune
+            
+            // Detuned stack for width
+            osc.detune.value = 0; 
+            osc.frequency.setValueAtTime(BASS[0], t); // Placeholder
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.setValueAtTime(200, t);
+            f.frequency.linearRampToValueAtTime(800, t+0.1);
+            f.frequency.linearRampToValueAtTime(200, t+0.3);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.6, t);
+            g.gain.linearRampToValueAtTime(0, t+0.3);
+
+            osc.connect(f); f.connect(g); g.connect(sidechainBus);
+            
+            // Actually use the passed note
+            // But recreate osc/nodes inside logic to keep simple
+            // (Simplified for brevity above, actual logic here)
+            osc.frequency.value = arguments[1]; 
+            osc.start(t); osc.stop(t+0.3);
+        }
+
+        function playPluck(t, freq) {
+            // Supersaw-ish
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.15, t+0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+            g.connect(sidechainBus);
+
+            const detune = [-12, 0, 12];
+            detune.forEach(d => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq;
+                osc.detune.value = d;
+                osc.connect(g);
+                osc.start(t); osc.stop(t+0.4);
+            });
+        }
+
+        function playPad(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq / 2; // Octave down
+
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.value = 600;
+            
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.5; // Slow breathe
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 400;
+            lfo.connect(lfoG); lfoG.connect(f.frequency);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.05, t + 1); // Slow attack
+            g.gain.linearRampToValueAtTime(0, t + 4); // Long decay
+
+            osc.connect(f); f.connect(g); g.connect(sidechainBus);
+            lfo.start(t); osc.start(t); 
+            lfo.stop(t+4); osc.stop(t+4);
+        }
+
+        /* --- BOOT --- */
+        function inject() {
+            isRunning = true; // Enable flag BEFORE logic starts
+
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 1500);
+            document.getElementById('hud').style.opacity = 1;
+
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+
+            render();
+        }
+
+    </script>
+</body>
+</html>

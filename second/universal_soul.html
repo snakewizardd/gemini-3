@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INDRA'S NET // UNIVERSAL CHORUS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Cinzel Decorative', serif;
+            color: white;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.95) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 3s ease-in-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 10px;
+            background: linear-gradient(to bottom, #fff, #aaddff);
+            -webkit-background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-family: 'Lato', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 4px;
+            color: #888;
+            margin-bottom: 50px;
+            text-transform: uppercase;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.5);
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: 0.5s;
+            border-radius: 100px;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #fff;
+        }
+
+        #layer-readout {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            font-family: 'Lato', sans-serif;
+            font-size: 12px;
+            color: rgba(255,255,255,0.3);
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="net"></canvas>
+
+    <div id="ui">
+        <h1>INDRA'S NET</h1>
+        <p>FROM THE QUARK TO THE QUASAR</p>
+        <button id="btn-init" onclick="unite()">UNITE THE CHORUS</button>
+    </div>
+
+    <div id="layer-readout">MICRO // MESO // MACRO</div>
+
+    <script>
+        const canvas = document.getElementById('net');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let globalBreath = 0;
+
+        // ENTITIES
+        let souls = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            initSouls();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: THE THREE LAYERS
+           ------------------------------------------------ */
+        
+        class Soul {
+            constructor(type) {
+                this.type = type; // 0=Micro, 1=Meso, 2=Macro
+                this.reset();
+            }
+
+            reset() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.active = 0; // Opacity for singing
+                
+                if (this.type === 0) { // MICRO (Particles)
+                    this.dist = Math.random() * 200;
+                    this.speed = 0.02 + Math.random() * 0.03;
+                    this.size = 1 + Math.random();
+                    this.color = '#00ffff';
+                } else if (this.type === 1) { // MESO (Life)
+                    this.dist = 200 + Math.random() * 200;
+                    this.speed = 0.005 + Math.random() * 0.01;
+                    this.size = 3 + Math.random() * 2;
+                    this.color = '#ffaa55'; // Flesh/Warmth
+                } else { // MACRO (Cosmic)
+                    this.dist = 400 + Math.random() * 400;
+                    this.speed = 0.0005 + Math.random() * 0.001;
+                    this.size = 5 + Math.random() * 10;
+                    this.color = '#aa55ff'; // Deep Space
+                }
+            }
+
+            sing() {
+                this.active = 1.0;
+            }
+
+            update() {
+                this.angle += this.speed;
+                this.x = cx + Math.cos(this.angle) * this.dist;
+                this.y = cy + Math.sin(this.angle) * this.dist;
+                
+                // Decay singing visual
+                this.active *= 0.95;
+            }
+
+            draw() {
+                ctx.beginPath();
+                const alpha = 0.3 + (this.active * 0.7);
+                const glow = this.active * 20;
+                
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = alpha;
+                ctx.shadowBlur = glow;
+                ctx.shadowColor = this.color;
+                
+                ctx.arc(this.x, this.y, this.size + (this.active*2), 0, Math.PI*2);
+                ctx.fill();
+                
+                // Connection line to Source (God)
+                if (this.active > 0.1) {
+                    ctx.beginPath();
+                    ctx.lineWidth = this.active;
+                    ctx.strokeStyle = `rgba(255,255,255,${this.active * 0.2})`;
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(cx, cy);
+                    ctx.stroke();
+                }
+                
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function initSouls() {
+            souls = [];
+            // Create populations
+            for(let i=0; i<100; i++) souls.push(new Soul(0)); // Micro
+            for(let i=0; i<40; i++) souls.push(new Soul(1));  // Meso
+            for(let i=0; i<10; i++) souls.push(new Soul(2));  // Macro
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.01;
+            globalBreath = Math.sin(time) * 0.1 + 1; // 0.9 to 1.1
+
+            // Clear
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // The Source (Center)
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(globalBreath, globalBreath);
+            
+            const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, 300);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.1, 'rgba(255, 255, 200, 0.2)');
+            grad.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, 300, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Central Eye
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI*2); ctx.fill();
+            
+            ctx.restore();
+
+            // Draw Souls
+            souls.forEach(s => {
+                s.update();
+                s.draw();
+            });
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE HARMONIC SERIES
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+
+        // FUNDAMENTAL (The Source)
+        const ROOT = 65.41; // Low C
+        
+        // HARMONIC SERIES (Pure Physics)
+        const MICRO_RATIOS = [8, 10, 12, 16, 20, 24, 32]; // High overtones
+        const MESO_RATIOS = [3, 4, 5, 6]; // Mid harmonics
+        const MACRO_RATIOS = [0.5, 1, 1.5, 2]; // Sub and Low
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // REVERB (Infinite Space)
+            const conv = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const len = rate * 6;
+            const buf = actx.createBuffer(2, len, rate);
+            for(let c=0;c<2;c++) {
+                for(let i=0;i<len;i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 4);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // Start the Orchestrator
+            orchestrator();
+            
+            // Start Drone
+            playDrone();
+        }
+
+        function playDrone() {
+            const t = actx.currentTime;
+            const osc = actx.createOscillator();
+            osc.frequency.value = ROOT;
+            const g = actx.createGain();
+            g.gain.value = 0.15;
+            osc.connect(g); g.connect(master);
+            osc.start(t);
+        }
+
+        function orchestrator() {
+            if(!isRunning) return;
+
+            const t = actx.currentTime + 0.05; // Adding small lookahead for safety
+            
+            // 1. MICRO LAYER (Fast, Random)
+            if (Math.random() > 0.2) {
+                const ratio = MICRO_RATIOS[Math.floor(Math.random() * MICRO_RATIOS.length)];
+                const freq = ROOT * ratio;
+                playTone(t, freq, 'sine', 0.1, 0.05, 0); // Short blip
+            }
+
+            // 2. MESO LAYER (Rhythmic, Breathing)
+            if (Math.random() > 0.6) {
+                const ratio = MESO_RATIOS[Math.floor(Math.random() * MESO_RATIOS.length)];
+                const freq = ROOT * ratio;
+                playVoice(t, freq, 1); // 1 = Meso layer ID
+            }
+
+            // 3. MACRO LAYER (Slow, Deep)
+            if (Math.random() > 0.95) {
+                const ratio = MACRO_RATIOS[Math.floor(Math.random() * MACRO_RATIOS.length)];
+                const freq = ROOT * ratio;
+                playTone(t, freq, 'triangle', 4.0, 0.3, 2); // Long swell
+            }
+
+            // Loop fast (100ms)
+            setTimeout(orchestrator, 100);
+        }
+
+        function playTone(t, freq, type, duration, vol, layerId) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = type;
+            osc.frequency.value = freq;
+
+            // Envelope
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(vol, t + (duration*0.2));
+            g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + duration);
+
+            // Trigger Visual
+            triggerVisual(layerId);
+        }
+
+        function playVoice(t, freq, layerId) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            f.type = 'bandpass';
+            f.Q.value = 4;
+            // Vowel sweep
+            f.frequency.setValueAtTime(400, t);
+            f.frequency.linearRampToValueAtTime(1200, t + 1.5);
+
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t + 0.5);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 2.0);
+
+            triggerVisual(layerId);
+        }
+
+        function triggerVisual(layerId) {
+            const candidates = souls.filter(s => s.type === layerId);
+            if (candidates.length > 0) {
+                const s = candidates[Math.floor(Math.random() * candidates.length)];
+                s.sing();
+            }
+        }
+
+        function unite() {
+            // 1. ENABLE FLAG FIRST (Fixes the silence bug)
+            isRunning = true;
+
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 3000);
+            document.getElementById('layer-readout').style.opacity = 1;
+
+            resize();
+            initSouls();
+            
+            // 2. INIT AUDIO
+            if (!actx) {
+                initAudio();
+            }
+            
+            // 3. RESUME IF SUSPENDED (Browser policy)
+            if(actx.state === 'suspended') {
+                actx.resume();
+            }
+            
+            render();
+        }
+
+        resize();
+
+    </script>
+</body>
+</html>

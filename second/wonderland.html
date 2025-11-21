@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WONDERLAND // THE FALL</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Henny+Penny&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: none; /* We are all mad here */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.9), #1a001a);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: #b300ff;
+            text-shadow: 2px 2px 0 #00ffaa, -2px -2px 0 #ff0055;
+            margin-bottom: 20px;
+            animation: float 3s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 20px 50px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 50px;
+            transition: 0.3s;
+            box-shadow: 0 0 20px #b300ff;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #fff;
+            transform: scale(1.1);
+        }
+
+        #quote {
+            position: absolute;
+            bottom: 30px;
+            font-family: 'Henny Penny', cursive;
+            font-size: 1.5rem;
+            color: #00ffaa;
+            text-shadow: 0 0 10px #000;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* The Mouse Trail */
+        .trail {
+            position: absolute;
+            pointer-events: none;
+            font-size: 20px;
+            animation: fadeOut 1s forwards;
+            z-index: 20;
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: scale(2) rotate(180deg); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="rabbit-hole"></canvas>
+
+    <div id="ui">
+        <h1>WONDERLAND</h1>
+        <button id="btn-init" onclick="fall()">DRINK ME</button>
+    </div>
+
+    <div id="quote">We're all mad here...</div>
+
+    <script>
+        const canvas = document.getElementById('rabbit-hole');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const quoteEl = document.getElementById('quote');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let mouse = { x: 0, y: 0 };
+
+        // FALLING OBJECTS
+        const SYMBOLS = ["🃏", "🕰️", "☕", "🍄", "🗝️", "🌹", "👑", "🐱"];
+        let items = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            
+            // Cheshire Trail
+            if (isRunning && Math.random() > 0.5) {
+                const el = document.createElement('div');
+                el.className = 'trail';
+                el.innerText = "☽"; // Smile shape
+                el.style.left = e.clientX + 'px';
+                el.style.top = e.clientY + 'px';
+                el.style.color = `hsl(${time * 100}, 100%, 50%)`;
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1000);
+            }
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE VORTEX
+           ------------------------------------------------ */
+        class FallingItem {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.angle = Math.random() * Math.PI * 2;
+                this.dist = 0; // Start at center
+                this.z = 0;    // Depth
+                this.symbol = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+                this.spin = Math.random() * 0.2 - 0.1;
+                this.rotation = Math.random() * Math.PI;
+                this.color = `hsl(${Math.random()*360}, 70%, 60%)`;
+            }
+            update() {
+                // Spiral outward
+                this.dist += 2 + (this.dist * 0.02);
+                this.angle += 0.01;
+                this.rotation += this.spin;
+                
+                if (this.dist > Math.max(width, height)) {
+                    this.reset();
+                }
+            }
+            draw() {
+                const x = cx + Math.cos(this.angle + time) * this.dist;
+                const y = cy + Math.sin(this.angle + time) * this.dist;
+                const size = (this.dist / 10) + 10;
+
+                // Distortion based on mouse
+                const dx = x - mouse.x;
+                const dy = y - mouse.y;
+                const d = Math.sqrt(dx*dx + dy*dy);
+                const warp = Math.max(0, (300 - d)/300);
+                
+                ctx.save();
+                ctx.translate(x + (Math.random()-0.5)*warp*20, y + (Math.random()-0.5)*warp*20);
+                ctx.rotate(this.rotation + (warp * Math.PI));
+                ctx.font = `${size}px serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                
+                // Shadow
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.dist / (width/2);
+                ctx.fillText(this.symbol, 0, 0);
+                
+                ctx.restore();
+            }
+        }
+
+        // Init items
+        for(let i=0; i<50; i++) items.push(new FallingItem());
+
+        function drawTunnel() {
+            // The Checkerboard Vortex
+            const rings = 20;
+            const maxR = Math.max(width, height);
+            
+            for(let i=0; i<rings; i++) {
+                const t = (time * 0.5 + i) % rings;
+                const r = Math.pow(t, 2.5) * (maxR / Math.pow(rings, 2)); // Exponential growth
+                
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI*2);
+                
+                // Colors: Purple/Black vs Teal/White
+                const isAlt = Math.floor(t) % 2 === 0;
+                ctx.lineWidth = (t * 5) + 1;
+                ctx.strokeStyle = isAlt ? '#2a002a' : '#003333';
+                ctx.stroke();
+                
+                // Add the "Checkerboard" segments
+                if (r > 10) {
+                    const segments = 12;
+                    for(let j=0; j<segments; j++) {
+                        const ang = (j / segments) * Math.PI * 2 + (time * (i%2==0 ? 1 : -1));
+                        const x = cx + Math.cos(ang) * r;
+                        const y = cy + Math.sin(ang) * r;
+                        
+                        ctx.fillStyle = (j % 2 === 0) ? '#b300ff' : '#00ffaa';
+                        ctx.beginPath();
+                        ctx.arc(x, y, r * 0.15, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+
+            // Trail
+            ctx.fillStyle = 'rgba(10, 0, 20, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            drawTunnel();
+
+            // Glitch Text
+            if (Math.random() > 0.98) {
+                const phrases = ["LATE!", "OFF WITH HER HEAD!", "WHO ARE YOU?", "DRINK ME"];
+                quoteEl.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+                quoteEl.style.color = Math.random() > 0.5 ? '#ff0055' : '#00ffaa';
+            }
+
+            items.forEach(item => {
+                item.update();
+                item.draw();
+            });
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE MAD HATTER'S ORCHESTRA
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let nextBeat = 0;
+        let tickCount = 0;
+
+        // WHOLE TONE SCALE (Dreamy, Unsettled)
+        // C, D, E, F#, G#, A#
+        const SCALE = [261.63, 293.66, 329.63, 369.99, 415.30, 466.16];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // REVERB (The Rabbit Hole)
+            const conv = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const len = rate * 3;
+            const buf = actx.createBuffer(2, len, rate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) {
+                    // Reverse Gate effect
+                    const v = (Math.random()*2-1) * (i/len); 
+                    buf.getChannelData(c)[i] = v;
+                }
+            }
+            conv.buffer = buf;
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            nextBeat = actx.currentTime;
+            scheduler();
+            
+            playDrone();
+        }
+
+        function playDrone() {
+            // The "Wind" of falling
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.value = 55; // Low A
+            
+            f.type = 'lowpass';
+            f.frequency.value = 200;
+            
+            g.gain.value = 0.2;
+            
+            // LFO for "Whooshing"
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 0.2;
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 300;
+            lfo.connect(lfoG);
+            lfoG.connect(f.frequency);
+            lfo.start();
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+        }
+
+        function scheduler() {
+            const bpm = 180; // Frantic
+            const beatLen = 60 / bpm;
+
+            while (nextBeat < actx.currentTime + 0.1) {
+                playTick(nextBeat, tickCount);
+                nextBeat += beatLen;
+                tickCount++;
+            }
+            if (isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playTick(t, i) {
+            // 1. THE CLOCK (Woodblock)
+            // Ticks constantly
+            playClock(t, i % 4 === 0); // Accent on 1
+
+            // 2. THE MADNESS (Melody)
+            // Random walk on Whole Tone scale
+            if (Math.random() > 0.4) {
+                const freq = SCALE[Math.floor(Math.random() * SCALE.length)];
+                // Random Octave
+                const finalFreq = Math.random() > 0.5 ? freq : freq * 2;
+                playChime(t, finalFreq);
+            }
+        }
+
+        function playClock(t, accent) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'square';
+            osc.frequency.value = accent ? 800 : 1200;
+            
+            g.gain.setValueAtTime(accent ? 0.3 : 0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.05);
+        }
+
+        function playChime(t, freq) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // Detuned Triangle (Wobbly)
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            osc.detune.value = (Math.random() - 0.5) * 50; // Out of tune
+            
+            // Envelope
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.05);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 1.0);
+        }
+
+        function fall() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 1500);
+            
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

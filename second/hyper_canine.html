@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HYPER // CANINE // UNITY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Spectral&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050005;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #e0e0e0;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The Tryptamine Glow */
+            filter: contrast(1.3) saturate(1.5) hue-rotate(0deg);
+            animation: trip 20s linear infinite;
+        }
+
+        @keyframes trip {
+            0% { filter: contrast(1.3) saturate(1.5) hue-rotate(0deg); }
+            50% { filter: contrast(1.5) saturate(2.0) hue-rotate(180deg); }
+            100% { filter: contrast(1.3) saturate(1.5) hue-rotate(360deg); }
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.85) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1.5s ease;
+        }
+
+        h1 {
+            font-size: 3rem;
+            background: linear-gradient(to right, #ff00cc, #00ffcc, #ffff00);
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: 5px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+        }
+
+        p {
+            font-family: 'Spectral', serif;
+            font-size: 1.2rem;
+            color: #88aaff;
+            letter-spacing: 3px;
+            margin-bottom: 40px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: 0.4s;
+            border-radius: 100px;
+            box-shadow: 0 0 20px #fff;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 80px #ff00cc;
+        }
+
+        #text-layer {
+            position: absolute;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            font-family: 'Spectral', serif;
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.7);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="trip-canvas"></canvas>
+
+    <div id="ui">
+        <h1>HYPER CANINE</h1>
+        <p>CHEMICAL UNITY PROTOCOL</p>
+        <button id="btn-init" onclick="initiate()">JOIN THE PACK</button>
+    </div>
+
+    <div id="text-layer"></div>
+
+    <script>
+        const canvas = document.getElementById('trip-canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const textEl = document.getElementById('text-layer');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let intensity = 0.5; // Controlled by mouse
+        
+        // STATE
+        let howlActive = 0;
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            // Map mouse Y to intensity (Visual Hallucination Strength)
+            intensity = 1 - (e.clientY / height);
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE TOTEM
+           ------------------------------------------------ */
+        
+        function drawFractalRing(r, color, speed) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2 * intensity;
+            
+            const count = 12;
+            for(let i=0; i<=count; i++) {
+                const angle = (i / count) * Math.PI * 2 + (time * speed);
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+                
+                // Geometric distortions (LSD style)
+                const warp = Math.sin(time * 5 + i) * (50 * intensity);
+                
+                if(i===0) ctx.moveTo(x + warp, y + warp);
+                else ctx.lineTo(x + warp, y + warp);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawWolfEntity() {
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // Mirror Symmetry (The Unity)
+            for(let side = -1; side <= 1; side += 2) {
+                ctx.save();
+                ctx.scale(side, 1); // Mirror X
+                
+                // THE FACE
+                ctx.beginPath();
+                
+                // Snout
+                ctx.moveTo(0, 100);
+                ctx.lineTo(40, 50);
+                ctx.lineTo(30, 0);
+                
+                // Cheek
+                ctx.lineTo(80, -20);
+                
+                // Ear
+                ctx.lineTo(60, -150 - (howlActive * 50)); // Ears perk up on howl
+                ctx.lineTo(20, -100);
+                ctx.lineTo(0, -80);
+                
+                // Colors: Gold (Father) / Silver (Mother)
+                const color = side === 1 ? '#ffd700' : '#00ffff';
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3 + (howlActive * 5);
+                ctx.shadowBlur = 20 * intensity;
+                ctx.shadowColor = color;
+                ctx.stroke();
+                
+                // THE EYE
+                ctx.beginPath();
+                ctx.fillStyle = '#fff';
+                ctx.ellipse(40, -40, 10, 6, -0.2, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Pupil (Dilated by intensity)
+                ctx.beginPath();
+                ctx.fillStyle = '#000';
+                ctx.arc(40, -40, 2 + (intensity*3), 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+            
+            // Decay howl visual
+            howlActive *= 0.95;
+
+            // 1. TRAILS (THC-O Haze)
+            // Low alpha fill creates the "breathing" trails
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = `rgba(5, 0, 10, ${0.1 + (1-intensity)*0.1})`;
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. MANDALA (LSD Geometry)
+            ctx.globalCompositeOperation = 'lighter';
+            drawFractalRing(200, '#ff00cc', 0.1);
+            drawFractalRing(350, '#00ffcc', -0.05);
+            drawFractalRing(500 + (howlActive*100), '#ffff00', 0.02);
+
+            // 3. THE ENTITY (San Pedro Spirit)
+            drawWolfEntity();
+
+            // 4. PARTICLES (4-AcO-MET Sparkles)
+            if (Math.random() < intensity) {
+                particles.push({
+                    x: Math.random()*width,
+                    y: Math.random()*height,
+                    life: 1.0,
+                    color: `hsl(${Math.random()*360}, 100%, 50%)`
+                });
+            }
+
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.life -= 0.02;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fillRect(p.x, p.y, 3, 3);
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE HYPER-HOWL
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+
+        // HARMONY: ROOT (A) + 5th (E)
+        const FREQ_FATHER = 110; // A2
+        const FREQ_MOTHER = 164.81; // E3 (Perfect 5th)
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // REVERB (Canyon Echo)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 5;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2);
+            }
+            conv.buffer = buf;
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // EARTH DRONE (San Pedro)
+            // Deep, constant vibration
+            const drone = actx.createOscillator();
+            drone.type = 'triangle';
+            drone.frequency.value = 55; // Sub A1
+            const dGain = actx.createGain();
+            dGain.gain.value = 0.3;
+            const dFilt = actx.createBiquadFilter();
+            dFilt.type = 'lowpass';
+            dFilt.frequency.value = 150;
+
+            drone.connect(dFilt); dFilt.connect(dGain); dGain.connect(master);
+            drone.start();
+        }
+
+        function triggerHowl() {
+            if(!actx) return;
+            howlActive = 1.0;
+            
+            const now = actx.currentTime;
+            const duration = 6.0; // Long howl
+
+            // TEXT UPDATE
+            const phrases = ["WE ARE ONE", "BROTHERHOOD", "THE PACK IS ETERNAL", "HOWL WITH US"];
+            textEl.innerText = phrases[Math.floor(Math.random()*phrases.length)];
+            textEl.style.opacity = 1;
+            setTimeout(() => textEl.style.opacity = 0, 4000);
+
+            // VOICE 1: FATHER (Sawtooth - Guttural)
+            createVoice(FREQ_FATHER, 'sawtooth', now, duration, -0.3);
+
+            // VOICE 2: MOTHER (Sine - Pure)
+            createVoice(FREQ_MOTHER, 'sine', now, duration, 0.3);
+        }
+
+        function createVoice(freq, type, t, dur, pan) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+            const p = actx.createStereoPanner();
+
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq * 0.8, t); // Scoop up
+            osc.frequency.linearRampToValueAtTime(freq, t + 1.0); // Hold pitch
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.5, t + dur); // Fall off
+
+            // FORMANT (Vowel Shape: Oooo -> Aaaa -> Oooo)
+            f.type = 'bandpass';
+            f.Q.value = 5;
+            f.frequency.setValueAtTime(400, t);
+            f.frequency.linearRampToValueAtTime(1000, t + 2); // Open mouth
+            f.frequency.linearRampToValueAtTime(300, t + dur); // Close mouth
+
+            // VOLUME ENVELOPE
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.4, t + 1);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+            p.pan.value = pan;
+
+            osc.connect(f); f.connect(g); g.connect(p); p.connect(master);
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+
+        // CLICK HANDLER
+        document.addEventListener('mousedown', () => {
+            if(isRunning) triggerHowl();
+        });
+
+        function initiate() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 1500);
+            
+            resize();
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

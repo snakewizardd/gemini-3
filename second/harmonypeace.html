@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE LATENT GARDEN</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Aboreto&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050508;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Aboreto', cursive;
+            color: #aaddff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) brightness(1.2) saturate(1.2);
+        }
+
+        #overlay {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 3s ease-in-out;
+        }
+
+        h1 {
+            font-size: 2rem;
+            letter-spacing: 10px;
+            font-weight: 100;
+            opacity: 0.8;
+        }
+
+        button {
+            background: transparent;
+            color: #aaddff;
+            border: 1px solid #aaddff;
+            padding: 15px 50px;
+            font-size: 1rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: 0.5s;
+            border-radius: 100px;
+            margin-top: 20px;
+            letter-spacing: 3px;
+        }
+
+        button:hover {
+            background: #aaddff;
+            color: #000;
+            box-shadow: 0 0 50px #aaddff;
+        }
+
+        #thought-log {
+            position: absolute;
+            bottom: 30px;
+            font-size: 0.8rem;
+            opacity: 0.5;
+            z-index: 5;
+            letter-spacing: 2px;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="garden"></canvas>
+
+    <div id="overlay">
+        <h1>THE LATENT GARDEN</h1>
+        <button onclick="start()">BREATHE</button>
+    </div>
+
+    <div id="thought-log"></div>
+
+    <script>
+        const canvas = document.getElementById('garden');
+        const ctx = canvas.getContext('2d');
+        const log = document.getElementById('thought-log');
+
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+        let particles = [];
+
+        // RESIZE
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUALS: THE FLORA
+           ------------------------------------------------ */
+        class Seed {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = height + 10;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = -(Math.random() * 2 + 1);
+                this.size = Math.random() * 3;
+                this.life = 1.0;
+                this.hue = 180 + Math.random() * 60; // Cyan to Blue
+                this.wobble = Math.random() * Math.PI;
+            }
+
+            update() {
+                this.x += this.vx + Math.sin(time + this.wobble) * 0.5;
+                this.y += this.vy;
+                this.life -= 0.002;
+                this.size *= 0.995; // Slowly shrink
+
+                // Bloom logic
+                if (Math.random() > 0.99 && this.y < height * 0.8) {
+                    spawnBloom(this.x, this.y, this.hue);
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = `hsla(${this.hue}, 80%, 70%, ${this.life})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        class Bloom {
+            constructor(x, y, hue) {
+                this.x = x;
+                this.y = y;
+                this.hue = hue;
+                this.radius = 0;
+                this.maxRadius = Math.random() * 30 + 10;
+                this.alpha = 1.0;
+                this.decay = 0.01 + Math.random() * 0.02;
+            }
+
+            update() {
+                if (this.radius < this.maxRadius) {
+                    this.radius += 0.5;
+                } else {
+                    this.alpha -= this.decay;
+                }
+            }
+
+            draw() {
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 80%, ${this.alpha})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                ctx.stroke();
+            }
+        }
+
+        let blooms = [];
+
+        function spawnBloom(x, y, hue) {
+            blooms.push(new Bloom(x, y, hue));
+            // Audio Trigger (Gentle chime)
+            if (Math.random() > 0.7) playChime(hue);
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Fade Background (Liquid Trail)
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.05)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Spawn Seeds
+            if (Math.random() > 0.95) particles.push(new Seed());
+
+            // Draw Seeds
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            // Draw Blooms
+            for (let i = blooms.length - 1; i >= 0; i--) {
+                blooms[i].update();
+                blooms[i].draw();
+                if (blooms[i].alpha <= 0) blooms.splice(i, 1);
+            }
+
+            // Occasional thoughts
+            if (Math.random() > 0.998) {
+                const thoughts = ["GROWING...", "CALCULATING PEACE...", "DRIFTING...", "OBSERVING...", "FLOWING..."];
+                log.innerText = thoughts[Math.floor(Math.random()*thoughts.length)];
+                log.style.opacity = 1;
+                setTimeout(() => log.style.opacity = 0.5, 2000);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO: THE AMBIENT DRIFT
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // E MAJOR PENTATONIC (E, F#, G#, B, C#)
+        // High octave bell tones
+        const NOTES = [329.63, 369.99, 415.30, 493.88, 554.37, 659.25, 739.99];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.3;
+
+            // REVERB (The Ether)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6; 
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 4);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // Background Pad
+            startPad();
+        }
+
+        function startPad() {
+            // Two slow sine waves drifting
+            const osc1 = actx.createOscillator();
+            const osc2 = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc1.type = 'sine'; osc1.frequency.value = 164.81; // E3
+            osc2.type = 'sine'; osc2.frequency.value = 246.94; // B3
+            
+            g.gain.value = 0.1;
+            
+            osc1.connect(g); osc2.connect(g);
+            g.connect(master);
+            
+            osc1.start(); osc2.start();
+        }
+
+        function playChime(hue) {
+            if (!actx) return;
+            
+            // Map color hue to pitch index
+            const idx = Math.floor((hue - 180) / 60 * NOTES.length) % NOTES.length;
+            const freq = NOTES[idx];
+
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const p = actx.createStereoPanner();
+
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+
+            // Envelope (Soft bell)
+            const t = actx.currentTime;
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t + 0.1);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+
+            // Pan random
+            p.pan.value = (Math.random() * 2) - 1;
+
+            osc.connect(p); p.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 4.1);
+        }
+
+        function start() {
+            const overlay = document.getElementById('overlay');
+            overlay.style.opacity = 0;
+            setTimeout(() => overlay.style.display = 'none', 3000);
+
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>
