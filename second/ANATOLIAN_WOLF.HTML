@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANATOLIAN WOLF // HYBRID</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #d4af37; /* Turkish Gold */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #00ffff; /* Husky Blue */
+            background: linear-gradient(to right, #d4af37, #00ffff);
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #d4af37;
+            border: 2px solid #d4af37;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: 0.3s;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.2);
+        }
+
+        button:hover {
+            background: #d4af37;
+            color: #000;
+            box-shadow: 0 0 60px #d4af37;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 20px;
+            color: #555;
+            font-family: monospace;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="temple"></canvas>
+
+    <div id="ui">
+        <h1>ANATOLIAN WOLF</h1>
+        <button id="btn-start">SUMMON THE PACK</button>
+    </div>
+
+    <div id="status">STATUS: DORMANT</div>
+
+    <script>
+        // --- VISUALS ---
+        const canvas = document.getElementById('temple');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height, cx, cy;
+        let mouse = { x: 0, y: 0 };
+        let time = 0;
+        let isRunning = false;
+        let beatPulse = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        function drawEyes() {
+            const lookX = (mouse.x - cx) * 0.05;
+            const lookY = (mouse.y - cy) * 0.05;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // Mask Shape (Wolf/Ornament)
+            ctx.strokeStyle = '#d4af37';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-100, -50);
+            ctx.lineTo(-50, 100);
+            ctx.lineTo(0, 150); // Snout
+            ctx.lineTo(50, 100);
+            ctx.lineTo(100, -50);
+            ctx.lineTo(60, -150); // Ear R
+            ctx.lineTo(0, -80);
+            ctx.lineTo(-60, -150); // Ear L
+            ctx.closePath();
+            ctx.stroke();
+            
+            // Fur Texture (Siberian White)
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + beatPulse * 0.1})`;
+            ctx.fill();
+
+            // LEFT EYE (Ice Blue)
+            ctx.fillStyle = '#00ffff';
+            ctx.shadowBlur = 20; ctx.shadowColor = '#00ffff';
+            ctx.beginPath();
+            ctx.ellipse(-40 + lookX, -20 + lookY, 15, 10, 0.2, 0, Math.PI*2);
+            ctx.fill();
+
+            // RIGHT EYE (Amber/Gold - Heterochromia)
+            ctx.fillStyle = '#ffaa00';
+            ctx.shadowColor = '#ffaa00';
+            ctx.beginPath();
+            ctx.ellipse(40 + lookX, -20 + lookY, 15, 10, -0.2, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        function drawMandala() {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.1);
+            
+            const points = 7; // Sacred 7
+            const r = 300 + (beatPulse * 20);
+            
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.2)';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            for(let i=0; i<=points * 2; i++) {
+                const angle = (i / (points * 2)) * Math.PI * 2;
+                const rad = (i % 2 === 0) ? r : r/2;
+                const x = Math.cos(angle) * rad;
+                const y = Math.sin(angle) * rad;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.02;
+            beatPulse *= 0.9;
+
+            // Background (Deep Void)
+            ctx.fillStyle = 'rgba(5, 5, 10, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            drawMandala();
+            drawEyes();
+
+            // Particles (Snow/Dust)
+            if (Math.random() > 0.5) {
+                ctx.fillStyle = '#fff';
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                ctx.fillRect(x, y, 2, 2);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: TURKISH-SIBERIAN FUSION
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // HIJAZ SCALE (C, Db, E, F, G, Ab, Bb)
+        // Exotic, Eastern feel
+        const NOTES = [261.63, 277.18, 329.63, 349.23, 392.00, 415.30, 466.16];
+        
+        let step = 0;
+        let intervalId;
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Force Resume
+            if (actx.state === 'suspended') actx.resume();
+
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            
+            // Delay (Canyon Echo)
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.3; // Triplet feel
+            const fb = actx.createGain();
+            fb.gain.value = 0.4;
+            
+            master.connect(delay);
+            delay.connect(fb);
+            fb.connect(delay);
+            delay.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // START ENGINE
+            document.getElementById('status').innerText = "STATUS: RUNNING";
+            
+            // 7/8 RHYTHM LOOP (300ms per beat approx)
+            // Turkish Aksak Rhythm: 3 + 2 + 2
+            intervalId = setInterval(sequencer, 180);
+        }
+
+        function sequencer() {
+            const t = actx.currentTime;
+            const s = step % 7; // 7 beats per bar
+
+            // RHYTHM: KICK on 0, 3, 5 (Dum - Tek - Ka)
+            if (s === 0) playDrum(t, 100, 1.0); // DUM (Heavy)
+            if (s === 3) playDrum(t, 200, 0.5); // TEK
+            if (s === 5) playDrum(t, 250, 0.4); // KA
+
+            // MELODY: Zurna / Synth Lead
+            // Random walk on Hijaz scale
+            if (Math.random() > 0.3) {
+                const noteIdx = Math.floor(Math.random() * NOTES.length);
+                const freq = NOTES[noteIdx];
+                // Octave shift for variety
+                const finalFreq = Math.random() > 0.7 ? freq * 2 : freq;
+                
+                playSynth(t, finalFreq);
+            }
+
+            // BASS DRONE
+            if (s === 0) playDrone(t);
+
+            if (s === 0) beatPulse = 1.0; // Visual kick
+
+            step++;
+        }
+
+        function playDrum(t, freq, vol) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.frequency.setValueAtTime(freq, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
+            
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        function playSynth(t, freq) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // Sawtooth for "Zurna" reed sound
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, t);
+            
+            // Glide (Portamento)
+            osc.frequency.linearRampToValueAtTime(freq * 1.01, t + 0.1);
+
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.3);
+        }
+
+        function playDrone() {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = 65.41; // Low C
+            g.gain.setValueAtTime(0.1, actx.currentTime);
+            g.gain.linearRampToValueAtTime(0, actx.currentTime + 0.5);
+            osc.connect(g); g.connect(master);
+            osc.start(); osc.stop(actx.currentTime + 0.5);
+        }
+
+        // START
+        document.getElementById('btn-start').addEventListener('click', () => {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 500);
+            
+            initAudio();
+            isRunning = true;
+            render();
+        });
+
+    </script>
+</body>
+</html>

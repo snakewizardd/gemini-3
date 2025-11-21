@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOZART // HYPERDRIVE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.5) saturate(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.2s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: #fff;
+            text-shadow: 0 0 20px #fff;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        p { color: #888; font-size: 1rem; letter-spacing: 3px; margin-bottom: 40px; }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 20px 60px;
+            font-size: 2rem;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            transform: skew(-10deg);
+            box-shadow: 10px 10px 0 #444;
+        }
+        button:hover { background: #00ffcc; box-shadow: 10px 10px 0 #fff; }
+
+        #progress {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 10px;
+            width: 0%;
+            background: #fff;
+            z-index: 20;
+            box-shadow: 0 0 20px #fff;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="stage"></canvas>
+    <div id="progress"></div>
+
+    <div id="ui">
+        <h1>HYPER MOZART</h1>
+        <p>30 SECOND SYMPHONY</p>
+        <button id="btn">IGNITE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const progBar = document.getElementById('progress');
+
+        let width, height, cx, cy;
+        let startTime = 0;
+        let isRunning = false;
+        
+        // STATE
+        const DURATION = 30; // Seconds
+        let progress = 0; // 0.0 to 1.0
+
+        // PARTICLES
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUALS
+           ------------------------------------------------ */
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            const now = Date.now() / 1000;
+            progress = (now - startTime) / DURATION;
+            
+            if (progress >= 1.0) {
+                isRunning = false;
+                reset();
+                return;
+            }
+
+            // UI Update
+            progBar.style.width = (progress * 100) + '%';
+
+            // Clear with heavy trails as we speed up
+            const alpha = 0.1 + (progress * 0.3);
+            ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // ROTATION ACCELERATION
+            const rotSpeed = progress * progress * 20;
+            ctx.rotate(now * rotSpeed);
+            
+            // SCALE ACCELERATION
+            const scale = 1 + (progress * 5);
+            ctx.scale(scale, scale);
+
+            // COLOR SHIFT (Blue -> Purple -> Gold -> White)
+            const hue = 200 + (progress * 200);
+            ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+            ctx.lineWidth = 2 / scale;
+
+            // GEOMETRY (The Mozart Fractal)
+            const petals = 4 + Math.floor(progress * 12);
+            ctx.beginPath();
+            for(let i=0; i<=petals * 2; i++) {
+                const a = (i / (petals * 2)) * Math.PI * 2;
+                const r = 100 * Math.sin(a * petals);
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+
+            // PARTICLES
+            if (Math.random() < progress) spawnParticle();
+            
+            ctx.restore();
+            
+            // FLASH at end
+            if (progress > 0.9) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${(progress-0.9)*10})`;
+                ctx.fillRect(0,0,width,height);
+            }
+        }
+
+        function spawnParticle() {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 50;
+            particles.push({
+                x: Math.cos(angle)*dist, y: Math.sin(angle)*dist,
+                vx: Math.cos(angle)*(5 + progress*20),
+                vy: Math.sin(angle)*(5 + progress*20),
+                life: 1.0
+            });
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE (HARD CODED ARPEGGIATOR)
+           ------------------------------------------------ */
+        let actx, master;
+        let nextNote = 0;
+        let noteIdx = 0;
+
+        // C MAJOR ARPEGGIO EXTENDED
+        const NOTES = [
+            261.63, 329.63, 392.00, 523.25, // C E G C
+            587.33, 659.25, 783.99, 1046.50, // D E G C
+            130.81, 196.00, 261.63, 329.63  // Low C G C E
+        ];
+
+        function initAudio() {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.3;
+            master.connect(actx.destination);
+            
+            // Start time
+            startTime = Date.now() / 1000;
+            nextNote = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            if (!isRunning) return;
+
+            // ACCELERATE BPM
+            // Start: 120 BPM -> End: 1200 BPM
+            const currentBPM = 120 + (progress * 1080);
+            const beatLen = 60 / currentBPM / 4; // 16th notes
+
+            while (nextNote < actx.currentTime + 0.1) {
+                playNote(nextNote);
+                nextNote += beatLen;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playNote(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // Select note based on index + randomization
+            // As progress increases, jump higher octaves
+            let idx = noteIdx % NOTES.length;
+            let freq = NOTES[idx];
+            
+            if (progress > 0.5) freq *= 2;
+            if (progress > 0.8) freq *= 2;
+
+            osc.type = progress > 0.6 ? 'sawtooth' : 'triangle';
+            osc.frequency.value = freq;
+
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+            osc.connect(g);
+            g.connect(master);
+            osc.start(t);
+            osc.stop(t + 0.15);
+
+            noteIdx++;
+            
+            // Visual flash sync
+            const canvasX = cx + (Math.random()-0.5)*width*progress;
+            const canvasY = cy + (Math.random()-0.5)*height*progress;
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(canvasX, canvasY, 5 * progress, 5 * progress);
+        }
+
+        function reset() {
+            document.getElementById('ui').style.opacity = 1;
+            document.getElementById('ui').style.display = 'flex';
+        }
+
+        // INIT
+        document.getElementById('btn').addEventListener('click', () => {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 200);
+            
+            isRunning = true;
+            initAudio();
+            render();
+        });
+
+    </script>
+</body>
+</html>
