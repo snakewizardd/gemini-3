@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIVE_CODER // JS TECHNO</title>
+    <title>LIVE_CODER // FIXED AUDIO</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
 
         body {
             margin: 0;
-            background-color: #0000aa; /* The "Blue Screen of Death" / Live Code Blue */
+            background-color: #111;
             color: #fff;
             font-family: 'Fira Code', monospace;
             overflow: hidden;
             cursor: crosshair;
+            user-select: none;
         }
 
         #code-layer {
@@ -24,14 +25,14 @@
             opacity: 0.8;
             white-space: pre;
             pointer-events: none;
-            text-shadow: 2px 2px 0 #000;
+            color: #0f0;
+            text-shadow: 0 0 2px #0f0;
         }
 
         canvas {
             position: absolute;
             top: 0; left: 0;
             z-index: 1;
-            mix-blend-mode: screen;
         }
 
         #ui {
@@ -40,22 +41,24 @@
             transform: translate(-50%, -50%);
             z-index: 100;
             text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 40px;
+            border: 2px solid #0f0;
         }
 
-        h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 4px 4px 0 #000; }
+        h1 { font-size: 2rem; margin-bottom: 20px; color: #0f0; text-transform: uppercase; letter-spacing: 4px; }
 
         button {
-            background: #fff;
-            color: #0000aa;
-            border: 4px solid #fff;
-            padding: 20px 60px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
             font-family: inherit;
             font-weight: bold;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             cursor: pointer;
-            box-shadow: 10px 10px 0 #000;
         }
-        button:hover { transform: translate(-2px, -2px); box-shadow: 12px 12px 0 #000; }
+        button:hover { background: #fff; box-shadow: 0 0 15px #0f0; }
 
         #params {
             position: absolute;
@@ -63,330 +66,325 @@
             text-align: right;
             z-index: 10;
             font-size: 1.2rem;
-            text-shadow: 2px 2px 0 #000;
+            color: #0f0;
         }
-
-        .highlight { color: #ffff00; font-weight: bold; }
-
     </style>
 </head>
 <body>
 
     <div id="code-layer">
-const drums = stack(
-  s("bd(3,8)").bank("Roland909"),
-  s("hh*16").pan(sine.range(-0.5,0.5))
-);
-const bass = note("c2 . eb2 . g2").s("sawtooth");
-const energy = mouse.x.map(100, 8000);
-const space = mouse.y.map(0, 1);
+// SYSTEM STATUS: ONLINE
+// AUDIO ENGINE:  READY
+// DSP CHAIN:
+// [KICK] -> [COMPRESSOR]
+// [BASS] -> [LPF] -> [COMPRESSOR]
+// [HATS] -> [HPF] -> [COMPRESSOR]
     </div>
 
     <canvas id="viz"></canvas>
 
     <div id="ui">
-        <h1>LIVE_CODER.JS</h1>
-        <button id="btn-run">COMPILE & RUN</button>
+        <h1>SYSTEM BOOT</h1>
+        <button id="btn-run">INITIALIZE AUDIO</button>
     </div>
 
     <div id="params">
-        FILTER: <span id="val-x" class="highlight">0%</span><br>
-        REVERB: <span id="val-y" class="highlight">0%</span>
+        FILTER: <span id="val-x">50%</span><br>
+        SPACE: <span id="val-y">50%</span>
     </div>
 
     <script>
-        // VISUAL SETUP
-        const canvas = document.getElementById('viz');
-        const ctx = canvas.getContext('2d');
-        
-        let width, height;
-        let mouseX = 0.5, mouseY = 0.5;
-        let isRunning = false;
-        let beatPulse = 0;
-
-        function resize() {
-            width = window.innerWidth;
-            height = window.innerHeight;
-            canvas.width = width;
-            canvas.height = height;
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        window.addEventListener('mousemove', e => {
-            mouseX = e.clientX / width;
-            mouseY = 1 - (e.clientY / height); // Invert Y
-            
-            document.getElementById('val-x').innerText = Math.floor(mouseX * 100) + "%";
-            document.getElementById('val-y').innerText = Math.floor(mouseY * 100) + "%";
-            
-            if(isRunning && actx) updateAudioParams();
-        });
-
         /* ------------------------------------------------
-           AUDIO ENGINE
+           GLOBAL VARS
            ------------------------------------------------ */
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        let actx, master, filterNode, reverbNode, reverbGain;
-        let noiseBufferHat, noiseBufferClap; // Pre-calculated buffers
+        let actx, master, limiter, filterNode, reverbNode, reverbGain;
+        let noiseBufferHat, noiseBufferClap;
         let nextNoteTime = 0;
         let beat = 0;
+        let isRunning = false;
+        let beatPulse = 0;
+        
+        // Input State
+        let mouseX = 0.5;
+        let mouseY = 0.5;
 
-        // SCALE: C Minor
-        const BASS_NOTES = [65.41, 65.41, 77.78, 65.41, 98.00, 87.31, 65.41, 77.78];
-        const CHORD_NOTES = [
-            [261.63, 311.13, 392.00], // Cm
-            [207.65, 261.63, 311.13], // Ab
-            [233.08, 293.66, 349.23]  // Bb
-        ];
+        /* ------------------------------------------------
+           AUDIO CORE
+           ------------------------------------------------ */
+        async function startAudio() {
+            const AudioCtor = window.AudioContext || window.webkitAudioContext;
+            actx = new AudioCtor();
 
-        async function initAudio() {
-            actx = new AudioContext();
-            
-            // Resume Context immediately for browser policies
+            // 1. CRITICAL: Resume immediately
             if (actx.state === 'suspended') {
                 await actx.resume();
             }
 
+            // 2. MASTER CHAIN (With Limiter to prevent silence/blowout)
             master = actx.createGain();
-            master.gain.value = 0.5;
+            master.gain.value = 0.6;
 
-            // 1. MASTER FILTER (The "Energy" Knob)
+            limiter = actx.createDynamicsCompressor();
+            limiter.threshold.value = -10;
+            limiter.knee.value = 40;
+            limiter.ratio.value = 12;
+            limiter.attack.value = 0;
+            limiter.release.value = 0.25;
+
+            // 3. FILTER (Controlled by Mouse X)
             filterNode = actx.createBiquadFilter();
             filterNode.type = 'lowpass';
-            filterNode.frequency.value = 1000;
-            filterNode.Q.value = 2;
+            filterNode.frequency.value = 2000; 
+            filterNode.Q.value = 1;
 
-            // 2. PRE-CALCULATE NOISE BUFFERS (Optimization)
-            // Hat Buffer
-            const bSizeHat = actx.sampleRate * 0.05;
-            noiseBufferHat = actx.createBuffer(1, bSizeHat, actx.sampleRate);
-            let d = noiseBufferHat.getChannelData(0);
-            for(let i=0; i<bSizeHat; i++) d[i] = Math.random() * 2 - 1;
-
-            // Clap Buffer
-            const bSizeClap = actx.sampleRate * 0.2;
-            noiseBufferClap = actx.createBuffer(1, bSizeClap, actx.sampleRate);
-            d = noiseBufferClap.getChannelData(0);
-            for(let i=0; i<bSizeClap; i++) d[i] = Math.random() * 2 - 1;
-
-            // 3. REVERB (The "Space" Knob)
+            // 4. REVERB (Controlled by Mouse Y)
+            reverbGain = actx.createGain();
+            reverbGain.gain.value = 0.2;
+            
+            // Procedural Impulse
             const rate = actx.sampleRate;
-            const length = rate * 2; // 2 seconds
+            const length = rate * 1.5;
             const impulse = actx.createBuffer(2, length, rate);
             for (let c = 0; c < 2; c++) {
-                let chData = impulse.getChannelData(c);
+                let d = impulse.getChannelData(c);
                 for (let i = 0; i < length; i++) {
-                    chData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3);
+                    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/length, 2);
                 }
             }
             reverbNode = actx.createConvolver();
             reverbNode.buffer = impulse;
-            reverbGain = actx.createGain();
-            reverbGain.gain.value = 0.2;
 
-            // Wiring
-            filterNode.connect(master);
+            // 5. PRE-GENERATE NOISE (Performance Fix)
+            const makeNoise = (dur) => {
+                const b = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate);
+                const d = b.getChannelData(0);
+                for(let i=0; i<b.length; i++) d[i] = Math.random() * 2 - 1;
+                return b;
+            };
+            noiseBufferHat = makeNoise(0.1);
+            noiseBufferClap = makeNoise(0.4);
+
+            // 6. WIRING
+            // Dry Signal -> Filter -> Limiter -> Out
+            filterNode.connect(limiter);
+            
+            // Reverb Send
             filterNode.connect(reverbGain);
             reverbGain.connect(reverbNode);
-            reverbNode.connect(master);
+            reverbNode.connect(limiter);
+
+            limiter.connect(master);
             master.connect(actx.destination);
 
-            // Start Clock
+            // 7. START LOOP
             nextNoteTime = actx.currentTime + 0.1;
+            isRunning = true;
             scheduler();
+            draw();
         }
 
-        function updateAudioParams() {
-            if (!actx) return;
-            // Mouse X -> Filter
-            const freq = 100 + Math.pow(mouseX, 3) * 10000;
-            filterNode.frequency.setTargetAtTime(freq, actx.currentTime, 0.1);
-
-            // Mouse Y -> Reverb Wet
-            reverbGain.gain.setTargetAtTime(mouseY * 0.8, actx.currentTime, 0.1);
-        }
-
-        /* --- SCHEDULER --- */
+        /* ------------------------------------------------
+           SCHEDULER (The Metronome)
+           ------------------------------------------------ */
         function scheduler() {
-            const bpm = 128;
+            if(!isRunning) return;
+            
+            const bpm = 135;
             const secondsPerBeat = 60.0 / bpm;
             const sixteenth = secondsPerBeat / 4;
-            const lookahead = 0.1;
+            const lookahead = 0.1; // 100ms
 
+            // Schedule notes that fall within the lookahead window
             while (nextNoteTime < actx.currentTime + lookahead) {
-                playStep(nextNoteTime, beat);
+                scheduleNote(beat, nextNoteTime);
                 nextNoteTime += sixteenth;
                 beat++;
             }
-            if (isRunning) setTimeout(scheduler, 25);
+            
+            // Check back often
+            setTimeout(scheduler, 25);
         }
 
-        function playStep(t, i) {
-            const step16 = i % 16;
-            
-            // 1. KICK
-            if (step16 % 4 === 0) {
+        function scheduleNote(beatIndex, t) {
+            const step = beatIndex % 16;
+
+            // KICK (Every 4 steps)
+            if (step % 4 === 0) {
                 playKick(t);
-                beatPulse = 1.0;
+                beatPulse = 1.0; // Visual Trigger
             }
 
-            // 2. HI-HATS
-            const vel = (step16 % 4 === 2) ? 0.8 : (step16 % 2 === 0 ? 0.3 : 0.1);
-            playHat(t, vel);
+            // BASS (Offbeats)
+            if (step % 4 === 2) {
+                playBass(t, 65.41); // C2
+            }
+            if (step % 16 === 14) {
+                playBass(t, 77.78); // Eb2
+            }
 
-            // 3. SNARE/CLAP
-            if (step16 === 4 || step16 === 12) {
+            // HATS (Every step, different velocity)
+            if (step % 2 === 0) playHat(t, 0.3);
+            else playHat(t, 0.1);
+            if (step % 4 === 2) playHat(t, 0.6); // Open hat accent
+
+            // CLAP (Step 4 and 12)
+            if (step === 4 || step === 12) {
                 playClap(t);
             }
-
-            // 4. BASS
-            if (step16 % 4 === 2 || step16 % 4 === 3) {
-                const note = BASS_NOTES[Math.floor(i / 16) % BASS_NOTES.length];
-                playBass(t, note);
-            }
-
-            // 5. CHORDS
-            if (i % 32 === 0) {
-                const chord = CHORD_NOTES[Math.floor(i / 32) % CHORD_NOTES.length];
-                playChord(t, chord);
-            }
         }
 
-        /* --- INSTRUMENTS --- */
-
+        /* ------------------------------------------------
+           INSTRUMENTS
+           ------------------------------------------------ */
         function playKick(t) {
             const osc = actx.createOscillator();
             const g = actx.createGain();
             
             osc.frequency.setValueAtTime(150, t);
-            // Ramping to 0.01Hz can be problematic; 1Hz is safe and effectively silent
-            osc.frequency.exponentialRampToValueAtTime(1, t + 0.5);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
             
-            g.gain.setValueAtTime(1.2, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            g.gain.setValueAtTime(1.0, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
             
-            osc.connect(g); g.connect(master);
-            osc.start(t); osc.stop(t + 0.5);
-        }
-
-        function playHat(t, vol) {
-            // Use pre-calculated buffer
-            const src = actx.createBufferSource();
-            src.buffer = noiseBufferHat;
+            // Kick bypasses filter for power, goes straight to limiter
+            osc.connect(g);
+            g.connect(limiter);
             
-            const f = actx.createBiquadFilter();
-            f.type = 'highpass'; f.frequency.value = 8000;
-            
-            const g = actx.createGain();
-            g.gain.setValueAtTime(vol * 0.5, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-            
-            src.connect(f); f.connect(g); g.connect(filterNode);
-            src.start(t);
-        }
-
-        function playClap(t) {
-            // Use pre-calculated buffer
-            const src = actx.createBufferSource();
-            src.buffer = noiseBufferClap;
-            
-            const f = actx.createBiquadFilter();
-            f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 1;
-            
-            const g = actx.createGain();
-            g.gain.setValueAtTime(0.5, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-            
-            src.connect(f); f.connect(g); g.connect(filterNode);
-            src.start(t);
+            osc.start(t);
+            osc.stop(t + 0.5);
         }
 
         function playBass(t, freq) {
             const osc = actx.createOscillator();
             osc.type = 'sawtooth';
-            osc.frequency.value = freq;
-            
+            osc.frequency.setValueAtTime(freq, t);
+
+            // 303-style Filter Envelope
             const f = actx.createBiquadFilter();
-            f.type = 'lowpass'; f.Q.value = 5;
-            f.frequency.setValueAtTime(100, t);
-            f.frequency.exponentialRampToValueAtTime(2000, t + 0.05);
-            f.frequency.exponentialRampToValueAtTime(100, t + 0.2);
+            f.type = 'lowpass';
+            f.Q.value = 8;
+            f.frequency.setValueAtTime(200, t);
+            f.frequency.exponentialRampToValueAtTime(3000, t + 0.05);
+            f.frequency.exponentialRampToValueAtTime(200, t + 0.3);
 
             const g = actx.createGain();
-            g.gain.setValueAtTime(0.5, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            g.gain.setValueAtTime(0.4, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
 
-            osc.connect(f); f.connect(g); g.connect(filterNode);
-            osc.start(t); osc.stop(t + 0.3);
+            osc.connect(f);
+            f.connect(g);
+            g.connect(filterNode); // Goes to Master Filter
+            
+            osc.start(t);
+            osc.stop(t + 0.4);
         }
 
-        function playChord(t, notes) {
-            const g = actx.createGain();
-            g.gain.setValueAtTime(0, t);
-            g.gain.linearRampToValueAtTime(0.3, t + 0.1);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
-            g.connect(filterNode);
+        function playHat(t, vol) {
+            const src = actx.createBufferSource();
+            src.buffer = noiseBufferHat;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass';
+            f.frequency.value = 5000;
 
-            notes.forEach(n => {
-                [-5, 5].forEach(detune => {
-                    const osc = actx.createOscillator();
-                    osc.type = 'sawtooth';
-                    osc.frequency.value = n;
-                    osc.detune.value = detune;
-                    osc.connect(g);
-                    osc.start(t); osc.stop(t + 2.0);
-                });
-            });
+            const g = actx.createGain();
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+            src.connect(f);
+            f.connect(g);
+            g.connect(filterNode);
+            
+            src.start(t);
+        }
+
+        function playClap(t) {
+            const src = actx.createBufferSource();
+            src.buffer = noiseBufferClap;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'bandpass';
+            f.frequency.value = 1200;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.6, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+
+            src.connect(f);
+            f.connect(g);
+            g.connect(filterNode);
+            
+            src.start(t);
         }
 
         /* ------------------------------------------------
-           VISUALS
+           INPUT & VISUALS
            ------------------------------------------------ */
-        function draw() {
+        const canvas = document.getElementById('viz');
+        const ctx = canvas.getContext('2d');
+        let w, h;
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
             if (!isRunning) return;
+            mouseX = e.clientX / w;
+            mouseY = 1 - (e.clientY / h);
+
+            // Update Audio Params safely
+            // Filter Frequency: 50Hz -> 8000Hz
+            const fFreq = 50 + Math.pow(mouseX, 3) * 8000;
+            filterNode.frequency.setTargetAtTime(fFreq, actx.currentTime, 0.1);
+
+            // Reverb Wetness
+            reverbGain.gain.setTargetAtTime(mouseY * 0.5, actx.currentTime, 0.1);
+
+            document.getElementById('val-x').innerText = Math.floor(mouseX*100) + "%";
+            document.getElementById('val-y').innerText = Math.floor(mouseY*100) + "%";
+        });
+
+        function draw() {
             requestAnimationFrame(draw);
-
-            beatPulse *= 0.85;
-
-            ctx.fillStyle = '#0000aa';
-            ctx.fillRect(0, 0, width, height);
-
-            // Draw Code Rain
-            ctx.font = "14px 'Fira Code'";
-            ctx.fillStyle = `rgba(255, 255, 255, 0.1)`;
             
+            // Fade out background
+            ctx.fillStyle = 'rgba(17, 17, 17, 0.2)';
+            ctx.fillRect(0, 0, w, h);
+
+            beatPulse *= 0.9; // Decay
+
+            // Draw Waveform (Simulated)
             ctx.beginPath();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2 + (beatPulse * 5);
-            
-            const midY = height / 2;
-            
-            for (let i = 0; i < width; i+=10) {
-                const freq = 0.05 + (mouseX * 0.1);
-                const amp = 50 + (beatPulse * 100);
-                const y = midY + Math.sin(i * freq + performance.now()*0.01) * amp;
-                if (i===0) ctx.moveTo(i, y);
+            ctx.strokeStyle = `rgba(0, 255, 0, ${0.5 + beatPulse})`;
+            ctx.lineWidth = 2 + (beatPulse * 10);
+
+            const midY = h/2;
+            for(let i=0; i<w; i+=20) {
+                const noise = (Math.random() - 0.5) * 20 * beatPulse;
+                const wave = Math.sin(i * 0.02 + Date.now() * 0.01) * (50 + beatPulse * 100);
+                const y = midY + wave + noise;
+                if(i===0) ctx.moveTo(i, y);
                 else ctx.lineTo(i, y);
             }
             ctx.stroke();
-
+            
+            // Flash on kick
             if (beatPulse > 0.1) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${beatPulse * 0.2})`;
-                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = `rgba(0, 255, 0, ${beatPulse * 0.1})`;
+                ctx.fillRect(0, 0, w, h);
             }
         }
 
-        /* ------------------------------------------------
-           INIT
-           ------------------------------------------------ */
-        document.getElementById('btn-run').addEventListener('click', async () => {
+        // INIT
+        document.getElementById('btn-run').addEventListener('click', function() {
             document.getElementById('ui').style.display = 'none';
-            
-            await initAudio();
-            
-            isRunning = true;
-            draw();
+            startAudio().catch(e => alert("Audio Error: " + e));
         });
 
     </script>
