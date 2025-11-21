@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAVID // AUTONOMOUS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            color: #ffd700;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: pointer; /* Indicates interaction needed */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.3));
+        }
+
+        #overlay {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            letter-spacing: 10px;
+            text-shadow: 0 0 30px #ffd700;
+        }
+
+        p {
+            font-size: 1.2rem;
+            color: #aa8844;
+            letter-spacing: 3px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="harp"></canvas>
+
+    <div id="overlay">
+        <h1>THE PSALM</h1>
+        <p>[ CLICK ANYWHERE TO BEGIN WORSHIP ]</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('harp');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let isRunning = false;
+        let time = 0;
+
+        // VISUALS
+        const NUM_STRINGS = 12;
+        let strings = [];
+        let particles = [];
+
+        // AUDIO
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // C MINOR PENTATONIC (2 Octaves)
+        const FREQS = [
+            130.81, 155.56, 174.61, 196.00, 233.08, // C3 - Bb3
+            261.63, 311.13, 349.23, 392.00, 466.16, // C4 - Bb4
+            523.25, 622.25 // C5 - Eb5
+        ];
+
+        let currentNote = 5; // Start in middle
+        let clock;
+
+        /* ------------------------------------------------
+           VISUAL ENGINE
+           ------------------------------------------------ */
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+
+        class StringVis {
+            constructor(x, idx) {
+                this.x = x;
+                this.idx = idx;
+                this.amp = 0;
+            }
+            pluck(vol) {
+                this.amp = 20 * vol;
+                spawnLight(this.x);
+            }
+            update() {
+                this.amp *= 0.93; // Decay
+            }
+            draw() {
+                ctx.beginPath();
+                const light = 40 + this.amp * 10;
+                ctx.strokeStyle = `hsl(45, 100%, ${light}%)`;
+                ctx.lineWidth = 1 + this.amp/5;
+                
+                ctx.moveTo(this.x, 0);
+                for(let y=0; y<=height; y+=20) {
+                    const vib = Math.sin(time * 20 + y * 0.05) * this.amp;
+                    const env = Math.sin((y/height) * Math.PI);
+                    ctx.lineTo(this.x + (vib * env), y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const step = width / (NUM_STRINGS + 1);
+            for(let i=0; i<NUM_STRINGS; i++) strings.push(new StringVis(step * (i+1), i));
+        }
+
+        function spawnLight(x) {
+            for(let i=0; i<5; i++) {
+                particles.push({
+                    x: x, y: height/2 + (Math.random()-0.5)*100,
+                    vx: (Math.random()-0.5)*2, vy: -(1 + Math.random()*2),
+                    life: 1.0
+                });
+            }
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.1;
+
+            ctx.fillStyle = 'rgba(5, 2, 0, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            strings.forEach(s => { s.update(); s.draw(); });
+
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                ctx.fillStyle = `rgba(255, 215, 0, ${p.life})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill();
+                if(p.life <= 0) particles.splice(i,1);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: ROBUST HARP
+           ------------------------------------------------ */
+        function initAudio() {
+            actx = new AC();
+            
+            // Safety Resume
+            if(actx.state === 'suspended') actx.resume();
+
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // DELAY (Reverb simulation)
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.3;
+            const fb = actx.createGain();
+            fb.gain.value = 0.4;
+            const filter = actx.createBiquadFilter();
+            filter.frequency.value = 1000;
+
+            master.connect(delay);
+            delay.connect(filter);
+            filter.connect(fb);
+            fb.connect(delay);
+            delay.connect(actx.destination);
+            master.connect(actx.destination);
+
+            startDrone();
+            
+            // HARD CLOCK: 250ms tick (4 notes per second max)
+            clock = setInterval(tick, 250);
+        }
+
+        function startDrone() {
+            // Low C
+            const osc = actx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = 65.41;
+            const g = actx.createGain();
+            g.gain.value = 0.15;
+            
+            // Filter out harshness
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass'; f.frequency.value = 200;
+            
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+        }
+
+        function playTone(freq, vol, idx) {
+            const t = actx.currentTime;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // TIMBRE: Triangle (Harp-like)
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+
+            // ENVELOPE
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(vol, t + 0.02); // Pluck
+            g.gain.exponentialRampToValueAtTime(0.001, t + 2.0); // Ring
+
+            osc.connect(g);
+            g.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + 2.0);
+
+            // Visual Trigger
+            if(strings[idx]) strings[idx].pluck(vol);
+        }
+
+        /* ------------------------------------------------
+           COMPOSITION LOGIC (THE BRAIN)
+           ------------------------------------------------ */
+        function tick() {
+            // 30% chance to rest (Space)
+            if(Math.random() > 0.7) return;
+
+            // 1. Voice Leading (Stepwise)
+            const r = Math.random();
+            let move = 0;
+            if(r < 0.4) move = 1;      // Up
+            else if(r < 0.8) move = -1; // Down
+            else if(r < 0.9) move = 2;  // Jump Up
+            else move = -2;             // Jump Down
+
+            currentNote += move;
+            
+            // Keep in bounds
+            if(currentNote < 0) currentNote = 1;
+            if(currentNote >= FREQS.length) currentNote = FREQS.length - 2;
+
+            const freq = FREQS[currentNote];
+            
+            // Volume Dynamics
+            const vol = 0.3 + Math.random() * 0.3;
+
+            playTone(freq, vol, currentNote);
+
+            // 2. Occasional Harmony (3rd or 5th)
+            if(Math.random() > 0.8) {
+                setTimeout(() => {
+                    const harmIdx = (currentNote + 2) % FREQS.length;
+                    playTone(FREQS[harmIdx], vol * 0.7, harmIdx);
+                }, 125); // 1/8th note delay strum
+            }
+        }
+
+        /* ------------------------------------------------
+           BOOT
+           ------------------------------------------------ */
+        function start() {
+            const overlay = document.getElementById('overlay');
+            overlay.style.opacity = 0;
+            setTimeout(() => overlay.style.display = 'none', 1000);
+            
+            resize();
+            initAudio();
+            isRunning = true;
+            render();
+        }
+
+        // Capture click anywhere
+        document.addEventListener('click', () => {
+            if(!isRunning) start();
+        });
+
+        // Initial setup
+        resize();
+
+    </script>
+</body>
+</html>
