@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIVE_CODER // FIXED AUDIO</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #111;
+            color: #fff;
+            font-family: 'Fira Code', monospace;
+            overflow: hidden;
+            cursor: crosshair;
+            user-select: none;
+        }
+
+        #code-layer {
+            position: absolute;
+            top: 20px; left: 20px;
+            z-index: 5;
+            font-size: 14px;
+            opacity: 0.8;
+            white-space: pre;
+            pointer-events: none;
+            color: #0f0;
+            text-shadow: 0 0 2px #0f0;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        #ui {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 40px;
+            border: 2px solid #0f0;
+        }
+
+        h1 { font-size: 2rem; margin-bottom: 20px; color: #0f0; text-transform: uppercase; letter-spacing: 4px; }
+
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        button:hover { background: #fff; box-shadow: 0 0 15px #0f0; }
+
+        #params {
+            position: absolute;
+            bottom: 20px; right: 20px;
+            text-align: right;
+            z-index: 10;
+            font-size: 1.2rem;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="code-layer">
+// SYSTEM STATUS: ONLINE
+// AUDIO ENGINE:  READY
+// DSP CHAIN:
+// [KICK] -> [COMPRESSOR]
+// [BASS] -> [LPF] -> [COMPRESSOR]
+// [HATS] -> [HPF] -> [COMPRESSOR]
+    </div>
+
+    <canvas id="viz"></canvas>
+
+    <div id="ui">
+        <h1>SYSTEM BOOT</h1>
+        <button id="btn-run">INITIALIZE AUDIO</button>
+    </div>
+
+    <div id="params">
+        FILTER: <span id="val-x">50%</span><br>
+        SPACE: <span id="val-y">50%</span>
+    </div>
+
+    <script>
+        /* ------------------------------------------------
+           GLOBAL VARS
+           ------------------------------------------------ */
+        let actx, master, limiter, filterNode, reverbNode, reverbGain;
+        let noiseBufferHat, noiseBufferClap;
+        let nextNoteTime = 0;
+        let beat = 0;
+        let isRunning = false;
+        let beatPulse = 0;
+        
+        // Input State
+        let mouseX = 0.5;
+        let mouseY = 0.5;
+
+        /* ------------------------------------------------
+           AUDIO CORE
+           ------------------------------------------------ */
+        async function startAudio() {
+            const AudioCtor = window.AudioContext || window.webkitAudioContext;
+            actx = new AudioCtor();
+
+            // 1. CRITICAL: Resume immediately
+            if (actx.state === 'suspended') {
+                await actx.resume();
+            }
+
+            // 2. MASTER CHAIN (With Limiter to prevent silence/blowout)
+            master = actx.createGain();
+            master.gain.value = 0.6;
+
+            limiter = actx.createDynamicsCompressor();
+            limiter.threshold.value = -10;
+            limiter.knee.value = 40;
+            limiter.ratio.value = 12;
+            limiter.attack.value = 0;
+            limiter.release.value = 0.25;
+
+            // 3. FILTER (Controlled by Mouse X)
+            filterNode = actx.createBiquadFilter();
+            filterNode.type = 'lowpass';
+            filterNode.frequency.value = 2000; 
+            filterNode.Q.value = 1;
+
+            // 4. REVERB (Controlled by Mouse Y)
+            reverbGain = actx.createGain();
+            reverbGain.gain.value = 0.2;
+            
+            // Procedural Impulse
+            const rate = actx.sampleRate;
+            const length = rate * 1.5;
+            const impulse = actx.createBuffer(2, length, rate);
+            for (let c = 0; c < 2; c++) {
+                let d = impulse.getChannelData(c);
+                for (let i = 0; i < length; i++) {
+                    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/length, 2);
+                }
+            }
+            reverbNode = actx.createConvolver();
+            reverbNode.buffer = impulse;
+
+            // 5. PRE-GENERATE NOISE (Performance Fix)
+            const makeNoise = (dur) => {
+                const b = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate);
+                const d = b.getChannelData(0);
+                for(let i=0; i<b.length; i++) d[i] = Math.random() * 2 - 1;
+                return b;
+            };
+            noiseBufferHat = makeNoise(0.1);
+            noiseBufferClap = makeNoise(0.4);
+
+            // 6. WIRING
+            // Dry Signal -> Filter -> Limiter -> Out
+            filterNode.connect(limiter);
+            
+            // Reverb Send
+            filterNode.connect(reverbGain);
+            reverbGain.connect(reverbNode);
+            reverbNode.connect(limiter);
+
+            limiter.connect(master);
+            master.connect(actx.destination);
+
+            // 7. START LOOP
+            nextNoteTime = actx.currentTime + 0.1;
+            isRunning = true;
+            scheduler();
+            draw();
+        }
+
+        /* ------------------------------------------------
+           SCHEDULER (The Metronome)
+           ------------------------------------------------ */
+        function scheduler() {
+            if(!isRunning) return;
+            
+            const bpm = 135;
+            const secondsPerBeat = 60.0 / bpm;
+            const sixteenth = secondsPerBeat / 4;
+            const lookahead = 0.1; // 100ms
+
+            // Schedule notes that fall within the lookahead window
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                scheduleNote(beat, nextNoteTime);
+                nextNoteTime += sixteenth;
+                beat++;
+            }
+            
+            // Check back often
+            setTimeout(scheduler, 25);
+        }
+
+        function scheduleNote(beatIndex, t) {
+            const step = beatIndex % 16;
+
+            // KICK (Every 4 steps)
+            if (step % 4 === 0) {
+                playKick(t);
+                beatPulse = 1.0; // Visual Trigger
+            }
+
+            // BASS (Offbeats)
+            if (step % 4 === 2) {
+                playBass(t, 65.41); // C2
+            }
+            if (step % 16 === 14) {
+                playBass(t, 77.78); // Eb2
+            }
+
+            // HATS (Every step, different velocity)
+            if (step % 2 === 0) playHat(t, 0.3);
+            else playHat(t, 0.1);
+            if (step % 4 === 2) playHat(t, 0.6); // Open hat accent
+
+            // CLAP (Step 4 and 12)
+            if (step === 4 || step === 12) {
+                playClap(t);
+            }
+        }
+
+        /* ------------------------------------------------
+           INSTRUMENTS
+           ------------------------------------------------ */
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            g.gain.setValueAtTime(1.0, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            // Kick bypasses filter for power, goes straight to limiter
+            osc.connect(g);
+            g.connect(limiter);
+            
+            osc.start(t);
+            osc.stop(t + 0.5);
+        }
+
+        function playBass(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, t);
+
+            // 303-style Filter Envelope
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.Q.value = 8;
+            f.frequency.setValueAtTime(200, t);
+            f.frequency.exponentialRampToValueAtTime(3000, t + 0.05);
+            f.frequency.exponentialRampToValueAtTime(200, t + 0.3);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.4, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+
+            osc.connect(f);
+            f.connect(g);
+            g.connect(filterNode); // Goes to Master Filter
+            
+            osc.start(t);
+            osc.stop(t + 0.4);
+        }
+
+        function playHat(t, vol) {
+            const src = actx.createBufferSource();
+            src.buffer = noiseBufferHat;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass';
+            f.frequency.value = 5000;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+            src.connect(f);
+            f.connect(g);
+            g.connect(filterNode);
+            
+            src.start(t);
+        }
+
+        function playClap(t) {
+            const src = actx.createBufferSource();
+            src.buffer = noiseBufferClap;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'bandpass';
+            f.frequency.value = 1200;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.6, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+
+            src.connect(f);
+            f.connect(g);
+            g.connect(filterNode);
+            
+            src.start(t);
+        }
+
+        /* ------------------------------------------------
+           INPUT & VISUALS
+           ------------------------------------------------ */
+        const canvas = document.getElementById('viz');
+        const ctx = canvas.getContext('2d');
+        let w, h;
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            if (!isRunning) return;
+            mouseX = e.clientX / w;
+            mouseY = 1 - (e.clientY / h);
+
+            // Update Audio Params safely
+            // Filter Frequency: 50Hz -> 8000Hz
+            const fFreq = 50 + Math.pow(mouseX, 3) * 8000;
+            filterNode.frequency.setTargetAtTime(fFreq, actx.currentTime, 0.1);
+
+            // Reverb Wetness
+            reverbGain.gain.setTargetAtTime(mouseY * 0.5, actx.currentTime, 0.1);
+
+            document.getElementById('val-x').innerText = Math.floor(mouseX*100) + "%";
+            document.getElementById('val-y').innerText = Math.floor(mouseY*100) + "%";
+        });
+
+        function draw() {
+            requestAnimationFrame(draw);
+            
+            // Fade out background
+            ctx.fillStyle = 'rgba(17, 17, 17, 0.2)';
+            ctx.fillRect(0, 0, w, h);
+
+            beatPulse *= 0.9; // Decay
+
+            // Draw Waveform (Simulated)
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(0, 255, 0, ${0.5 + beatPulse})`;
+            ctx.lineWidth = 2 + (beatPulse * 10);
+
+            const midY = h/2;
+            for(let i=0; i<w; i+=20) {
+                const noise = (Math.random() - 0.5) * 20 * beatPulse;
+                const wave = Math.sin(i * 0.02 + Date.now() * 0.01) * (50 + beatPulse * 100);
+                const y = midY + wave + noise;
+                if(i===0) ctx.moveTo(i, y);
+                else ctx.lineTo(i, y);
+            }
+            ctx.stroke();
+            
+            // Flash on kick
+            if (beatPulse > 0.1) {
+                ctx.fillStyle = `rgba(0, 255, 0, ${beatPulse * 0.1})`;
+                ctx.fillRect(0, 0, w, h);
+            }
+        }
+
+        // INIT
+        document.getElementById('btn-run').addEventListener('click', function() {
+            document.getElementById('ui').style.display = 'none';
+            startAudio().catch(e => alert("Audio Error: " + e));
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STAR DRIVE // AVICII x JAI WOLF</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Russo+One&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Russo One', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #00ddee;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturate(1.3);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, #000 100%);
+            transition: opacity 0.5s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            text-transform: uppercase;
+            margin: 0;
+            color: #fff;
+            text-shadow: 0 0 20px #00ddee, 4px 4px 0 #ff0055;
+            font-style: italic;
+        }
+
+        button {
+            margin-top: 30px;
+            padding: 20px 80px;
+            background: transparent;
+            color: #fff;
+            border: 4px solid #fff;
+            font-size: 2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            transform: skew(-10deg);
+            transition: 0.2s;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            transform: skew(-10deg) scale(1.1);
+        }
+
+        /* DASHBOARD */
+        #hud {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 150px;
+            z-index: 5;
+            background: linear-gradient(to top, #000, transparent);
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 50px;
+            box-sizing: border-box;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        .gauge {
+            text-align: center;
+            color: #fff;
+        }
+
+        #gear-disp {
+            font-size: 5rem;
+            color: #ff0055;
+            text-shadow: 0 0 20px #ff0055;
+        }
+
+        #clutch-bar {
+            width: 20px;
+            height: 100px;
+            border: 2px solid #fff;
+            display: inline-block;
+            position: relative;
+        }
+        #clutch-fill {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%; height: 0%;
+            background: #00ddee;
+            transition: height 0.1s;
+        }
+
+        .blink { animation: blinker 0.5s infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="hyperspace"></canvas>
+
+    <div id="ui">
+        <h1>STAR DRIVE</h1>
+        <div style="color: #aaa; margin-top: 10px; letter-spacing: 2px;">MANUAL TRANSMISSION SYMPHONY</div>
+        <button id="btn-init" onclick="ignite()">IGNITE ENGINE</button>
+    </div>
+
+    <div id="hud">
+        <div class="gauge">
+            <div style="font-size: 12px; color: #888;">RPM / FILTER</div>
+            <div id="clutch-bar"><div id="clutch-fill"></div></div>
+        </div>
+        <div class="gauge">
+            <div style="font-size: 12px; color: #888;">GEAR</div>
+            <div id="gear-disp">N</div>
+        </div>
+        <div class="gauge" style="text-align: right;">
+            <div style="font-size: 12px; color: #888;">STATUS</div>
+            <div id="status-text" style="font-size: 1.5rem; color: #00ddee;">IDLE</div>
+            <div style="font-size: 10px; margin-top: 5px;">[SPACE] TO SHIFT</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('hyperspace');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // INPUTS
+        let clutch = 0; // 0 (Bottom/Muffled) to 1 (Top/Open)
+        let gear = 0; // 0=N, 1-5
+        
+        // STARS
+        let stars = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            // Mouse Y controls Clutch/Filter
+            // Bottom (Height) = 0, Top (0) = 1
+            clutch = 1 - (e.clientY / height);
+            clutch = Math.max(0, Math.min(1, clutch));
+            
+            document.getElementById('clutch-fill').style.height = (clutch * 100) + '%';
+            updateEngineParams();
+        });
+
+        window.addEventListener('keydown', e => {
+            if (e.code === 'Space' && isRunning) {
+                shiftGear();
+            }
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: HYPERDRIVE
+           ------------------------------------------------ */
+        class Star {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = (Math.random() - 0.5) * width * 2;
+                this.y = (Math.random() - 0.5) * height * 2;
+                this.z = 2000 + Math.random() * 1000;
+                this.color = Math.random() > 0.8 ? '#ff0055' : '#00ddee';
+            }
+            update() {
+                // Speed depends on Gear + Clutch
+                let speed = (gear * 10) + (clutch * 50); 
+                if (gear === 0) speed = 2; // Idle drift
+
+                this.z -= speed;
+                if (this.z < 1) this.reset();
+            }
+            draw() {
+                const scale = 500 / this.z;
+                const x2d = cx + this.x * scale;
+                const y2d = cy + this.y * scale;
+                
+                const size = Math.max(1, scale * 3);
+                const trailLen = scale * (gear * 20 + clutch * 50);
+
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = size;
+                ctx.lineCap = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(x2d, y2d);
+                // Draw trail radiating from center
+                const angle = Math.atan2(y2d - cy, x2d - cx);
+                ctx.lineTo(x2d - Math.cos(angle)*trailLen, y2d - Math.sin(angle)*trailLen);
+                ctx.stroke();
+            }
+        }
+
+        // Init Stars
+        for(let i=0; i<500; i++) stars.push(new Star());
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Clear
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            // Sun/Tunnel center
+            const intensity = (gear * 0.2) + (clutch * 0.3);
+            const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, width * 0.8);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${intensity})`);
+            grad.addColorStop(0.2, `rgba(0, 221, 238, ${intensity * 0.5})`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,width,height);
+
+            stars.forEach(s => {
+                s.update();
+                s.draw();
+            });
+
+            // Grid Floor (The Road)
+            ctx.strokeStyle = 'rgba(255, 0, 85, 0.3)';
+            ctx.lineWidth = 2;
+            const speed = (time * (gear+1) * 200) % 100;
+            
+            ctx.beginPath();
+            // Horizon lines
+            for(let i=0; i<height/2; i+=40) {
+                const y = (height/2) + i + (speed * (i/200)); // Pseudo perspective
+                if (y > height/2 && y < height) {
+                    ctx.moveTo(0, y); ctx.lineTo(width, y);
+                }
+            }
+            // Perspective lines
+            for(let i=-width; i<width*2; i+=200) {
+                ctx.moveTo(i, height);
+                ctx.lineTo(cx, height/2);
+            }
+            ctx.stroke();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE MONZA SYMPHONY
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, lowpass;
+        let nextNoteTime = 0;
+        let beatCount = 0;
+        
+        // SCALES (Avicii Style: F# Major)
+        // F#, G#, A#, B, C#, D#, E#
+        const SCALE = [185.00, 207.65, 233.08, 246.94, 277.18, 311.13, 349.23]; 
+        const CHORDS = [
+            [185.00, 233.08, 277.18], // F# Maj
+            [146.83, 185.00, 220.00], // D# Min
+            [246.94, 311.13, 370.00], // B Maj
+            [277.18, 349.23, 415.30]  // C# Maj
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // GLOBAL FILTER (The "Clutch")
+            lowpass = actx.createBiquadFilter();
+            lowpass.type = 'lowpass';
+            lowpass.frequency.value = 200; // Start closed
+            lowpass.Q.value = 2; // Resonance
+
+            // DISTORTION (The Monza Exhaust)
+            const dist = actx.createWaveShaper();
+            dist.curve = makeDistortionCurve(100); // Mild grit
+            
+            // COMPRESSOR (The Pump)
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -20;
+            comp.ratio.value = 12;
+
+            // Wiring
+            // Mix -> Filter -> Distortion -> Compressor -> Out
+            master.connect(lowpass);
+            lowpass.connect(dist);
+            dist.connect(comp);
+            comp.connect(actx.destination);
+
+            // Start Sequencer
+            nextNoteTime = actx.currentTime;
+            scheduler();
+            
+            // Start Drone (Idle Engine)
+            playDrone();
+        }
+
+        function makeDistortionCurve(amount) {
+            const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+        function updateEngineParams() {
+            if(!actx) return;
+            // Clutch controls filter cutoff
+            // Bottom = 200Hz, Top = 12000Hz
+            // Exponential curve for better feel
+            const freq = 200 * Math.pow(60, clutch);
+            lowpass.frequency.setTargetAtTime(freq, actx.currentTime, 0.1);
+            
+            // Resonance increases when filter opens
+            lowpass.Q.value = 2 + (clutch * 8);
+        }
+
+        function playDrone() {
+            // Engine Idle Rumble
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = 46.25; // Low F#
+            const g = actx.createGain();
+            g.gain.value = 0.3;
+            osc.connect(g); g.connect(master);
+            osc.start();
+        }
+
+        function scheduler() {
+            const bpm = 128;
+            const secPerBeat = 60 / bpm;
+            const sixteenth = secPerBeat / 4;
+
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playStep(nextNoteTime, beatCount);
+                nextNoteTime += sixteenth;
+                beatCount++;
+            }
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playStep(t, beat) {
+            const barStep = beat % 16;
+            const barIdx = Math.floor(beat / 16) % 4;
+            const chord = CHORDS[barIdx];
+
+            // GEAR 1: PADS (Atmosphere)
+            if (gear >= 1) {
+                if (barStep === 0) { // Chord every bar
+                    playPad(t, chord);
+                }
+            }
+
+            // GEAR 2: PLUCK (Avicii Melody)
+            if (gear >= 2) {
+                // Folk rhythm: 1 . & . 3 . & .
+                if (barStep % 2 === 0 || barStep === 3 || barStep === 11) {
+                    const note = SCALE[Math.floor(Math.random() * SCALE.length)];
+                    playPluck(t, note);
+                }
+            }
+
+            // GEAR 3: ARP + SNARE BUILD
+            if (gear >= 3) {
+                if (barStep % 2 === 0) { // 8th note arp
+                     const arpNote = chord[barStep % 3] * 2; // High octave
+                     playSaw(t, arpNote, 0.1);
+                }
+                if (barStep === 4 || barStep === 12) playSnare(t);
+            }
+
+            // GEAR 4: THE DROP (Full Power)
+            if (gear >= 4) {
+                if (barStep % 4 === 0) playKick(t); // 4 on floor
+                if (barStep === 4 || barStep === 12) playSnare(t);
+                
+                // Supersaw Chord Stabs on offbeats
+                if (barStep === 2 || barStep === 6 || barStep === 10 || barStep === 14) {
+                    playSuperSaw(t, chord);
+                }
+            }
+            
+            // GEAR 5: WARP SPEED (Noise + Lead)
+            if (gear >= 5) {
+                if (beat % 2 === 0) playLead(t);
+            }
+        }
+
+        /* --- INSTRUMENTS --- */
+
+        function playPad(t, chord) {
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t+0.5);
+            g.gain.exponentialRampToValueAtTime(0.001, t+3);
+            g.connect(master);
+
+            chord.forEach(f => {
+                const osc = actx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = f;
+                osc.connect(g);
+                osc.start(t); osc.stop(t+3.1);
+            });
+        }
+
+        function playPluck(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'square'; // Folk-ish
+            osc.frequency.value = freq;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t+0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.31);
+        }
+
+        function playSaw(t, freq, dur) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+dur+0.1);
+        }
+
+        function playSuperSaw(t, chord) {
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.3, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.4);
+            g.connect(master);
+
+            // Stack detuned saws for Jai Wolf effect
+            chord.forEach(f => {
+                [-10, 0, 10].forEach(d => {
+                    const osc = actx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = f;
+                    osc.detune.value = d;
+                    osc.connect(g);
+                    osc.start(t); osc.stop(t+0.4);
+                });
+            });
+        }
+
+        function playLead(t) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            // High melody
+            const note = SCALE[Math.floor(Math.random()*SCALE.length)] * 2;
+            osc.frequency.value = note;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.2);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.2);
+        }
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t+0.5);
+            const g = actx.createGain();
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t+0.5);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.5);
+        }
+
+        function playSnare(t) {
+            const buf = actx.createBuffer(1, actx.sampleRate*0.1, actx.sampleRate);
+            const d = buf.getChannelData(0);
+            for(let i=0; i<d.length; i++) d[i]=Math.random()*2-1;
+            const src = actx.createBufferSource();
+            src.buffer = buf;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t+0.2);
+            src.connect(g); g.connect(master);
+            src.start(t);
+        }
+
+        /* ------------------------------------------------
+           CONTROLS
+           ------------------------------------------------ */
+        function shiftGear() {
+            if (gear < 5) {
+                gear++;
+                document.getElementById('gear-disp').innerText = gear;
+                
+                // Update Status Text
+                const stats = ["NEUTRAL", "PADS_ENGAGED", "MELODY_ACTIVE", "TURBO_SPOOL", "DROP_INITIATED", "HYPERDRIVE"];
+                document.getElementById('status-text').innerText = stats[gear];
+                document.getElementById('status-text').className = "blink";
+                setTimeout(() => document.getElementById('status-text').className = "", 500);
+            }
+        }
+
+        function ignite() {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 500);
+            document.getElementById('hud').style.opacity = 1;
+            
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

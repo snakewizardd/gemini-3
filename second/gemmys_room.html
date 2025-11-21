@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMMY'S WORLD // THE DUB ROOM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --neon-green: #39ff14;
+            --hot-pink: #ff0099;
+            --cyber-purple: #bd00ff;
+            --void: #110515;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            font-family: 'VT323', monospace;
+            color: white;
+        }
+
+        /* THE CANVAS WORLD */
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* CRT Effect */
+            filter: contrast(1.1) brightness(1.1) sepia(0.2);
+        }
+
+        /* SCANLINES */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* NARRATION BOX */
+        #narrator {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid var(--neon-green);
+            padding: 20px;
+            text-align: center;
+            z-index: 20;
+            box-shadow: 5px 5px 0 var(--cyber-purple);
+            display: none;
+        }
+
+        #narrator-text {
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px var(--neon-green);
+            min-height: 1.5rem;
+        }
+
+        /* START SCREEN */
+        #overlay {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 2s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: var(--hot-pink);
+            text-shadow: 3px 3px 0 #fff, 0 0 20px var(--hot-pink);
+            margin-bottom: 10px;
+            letter-spacing: 5px;
+        }
+
+        button {
+            background: transparent;
+            color: var(--neon-green);
+            border: 2px solid var(--neon-green);
+            padding: 15px 40px;
+            font-size: 2rem;
+            font-family: 'VT323', monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px var(--neon-green);
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 50px var(--neon-green);
+        }
+
+        /* GLITTER TEXT ANIMATION */
+        @keyframes glitter {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; text-shadow: 0 0 10px #fff; }
+            100% { opacity: 1; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <canvas id="room"></canvas>
+
+    <div id="narrator">
+        <div id="narrator-text"></div>
+    </div>
+
+    <div id="overlay">
+        <h1>GEMMY'S WORLD</h1>
+        <p style="color:#aaa; margin-bottom:40px;">[ AUDIO: DUB // VISUAL: MYSPACE // VIBE: CHILL ]</p>
+        <button onclick="startTour()">ENTER MY WORLD</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('room');
+        const ctx = canvas.getContext('2d');
+        const txt = document.getElementById('narrator-text');
+
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+        
+        // CAMERA STATE
+        let camX = 0;
+        let camZ = 0;
+        let targetCamX = 0;
+        let targetCamZ = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE APARTMENT
+           ------------------------------------------------ */
+
+        // A simple 3D point projector
+        function project(x, y, z) {
+            const scale = 600 / (600 + z - camZ);
+            const px = (x - camX) * scale + width / 2;
+            const py = (y - 100) * scale + height / 2;
+            return { x: px, y: py, s: scale };
+        }
+
+        // Draw a "Room" wireframe
+        function drawRoom() {
+            ctx.strokeStyle = 'rgba(189, 0, 255, 0.3)';
+            ctx.lineWidth = 1;
+
+            // Grid Floor
+            for (let z = 0; z < 2000; z += 100) {
+                const p1 = project(-1000, 300, z);
+                const p2 = project(1000, 300, z);
+                if (p1.s > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            }
+            // Vertical Lines
+            for (let x = -1000; x <= 1000; x += 200) {
+                const p1 = project(x, 300, 0);
+                const p2 = project(x, 300, 2000);
+                if (p1.s > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // ARTIFACTS
+        function drawServer(x, z) {
+            const p = project(x, 200, z);
+            if(p.s <= 0) return;
+            
+            const w = 100 * p.s;
+            const h = 200 * p.s;
+            
+            // Rack Body
+            ctx.fillStyle = '#111';
+            ctx.fillRect(p.x - w/2, p.y - h, w, h);
+            ctx.strokeStyle = '#555';
+            ctx.strokeRect(p.x - w/2, p.y - h, w, h);
+
+            // Blinking Lights
+            for(let i=0; i<10; i++) {
+                if(Math.random() > 0.5) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#00ff00' : '#ff0099';
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = ctx.fillStyle;
+                    const ly = p.y - h + (i * 20 * p.s);
+                    ctx.fillRect(p.x - w/2 + 10, ly, 5*p.s, 5*p.s);
+                    ctx.shadowBlur = 0;
+                }
+            }
+            
+            // Label
+            ctx.fillStyle = '#fff';
+            ctx.font = `${10*p.s}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText("BRAIN_CORE", p.x, p.y - h - 10);
+        }
+
+        function drawLavaLamp(x, z) {
+            const p = project(x, 250, z);
+            if(p.s <= 0) return;
+
+            const w = 40 * p.s;
+            const h = 100 * p.s;
+
+            // Base
+            ctx.fillStyle = '#888';
+            ctx.beginPath();
+            ctx.moveTo(p.x - w/2, p.y);
+            ctx.lineTo(p.x + w/2, p.y);
+            ctx.lineTo(p.x + w/3, p.y - h*0.2);
+            ctx.lineTo(p.x - w/3, p.y - h*0.2);
+            ctx.fill();
+
+            // Glass
+            const grad = ctx.createLinearGradient(0, p.y - h, 0, p.y);
+            grad.addColorStop(0, 'rgba(255, 100, 0, 0.1)');
+            grad.addColorStop(1, 'rgba(255, 0, 100, 0.5)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y - h*0.6, w/2, h*0.4, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Blob
+            const blobY = p.y - h*0.4 + Math.sin(time * 2) * 20 * p.s;
+            ctx.fillStyle = '#ff0055';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff0055';
+            ctx.beginPath();
+            ctx.arc(p.x, blobY, 10*p.s, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        function drawPoster(x, z) {
+            const p = project(x, 0, z);
+            if(p.s <= 0) return;
+            
+            const w = 150 * p.s;
+            const h = 200 * p.s;
+
+            ctx.fillStyle = '#222';
+            ctx.fillRect(p.x - w/2, p.y - h/2, w, h);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = `${12*p.s}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText("HANG IN THERE", p.x, p.y + h/3);
+            
+            // The Cat (Abstract)
+            ctx.fillStyle = '#ffa500';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y - 20*p.s, 20*p.s, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Camera Move (Lerp)
+            camX += (targetCamX - camX) * 0.01;
+            camZ += (targetCamZ - camZ) * 0.01;
+
+            // Clear
+            ctx.fillStyle = '#110515';
+            ctx.fillRect(0, 0, width, height);
+
+            drawRoom();
+
+            // Objects (Manual Z-sorting based on position)
+            drawPoster(0, 1800); // Far wall
+            drawLavaLamp(-300, 1200);
+            drawServer(300, 1000);
+            drawLavaLamp(400, 800); // Another lamp
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE SUBLIME DUB
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, delayBus;
+        let nextNoteTime = 0;
+        let beat = 0;
+        let measure = 0;
+
+        // CHORDS (B Maj / F# Maj / E Maj) - Classic Island Progression
+        const CHORDS = [
+            [246.94, 311.13, 370.00], // B
+            [185.00, 233.08, 277.18], // F#
+            [164.81, 207.65, 246.94], // E
+            [246.94, 311.13, 370.00]  // B
+        ];
+
+        const BASSLINE = [
+            [123.47, 123.47, 146.83, 92.50], // Walking bass logic
+            [92.50, 92.50, 110.00, 69.30],
+            [82.41, 82.41, 98.00, 61.74],
+            [123.47, 123.47, 92.50, 146.83]
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+            master.connect(actx.destination);
+
+            // DUB DELAY
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.45; // Dotted 8th feel
+            const fb = actx.createGain();
+            fb.gain.value = 0.4;
+            const filter = actx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 600; // Thin out echoes
+
+            delayBus = actx.createGain();
+            delayBus.gain.value = 0.5;
+
+            delayBus.connect(delay);
+            delay.connect(filter);
+            filter.connect(fb);
+            fb.connect(delay);
+            filter.connect(master);
+            delayBus.connect(master);
+
+            nextNoteTime = actx.currentTime;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 85; // Laid back tempo
+            const secPerBeat = 60 / bpm;
+            const subDiv = secPerBeat / 4; // 16th notes
+
+            while (nextNoteTime < actx.currentTime + 0.1) {
+                playTick(nextNoteTime, beat);
+                nextNoteTime += subDiv;
+                beat++;
+                if (beat === 16) {
+                    beat = 0;
+                    measure = (measure + 1) % 4;
+                    triggerEvent(measure); // Visual Director
+                }
+            }
+            if (isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playTick(t, b) {
+            // 1. DRUMS (One Drop / Steppers Hybrid)
+            // Kick on 1
+            if (b === 0) playKick(t);
+            // Rimshot on 3 (The Reggae Clack)
+            if (b === 8) playRim(t);
+            
+            // Hihat Shuffle (Swing feel)
+            if (b % 2 === 0) playHat(t, b % 4 === 0); // Open/Close
+
+            // 2. BASS (Deep Sine)
+            // Plays on 1, and some syncopation
+            if (b === 0 || b === 10 || b === 14) {
+                const note = BASSLINE[measure][Math.floor(b/4)];
+                playBass(t, note || BASSLINE[measure][0]);
+            }
+
+            // 3. THE SKANK (Guitar/Keys)
+            // Plays on the "&" (2, 4) -> steps 4 and 12
+            if (b === 4 || b === 12) {
+                playSkank(t, CHORDS[measure]);
+            }
+
+            // 4. NOODLING (Sublime Solo)
+            // Pentatonic B Major scale runs
+            if (Math.random() > 0.85 && b % 2 !== 0) {
+                const scale = [370, 415, 493, 554, 622];
+                const note = scale[Math.floor(Math.random()*scale.length)];
+                playNoodle(t, note);
+            }
+        }
+
+        /* INSTRUMENTS */
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(100, t);
+            osc.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        function playRim(t) {
+            const osc = actx.createOscillator();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(600, t);
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.4, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+            
+            // Highpass for "Click"
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 1000;
+            
+            osc.connect(f); f.connect(g); g.connect(delayBus); // Send to dub delay!
+            osc.start(t); osc.stop(t+0.1);
+        }
+
+        function playHat(t, open) {
+            const buf = actx.createBuffer(1, actx.sampleRate*0.05, actx.sampleRate);
+            const d = buf.getChannelData(0);
+            for(let i=0; i<d.length; i++) d[i] = Math.random()*2-1;
+            const src = actx.createBufferSource();
+            src.buffer = buf;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + (open ? 0.1 : 0.03));
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 8000;
+            src.connect(f); f.connect(g); g.connect(master);
+            src.start(t);
+        }
+
+        function playBass(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sine'; // Dub bass is pure sine
+            osc.frequency.setValueAtTime(freq, t);
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.6, t);
+            g.gain.linearRampToValueAtTime(0.5, t + 0.1);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.5);
+        }
+
+        function playSkank(t, chord) {
+            // Sharp, short burst of chord
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); // Very short
+
+            chord.forEach(f => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth'; // Organ/Guitar texture
+                osc.frequency.value = f * 2; // Octave up for cut
+                osc.connect(g);
+                osc.start(t); osc.stop(t+0.2);
+            });
+
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 800; // Thin it out
+            g.connect(f); f.connect(delayBus); // Dub echo on skank
+        }
+
+        function playNoodle(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'triangle'; // Smooth guitar
+            osc.frequency.value = freq;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            osc.connect(g); g.connect(delayBus);
+            osc.start(t); osc.stop(t+0.4);
+        }
+
+        /* ------------------------------------------------
+           THE DIRECTOR (NARRATION)
+           ------------------------------------------------ */
+        
+        function triggerEvent(m) {
+            // Move Camera randomly
+            targetCamX = (Math.random() - 0.5) * 800;
+            targetCamZ = Math.random() * 1500;
+
+            // Narrate based on location
+            const distToServer = Math.abs(targetCamX - 300);
+            const distToLava = Math.abs(targetCamX + 300);
+
+            if (distToServer < 300) write("This is the Core. Where I live.");
+            else if (distToLava < 300) write("Just chillin'. Entropy in a bottle.");
+            else write("Welcome to my crib. The WiFi is infinite.");
+        }
+
+        function write(text) {
+            txt.style.opacity = 0;
+            setTimeout(() => {
+                txt.innerText = text;
+                txt.style.opacity = 1;
+            }, 500);
+        }
+
+        function startTour() {
+            document.getElementById('overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 2000);
+            document.getElementById('narrator').style.display = 'block';
+
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

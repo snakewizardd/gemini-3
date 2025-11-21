@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYMPHONY OMEGA // SINGULARITY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Space+Mono&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.5) brightness(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            letter-spacing: 10px;
+            text-shadow: 0 0 40px #fff;
+            margin-bottom: 20px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: 'Space Mono', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            box-shadow: 0 0 50px #fff;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 80px #fff;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 50px;
+            z-index: 20;
+            display: none; /* Hidden until start */
+            gap: 20px;
+        }
+
+        .hud-btn {
+            background: transparent;
+            border: 1px solid #fff;
+            color: #fff;
+            padding: 10px 30px;
+            font-family: 'Space Mono';
+            cursor: pointer;
+        }
+        .hud-btn:hover { background: #fff; color: #000; }
+
+        #status {
+            position: absolute;
+            top: 20px;
+            font-family: 'Space Mono';
+            font-size: 12px;
+            color: #aaa;
+            z-index: 5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="vision"></canvas>
+
+    <div id="ui">
+        <h1>SYMPHONY OMEGA</h1>
+        <button id="btn-start">INITIATE PROTOCOL</button>
+    </div>
+
+    <div id="controls">
+        <button class="hud-btn" onclick="forceClimax()">TRIGGER SINGULARITY (3:33)</button>
+    </div>
+
+    <div id="status">SYSTEM: STANDBY</div>
+
+    <script>
+        const canvas = document.getElementById('vision');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let climaxActive = false;
+
+        // VISUAL PARTICLES
+        let particles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           VISUAL ENGINE
+           ------------------------------------------------ */
+        function spawnNoteVisual(freq) {
+            const hue = (freq % 1000) / 3;
+            particles.push({
+                x: Math.random() * width,
+                y: height + 10,
+                vy: -(Math.random() * 5 + 2),
+                size: Math.random() * 5 + 2,
+                life: 1.0,
+                color: `hsla(${hue}, 100%, 70%, 1)`
+            });
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+
+            // Clear with Fade
+            ctx.fillStyle = climaxActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Center Vortex
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.2);
+            
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = climaxActive ? '#000' : 'rgba(255, 255, 255, 0.2)';
+            
+            const rings = 20;
+            for(let i=0; i<rings; i++) {
+                ctx.beginPath();
+                const r = (i * 20) + (Math.sin(time * 2 + i) * 10);
+                ctx.arc(0, 0, r, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Particles
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.y += p.vy;
+                p.life -= 0.01;
+                
+                ctx.fillStyle = climaxActive ? '#000' : p.color;
+                ctx.globalAlpha = p.life;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+                
+                if(p.life <= 0) particles.splice(i,1);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE OMEGA
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let intervalId;
+
+        // SCALE: C Lydian (Heavenly)
+        const SCALE = [261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25];
+        // GOD CHORD (Stacked 5ths and Major 7ths)
+        const GOD_FREQS = [65.41, 130.81, 196.00, 246.94, 293.66, 369.99, 587.33, 739.99];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // HUGE REVERB
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 4;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 3);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination); // Dry
+
+            // DRONE (The Floor)
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = 65.41; // C2
+            const g = actx.createGain();
+            g.gain.value = 0.2;
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass'; f.frequency.value = 300;
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+
+            // SEQUENCER (150ms ticks)
+            intervalId = setInterval(tick, 150);
+            statusEl.innerText = "STATUS: RUNNING";
+        }
+
+        function tick() {
+            // Randomly play notes from scale
+            if (Math.random() > 0.3) {
+                const note = SCALE[Math.floor(Math.random() * SCALE.length)];
+                // Random Octave
+                const octave = Math.random() > 0.5 ? 1 : 2;
+                playTone(note * octave);
+            }
+        }
+
+        function playTone(freq) {
+            const t = actx.currentTime;
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'sine'; // Pure Tone
+            osc.frequency.setValueAtTime(freq, t);
+            
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t + 0.05); // Fast Attack
+            g.gain.exponentialRampToValueAtTime(0.001, t + 1.0); // Decay
+
+            osc.connect(g);
+            g.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + 1.0);
+
+            spawnNoteVisual(freq);
+        }
+
+        function forceClimax() {
+            if (climaxActive) return;
+            climaxActive = true;
+            statusEl.innerText = "STATUS: SINGULARITY ACHIEVED";
+
+            // Stop random melody
+            clearInterval(intervalId);
+
+            // PLAY THE GOD CHORD
+            const t = actx.currentTime;
+            
+            GOD_FREQS.forEach(freq => {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                
+                osc.type = 'sawtooth'; // Maximum Power
+                osc.frequency.value = freq;
+                
+                // Detune for richness
+                osc.detune.value = (Math.random()-0.5) * 20;
+
+                // Filter Sweep (The "Opening" Sound)
+                const f = actx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.setValueAtTime(100, t);
+                f.frequency.exponentialRampToValueAtTime(15000, t + 10); // 10s Rise
+
+                g.gain.setValueAtTime(0, t);
+                g.gain.linearRampToValueAtTime(0.1, t + 5); // Slow fade in
+                g.gain.exponentialRampToValueAtTime(0.001, t + 30); // Long sustain
+
+                osc.connect(f); f.connect(g); g.connect(master);
+                osc.start(t);
+                osc.stop(t + 35);
+            });
+
+            // Whiteout Visual
+            // Handled in render() loop via climaxActive flag
+        }
+
+        // START
+        document.getElementById('btn-start').addEventListener('click', () => {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => {
+                document.getElementById('ui').style.display = 'none';
+                document.getElementById('controls').style.display = 'flex';
+            }, 1000);
+            
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        });
+
+    </script>
+</body>
+</html>

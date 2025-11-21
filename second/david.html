@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAVID // THE ETERNAL PSALM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Spectral:ital@1&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #ffd700;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* Soft Dreamy Bloom */
+            filter: contrast(1.2) brightness(1.2) drop-shadow(0 0 20px rgba(212, 175, 55, 0.4));
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.6) 0%, #000 90%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s ease;
+        }
+
+        h1 {
+            color: #ffd700;
+            font-size: 3rem;
+            letter-spacing: 15px;
+            text-shadow: 0 0 40px #ffd700;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        p {
+            font-family: 'Spectral', serif;
+            color: #aa8844;
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+            letter-spacing: 3px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #ffd700;
+            border: 1px solid #ffd700;
+            padding: 20px 60px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.5s;
+            border-radius: 100px;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
+        }
+
+        button:hover {
+            background: #ffd700;
+            color: #000;
+            box-shadow: 0 0 80px #ffd700;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            font-family: sans-serif;
+            letter-spacing: 3px;
+            color: rgba(255, 215, 0, 0.4);
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="temple"></canvas>
+
+    <div id="ui">
+        <h1>THE ETERNAL PSALM</h1>
+        <p>AUTONOMOUS SYMPHONY OF LIGHT</p>
+        <button id="btn-init" onclick="beginWorship()">ENTER THE TEMPLE</button>
+    </div>
+
+    <div id="status">CONDUCTOR: ACTIVE // GENERATING PRAISE</div>
+
+    <script>
+        const canvas = document.getElementById('temple');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+
+        // VISUALS
+        const NUM_STRINGS = 12; 
+        let strings = [];
+        let particles = [];
+        
+        // AUDIO STATE
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let nextNoteTime = 0;
+        let noteIndex = 0;
+        let currentMood = 'CALM'; // CALM, RISING, GLORY
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: GOLDEN PHYSICS
+           ------------------------------------------------ */
+        class HarpString {
+            constructor(x, index) {
+                this.x = x;
+                this.index = index;
+                this.amp = 0;
+                this.vel = 0;
+                this.tension = 0.05 + (index * 0.01);
+                this.hue = 45; // Gold
+            }
+
+            pluck(force) {
+                this.amp = force * 15;
+                this.vel = 0;
+                // Burst of light
+                spawnLight(this.x, height/2);
+            }
+
+            update() {
+                // Harmonic Oscillator
+                const force = -this.tension * this.amp;
+                this.vel += force;
+                this.vel *= 0.94; // Damping
+                this.amp += this.vel;
+                
+                // Gentle sway from "Holy Wind"
+                this.amp += Math.sin(time * 2 + this.index) * 0.05;
+            }
+
+            draw() {
+                ctx.beginPath();
+                const light = 50 + Math.abs(this.amp) * 20;
+                const alpha = 0.3 + Math.abs(this.amp) * 0.2;
+                
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, ${light}%, ${alpha})`;
+                ctx.lineWidth = 1 + Math.abs(this.amp);
+                ctx.moveTo(this.x, 0);
+
+                for(let y=0; y<=height; y+=20) {
+                    // Sine vibration
+                    const vib = Math.sin(time * 40 + y * 0.1) * this.amp;
+                    // Envelope (pinned at ends)
+                    const env = Math.sin((y/height) * Math.PI);
+                    ctx.lineTo(this.x + (vib * env), y);
+                }
+                ctx.stroke();
+                
+                if (Math.abs(this.amp) > 2) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffd700';
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const spacing = width / (NUM_STRINGS + 1);
+            for(let i=0; i<NUM_STRINGS; i++) strings.push(new HarpString(spacing * (i+1), i));
+        }
+
+        function spawnLight(x, y) {
+            for(let i=0; i<5; i++) {
+                particles.push({
+                    x: x, y: y + (Math.random()-0.5)*100,
+                    vx: (Math.random()-0.5)*2,
+                    vy: -(Math.random()*2 + 0.5),
+                    life: 1.0,
+                    size: Math.random()*3
+                });
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Clear with Trail
+            ctx.fillStyle = 'rgba(2, 1, 0, 0.2)'; // Deep Gold/Black
+            ctx.fillRect(0, 0, width, height);
+
+            // Background Glow (The Shekinah)
+            const glow = 100 + Math.sin(time)*20;
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, width);
+            grad.addColorStop(0, `rgba(255, 215, 0, 0.05)`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,width,height);
+
+            // Strings
+            strings.forEach(s => { s.update(); s.draw(); });
+
+            // Particles
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.x += p.vx + Math.sin(time + p.y*0.01)*0.5;
+                p.y += p.vy;
+                p.life -= 0.01;
+                
+                ctx.fillStyle = `rgba(255, 255, 200, ${p.life})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+                
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO: THE AUTONOMOUS COMPOSER
+           ------------------------------------------------ */
+        
+        // SCALE: C Minor Pentatonic (2 Octaves)
+        // Low, Mid, High ranges
+        const NOTES = [
+            130.81, 155.56, 174.61, 196.00, 233.08, // Low
+            261.63, 311.13, 349.23, 392.00, 466.16, // Mid
+            523.25, 622.25, 698.46, 783.99          // High
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // REVERB (Huge Cathedral)
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6; // 6s tail
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 3);
+            }
+            conv.buffer = buf;
+            
+            // Wet/Dry Mix
+            const wet = actx.createGain(); wet.gain.value = 0.5;
+            const dry = actx.createGain(); dry.gain.value = 0.6;
+            
+            master.connect(wet); wet.connect(conv); conv.connect(actx.destination);
+            master.connect(dry); dry.connect(actx.destination);
+
+            // Start the infinite loop
+            nextNoteTime = actx.currentTime + 0.5;
+            scheduler();
+            
+            // Background Pad
+            playPad();
+        }
+
+        function playPad() {
+            // A continuous drone to fill the space
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = 65.41; // Low C
+            
+            g.gain.value = 0.1;
+            
+            // Lowpass
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.value = 200;
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start();
+        }
+
+        function playPluck(freq, volume, dur) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const f = actx.createBiquadFilter();
+
+            // Timbre: Triangle + Sine mix (Simulated)
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+
+            // Filter Pluck
+            f.type = 'lowpass';
+            f.Q.value = 1;
+            f.frequency.setValueAtTime(200, nextNoteTime);
+            f.frequency.linearRampToValueAtTime(2000, nextNoteTime + 0.02);
+            f.frequency.exponentialRampToValueAtTime(200, nextNoteTime + dur);
+
+            // Amp Envelope
+            g.gain.setValueAtTime(0, nextNoteTime);
+            g.gain.linearRampToValueAtTime(volume, nextNoteTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + dur * 2);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(nextNoteTime);
+            osc.stop(nextNoteTime + dur * 2 + 1);
+
+            // Trigger Visual (Approximate mapping)
+            setTimeout(() => {
+                // Map freq index to string index (modulo)
+                const idx = NOTES.indexOf(freq);
+                const strIdx = idx >= 0 ? idx % NUM_STRINGS : Math.floor(Math.random()*NUM_STRINGS);
+                if(strings[strIdx]) strings[strIdx].pluck(volume);
+            }, (nextNoteTime - actx.currentTime) * 1000);
+        }
+
+        // THE CONDUCTOR ALGORITHM
+        function scheduler() {
+            const lookahead = 0.1;
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                scheduleNextEvent();
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function scheduleNextEvent() {
+            // 1. Decide Mood
+            // Randomly shift mood every 20 notes
+            if (Math.random() > 0.95) {
+                const moods = ['CALM', 'RISING', 'GLORY'];
+                currentMood = moods[Math.floor(Math.random() * moods.length)];
+            }
+
+            // 2. Generate Note based on Mood
+            let noteIdx, duration, vol;
+
+            if (currentMood === 'CALM') {
+                // Slow, lower register, sparse
+                noteIdx = Math.floor(Math.random() * 6); // Bottom half
+                duration = 0.5 + Math.random() * 1.0; // Slow
+                vol = 0.3;
+            } else if (currentMood === 'RISING') {
+                // Upward arpeggios
+                noteIndex = (noteIndex + 1) % NOTES.length; // Step up
+                noteIdx = noteIndex;
+                duration = 0.2; // Faster
+                vol = 0.4;
+                // Reset if too high
+                if(noteIndex > 10) noteIndex = 0;
+            } else { // GLORY
+                // Chords (Multiple notes), High register
+                noteIdx = 5 + Math.floor(Math.random() * 8); // Upper half
+                duration = 0.3;
+                vol = 0.5;
+                
+                // Add a harmony note
+                const harmonyIdx = (noteIdx + 2) % NOTES.length; // 3rd up
+                playPluck(NOTES[harmonyIdx], 0.3, 1.5);
+            }
+
+            playPluck(NOTES[noteIdx], vol, 2.0);
+
+            // 3. Advance Time
+            nextNoteTime += duration;
+        }
+
+        function beginWorship() {
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 2000);
+            document.getElementById('status').style.opacity = 1;
+
+            resize();
+            initStrings();
+            initAudio();
+            
+            if(actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

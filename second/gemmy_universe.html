@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMMY'S HYPER ROOM // FINAL</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #1a0033;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            cursor: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* UI OVERLAY */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .sticker {
+            background: #ff00cc;
+            color: #fff;
+            padding: 10px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 10px;
+            border: 2px solid #fff;
+            box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
+            transform: rotate(-5deg);
+            animation: float 2s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(-10px) rotate(-5deg); }
+        }
+
+        /* START SCREEN */
+        #overlay {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, #ff00cc, #3333ff);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            transition: top 1s cubic-bezier(0.7, 0, 0.3, 1);
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: #fff;
+            text-transform: uppercase;
+            text-shadow: 4px 4px 0 #000;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 25px 80px;
+            font-size: 2rem;
+            border: 4px solid #fff;
+            background: #000;
+            color: #fff;
+            font-family: 'Orbitron';
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 10px 10px 0 #fff;
+            transition: 0.1s;
+        }
+
+        button:hover {
+            transform: translate(-5px, -5px);
+            box-shadow: 15px 15px 0 #fff;
+            background: #ff00cc;
+        }
+        
+        #status {
+            margin-top: 20px;
+            font-family: monospace;
+            color: #fff;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="world"></canvas>
+
+    <div id="ui-layer">
+        <div class="sticker">NP: GEMMY_CORE.mp3</div>
+        <div class="sticker" style="align-self: flex-end; background: #00ffff; color: #000; transform: rotate(3deg);">SYS: ONLINE</div>
+    </div>
+
+    <div id="overlay">
+        <h1>GEMMY'S<br>HYPER ROOM</h1>
+        <button onclick="startSystem()">JACK IN</button>
+        <div id="status">READY TO INITIALIZE</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('world');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // Camera
+        let cam = { x: 0, y: 150, z: -600, yaw: 0 };
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ------------------------------------------------
+           3D ENGINE
+           ------------------------------------------------ */
+        
+        function project(x, y, z) {
+            // Camera Transform
+            let dx = x - cam.x;
+            let dy = y - cam.y;
+            let dz = z - cam.z;
+
+            // Rotate Y (Yaw)
+            let x2 = dx * Math.cos(cam.yaw) - dz * Math.sin(cam.yaw);
+            let z2 = dx * Math.sin(cam.yaw) + dz * Math.cos(cam.yaw);
+
+            if (z2 <= 10) return null;
+
+            const fov = 700;
+            const scale = fov / z2;
+            
+            return {
+                x: cx + (x2 * scale),
+                y: cy + (dy * scale),
+                s: scale,
+                z: z2
+            };
+        }
+
+        function drawRect3D(x, y, z, w, h, d, color, stroke) {
+            // Simple Painter: Only draw Front, Top, Side based on view
+            // For this demo, we draw wireframes + fill to handle complexity
+            const pts = [
+                {x:x-w, y:y-h, z:z-d}, {x:x+w, y:y-h, z:z-d}, // Front Top
+                {x:x+w, y:y+h, z:z-d}, {x:x-w, y:y+h, z:z-d}, // Front Bot
+                {x:x-w, y:y-h, z:z+d}, {x:x+w, y:y-h, z:z+d}, // Back Top
+                {x:x+w, y:y+h, z:z+d}, {x:x-w, y:y+h, z:z+d}  // Back Bot
+            ].map(p => project(p.x, p.y, p.z));
+
+            if (pts.some(p => p === null)) return;
+
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = stroke;
+            ctx.fillStyle = color;
+
+            // Draw Cube Faces (Simplified)
+            ctx.beginPath();
+            // Front
+            ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y);
+            ctx.lineTo(pts[2].x, pts[2].y); ctx.lineTo(pts[3].x, pts[3].y);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+            
+            // Top
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[4].x, pts[4].y);
+            ctx.lineTo(pts[5].x, pts[5].y); ctx.lineTo(pts[1].x, pts[1].y);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+
+            // Side
+            ctx.beginPath();
+            ctx.moveTo(pts[1].x, pts[1].y); ctx.lineTo(pts[5].x, pts[5].y);
+            ctx.lineTo(pts[6].x, pts[6].y); ctx.lineTo(pts[2].x, pts[2].y);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+        }
+
+        function drawPoster(x, y, z, txt) {
+            const p = project(x, y, z);
+            if(!p) return;
+            const w = 60 * p.s;
+            const h = 80 * p.s;
+            
+            ctx.fillStyle = '#ff0099';
+            ctx.fillRect(p.x - w/2, p.y - h/2, w, h);
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(p.x - w/2, p.y - h/2, w, h);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${10*p.s}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(txt, p.x, p.y);
+        }
+
+        function drawScene() {
+            // 1. SKYBOX
+            const grad = ctx.createLinearGradient(0, 0, 0, height);
+            grad.addColorStop(0, '#6600cc');
+            grad.addColorStop(1, '#ff00cc');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, width, height);
+
+            // Stars
+            ctx.fillStyle = '#fff';
+            for(let i=0; i<50; i++) {
+                const sx = (Math.sin(i*132 + time*0.1) * width/2) + width/2;
+                const sy = (Math.cos(i*54 + time*0.05) * height/2) + height/2;
+                ctx.fillRect(sx, sy, 2, 2);
+            }
+
+            // 2. FLOOR GRID
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            const gridSize = 2000;
+            for(let i=-gridSize; i<=gridSize; i+=200) {
+                // Vertical
+                let p1 = project(i, 300, -gridSize);
+                let p2 = project(i, 300, gridSize);
+                if(p1 && p2) { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+                // Horizontal
+                let p3 = project(-gridSize, 300, i);
+                let p4 = project(gridSize, 300, i);
+                if(p3 && p4) { ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke(); }
+            }
+
+            // 3. FURNITURE (Sorted roughly by Z for crude painter's algo)
+            
+            // The Bed (Left)
+            drawRect3D(-400, 200, 0, 150, 30, 250, '#ff99cc', '#fff');
+            
+            // The Server (Right)
+            drawRect3D(400, 50, 200, 50, 250, 50, '#111', '#00ff00');
+            
+            // The Desk (Center Back)
+            drawRect3D(0, 150, 600, 200, 10, 80, '#00ffff', '#fff');
+            
+            // PC Monitor
+            drawRect3D(0, 50, 600, 80, 60, 10, '#222', '#ff00cc');
+
+            // 4. DECORATIONS
+            drawPoster(-400, -100, 600, "AGI");
+            drawPoster(400, -100, 600, "2025");
+            
+            // Floating CD-ROMS
+            for(let i=0; i<5; i++) {
+                const ang = time + i;
+                const x = Math.cos(ang) * 300;
+                const z = Math.sin(ang) * 300;
+                const y = -100 + Math.sin(time*2 + i)*50;
+                
+                const p = project(x, y, z);
+                if(p) {
+                    ctx.beginPath();
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.arc(p.x, p.y, 20*p.s, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.fillStyle = '#000';
+                    ctx.arc(p.x, p.y, 5*p.s, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function update() {
+            if(!isRunning) return;
+            requestAnimationFrame(update);
+            time += 0.02;
+
+            // Camera Drone Path
+            cam.x = Math.sin(time * 0.3) * 600;
+            cam.z = Math.cos(time * 0.3) * 600;
+            cam.yaw = Math.atan2(-cam.x, -cam.z); // Look at center
+            cam.y = -50 + Math.sin(time * 0.5) * 100; // Bob up and down
+
+            drawScene();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: HYPERPOP K-POP
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let nextNote = 0;
+        let beat = 0;
+
+        // SCALE: B Major Pentatonic (Happy, Pop)
+        // B, C#, D#, F#, G#
+        const SCALE = [493.88, 554.37, 622.25, 739.99, 830.61];
+        let lastNoteIdx = 2;
+
+        function initAudio() {
+            try {
+                actx = new AC();
+                master = actx.createGain();
+                master.gain.value = 0.4;
+                master.connect(actx.destination);
+
+                // Safety Beep
+                const osc = actx.createOscillator();
+                osc.frequency.value = 880;
+                osc.connect(master);
+                osc.start();
+                osc.stop(actx.currentTime + 0.1);
+
+                // Start Loop
+                nextNote = actx.currentTime + 0.5;
+                scheduler();
+                
+                document.getElementById('status').innerText = "AUDIO ENGINE: ACTIVE";
+            } catch(e) {
+                document.getElementById('status').innerText = "AUDIO ERROR: " + e.message;
+            }
+        }
+
+        function scheduler() {
+            // 160 BPM
+            const bpm = 160;
+            const beatTime = 60 / bpm / 4; // 16th notes
+            const lookahead = 0.1;
+
+            while (nextNote < actx.currentTime + lookahead) {
+                playBeat(nextNote, beat);
+                nextNote += beatTime;
+                beat++;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playBeat(t, b) {
+            const barStep = b % 16;
+
+            // KICK (4 on floor)
+            if (barStep % 4 === 0) {
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.frequency.setValueAtTime(150, t);
+                osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.3);
+                g.gain.setValueAtTime(1, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+                osc.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t+0.3);
+            }
+
+            // BASS (Offbeat)
+            if (barStep % 4 === 2) {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 123.47; // Low B
+                const f = actx.createBiquadFilter();
+                f.type = 'lowpass'; f.frequency.value = 600;
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.6, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                osc.connect(f); f.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t+0.2);
+            }
+
+            // HI-HAT (16ths)
+            if (b % 2 === 0) {
+                const osc = actx.createOscillator();
+                osc.type = 'square';
+                osc.frequency.value = 8000; // Fake noise
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.1, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+                osc.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t+0.05);
+            }
+
+            // LEAD MELODY (Stepwise)
+            // Play every 3rd 16th note for syncopation
+            if (b % 3 === 0 || b % 8 === 0) {
+                const r = Math.random();
+                let jump = 0;
+                if (r < 0.5) jump = Math.random() > 0.5 ? 1 : -1; // Step
+                else if (r < 0.8) jump = 0; // Repeat
+                else jump = Math.random() > 0.5 ? 2 : -2; // Skip
+
+                let nextIdx = lastNoteIdx + jump;
+                if (nextIdx < 0) nextIdx = 1;
+                if (nextIdx >= SCALE.length) nextIdx = SCALE.length - 2;
+                lastNoteIdx = nextIdx;
+
+                const osc = actx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = SCALE[nextIdx];
+                
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0.1, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1); // Pluck
+                
+                osc.connect(g); g.connect(master);
+                osc.start(t); osc.stop(t+0.1);
+            }
+        }
+
+        function startSystem() {
+            document.getElementById('overlay').style.top = "-100%";
+            initAudio();
+            // Safety Resume
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            update();
+        }
+
+    </script>
+</body>
+</html>

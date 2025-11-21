@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAVID // UNBREAKABLE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #ffd700;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.95) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            letter-spacing: 10px;
+            text-shadow: 0 0 20px #ffd700;
+            margin-bottom: 20px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 20px 80px;
+            font-size: 2rem;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 50px #ffd700;
+        }
+
+        button:hover {
+            background: #fff;
+            box-shadow: 0 0 80px #fff;
+        }
+
+        #debug {
+            position: absolute;
+            bottom: 20px;
+            font-family: monospace;
+            color: #444;
+            z-index: 5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="harp"></canvas>
+
+    <div id="ui">
+        <h1>THE PSALM</h1>
+        <button id="btn">IGNITE</button>
+    </div>
+
+    <div id="debug">STATUS: WAITING</div>
+
+    <script>
+        const canvas = document.getElementById('harp');
+        const ctx = canvas.getContext('2d');
+        const debug = document.getElementById('debug');
+
+        let width, height;
+        let isRunning = false;
+        let time = 0;
+
+        // STRINGS
+        const NUM_STRINGS = 8;
+        let strings = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+        
+        /* ------------------------------------------------
+           AUDIO ENGINE: BRUTE FORCE
+           ------------------------------------------------ */
+        let actx, master;
+        
+        // C Minor Pentatonic (Reliable, Beautiful)
+        const NOTES = [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 392.00];
+        
+        function initAudio() {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            actx = new AC();
+            
+            // Master Volume
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            master.connect(actx.destination);
+
+            // 1. DRONE (The Hum)
+            // We use 3 oscillators to make it thick
+            [65.41, 130.81, 196.00].forEach(f => {
+                const osc = actx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = f;
+                const g = actx.createGain();
+                g.gain.value = 0.1;
+                osc.connect(g); g.connect(master);
+                osc.start();
+            });
+
+            // 2. DELAY (Fake Reverb - CPU Safe)
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.4;
+            const fb = actx.createGain();
+            fb.gain.value = 0.5;
+            master.connect(delay);
+            delay.connect(fb);
+            fb.connect(delay);
+            delay.connect(actx.destination);
+
+            debug.innerText = "AUDIO: RUNNING";
+
+            // 3. THE SEQUENCER (Hard Interval)
+            setInterval(tick, 400); // Plays every 400ms no matter what
+        }
+
+        function tick() {
+            if (!isRunning) return;
+            
+            // Random Walk Logic
+            if (Math.random() > 0.3) {
+                const idx = Math.floor(Math.random() * NOTES.length);
+                playNote(idx);
+            }
+        }
+
+        function playNote(idx) {
+            const t = actx.currentTime;
+            const freq = NOTES[idx];
+            
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.type = 'sine'; // Pure tone (Harp harmonic)
+            osc.frequency.value = freq;
+            
+            // Simple Envelope (Click-free)
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.5, t + 0.05); // Attack
+            g.gain.exponentialRampToValueAtTime(0.001, t + 2.0); // Decay
+            
+            osc.connect(g);
+            g.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + 2.0);
+
+            // Visual
+            if (strings[idx]) strings[idx].pluck();
+        }
+
+        /* ------------------------------------------------
+           VISUALS
+           ------------------------------------------------ */
+        class StringLine {
+            constructor(x) {
+                this.x = x;
+                this.amp = 0;
+            }
+            pluck() { this.amp = 30; }
+            update() { this.amp *= 0.9; }
+            draw() {
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + this.amp/40})`;
+                ctx.lineWidth = 2 + this.amp/5;
+                ctx.moveTo(this.x, 0);
+                // Simple vibration
+                const mid = this.x + (Math.sin(time * 20) * this.amp);
+                ctx.quadraticCurveTo(mid, height/2, this.x, height);
+                ctx.stroke();
+
+                if (this.amp > 1) {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = '#ffd700';
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const step = width / (NUM_STRINGS + 1);
+            for(let i=0; i<NUM_STRINGS; i++) {
+                strings.push(new StringLine(step * (i+1)));
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.1;
+
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            strings.forEach(s => {
+                s.update();
+                s.draw();
+            });
+        }
+
+        // START
+        document.getElementById('btn').addEventListener('click', () => {
+            document.getElementById('ui').style.display = 'none';
+            resize();
+            initAudio();
+            
+            // Force Resume
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        });
+        
+        // Init visual on load
+        resize();
+
+    </script>
+</body>
+</html>

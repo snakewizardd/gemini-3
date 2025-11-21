@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KULITTA // GENERATIVE GRAMMAR</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #00ff41;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: blur(0.5px) contrast(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            background: rgba(0, 10, 0, 0.9);
+            border: 1px solid #00ff41;
+            padding: 40px;
+            box-shadow: 0 0 30px #00ff41;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin: 0 0 20px 0;
+            text-shadow: 0 0 10px #00ff41;
+        }
+
+        p {
+            color: #88cc88;
+            font-size: 1rem;
+            margin-bottom: 30px;
+        }
+
+        button {
+            background: #000;
+            color: #00ff41;
+            border: 2px solid #00ff41;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #00ff41;
+            color: #000;
+            box-shadow: 0 0 20px #00ff41;
+        }
+
+        #grammar-log {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 12px;
+            color: rgba(0, 255, 65, 0.5);
+            pointer-events: none;
+            text-align: left;
+            z-index: 5;
+            white-space: pre;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="screen"></canvas>
+
+    <div id="ui">
+        <h1>THE KULITTA ENGINE</h1>
+        <p>PROBABILISTIC CONTEXT-FREE GRAMMAR</p>
+        <button id="btn-init">COMPILE GRAMMAR</button>
+    </div>
+
+    <div id="grammar-log">WAITING FOR SEED...</div>
+
+    <script>
+        // GRAPHICS
+        const canvas = document.getElementById('screen');
+        const ctx = canvas.getContext('2d');
+        const logEl = document.getElementById('grammar-log');
+        
+        let width, height;
+        let particles = [];
+        let connections = [];
+        
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // VISUALIZE THE TREE
+        function spawnNode(x, y, type, parentX, parentY) {
+            particles.push({
+                x: x, y: y,
+                size: type === 'ROOT' ? 10 : (type === 'PHRASE' ? 6 : 3),
+                color: type === 'ROOT' ? '#fff' : (type === 'PHRASE' ? '#00ff41' : '#0088ff'),
+                life: 1.0,
+                decay: 0.005
+            });
+            
+            if(parentX !== null) {
+                connections.push({
+                    x1: parentX, y1: parentY,
+                    x2: x, y2: y,
+                    life: 1.0,
+                    decay: 0.01
+                });
+            }
+        }
+
+        function render() {
+            requestAnimationFrame(render);
+            
+            // Fade background
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw Connections (The Syntax Tree)
+            for(let i=connections.length-1; i>=0; i--) {
+                let c = connections[i];
+                ctx.strokeStyle = `rgba(0, 255, 65, ${c.life * 0.5})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(c.x1, c.y1);
+                ctx.lineTo(c.x2, c.y2);
+                ctx.stroke();
+                c.life -= c.decay;
+                if(c.life <= 0) connections.splice(i, 1);
+            }
+
+            // Draw Nodes
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+                p.life -= p.decay;
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+        render();
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: PCFG (Probabilistic Context Free Grammar)
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        let nextTime = 0;
+        
+        // SCALE: C Harmonic Minor (C, D, Eb, F, G, Ab, B)
+        // The "Epic/Ancient" sound
+        const SCALE_FREQS = [
+            130.81, 146.83, 155.56, 174.61, 196.00, 207.65, 246.94, // Octave 3
+            261.63, 293.66, 311.13, 349.23, 392.00, 415.30, 493.88  // Octave 4
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            
+            // REVERB (The Hall)
+            const conv = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const len = rate * 3;
+            const buf = actx.createBuffer(2, len, rate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) buf.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len, 3);
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            nextTime = actx.currentTime + 0.5;
+            
+            // Start the Recursive Composer
+            composeGrammar();
+        }
+
+        // --- GRAMMAR ENGINE ---
+
+        // Symbols
+        const TERMINALS = {
+            'I': [0, 2, 4],      // Tonic Triad (C, Eb, G)
+            'V': [4, 6, 1],      // Dominant (G, B, D)
+            'iv': [3, 5, 0],     // Subdominant (F, Ab, C)
+            'arp_up': 'PATTERN_UP',
+            'arp_down': 'PATTERN_DOWN',
+            'run': 'PATTERN_RUN'
+        };
+
+        function composeGrammar() {
+            // 1. Generate High-Level Structure (The "Sentence")
+            // e.g., A -> A B A (Theme, Variation, Theme)
+            const structure = ['THEME', 'VAR1', 'THEME', 'OUTRO'];
+            
+            let timeline = nextTime;
+            let screenX = width * 0.1;
+
+            logEl.innerText = "COMPILING: " + structure.join(" -> ");
+
+            structure.forEach((section, i) => {
+                // Visualize Section Node
+                spawnNode(screenX, height/2, 'ROOT', null, null);
+                const rootX = screenX;
+                const rootY = height/2;
+
+                // 2. Expand Section into Phrases
+                const phrases = expandSection(section);
+                
+                phrases.forEach((phrase, j) => {
+                    const dur = 2.0; // Seconds per phrase
+                    
+                    // Visualize Phrase Node
+                    const px = rootX + (Math.random()-0.5)*50;
+                    const py = rootY + 100;
+                    spawnNode(px, py, 'PHRASE', rootX, rootY);
+
+                    // 3. Expand Phrase into Notes
+                    const notes = expandPhrase(phrase);
+                    
+                    // Schedule Notes
+                    const noteDur = dur / notes.length;
+                    
+                    notes.forEach((noteIdx, k) => {
+                        playTone(SCALE_FREQS[noteIdx % SCALE_FREQS.length], timeline + (k * noteDur), noteDur);
+                        
+                        // Visual Leaf
+                        setTimeout(() => {
+                            spawnNode(px + (k*20)-50, py + 100, 'NOTE', px, py);
+                        }, (timeline + (k*noteDur) - actx.currentTime) * 1000);
+                    });
+
+                    timeline += dur;
+                });
+
+                screenX += width / 5;
+            });
+
+            nextTime = timeline;
+            
+            // Loop the composition engine
+            setTimeout(composeGrammar, (timeline - actx.currentTime) * 1000 - 500);
+        }
+
+        function expandSection(type) {
+            // Grammar Rules
+            if (type === 'THEME') return ['I', 'iv', 'V', 'I'];
+            if (type === 'VAR1') return ['iv', 'iv', 'I', 'V'];
+            if (type === 'OUTRO') return ['I', 'I'];
+            return ['I'];
+        }
+
+        function expandPhrase(chordType) {
+            // Expands a chord symbol into a sequence of note indices
+            const baseChord = TERMINALS[chordType]; // e.g. [0, 2, 4]
+            const r = Math.random();
+
+            // Pattern Generators
+            if (r < 0.4) {
+                // Arpeggio Up: Root, 3rd, 5th, Octave
+                return [baseChord[0], baseChord[1], baseChord[2], baseChord[0]+7];
+            } else if (r < 0.7) {
+                // Alberti Bass style: Root, 5th, 3rd, 5th
+                return [baseChord[0], baseChord[2], baseChord[1], baseChord[2]];
+            } else {
+                // Block Chord (Fast repeat)
+                return [baseChord[0], baseChord[1], baseChord[2], baseChord[1]];
+            }
+        }
+
+        // --- SYNTHESIS ---
+        function playTone(freq, t, dur) {
+            const osc = actx.createOscillator();
+            const mod = actx.createOscillator();
+            const modGain = actx.createGain();
+            const gain = actx.createGain();
+            
+            // FM Synthesis (Bell/Harp Texture)
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            
+            mod.type = 'triangle';
+            mod.frequency.value = freq * 2; // 2:1 Ratio (Octave)
+            modGain.gain.value = 500 * Math.exp(-4 * 0); // Decaying FM index
+
+            // Envelope
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.02); // Attack
+            gain.gain.exponentialRampToValueAtTime(0.001, t + dur); // Decay
+
+            // FM Envelope (Modulation decreases over time -> "Ping" sound)
+            modGain.gain.setValueAtTime(500, t);
+            modGain.gain.exponentialRampToValueAtTime(1, t + 0.2);
+
+            mod.connect(modGain);
+            modGain.connect(osc.frequency);
+            
+            osc.connect(gain);
+            gain.connect(master);
+
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+            mod.start(t);
+            mod.stop(t + dur + 0.1);
+        }
+
+        // START
+        document.getElementById('btn-init').addEventListener('click', () => {
+            document.getElementById('ui').style.display = 'none';
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        });
+
+    </script>
+</body>
+</html>
