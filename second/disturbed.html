@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROJECT: OBLITERATION // AUDIO ENGINE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Metal+Mania&family=Nosifer&display=swap');
+
+        :root {
+            --blood: #8a0303;
+            --void: #000000;
+            --ash: #1a1a1a;
+            --flash: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            color: var(--blood);
+            font-family: 'Nosifer', cursive;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            filter: contrast(200%) brightness(150%);
+        }
+
+        #overlay {
+            z-index: 10;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 0 20px red;
+            mix-blend-mode: exclusion;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0;
+            animation: shake 0.5s infinite;
+        }
+
+        p {
+            font-family: 'Metal Mania', cursive;
+            font-size: 1.5rem;
+            color: #ccc;
+            letter-spacing: 2px;
+        }
+
+        #ignite-btn {
+            pointer-events: auto;
+            background: transparent;
+            border: 4px solid var(--blood);
+            color: var(--blood);
+            font-family: 'Nosifer', cursive;
+            font-size: 2rem;
+            padding: 20px 60px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 50px;
+            box-shadow: 0 0 30px var(--blood);
+        }
+
+        #ignite-btn:hover {
+            background: var(--blood);
+            color: var(--void);
+            transform: scale(1.1) rotate(1deg);
+        }
+
+        .glitch {
+            animation: glitch 0.2s infinite;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        @keyframes glitch {
+            0% { opacity: 1; transform: skew(0deg); }
+            20% { opacity: 0.8; transform: skew(10deg); }
+            40% { opacity: 1; transform: skew(-10deg); }
+            60% { opacity: 0.1; transform: skew(20deg); }
+            80% { opacity: 1; transform: skew(0deg); }
+            100% { opacity: 1; transform: skew(0deg); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="visuals"></canvas>
+
+    <div id="overlay">
+        <h1 id="title">PROJECT:<br>OBLITERATION</h1>
+        <p>PROCEDURAL DEATH METAL ENGINE // 240 BPM</p>
+        <button id="ignite-btn">INITIATE RAGE</button>
+    </div>
+
+<script>
+/**
+ * MUSICAL PHYSICS ENGINE: DEATH METAL EDITION
+ * 
+ * ARCHITECTURE:
+ * 1. The "Wall of Sound" - 30+ Oscillators detuned and distorted.
+ * 2. The "Scream" - Filtered Noise + Formant Synthesis to mimic human vocal chords.
+ * 3. The "Impact" - Transient shaping for kick drums that hit like cannons.
+ */
+
+const CONFIG = {
+    BPM: 180,
+    DISTORTION_AMOUNT: 400, // Hard clipping
+    DETUNE_SPREAD: 25, // Cents
+    REVERB_SIZE: 3.0 // Seconds
+};
+
+let ctx;
+let masterBus;
+let reverbNode;
+let analyser;
+let isPlaying = false;
+let nextNoteTime = 0;
+let beatCount = 0;
+let riffIndex = 0;
+
+// --- AUDIO CORE INITIALIZATION ---
+
+async function initAudio() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    ctx = new AudioContext();
+    
+    // 1. MASTER BUS (Limiter/Compressor)
+    // Prevents your speakers from actually exploding
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -10;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20; // Brick wall
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.1;
+
+    masterBus = ctx.createGain();
+    masterBus.gain.value = 0.7;
+    
+    masterBus.connect(limiter);
+    limiter.connect(ctx.destination);
+
+    // 2. VISUAL ANALYZER
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    limiter.connect(analyser);
+
+    // 3. REVERB CONVOLVER (The "Arena" Sound)
+    reverbNode = ctx.createConvolver();
+    reverbNode.buffer = await createReverbImpulse();
+    const reverbGain = ctx.createGain();
+    reverbGain.gain.value = 0.4; // Wet mix
+    reverbNode.connect(reverbGain);
+    reverbGain.connect(masterBus);
+
+    // Start The Engine
+    isPlaying = true;
+    nextNoteTime = ctx.currentTime + 0.1;
+    scheduler();
+    renderVisuals();
+}
+
+// --- PHYSICS UTILITIES ---
+
+// Generates a massive, dark space impulse response
+async function createReverbImpulse() {
+    const length = ctx.sampleRate * CONFIG.REVERB_SIZE;
+    const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+        const data = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            // Exponential decay noise
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+        }
+    }
+    return impulse;
+}
+
+// The "Amp Simulator" - Non-linear waveshaping
+function makeDistortionCurve(amount) {
+    const k = typeof amount === 'number' ? amount : 50;
+    const n_samples = 44100;
+    const curve = new Float32Array(n_samples);
+    const deg = Math.PI / 180;
+    for (let i = 0; i < n_samples; ++i) {
+        const x = i * 2 / n_samples - 1;
+        // Sigmoid function for clipping
+        curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+
+const distCurve = makeDistortionCurve(CONFIG.DISTORTION_AMOUNT);
+
+function mtof(note) {
+    return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+// --- INSTRUMENTS ---
+
+// 1. THE "CHUG" (Rhythm Guitar)
+// Uses Palm Muting physics: Low pass filter closes rapidly
+function playChug(time, note, duration, palmMute = true) {
+    const gain = ctx.createGain();
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = distCurve;
+    
+    // Filter (The Tone Knob/Palm Mute)
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 1;
+
+    gain.connect(shaper);
+    shaper.connect(filter);
+    filter.connect(masterBus);
+    
+    // Double tracking (Left and Right Hard Pan)
+    [-1, 1].forEach(pan => {
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = pan;
+        filter.connect(panner);
+        panner.connect(masterBus);
+        
+        // Create 3 oscillators per side for thickness
+        [0, 0.1, -0.1].forEach(detune => {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = mtof(note);
+            osc.detune.value = (detune * 10) + (Math.random() * 10 - 5);
+            osc.connect(gain);
+            osc.start(time);
+            osc.stop(time + duration);
+        });
+    });
+
+    // Envelope Physics
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.8, time + 0.01); // Fast attack
+    gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+
+    // Palm Mute Logic: Filter closes quickly
+    if (palmMute) {
+        filter.frequency.setValueAtTime(3000, time);
+        filter.frequency.exponentialRampToValueAtTime(100, time + 0.15);
+    } else {
+        // Open chord
+        filter.frequency.setValueAtTime(5000, time);
+        filter.frequency.linearRampToValueAtTime(3000, time + duration);
+    }
+}
+
+// 2. THE "SCREAM" (Vocals)
+// 50 Layered Voices
+function playScream(time, duration) {
+    const masterScreamGain = ctx.createGain();
+    masterScreamGain.gain.value = 0.4;
+    masterScreamGain.connect(reverbNode); // Send to Reverb
+    masterScreamGain.connect(masterBus);
+
+    // The Formant Filter (The Throat)
+    const throat = ctx.createBiquadFilter();
+    throat.type = 'bandpass';
+    throat.Q.value = 1;
+    
+    // Automate throat shape (Vowel movement)
+    throat.frequency.setValueAtTime(800, time); // "Ah"
+    throat.frequency.linearRampToValueAtTime(2000, time + duration); // "Ee"
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = distCurve;
+
+    throat.connect(shaper);
+    shaper.connect(masterScreamGain);
+
+    // The "Crowd" / Vocal Cords (10 voices)
+    for(let i=0; i<10; i++) {
+        const osc = ctx.createOscillator();
+        const noise = ctx.createBufferSource(); // Add grit
+        
+        // Random base pitch for chaotic screaming
+        const baseFreq = 150 + (Math.random() * 50);
+        
+        osc.type = 'sawtooth';
+        osc.frequency.value = baseFreq;
+        osc.detune.value = (Math.random() * 200) - 100; // Huge detune
+        
+        // FM Synthesis: Modulate pitch rapidly (Vibrato/Growl)
+        const mod = ctx.createOscillator();
+        const modGain = ctx.createGain();
+        mod.frequency.value = 30; // Fast rattle
+        modGain.gain.value = 50;
+        mod.connect(modGain);
+        modGain.connect(osc.frequency);
+
+        osc.connect(throat);
+        mod.start(time);
+        osc.start(time);
+        osc.stop(time + duration);
+    }
+}
+
+// 3. THE CANNON (Kick Drum)
+function playKick(time) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    // Pitch Sweep (Physics of a membrane being hit)
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(10, time + 0.3);
+    
+    // Amplitude Envelope (Short, Punchy)
+    gain.gain.setValueAtTime(1.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+    // Click (Beater hitting skin)
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.type = 'square';
+    click.frequency.setValueAtTime(3000, time);
+    clickGain.gain.setValueAtTime(0.5, time);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
+
+    osc.connect(gain);
+    click.connect(clickGain);
+    
+    // Distort the kick for aggression
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = distCurve;
+    
+    gain.connect(shaper);
+    clickGain.connect(shaper);
+    shaper.connect(masterBus);
+
+    osc.start(time);
+    click.start(time);
+    osc.stop(time + 0.3);
+    click.stop(time + 0.3);
+    
+    // Trigger visual shake
+    triggerKickVisual();
+}
+
+// 4. THE CRASH (Cymbals)
+function playSnare(time) {
+    const noise = ctx.createBufferSource();
+    const bufferSize = ctx.sampleRate;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 1000;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(reverbNode); // Snare loves reverb
+    gain.connect(masterBus);
+
+    noise.start(time);
+    noise.stop(time + 0.2);
+}
+
+// --- COMPOSITION ENGINE ---
+
+// The "Rage Logic"
+// Scales: Phrygian Dominant (The Metal Scale)
+// Root: C (Low C -> 65.4Hz)
+const ROOT = 36; // C2
+const SCALE = [0, 1, 4, 5, 7, 8, 10]; 
+
+function scheduler() {
+    const secondsPerBeat = 60.0 / CONFIG.BPM;
+    const sixteenthTime = secondsPerBeat / 4;
+
+    while (nextNoteTime < ctx.currentTime + 0.1) {
+        scheduleStep(beatCount, nextNoteTime, sixteenthTime);
+        nextNoteTime += sixteenthTime;
+        beatCount++;
+    }
+    if(isPlaying) requestAnimationFrame(scheduler);
+}
+
+function scheduleStep(beat, time, stepDur) {
+    const measurePos = beat % 16;
+    const riffType = Math.floor(beat / 64) % 2; // Switch riffs every 4 bars
+
+    // 1. DRUMS (BLAST BEAT)
+    // Classic Death Metal Blast: Kick/Snare alternating at high speed
+    if (riffType === 0) {
+        // Straight Blast
+        if (measurePos % 2 === 0) playKick(time);
+        if (measurePos % 2 !== 0) playSnare(time);
+    } else {
+        // Double Bass Gallop
+        if (measurePos % 4 === 0 || measurePos % 4 === 3) playKick(time);
+        if (measurePos === 4 || measurePos === 12) playSnare(time);
+    }
+
+    // 2. GUITARS
+    // Generates a random low-string riff
+    const isAccent = measurePos % 2 === 0;
+    let note = ROOT;
+    
+    if (measurePos === 0 || measurePos === 8) {
+        // Root chug
+        playChug(time, ROOT, stepDur * 2, true); 
+    } else if (Math.random() > 0.5) {
+        // Random chromatic chaos
+        const interval = SCALE[Math.floor(Math.random() * SCALE.length)];
+        // Occasionally jump up an octave for "pinch harmonic" feel
+        const octave = Math.random() > 0.9 ? 12 : 0;
+        playChug(time, ROOT + interval + octave, stepDur, !isAccent);
+    }
+
+    // 3. THE SCREAM
+    // Happens once every 4 bars, lasts for a whole bar
+    if (beat % 64 === 0) {
+        playScream(time, stepDur * 16); // Roar for 1 measure
+        document.body.style.backgroundColor = "red";
+        setTimeout(() => document.body.style.backgroundColor = "black", 100);
+    }
+}
+
+// --- VISUAL ENGINE ---
+
+const canvas = document.getElementById('visuals');
+const cCtx = canvas.getContext('2d');
+let shakeIntensity = 0;
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerKickVisual() {
+    shakeIntensity = 20;
+}
+
+function renderVisuals() {
+    requestAnimationFrame(renderVisuals);
+    
+    // Fade out effect
+    cCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    cCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (!isPlaying) return;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(dataArray);
+
+    cCtx.lineWidth = 3;
+    cCtx.strokeStyle = `rgb(${150 + Math.random() * 100}, 0, 0)`;
+    cCtx.beginPath();
+
+    const sliceWidth = canvas.width * 1.0 / analyser.frequencyBinCount;
+    let x = 0;
+
+    // Apply shake
+    let offsetX = (Math.random() - 0.5) * shakeIntensity;
+    let offsetY = (Math.random() - 0.5) * shakeIntensity;
+    if(shakeIntensity > 0) shakeIntensity *= 0.9;
+
+    for (let i = 0; i < analyser.frequencyBinCount; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * canvas.height / 2) + offsetY;
+
+        if (i === 0) cCtx.moveTo(x + offsetX, y);
+        else cCtx.lineTo(x + offsetX, y);
+
+        x += sliceWidth;
+    }
+
+    cCtx.lineTo(canvas.width, canvas.height / 2);
+    cCtx.stroke();
+}
+
+// --- INTERACTION ---
+
+document.getElementById('ignite-btn').addEventListener('click', () => {
+    document.getElementById('overlay').classList.add('glitch');
+    document.getElementById('ignite-btn').innerText = "RUNNING...";
+    initAudio();
+});
+
+</script>
+</body>
+</html>

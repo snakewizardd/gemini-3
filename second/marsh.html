@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HYPER // CORE // ENGINE</title>
+    <style>
+        :root { --neon: #0ff; --hot: #f0f; --bg: #050505; }
+        body {
+            margin: 0; background: var(--bg); overflow: hidden;
+            font-family: 'Courier New', monospace; color: white;
+            user-select: none;
+        }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        #hud {
+            position: absolute; z-index: 10; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+        
+        .panel { padding: 20px; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); }
+        
+        #top-bar { display: flex; justify-content: space-between; border-bottom: 1px solid #333; }
+        #btm-bar { display: flex; justify-content: space-between; border-top: 1px solid #333; }
+        
+        h1 { margin: 0; font-size: 1.5rem; letter-spacing: 4px; text-shadow: 0 0 10px var(--neon); }
+        .stat { font-size: 0.8rem; color: #888; margin-right: 15px; }
+        .val { color: var(--neon); font-weight: bold; }
+        .warn { color: var(--hot); }
+
+        #center-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; z-index: 20; pointer-events: auto;
+        }
+        
+        button {
+            background: transparent; border: 2px solid var(--neon); color: var(--neon);
+            padding: 15px 50px; font-size: 1.5rem; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 5px;
+            transition: 0.2s; box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+        }
+        button:hover { background: var(--neon); color: black; box-shadow: 0 0 50px var(--neon); }
+
+        #visual-analyser {
+            position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+            font-size: 4rem; opacity: 0.2; font-weight: 900; mix-blend-mode: overlay;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gl"></canvas>
+    
+    <div id="hud">
+        <div id="top-bar" class="panel">
+            <div>
+                <h1>MARSH // MELLO // ENGINE</h1>
+            </div>
+            <div>
+                <span class="stat">DSP LOAD: <span class="val" id="dsp-val">0%</span></span>
+                <span class="stat">BPM: <span class="val">140</span></span>
+            </div>
+        </div>
+        
+        <div id="visual-analyser">WAITING</div>
+
+        <div id="btm-bar" class="panel">
+            <div>
+                <span class="stat">PHASE: <span class="val" id="phase-val">STANDBY</span></span>
+                <span class="stat">BAR: <span class="val" id="bar-val">0</span></span>
+            </div>
+            <div>
+                <span class="stat">KEY: <span class="val">E MAJOR</span></span>
+            </div>
+        </div>
+    </div>
+
+    <div id="center-modal">
+        <button id="init-btn">INITIALIZE</button>
+    </div>
+
+<script>
+/**
+ * MAGNUM OPUS AUDIO ENGINE
+ * Concepts: Lookahead Scheduling, Subtractive Synthesis, Convolution Reverb, Sidechain Compression
+ */
+
+// --- CONFIGURATION ---
+const BPM = 140;
+const LOOKAHEAD = 25.0; // ms
+const SCHEDULE_AHEAD = 0.1; // s
+const ROOT_NOTE = 52; // E3
+const SCALE = [0, 2, 4, 5, 7, 9, 11]; // Major Scale
+
+// --- STATE ---
+let audioCtx, master, limiter, reverbNode, sidechainBus, synthBus, drumBus;
+let nextNoteTime = 0.0;
+let current16th = 0;
+let totalBars = 0;
+let isPlaying = false;
+let noiseBuffer = null;
+let impulseBuffer = null;
+
+// --- MUSIC THEORY ---
+const CHORDS = [
+    [0, 4, 7, 11], // I (E Major 7)
+    [5, 9, 12, 16], // IV (A Major 7)
+    [2, 5, 9, 12], // vi (C# Minor 7)
+    [7, 11, 14, 17] // V (B Major)
+];
+
+// --- UTILS ---
+const mtof = n => 440 * Math.pow(2, (n - 69) / 12);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
+
+// --- AUDIO ENGINE CORE ---
+
+async function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+    
+    // Master Chain: Limiter -> Destination
+    limiter = audioCtx.createDynamicsCompressor();
+    limiter.threshold.value = -1.0;
+    limiter.ratio.value = 20.0;
+    limiter.connect(audioCtx.destination);
+
+    // Reverb Send
+    reverbNode = audioCtx.createConvolver();
+    reverbNode.buffer = await createImpulseResponse();
+    const reverbGain = audioCtx.createGain();
+    reverbGain.gain.value = 0.3;
+    reverbNode.connect(limiter);
+    reverbGain.connect(reverbNode);
+
+    // Sidechain Logic (The "Pump" effect)
+    // We invert the kick signal to duck the volume of this node
+    sidechainBus = audioCtx.createGain();
+    sidechainBus.connect(reverbGain); // Send synths to reverb
+    sidechainBus.connect(limiter);    // Send synths to master
+
+    // Drum Bus (Bypasses Sidechain)
+    drumBus = audioCtx.createGain();
+    drumBus.connect(reverbGain);
+    drumBus.connect(limiter);
+
+    // Create Noise Buffer for Snares/Hats
+    const bufSize = audioCtx.sampleRate * 2;
+    noiseBuffer = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) output[i] = Math.random() * 2 - 1;
+
+    // Analysis for Visuals
+    window.analyser = audioCtx.createAnalyser();
+    window.analyser.fftSize = 512;
+    limiter.connect(window.analyser);
+
+    isPlaying = true;
+    nextNoteTime = audioCtx.currentTime + 0.1;
+    scheduler();
+}
+
+async function createImpulseResponse() {
+    // Procedurally generate a nice hall reverb
+    const len = audioCtx.sampleRate * 2.0;
+    const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+    for(let c=0; c<2; c++){
+        const ch = buf.getChannelData(c);
+        for(let i=0; i<len; i++){
+            // Exponential decay noise
+            ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/len, 3);
+        }
+    }
+    return buf;
+}
+
+// --- INSTRUMENTS ---
+
+class Kick {
+    constructor(time) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.frequency.setValueAtTime(150, time);
+        osc.frequency.exponentialRampToValueAtTime(40, time + 0.15);
+        
+        gain.gain.setValueAtTime(1.0, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+        
+        osc.connect(gain);
+        gain.connect(drumBus);
+        
+        osc.start(time);
+        osc.stop(time + 0.4);
+        
+        // SIDECHAIN TRIGGER
+        // We manually duck the synth bus
+        sidechainBus.gain.cancelScheduledValues(time);
+        sidechainBus.gain.setValueAtTime(0, time);
+        sidechainBus.gain.linearRampToValueAtTime(1, time + 0.1); // 100ms recovery
+    }
+}
+
+class Snare {
+    constructor(time, type='CLAP') {
+        // Filtered Noise
+        const src = audioCtx.createBufferSource();
+        src.buffer = noiseBuffer;
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+
+        if (type === 'CLAP') {
+            filter.type = 'bandpass';
+            filter.frequency.value = 1200;
+            filter.Q.value = 1;
+            gain.gain.setValueAtTime(0.8, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+        } else if (type === 'BUILD') {
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(500, time);
+            filter.frequency.linearRampToValueAtTime(3000, time + 0.1);
+            gain.gain.setValueAtTime(0.6, time);
+            gain.gain.linearRampToValueAtTime(0, time + 0.05);
+        }
+
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(drumBus);
+        src.start(time);
+        src.stop(time + 0.2);
+    }
+}
+
+class HiHat {
+    constructor(time) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = noiseBuffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 8000;
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.3, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+        
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(drumBus);
+        src.start(time);
+        src.stop(time + 0.1);
+    }
+}
+
+class SuperSawChord {
+    constructor(time, notes, duration) {
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        
+        // Pluck envelope on filter
+        filter.type = "lowpass";
+        filter.Q.value = 1;
+        filter.frequency.setValueAtTime(200, time);
+        filter.frequency.exponentialRampToValueAtTime(8000, time + 0.05);
+        filter.frequency.exponentialRampToValueAtTime(400, time + duration);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.3, time + 0.02);
+        gain.gain.linearRampToValueAtTime(0, time + duration);
+
+        filter.connect(gain);
+        gain.connect(sidechainBus); // Connect to sidechain bus
+
+        notes.forEach((n, i) => {
+            // 3 Oscillators per note for width
+            for(let d=0; d<3; d++) {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sawtooth';
+                const detune = (d - 1) * 12; // -12, 0, +12 cents
+                osc.detune.value = detune;
+                osc.frequency.value = mtof(ROOT_NOTE + n);
+                osc.connect(filter);
+                osc.start(time);
+                osc.stop(time + duration + 0.1);
+            }
+        });
+        
+        setTimeout(() => gain.disconnect(), (duration+0.5)*1000);
+    }
+}
+
+class Bass {
+    constructor(time, note, duration) {
+        const osc = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator(); // Sub
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.value = mtof(ROOT_NOTE + note - 12);
+        
+        osc2.type = 'sine';
+        osc2.frequency.value = mtof(ROOT_NOTE + note - 24);
+        
+        gain.gain.setValueAtTime(0.5, time);
+        gain.gain.linearRampToValueAtTime(0, time + duration);
+        
+        osc.connect(gain);
+        osc2.connect(gain);
+        gain.connect(sidechainBus);
+        
+        osc.start(time);
+        osc.stop(time + duration);
+        osc2.start(time);
+        osc2.stop(time + duration);
+    }
+}
+
+class Riser {
+    constructor(time, duration) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = noiseBuffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 5;
+        
+        const gain = audioCtx.createGain();
+        
+        filter.frequency.setValueAtTime(100, time);
+        filter.frequency.exponentialRampToValueAtTime(8000, time + duration);
+        
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.2, time + duration - 0.1);
+        gain.gain.linearRampToValueAtTime(0, time + duration);
+        
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(drumBus); // Bypass sidechain so it sits on top
+        
+        src.loop = true;
+        src.start(time);
+        src.stop(time + duration);
+    }
+}
+
+class Lead {
+    constructor(time, note, duration) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        // Vocal chop emulation (Pulse wave + glide)
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(mtof(ROOT_NOTE + note), time);
+        // Little pitch drop
+        osc.frequency.exponentialRampToValueAtTime(mtof(ROOT_NOTE + note) * 0.98, time + duration);
+        
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.15, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(gain);
+        gain.connect(sidechainBus);
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+    }
+}
+
+// --- SEQUENCER LOGIC ---
+
+function scheduler() {
+    while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD) {
+        scheduleStep(current16th, nextNoteTime);
+        nextNoteTime += 60.0 / BPM / 4; // Add 16th note duration
+        current16th++;
+        if (current16th === 16) {
+            current16th = 0;
+            totalBars++;
+            updateHUD();
+        }
+    }
+    if (isPlaying) requestAnimationFrame(scheduler);
+}
+
+function scheduleStep(beat, time) {
+    // Structure: 
+    // 0-16: Intro
+    // 16-32: Build
+    // 32-64: Drop
+    // 64+: Reset
+    
+    const bar = totalBars;
+    const section = bar < 16 ? 'INTRO' : bar < 32 ? 'BUILD' : bar < 64 ? 'DROP' : 'RESET';
+    
+    if (section === 'RESET') {
+        totalBars = 0;
+        return;
+    }
+
+    const isKickStep = beat % 4 === 0;
+    const isSnareStep = beat === 4 || beat === 12;
+    const isOffBeat = beat === 2 || beat === 6 || beat === 10 || beat === 14;
+
+    // --- CHORD PROGRESSION ---
+    // Change chord every 4 bars
+    const chordIdx = Math.floor(bar / 4) % 4;
+    const currentChord = CHORDS[chordIdx];
+
+    // --- INTRO ---
+    if (section === 'INTRO') {
+        if (isKickStep) new Kick(time);
+        if (beat % 2 === 0) new HiHat(time);
+        
+        // Simple Chords
+        if (beat === 0) {
+             new SuperSawChord(time, currentChord, 2.0); // Long chord
+        }
+        
+        // Pluck Melody
+        if (beat % 2 === 0 && Math.random() > 0.3) {
+            const note = currentChord[Math.floor(Math.random()*currentChord.length)] + 12;
+            new Lead(time, note, 0.1);
+        }
+    }
+
+    // --- BUILD UP ---
+    if (section === 'BUILD') {
+        // Riser Logic (Trigger once at start of build)
+        if (bar === 16 && beat === 0) {
+            const buildDuration = 16 * (60/BPM) * 4;
+            new Riser(time, buildDuration);
+        }
+
+        // Snare Roll Acceleration
+        let snareInterval = 4; // Quarter notes
+        if (bar >= 24) snareInterval = 2; // 8ths
+        if (bar >= 28) snareInterval = 1; // 16ths
+        if (bar === 31) snareInterval = 1; // Fill
+
+        if (beat % snareInterval === 0) {
+            new Snare(time, 'BUILD');
+        }
+        
+        // Pitching Chords Up
+        if (beat === 0 || beat === 8) {
+             new SuperSawChord(time, currentChord, 0.5);
+        }
+    }
+
+    // --- THE DROP ---
+    if (section === 'DROP') {
+        if (isKickStep) {
+            new Kick(time);
+            // Trigger Visual Flash
+            visualState.kick = true;
+        }
+        
+        // Off-beat hats
+        if (isOffBeat) new HiHat(time);
+        
+        // Clap
+        if (isSnareStep) new Snare(time, 'CLAP');
+
+        // Bouncy Chords (Future Bass rhythm)
+        // Rhythm: X . . X . X . . 
+        const bouncePattern = [0, 3, 6, 10, 12];
+        if (bouncePattern.includes(beat)) {
+            new SuperSawChord(time, currentChord, 0.3);
+            new Bass(time, currentChord[0], 0.3);
+        }
+
+        // Top Lead Melody
+        if ([0, 2, 3, 6, 8, 11, 12, 14].includes(beat)) {
+             const note = SCALE[Math.floor(Math.random() * SCALE.length)] + 12;
+             new Lead(time, note, 0.2);
+        }
+    }
+    
+    // Visual Phase Update
+    visualState.phase = section;
+}
+
+function updateHUD() {
+    document.getElementById('bar-val').innerText = totalBars + 1;
+    document.getElementById('phase-val').innerText = totalBars < 16 ? 'INTRO' : totalBars < 32 ? 'BUILDING' : 'DROP';
+    document.getElementById('visual-analyser').innerText = totalBars < 16 ? 'SYSTEM START' : totalBars < 32 ? 'ENERGY RISING' : 'MAXIMUM VELOCITY';
+}
+
+// --- VISUALS (CANVAS) ---
+const canvas = document.getElementById('gl');
+const ctx = canvas.getContext('2d');
+let visualState = { kick: false, phase: 'IDLE' };
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+let particles = [];
+
+function render() {
+    // Background fade
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (!isPlaying) {
+        requestAnimationFrame(render);
+        return;
+    }
+
+    // Get Frequency Data
+    const freqArray = new Uint8Array(window.analyser.frequencyBinCount);
+    window.analyser.getByteFrequencyData(freqArray);
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
+    // Draw Spectrum Ring
+    const radius = 100;
+    ctx.beginPath();
+    for (let i = 0; i < freqArray.length; i+=4) { // Skip some bins for style
+        const v = freqArray[i] / 255;
+        const angle = (i / freqArray.length) * Math.PI * 2 * 2; // 2 circles
+        
+        const r = radius + (v * 150);
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        
+        ctx.strokeStyle = `hsl(${i + (Date.now()/10)}, 100%, 50%)`;
+        ctx.lineWidth = 2;
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Kick reaction
+    if (visualState.kick) {
+        visualState.kick = false;
+        // Explosion
+        for(let k=0; k<20; k++) {
+            particles.push({
+                x: cx, y: cy,
+                vx: (Math.random() - 0.5) * 20,
+                vy: (Math.random() - 0.5) * 20,
+                life: 1.0,
+                color: visualState.phase === 'DROP' ? '#f0f' : '#0ff'
+            });
+        }
+        // Screen Shake
+        if(visualState.phase === 'DROP') {
+            ctx.translate(Math.random()*10 - 5, Math.random()*10 - 5);
+            setTimeout(() => ctx.setTransform(1,0,0,1,0,0), 50);
+        }
+    }
+
+    // Particle Logic
+    particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+        ctx.fill();
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+    ctx.globalAlpha = 1.0;
+
+    // Tunnel Effect during Drop
+    if (visualState.phase === 'DROP') {
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, (Date.now() / 5) % (canvas.width/2), 0, Math.PI*2);
+        ctx.stroke();
+    }
+
+    requestAnimationFrame(render);
+}
+
+// --- INITIALIZATION UI ---
+document.getElementById('init-btn').addEventListener('click', () => {
+    document.getElementById('init-btn').style.display = 'none';
+    initAudio();
+    render();
+});
+
+</script>
+</body>
+</html>
