@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COLLATZ: GOA PROTOCOL</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: monospace; color: #0f0; user-select: none; }
+        
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; filter: brightness(1.2) contrast(1.2); }
+        
+        #hud {
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            background: rgba(0,0,0,0.7); padding: 20px; border: 1px solid #0f0;
+        }
+        
+        .metric { margin-bottom: 10px; font-size: 1.2rem; }
+        
+        #overlay {
+            position: absolute; width: 100%; height: 100%; background: #000;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; z-index: 100; transition: opacity 1s;
+            cursor: pointer;
+        }
+
+        h1 { font-size: 5rem; color: #0f0; text-shadow: 0 0 20px #0f0; margin: 0; }
+        p { letter-spacing: 5px; animation: blink 0.5s infinite; }
+
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="hud">
+        <div class="metric" id="val-n">CURRENT N: NULL</div>
+        <div class="metric" id="val-steps">ORBIT LENGTH: 0</div>
+        <div class="metric" id="freq-mod">HARMONIC FREQ: 0Hz</div>
+    </div>
+
+    <div id="overlay">
+        <h1>3N+1</h1>
+        <p>[ CLICK TO GENERATE ENTROPY ]</p>
+    </div>
+
+<script>
+// ------------------------------------------------------
+// 1. MATHEMATICAL CORE: The Collatz Generator
+// ------------------------------------------------------
+let sequence = [];
+let sequenceIndex = 0;
+
+function generateOrbit(seed) {
+    let arr = [seed];
+    let n = seed;
+    // Cap sequence to avoid infinite browser freeze if math breaks, though Collatz always ends
+    while (n > 1 && arr.length < 200) {
+        if (n % 2 === 0) {
+            n = n / 2;
+        } else {
+            n = (3 * n) + 1;
+        }
+        arr.push(n);
+    }
+    return arr;
+}
+
+// "Israel Phrygian" Mapping - We map large numbers to musical intervals
+const SCALE_PHRYGIAN = [
+    1.0,  // Root
+    1.06, // Minor 2nd (The "Psytrance" interval)
+    1.25, // Major 3rd (Switch to Dominant Phrygian for Middle Eastern sound)
+    1.33, // Perfect 4th
+    1.5,  // Perfect 5th
+    1.6,  // Minor 6th
+    1.88  // Minor 7th
+];
+
+function mapNumberToFreq(n) {
+    // Map the chaos of N into the order of the scale
+    // Use modulo to pick the interval, Magnitude to pick the octave
+    const intervalIndex = n % SCALE_PHRYGIAN.length;
+    const octaveShift = (n > 50) ? 2 : (n > 20 ? 1 : 0); 
+    // Fundamental Frequency: 55Hz (A1 - Deep Bass)
+    return 55 * SCALE_PHRYGIAN[intervalIndex] * Math.pow(2, octaveShift + 1);
+}
+
+// ------------------------------------------------------
+// 2. AUDIO ENGINE: "The Acid Machine"
+// ------------------------------------------------------
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const ctx = new AudioCtx();
+
+// Global effects
+const delay = ctx.createDelay();
+delay.delayTime.value = 0.25; // 3/16ths usually, 0.25 for simplicity
+const fb = ctx.createGain();
+fb.gain.value = 0.4;
+const masterComp = ctx.createDynamicsCompressor();
+
+delay.connect(fb);
+fb.connect(delay);
+delay.connect(masterComp);
+masterComp.connect(ctx.destination);
+
+class Synthesizer {
+    
+    playKick(t) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+        
+        g.gain.setValueAtTime(1, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        
+        osc.connect(g);
+        g.connect(masterComp); // Compress the kick sidechain-style logic
+        osc.start(t);
+        osc.stop(t + 0.15);
+    }
+
+    playAcid(t, val) {
+        // The "TB-303" emulation using Collatz value for "Cutoff"
+        const osc = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
+        const g = ctx.createGain();
+        
+        // TYPE: Odd numbers are Saw (Rough), Even are Square (Hollow) - but logic handled below
+        osc.type = (val % 2 !== 0) ? 'sawtooth' : 'square'; 
+        
+        const freq = mapNumberToFreq(val);
+        osc.frequency.value = freq;
+
+        // FILTER MATH
+        // Higher N = Screechier Filter
+        filter.type = 'lowpass';
+        filter.Q.value = 10 + (val % 10); // Resonant peak
+        filter.frequency.setValueAtTime(freq, t);
+        filter.frequency.exponentialRampToValueAtTime(freq * (2 + (val/10)), t + 0.1);
+        filter.frequency.exponentialRampToValueAtTime(freq, t + 0.3);
+
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.3, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+
+        osc.connect(filter);
+        filter.connect(g);
+        g.connect(delay); // Send acid to delay
+        g.connect(masterComp);
+
+        osc.start(t);
+        osc.stop(t + 0.4);
+        
+        return { type: osc.type, freq: freq };
+    }
+    
+    playBass(t, val) {
+         // Rolling offbeat bass (Opposite of Kick)
+         const osc = ctx.createOscillator();
+         const g = ctx.createGain();
+         osc.type = 'sawtooth';
+         osc.frequency.value = 55; // Root Anchor
+         
+         // Detune using Collatz Math just a tiny bit
+         osc.detune.value = (val % 5); 
+
+         const filter = ctx.createBiquadFilter();
+         filter.frequency.value = 400;
+
+         g.gain.setValueAtTime(0, t);
+         g.gain.linearRampToValueAtTime(0.4, t+0.05);
+         g.gain.linearRampToValueAtTime(0, t+0.15);
+
+         osc.connect(filter);
+         filter.connect(g);
+         g.connect(masterComp);
+         osc.start(t);
+         osc.stop(t+0.2);
+    }
+}
+
+// ------------------------------------------------------
+// 3. VISUAL ENGINE
+// ------------------------------------------------------
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+let visualVal = 0;
+let visualFreq = 0;
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+function drawTunnel(t) {
+    // Trail
+    c.fillStyle = 'rgba(0,0,0,0.2)';
+    c.fillRect(0,0,w,h);
+    
+    const cx = w/2;
+    const cy = h/2;
+    
+    // Calculate Geometry based on Collatz N
+    // Higher N = More Sides
+    let sides = 3 + (visualVal % 6); 
+    let colorHue = (visualVal * 13) % 360; // Math-to-Color
+    
+    c.lineWidth = 3;
+    c.strokeStyle = `hsl(${colorHue}, 100%, 50%)`;
+    c.beginPath();
+    
+    let size = 50 + Math.sin(t*10)*20; // Pump on beat (approx)
+    if (visualVal % 2 !== 0) size *= 1.5; // Odd numbers are BIG
+    
+    for(let i=0; i<=sides; i++) {
+        let angle = (i/sides) * Math.PI * 2 + t;
+        c.lineTo(cx + Math.cos(angle)*size*visualVal/10, cy + Math.sin(angle)*size*visualVal/10);
+    }
+    c.stroke();
+    
+    // If Odd number (Spike), draw lasers
+    if (visualVal % 2 !== 0) {
+        c.globalCompositeOperation = 'lighter';
+        c.beginPath();
+        c.moveTo(cx, cy);
+        c.lineTo(cx + Math.cos(t*5)*w, cy + Math.sin(t*5)*h);
+        c.strokeStyle = '#fff';
+        c.stroke();
+        c.globalCompositeOperation = 'source-over';
+    }
+}
+
+let time = 0;
+function animate() {
+    time += 0.05;
+    drawTunnel(time);
+    requestAnimationFrame(animate);
+}
+
+// ------------------------------------------------------
+// 4. SEQUENCER (THE CONDUCTOR)
+// ------------------------------------------------------
+const BPM = 145;
+const BEAT_DUR = 60 / BPM;
+const NOTE_DUR = BEAT_DUR / 4; // 16th notes
+
+let synth = new Synthesizer();
+let nextNoteTime = 0;
+let tick = 0;
+
+// Current SEED determines the chaos
+let currentSeed = 27; // Start with the famous orbit 27
+
+function scheduler() {
+    while (nextNoteTime < ctx.currentTime + 0.1) {
+        scheduleNote(tick, nextNoteTime);
+        nextNoteTime += NOTE_DUR;
+        tick++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function scheduleNote(tickIndex, time) {
+    // PSYTRANCE STRUCTURE
+    // 1   e   &   a
+    // Kick _ Bass Bass
+    
+    const step = tickIndex % 4;
+    
+    // Get Collatz Number
+    let val = sequence[sequenceIndex];
+    if(!val) {
+        // If orbit finished, pick new chaotic seed based on time
+        currentSeed += Math.floor(Math.random() * 50);
+        sequence = generateOrbit(currentSeed);
+        sequenceIndex = 0;
+        val = sequence[0];
+        document.getElementById('val-steps').innerText = `NEW SEED: ${currentSeed}`;
+    }
+
+    // UI UPDATE
+    setTimeout(() => {
+        visualVal = val;
+        document.getElementById('val-n').innerText = `N: ${val} (${val%2===0 ? 'EVEN' : 'ODD/ACID'})`;
+    }, (time - ctx.currentTime) * 1000);
+
+
+    // KICK (The "Floor")
+    if (step === 0) {
+        synth.playKick(time);
+    }
+    // BASS (The "Gallop")
+    else {
+        synth.playBass(time, val);
+    }
+
+    // COLLATZ MELODY (The "Alien")
+    // Every odd Collatz number triggers an Acid Line
+    if (val % 2 !== 0) {
+        let sound = synth.playAcid(time, val);
+        
+        setTimeout(() => {
+             document.getElementById('freq-mod').innerText = `FREQ: ${Math.floor(sound.freq)}Hz`;
+        }, (time - ctx.currentTime) * 1000);
+    }
+    
+    // Iterate Sequence logic
+    // We step through the Collatz Orbit every bar (16 beats) or fast?
+    // Psytrance changes fast. Let's step every 2 beats (8 ticks)
+    if (tickIndex % 8 === 0) {
+        sequenceIndex++;
+        if(sequenceIndex >= sequence.length) {
+             // Orbit complete, new seed happens at top of loop
+             currentSeed++;
+             sequence = generateOrbit(currentSeed);
+             sequenceIndex = 0;
+        }
+    }
+}
+
+document.getElementById('overlay').addEventListener('click', (e) => {
+    if(ctx.state === 'suspended') ctx.resume();
+    sequence = generateOrbit(currentSeed);
+    e.target.style.opacity = 0;
+    setTimeout(() => e.target.remove(), 1000);
+    
+    nextNoteTime = ctx.currentTime + 0.1;
+    scheduler();
+    animate();
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TLV // FREQUENCY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap');
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+            cursor: crosshair;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: contrast(1.5) saturate(1.2);
+        }
+
+        /* The HUD overlay mimicking a DJ Deck / VJ Software */
+        #deck-overlay {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 100px #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: clamp(4rem, 10vw, 15rem);
+            margin: 0;
+            color: rgba(255,255,255,0.1);
+            text-transform: uppercase;
+            mix-blend-mode: overlay;
+            text-align: center;
+            line-height: 0.8;
+        }
+
+        #bpm-display {
+            font-size: 2rem;
+            color: #0ff;
+            margin-top: 20px;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 10px #0ff;
+        }
+
+        #phase-display {
+            position: absolute; top: 20px; width: 100%;
+            text-align: center; color: #FFF; letter-spacing: 5px; font-size: 1.2rem;
+        }
+
+        #start-btn {
+            position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            background: #fff;
+            color: #000;
+            border: none;
+            font-weight: 900;
+            letter-spacing: 2px;
+            cursor: pointer;
+            z-index: 99;
+            transition: all 0.2s;
+        }
+        #start-btn:hover { background: #0ff; transform: translate(-50%, -50%) scale(1.1); }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="deck-overlay">
+        <div id="phase-display">WAITING FOR THE DROP...</div>
+        <h1 id="hero-text">TLV</h1>
+        <div id="bpm-display">120 BPM</div>
+    </div>
+
+    <button id="start-btn">DROP THE BEAT</button>
+
+<script>
+
+// -------------------------------------------------------------------
+// 1. THE NIGHT (THE STORY ARC)
+// This maps the flow from "Warmup" (Avicii style piano) -> "Peak" (Marshmello bounce) -> "Full On" (Psy)
+// -------------------------------------------------------------------
+const SETLIST = [
+    { 
+        time: "23:00", 
+        label: "DOORS OPEN", 
+        bpm: 60, 
+        bassIntensity: 0, 
+        color: [255, 255, 255], // White
+        text: "THE VACUUM"
+    },
+    { 
+        time: "00:30", 
+        label: "THE WARMUP", 
+        bpm: 124, 
+        bassIntensity: 0.5, 
+        color: [0, 255, 255], // Cyan (Cool)
+        text: "IGNITION"
+    },
+    { 
+        time: "01:45", 
+        label: "MELODIC RISE", 
+        bpm: 128, 
+        bassIntensity: 0.8, 
+        color: [255, 0, 255], // Magenta (Miami/Avicii Vibe)
+        text: "LEVELS"
+    },
+    { 
+        time: "03:00", 
+        label: "THE DROP", 
+        bpm: 140, 
+        bassIntensity: 2.0, 
+        color: [255, 50, 50], // Red Alert
+        text: "JUMP"
+    },
+    { 
+        time: "04:15", 
+        label: "FULL ON (ISRAELI TRANCE)", 
+        bpm: 150, 
+        bassIntensity: 3.0, 
+        color: [50, 255, 50], // Acid Green
+        text: "GOA MIND"
+    },
+    { 
+        time: "05:55", 
+        label: "SUNRISE SET", 
+        bpm: 128, 
+        bassIntensity: 1.0, 
+        color: [255, 200, 0], // Golden Hour
+        text: "EUPHORIA"
+    }
+];
+
+// -------------------------------------------------------------------
+// 2. AUDIO ENGINE (THE RIG)
+// Features: Kick Synth, SuperSaw Stacks, White Noise Risers
+// -------------------------------------------------------------------
+class ClubRig {
+    constructor() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.5;
+        this.master.connect(this.ctx.destination);
+        
+        // Add simple delay for stadium feel
+        this.delay = this.ctx.createDelay();
+        this.delay.delayTime.value = 0.25; // 1/4 beatish
+        this.delayFeedback = this.ctx.createGain();
+        this.delayFeedback.gain.value = 0.3;
+        this.master.connect(this.delay);
+        this.delay.connect(this.delayFeedback);
+        this.delayFeedback.connect(this.delay);
+        this.delay.connect(this.ctx.destination);
+    }
+
+    playKick() {
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+        
+        gain.gain.setValueAtTime(1, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        
+        osc.connect(gain);
+        gain.connect(this.master);
+        osc.start(t);
+        osc.stop(t + 0.5);
+    }
+
+    playBassline(noteHz, intensity) {
+        if(intensity < 0.1) return;
+        const t = this.ctx.currentTime;
+        // Super Saw effect: 3 slightly detuned oscillators
+        [0, 5, -5].forEach(detune => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.value = noteHz;
+            osc.detune.value = detune;
+            
+            gain.gain.setValueAtTime(0.1 * intensity, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2); // Plucky
+            
+            osc.connect(gain);
+            gain.connect(this.master);
+            osc.start(t);
+            osc.stop(t+0.2);
+        });
+    }
+
+    playHat() {
+        // White noise hat
+        const bsize = this.ctx.sampleRate * 0.1;
+        const buffer = this.ctx.createBuffer(1, bsize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for(let i=0; i<bsize; i++) data[i] = Math.random() * 2 - 1;
+        
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        const gain = this.ctx.createGain();
+        
+        // High pass filter logic would go here, simulating with fast decay
+        gain.gain.value = 0.1;
+        src.connect(gain);
+        gain.connect(this.master);
+        src.start();
+    }
+}
+
+// -------------------------------------------------------------------
+// 3. VISUAL ENGINE (THE LIGHT SHOW)
+// -------------------------------------------------------------------
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+
+let beatPulse = 0;
+let currentIndex = 0;
+let lasers = [];
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+// Laser Object
+class Laser {
+    constructor(color) {
+        this.angle = Math.random() * Math.PI * 2;
+        this.speed = Math.random() * 0.05 + 0.01;
+        this.color = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+    }
+    draw(beat) {
+        this.angle += this.speed + (beat * 0.1); // Spin faster on beat
+        const length = w > h ? w : h;
+        c.strokeStyle = this.color;
+        c.lineWidth = 2 + beat * 5; // Thicken on kick
+        c.shadowBlur = 20;
+        c.shadowColor = this.color;
+        c.beginPath();
+        c.moveTo(w/2, h/2);
+        c.lineTo(w/2 + Math.cos(this.angle)*length, h/2 + Math.sin(this.angle)*length);
+        c.stroke();
+    }
+}
+
+function render() {
+    // Fade Effect
+    c.fillStyle = 'rgba(0,0,0,0.15)'; // Blur trail
+    c.fillRect(0, 0, w, h);
+
+    const track = SETLIST[currentIndex];
+    
+    // Bass Shake Camera Effect
+    let shakeX = 0, shakeY = 0;
+    if(beatPulse > 0.5) {
+        shakeX = (Math.random()-0.5) * 10 * track.bassIntensity;
+        shakeY = (Math.random()-0.5) * 10 * track.bassIntensity;
+    }
+
+    c.save();
+    c.translate(shakeX, shakeY);
+    c.globalCompositeOperation = 'lighter';
+
+    // Draw Center Orb (The DJ Booth)
+    const orbSize = 50 + (beatPulse * 50 * track.bassIntensity);
+    const grad = c.createRadialGradient(w/2, h/2, 10, w/2, h/2, orbSize);
+    grad.addColorStop(0, '#FFF');
+    grad.addColorStop(0.5, `rgb(${track.color.join(',')})`);
+    grad.addColorStop(1, 'transparent');
+    
+    c.fillStyle = grad;
+    c.beginPath();
+    c.arc(w/2, h/2, orbSize, 0, Math.PI*2);
+    c.fill();
+
+    // Draw Lasers
+    lasers.forEach(l => l.draw(beatPulse));
+
+    // Decay Pulse
+    beatPulse *= 0.85;
+
+    c.restore();
+
+    // Update UI Text (The Hero Text)
+    // If heavily bass, text grows
+    const heroScale = 1 + beatPulse * 0.2;
+    const heroText = document.getElementById('hero-text');
+    heroText.style.transform = `scale(${heroScale})`;
+    heroText.innerText = track.text;
+    heroText.style.color = `rgba(${track.color.join(',')}, 0.3)`;
+
+    document.getElementById('phase-display').innerText = `${track.time} // ${track.label}`;
+    document.getElementById('bpm-display').innerText = track.bpm + " BPM";
+    
+    requestAnimationFrame(render);
+}
+
+// -------------------------------------------------------------------
+// 4. THE CONDUCTOR (SEQUENCER)
+// -------------------------------------------------------------------
+let rig;
+let isPlaying = false;
+let interval;
+let sixteenthNoteTime;
+let lastNoteTime = 0;
+let beatCount = 0;
+
+// Harmonics for Avicii style riff
+// (Basic progression loop)
+const MELODY_NOTES = [440, 440, 523, 587, 659, 587, 523, 493]; // A minor-ish
+
+function scheduler() {
+    if(!isPlaying) return;
+    
+    const track = SETLIST[currentIndex];
+    const secondsPerBeat = 60.0 / track.bpm;
+    const sixteenthTime = secondsPerBeat / 4;
+    const lookahead = 0.1; // seconds
+
+    if (rig.ctx.currentTime > lastNoteTime + sixteenthTime) {
+        lastNoteTime += sixteenthTime;
+        playTick(track);
+    }
+    
+    // Loop faster than visual refresh
+    setTimeout(scheduler, 10); 
+}
+
+function playTick(track) {
+    beatCount++;
+
+    // 4/4 KICK (Quarter Notes)
+    if (beatCount % 4 === 0 && track.bassIntensity > 0.1) {
+        rig.playKick();
+        beatPulse = 1.0; // Trigger visual thump
+    }
+
+    // Offbeat Hat (Eighth Notes off)
+    if (beatCount % 4 === 2 && track.bassIntensity > 0.5) {
+        rig.playHat();
+    }
+
+    // Melody (16th notes)
+    if (track.bassIntensity > 0.7) {
+        // Select note based on counter
+        let noteIdx = (beatCount / 4) % MELODY_NOTES.length;
+        let freq = MELODY_NOTES[Math.floor(noteIdx)];
+        
+        // Avicii Stabs
+        if(beatCount % 8 === 0 || beatCount % 8 === 3 || beatCount % 8 === 6) {
+           rig.playBassline(freq, track.bassIntensity);
+        }
+        
+        // Israeli Full-On Triplets (during Phase 4)
+        if(track.bpm >= 150 && beatCount % 2 !== 0) {
+            rig.playBassline(freq * 2, 0.4); // Running high arp
+        }
+    }
+}
+
+function advanceSet() {
+    currentIndex++;
+    // Setup lasers for new color
+    const track = SETLIST[currentIndex];
+    
+    if(currentIndex < SETLIST.length) {
+        // Add more lasers as night progresses
+        lasers = [];
+        const count = 10 + (currentIndex * 5);
+        for(let i=0; i<count; i++) {
+            lasers.push(new Laser(track.color));
+        }
+        
+        setTimeout(advanceSet, 5000); // Each Phase lasts 5 seconds for demo (scale up for real time)
+    } else {
+        isPlaying = false; // End
+    }
+}
+
+// Start
+document.getElementById('start-btn').addEventListener('click', (e) => {
+    rig = new ClubRig();
+    rig.ctx.resume();
+    
+    e.target.remove();
+    isPlaying = true;
+    lastNoteTime = rig.ctx.currentTime + 0.1;
+    
+    // Populate initial lasers
+    const track = SETLIST[0];
+    for(let i=0; i<8; i++) lasers.push(new Laser(track.color));
+    
+    render();
+    scheduler();
+    setTimeout(advanceSet, 4000);
+});
+
+</script>
+</body>
+</html>

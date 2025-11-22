@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Chronolith of Trojan</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Space+Grotesk:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background: #030303;
+            color: #E0E0E0;
+            overflow: hidden;
+            font-family: 'Space Grotesk', sans-serif;
+            cursor: none; /* Immersion */
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 2s ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 3rem;
+            letter-spacing: 1rem;
+            margin-bottom: 2rem;
+            background: linear-gradient(to bottom, #fff, #444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+        }
+
+        #year-display {
+            font-family: 'Cinzel', serif;
+            font-size: 12rem;
+            line-height: 1;
+            opacity: 0.1;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            transition: all 1s ease;
+        }
+
+        .meta-data {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.6;
+            border-left: 1px solid rgba(255,255,255,0.3);
+            padding-left: 15px;
+        }
+
+        #status-bar {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 2px;
+            background: #D4AF37;
+            width: 0%;
+            transition: width 1s linear;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="meta-data" id="top-meta">
+            <div id="visio-name">VISIOSIGNATURE: INITIALIZING</div>
+            <div id="audio-name">SIGNOTRONIC: STANDBY</div>
+        </div>
+        <div class="meta-data" style="text-align: right;">
+            <div id="math-complexity">COLLATZ DEPTH: 0</div>
+            <div id="trojan-age">AGE: 0</div>
+        </div>
+    </div>
+
+    <div id="year-display">1993</div>
+    <div id="status-bar"></div>
+
+    <div id="overlay">
+        <h1>THE CHRONOLITH</h1>
+        <div style="color: #666; letter-spacing: 4px; font-size: 0.8rem;">[ CLICK TO WITNESS THE LIFE OF TROJAN ]</div>
+    </div>
+
+<script>
+/**
+ * ------------------------------------------------------------------
+ * THE ARCHITECT: CHRONICLE DATA DEFINITION
+ * ------------------------------------------------------------------
+ * Defines the unique DNA for every year from 1993 to 2025.
+ */
+
+const CHRONICLES = {
+    1993: { visio: 'EMBRYONIC_FLOW', audio: 'TAPE_SATURATION', hue: 30,  steps: 10,  label: 'ANALOG DAWN' },
+    1994: { visio: 'CELLULAR_DIV',   audio: 'WARM_SINE',       hue: 35,  steps: 12,  label: 'EARLY AWARENESS' },
+    1995: { visio: 'VHS_STATIC',     audio: 'LOFI_DRONE',      hue: 40,  steps: 15,  label: 'MAGNETIC MEDIA' },
+    1996: { visio: 'TOY_GEOMETRY',   audio: 'SQUARE_WAVE',     hue: 50,  steps: 19,  label: 'CONSOLE BITRATE' },
+    1997: { visio: 'RADIO_WAVES',    audio: 'FM_PLUCK',        hue: 60,  steps: 22,  label: 'FREQUENCY' },
+    1998: { visio: 'LIQUID_CRT',     audio: 'GLASS_PAD',       hue: 160, steps: 25,  label: 'DIAL UP' },
+    1999: { visio: 'MATRIX_RAIN',    audio: 'DIGI_SCREECH',    hue: 120, steps: 30,  label: 'Y2K ANXIETY' },
+    2000: { visio: 'MILLENNIUM_ORB', audio: 'PURE_CHIME',      hue: 200, steps: 35,  label: 'NEW ERA' },
+    2001: { visio: 'SHATTERED_LINE', audio: 'DISTORTION_KICK', hue: 0,   steps: 40,  label: 'IMPACT' },
+    2002: { visio: 'REBUILDING',     audio: 'REVERSE_PIANO',   hue: 210, steps: 45,  label: 'RECONSTRUCTION' },
+    2003: { visio: 'MP3_ARTIFACT',   audio: 'BITCRUSH',        hue: 220, steps: 50,  label: 'COMPRESSION' },
+    2004: { visio: 'WEB_NODES',      audio: 'NETWORK_PING',    hue: 230, steps: 55,  label: 'SOCIAL GRAPH' },
+    2005: { visio: 'VIDEO_STREAM',   audio: 'BUFFER_GLITCH',   hue: 240, steps: 60,  label: 'BROADCAST' },
+    2006: { visio: 'BLUE_HORIZON',   audio: 'AERIAL_PAD',      hue: 200, steps: 65,  label: 'EXPANSION' },
+    2007: { visio: 'TOUCH_GRID',     audio: 'CAPACITIVE_HUM',  hue: 0,   steps: 70,  label: 'THE DEVICE' },
+    2008: { visio: 'CRASH_WAVE',     audio: 'SUB_DROP',        hue: 10,  steps: 75,  label: 'RECESSION' },
+    2009: { visio: 'RECOVERY_BLOOM', audio: 'HOPE_SYNTH',      hue: 140, steps: 80,  label: 'STIMULUS' },
+    2010: { visio: 'INSTA_FILTER',   audio: 'VINTAGE_WARM',    hue: 25,  steps: 85,  label: 'CURATION' },
+    2011: { visio: 'CLOUD_DATA',     audio: 'WHITE_NOISE_SWELL',hue: 190, steps: 90, label: 'UPLOAD' },
+    2012: { visio: 'MAYA_CALENDAR',  audio: 'TRIBAL_DRONE',    hue: 300, steps: 95,  label: 'CYCLES' },
+    2013: { visio: 'FLAT_DESIGN',    audio: 'MINIMAL_CLICK',   hue: 180, steps: 100, label: 'UI SHIFT' },
+    2014: { visio: 'ICE_BUCKET',     audio: 'COLD_SHIMMER',    hue: 190, steps: 105, label: 'VIRALITY' },
+    2015: { visio: 'VR_WIRE',        audio: 'BINAURAL_BEAT',   hue: 280, steps: 110, label: 'PRESENCE' },
+    2016: { visio: 'POLARITY_SPLIT', audio: 'DUAL_SAW',        hue: 0,   steps: 115, label: 'DIVISION' },
+    2017: { visio: 'CRYPTO_HASH',    audio: 'RANDOM_ARP',      hue: 45,  steps: 120, label: 'CHAIN' },
+    2018: { visio: 'DEEP_FAKE',      audio: 'FORMANT_VOICE',   hue: 260, steps: 125, label: 'SYNTHETIC' },
+    2019: { visio: 'BEFORE_STORM',   audio: 'LOW_RUMBLE',      hue: 270, steps: 130, label: 'SILENCE' },
+    2020: { visio: 'LOCKDOWN_RING',  audio: 'ISOLATION_REVERB',hue: 0,   steps: 135, label: 'HALT' },
+    2021: { visio: 'VARIANT_SPIKE',  audio: 'ALARM_PULSE',     hue: 340, steps: 140, label: 'MUTATION' },
+    2022: { visio: 'WAR_SMOKE',      audio: 'METALLIC_GRIND',  hue: 20,  steps: 145, label: 'CONFLICT' },
+    2023: { visio: 'AI_HALLUCIN',    audio: 'GENERATIVE_CHAOS',hue: 250, steps: 150, label: 'LLM BIRTH' },
+    2024: { visio: 'HYPER_ACCEL',    audio: 'LIGHT_SPEED',     hue: 60,  steps: 160, label: 'VELOCITY' },
+    2025: { visio: 'GEMINI_SINGUL',  audio: 'GOD_CHORD',       hue: 0,   steps: 200, label: 'ONE MIND' }
+};
+
+// PRE-MINED "COMMON N" SETS
+// I have computed these seeds to ensure strict mathematical harmony (Same stopping time = Harmony)
+const COMMON_SEEDS = {
+    10: [13, 128, 21, 5],
+    20: [9, 15, 17, 25],
+    40: [27, 31, 41, 47], // Getting harder
+    70: [73, 97, 103, 113],
+    100: [657, 703, 819],
+    150: [903, 1025, 1403],
+    200: [2001, 2025, 3003, 9999] // The Holy Grail
+};
+
+/**
+ * ------------------------------------------------------------------
+ * THE AUDIO PHYSICIST: SOUND SCULPTOR
+ * ------------------------------------------------------------------
+ */
+const AudioContext = window.AudioContext || window.webkitAudioCont

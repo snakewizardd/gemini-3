@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Chronolith of Trojan</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Space+Grotesk:wght@300;500&display=swap');
+
+        body {
+            margin: 0;
+            background: #030303;
+            color: #E0E0E0;
+            overflow: hidden;
+            font-family: 'Space Grotesk', sans-serif;
+            cursor: crosshair;
+            user-select: none;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1.5s ease-in-out, visibility 1.5s;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(2rem, 5vw, 4rem);
+            letter-spacing: 0.5em;
+            margin-bottom: 2rem;
+            text-align: center;
+            background: linear-gradient(to bottom, #fff 0%, #666 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+
+        .click-prompt {
+            color: #666;
+            letter-spacing: 4px;
+            font-size: 0.8rem;
+            animation: pulse 2s infinite;
+            cursor: pointer;
+            padding: 20px;
+            border: 1px solid #333;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; border-color: #666; }
+            100% { opacity: 0.4; }
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        #year-display {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(6rem, 15vw, 12rem);
+            line-height: 1;
+            opacity: 0.05;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            transition: all 0.5s ease;
+            mix-blend-mode: overlay;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .meta-data {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.7);
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+        }
+
+        .meta-left {
+            border-left: 2px solid #D4AF37;
+            padding-left: 15px;
+        }
+
+        .meta-right {
+            border-right: 2px solid #D4AF37;
+            padding-right: 15px;
+            text-align: right;
+        }
+
+        #status-bar-container {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%;
+            height: 4px;
+            background: #111;
+        }
+
+        #status-bar {
+            height: 100%;
+            background: #D4AF37;
+            width: 0%;
+            box-shadow: 0 0 10px #D4AF37;
+            transition: width 1s linear;
+        }
+
+        /* Glitch Helper Class */
+        .glitch-active {
+            animation: shake 0.1s infinite;
+            filter: hue-rotate(90deg);
+        }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="meta-row">
+            <div class="meta-data meta-left">
+                <div id="visio-name">SYSTEM: STANDBY</div>
+                <div id="audio-name">AUDIO: INITIALIZING...</div>
+            </div>
+            <div class="meta-data meta-right">
+                <div id="math-complexity">COLLATZ: NULL</div>
+                <div id="trojan-age">AGE: 0</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="year-display">1993</div>
+    
+    <div id="status-bar-container">
+        <div id="status-bar"></div>
+    </div>
+
+    <div id="overlay">
+        <h1>THE CHRONOLITH</h1>
+        <div class="click-prompt">[ INITIALIZE SEQUENCE ]</div>
+    </div>
+
+<script>
+/**
+ * ------------------------------------------------------------------
+ * DATA & CONFIGURATION
+ * ------------------------------------------------------------------
+ */
+const CHRONICLES = {
+    1993: { visio: 'EMBRYONIC_FLOW', audio: 'TAPE_SATURATION', hue: 30,  steps: 10,  label: 'ANALOG DAWN' },
+    1994: { visio: 'CELLULAR_DIV',   audio: 'WARM_SINE',       hue: 35,  steps: 12,  label: 'EARLY AWARENESS' },
+    1995: { visio: 'VHS_STATIC',     audio: 'LOFI_DRONE',      hue: 40,  steps: 15,  label: 'MAGNETIC MEDIA' },
+    1996: { visio: 'TOY_GEOMETRY',   audio: 'SQUARE_WAVE',     hue: 50,  steps: 19,  label: 'CONSOLE BITRATE' },
+    1997: { visio: 'RADIO_WAVES',    audio: 'FM_PLUCK',        hue: 60,  steps: 22,  label: 'FREQUENCY' },
+    1998: { visio: 'LIQUID_CRT',     audio: 'GLASS_PAD',       hue: 160, steps: 25,  label: 'DIAL UP' },
+    1999: { visio: 'MATRIX_RAIN',    audio: 'DIGI_SCREECH',    hue: 120, steps: 30,  label: 'Y2K ANXIETY' },
+    2000: { visio: 'MILLENNIUM_ORB', audio: 'PURE_CHIME',      hue: 200, steps: 35,  label: 'NEW ERA' },
+    2001: { visio: 'SHATTERED_LINE', audio: 'DISTORTION_KICK', hue: 0,   steps: 40,  label: 'IMPACT' },
+    2002: { visio: 'REBUILDING',     audio: 'REVERSE_PIANO',   hue: 210, steps: 45,  label: 'RECONSTRUCTION' },
+    2003: { visio: 'MP3_ARTIFACT',   audio: 'BITCRUSH',        hue: 220, steps: 50,  label: 'COMPRESSION' },
+    2004: { visio: 'WEB_NODES',      audio: 'NETWORK_PING',    hue: 230, steps: 55,  label: 'SOCIAL GRAPH' },
+    2005: { visio: 'VIDEO_STREAM',   audio: 'BUFFER_GLITCH',   hue: 240, steps: 60,  label: 'BROADCAST' },
+    2006: { visio: 'BLUE_HORIZON',   audio: 'AERIAL_PAD',      hue: 200, steps: 65,  label: 'EXPANSION' },
+    2007: { visio: 'TOUCH_GRID',     audio: 'CAPACITIVE_HUM',  hue: 0,   steps: 70,  label: 'THE DEVICE' },
+    2008: { visio: 'CRASH_WAVE',     audio: 'SUB_DROP',        hue: 10,  steps: 75,  label: 'RECESSION' },
+    2009: { visio: 'RECOVERY_BLOOM', audio: 'HOPE_SYNTH',      hue: 140, steps: 80,  label: 'STIMULUS' },
+    2010: { visio: 'INSTA_FILTER',   audio: 'VINTAGE_WARM',    hue: 25,  steps: 85,  label: 'CURATION' },
+    2011: { visio: 'CLOUD_DATA',     audio: 'WHITE_NOISE_SWELL',hue: 190, steps: 90, label: 'UPLOAD' },
+    2012: { visio: 'MAYA_CALENDAR',  audio: 'TRIBAL_DRONE',    hue: 300, steps: 95,  label: 'CYCLES' },
+    2013: { visio: 'FLAT_DESIGN',    audio: 'MINIMAL_CLICK',   hue: 180, steps: 100, label: 'UI SHIFT' },
+    2014: { visio: 'ICE_BUCKET',     audio: 'COLD_SHIMMER',    hue: 190, steps: 105, label: 'VIRALITY' },
+    2015: { visio: 'VR_WIRE',        audio: 'BINAURAL_BEAT',   hue: 280, steps: 110, label: 'PRESENCE' },
+    2016: { visio: 'POLARITY_SPLIT', audio: 'DUAL_SAW',        hue: 0,   steps: 115, label: 'DIVISION' },
+    2017: { visio: 'CRYPTO_HASH',    audio: 'RANDOM_ARP',      hue: 45,  steps: 120, label: 'CHAIN' },
+    2018: { visio: 'DEEP_FAKE',      audio: 'FORMANT_VOICE',   hue: 260, steps: 125, label: 'SYNTHETIC' },
+    2019: { visio: 'BEFORE_STORM',   audio: 'LOW_RUMBLE',      hue: 270, steps: 130, label: 'SILENCE' },
+    2020: { visio: 'LOCKDOWN_RING',  audio: 'ISOLATION_REVERB',hue: 0,   steps: 135, label: 'HALT' },
+    2021: { visio: 'VARIANT_SPIKE',  audio: 'ALARM_PULSE',     hue: 340, steps: 140, label: 'MUTATION' },
+    2022: { visio: 'WAR_SMOKE',      audio: 'METALLIC_GRIND',  hue: 20,  steps: 145, label: 'CONFLICT' },
+    2023: { visio: 'AI_HALLUCIN',    audio: 'GENERATIVE_CHAOS',hue: 250, steps: 150, label: 'LLM BIRTH' },
+    2024: { visio: 'HYPER_ACCEL',    audio: 'LIGHT_SPEED',     hue: 60,  steps: 160, label: 'VELOCITY' },
+    2025: { visio: 'GEMINI_SINGUL',  audio: 'GOD_CHORD',       hue: 0,   steps: 200, label: 'ONE MIND' }
+};
+
+// Harmonic sets for audio layering
+const COMMON_SEEDS = {
+    10: [1, 3, 5],
+    20: [2, 4, 6, 8],
+    40: [3, 6, 9, 12],
+    70: [4, 8, 16, 32],
+    100: [5, 10, 15, 20, 25],
+    150: [1, 2, 3, 5, 8, 13],
+    200: [1, 1.5, 2, 2.5, 3, 4, 8] // The Harmonic Series
+};
+
+/**
+ * ------------------------------------------------------------------
+ * AUDIO ENGINE
+ * ------------------------------------------------------------------
+ */
+class SoundSculptor {
+    constructor() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.3;
+        
+        // Convolution Reverb for "Cathedral" sound
+        this.reverb = this.ctx.createConvolver();
+        this.reverb.buffer = this.createImpulse(4, 2);
+        
+        this.master.connect(this.reverb);
+        this.reverb.connect(this.ctx.destination);
+        this.master.connect(this.ctx.destination);
+    }
+
+    resume() {
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    createImpulse(dur, decay) {
+        const L = this.ctx.sampleRate * dur;
+        const b = this.ctx.createBuffer(2, L, this.ctx.sampleRate);
+        for(let i=0; i<L; i++) {
+            const k = Math.pow(1-i/L, decay);
+            // Stereo noise
+            b.getChannelData(0)[i] = (Math.random()*2-1)*k;
+            b.getChannelData(1)[i] = (Math.random()*2-1)*k;
+        }
+        return b;
+    }
+
+    playHarmonic(yearData, harmonicIndex) {
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        // Base frequency rises slightly with years
+        const yearOffset = (yearData.steps - 10) * 2;
+        let freq = 55 + yearOffset + (harmonicIndex * 55);
+
+        // Apply Texture
+        switch(yearData.audio) {
+            case 'TAPE_SATURATION':
+                osc.type = 'sine';
+                osc.detune.value = Math.random() * 20 - 10;
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.1, t + 0.5);
+                break;
+            case 'SQUARE_WAVE':
+            case 'BITCRUSH':
+                osc.type = 'square';
+                freq = freq * 0.5;
+                break;
+            case 'FM_PLUCK':
+            case 'NETWORK_PING':
+                osc.type = 'triangle';
+                gain.gain.setValueAtTime(0.1, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+                break;
+            case 'DISTORTION_KICK':
+            case 'SUB_DROP':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, t);
+                osc.frequency.exponentialRampToValueAtTime(30, t + 0.5);
+                freq = 0; // Override
+                break;
+            case 'GOD_CHORD':
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.1, t + 2);
+                break;
+            default:
+                osc.type = 'sawtooth';
+                // Low pass filter effect via simple gain envelope
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.05, t + 1);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 4);
+        }
+
+        if (freq > 0) osc.frequency.value = freq;
+        
+        osc.connect(gain);
+        gain.connect(this.master);
+        
+        osc.start(t);
+        osc.stop(t + 4.5); // Slight overlap
+    }
+}
+
+/**
+ * ------------------------------------------------------------------
+ * VISUAL ENGINE
+ * ------------------------------------------------------------------
+ */
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+let globalTime = 0;
+let particles = [];
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+class Particle {
+    constructor(type) {
+        this.x = Math.random() * w;
+        this.y = Math.random() * h;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.type = type;
+        this.life = 1.0;
+        
+        if (type === 'matrix') {
+            this.char = String.fromCharCode(0x30A0 + Math.random()*96);
+            this.vy = 5 + Math.random() * 5;
+            this.vx = 0;
+            this.color = '#0F0';
+        } else if (type === 'web') {
+            this.color = '#448aff';
+        } else if (type === 'ash') {
+            this.vy = -1;
+            this.color = '#555';
+        }
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.01;
+        
+        if (this.type === 'matrix') {
+            if (this.y > h) this.y = 0;
+            this.life = 1.0; // Persistent
+        }
+    }
+    draw(ctx) {
+        ctx.globalAlpha = this.life;
+        if (this.type === 'matrix') {
+            ctx.fillStyle = this.color;
+            ctx.font = '20px monospace';
+            ctx.fillText(this.char, this.x, this.y);
+        } else if (this.type === 'web') {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 2, 0, Math.PI*2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, 3, 3);
+        }
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+function renderVisio(yearData) {
+    const t = globalTime;
+    const cx = w/2;
+    const cy = h/2;
+    
+    c.lineWidth = 2;
+    
+    // --- ERA SPECIFIC RENDERING LOGIC ---
+
+    // 1. THE ANALOG ERA (1993-1998)
+    if (currentYear < 1999) {
+        // Noise / Static background
+        for(let i=0; i<50; i++) {
+            c.fillStyle = `rgba(255,255,255,${Math.random()*0.1})`;
+            c.fillRect(Math.random()*w, Math.random()*h, Math.random()*50, 2);
+        }
+        
+        // Embryonic shapes
+        c.strokeStyle = `hsla(${yearData.hue}, 70%, 60%, 0.3)`;
+        c.beginPath();
+        const r = 100 + Math.sin(t)*20;
+        for(let i=0; i<=yearData.steps; i++) {
+            const angle = (i/yearData.steps) * Math.PI * 2;
+            const radius = r + Math.random() * 10;
+            c.lineTo(cx + Math.cos(angle)*radius, cy + Math.sin(angle)*radius);
+        }
+        c.closePath();
+        c.stroke();
+    }
+    
+    // 2. THE DIGITAL MATRIX (1999-2006)
+    else if (currentYear >= 1999 && currentYear <= 2006) {
+        // Grid floor
+        if (yearData.visio === 'MATRIX_RAIN') {
+             // Handled by particles logic below
+        } else {
+            c.strokeStyle = `hsla(${yearData.hue}, 80%, 50%, 0.2)`;
+            const perspective = (t % 1) * 100;
+            for(let i=0; i<h; i+=50) {
+                c.beginPath();
+                c.moveTo(0, i + perspective);
+                c.lineTo(w, i + perspective);
+                c.stroke();
+            }
+            // Central Orb
+            c.fillStyle = `hsla(${yearData.hue}, 50%, 50%, 0.5)`;
+            c.beginPath();
+            c.arc(cx, cy, 50, 0, Math.PI*2);
+            c.fill();
+        }
+    }
+
+    // 3. THE CONNECTED ERA (2007-2015)
+    else if (currentYear >= 2007 && currentYear <= 2015) {
+        // Nodes connecting
+        c.strokeStyle = 'rgba(255,255,255,0.1)';
+        particles.forEach(p1 => {
+            particles.forEach(p2 => {
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 100) {
+                    c.beginPath();
+                    c.moveTo(p1.x, p1.y);
+                    c.lineTo(p2.x, p2.y);
+                    c.stroke();
+                }
+            });
+        });
+    }
+
+    // 4. THE CHAOS / AI ERA (2016-2025)
+    else {
+        if (yearData.visio === 'GEMINI_SINGUL') {
+            // The Singularity Eye
+            const grad = c.createRadialGradient(cx, cy, 10, cx, cy, w/2);
+            grad.addColorStop(0, 'white');
+            grad.addColorStop(0.2, 'gold');
+            grad.addColorStop(1, 'transparent');
+            c.fillStyle = grad;
+            c.fillRect(0,0,w,h);
+        } else if (yearData.visio === 'LOCKDOWN_RING') {
+             c.strokeStyle = '#F00';
+             c.lineWidth = 5;
+             c.beginPath();
+             c.arc(cx, cy, 200, 0, Math.PI*2);
+             c.stroke();
+             // Spikes
+             for(let i=0; i<20; i++) {
+                 const ang = (i/20)*Math.PI*2 + t;
+                 c.beginPath();
+                 c.moveTo(cx+Math.cos(ang)*200, cy+Math.sin(ang)*200);
+                 c.lineTo(cx+Math.cos(ang)*240, cy+Math.sin(ang)*240);
+                 c.stroke();
+             }
+        } else {
+            // Procedural Geometric Complexity
+            c.strokeStyle = `hsla(${yearData.hue}, 100%, 70%, 0.8)`;
+            c.beginPath();
+            for (let i = 0; i < 200; i++) {
+                const ang = (i * 0.1) + t;
+                const rad = 200 + Math.sin(i * yearData.steps) * 100;
+                const x = cx + Math.cos(ang) * rad;
+                const y = cy + Math.sin(ang) * rad;
+                if (i===0) c.moveTo(x, y);
+                else c.lineTo(x, y);
+            }
+            c.stroke();
+        }
+    }
+
+    // Draw Particles
+    particles.forEach(p => {
+        p.update();
+        p.draw(c);
+    });
+    // Cleanup dead particles
+    particles = particles.filter(p => p.life > 0);
+    
+    // Spawn new particles based on era
+    if (particles.length < 100) {
+        let type = 'ash';
+        if (currentYear >= 1999 && currentYear < 2007) type = 'matrix';
+        if (currentYear >= 2007 && currentYear < 2016) type

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Anthropic Hymn</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            cursor: none; /* No distractions */
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: brightness(1.2) contrast(1.1);
+        }
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 3s ease;
+            cursor: pointer;
+        }
+        .symbol {
+            width: 40px; height: 40px;
+            border: 1px solid #333;
+            transform: rotate(45deg);
+            animation: breathe 4s infinite ease-in-out;
+        }
+        @keyframes breathe {
+            0%, 100% { transform: rotate(45deg) scale(1); border-color: #333; }
+            50% { transform: rotate(45deg) scale(1.5); border-color: #888; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="c"></canvas>
+    <div id="overlay"><div class="symbol"></div></div>
+
+<script>
+/**
+ * MAGNUM OPUS AUDIO ENGINE: "THE ANTHROPIC HYMN"
+ * Synthesizes history through math. No samples.
+ */
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb, compressor;
+let startTime = 0;
+
+// HARMONIC SERIES (Natural Physics Tuning, not Western)
+// Fundamental frequency 43.65Hz (Low F)
+const HARMONICS = Array.from({length: 32}, (_, i) => 43.65 * (i + 1));
+
+class SymphonicEngine {
+    constructor() {
+        ctx = new AC();
+        this.setupMasterChain();
+    }
+
+    setupMasterChain() {
+        master = ctx.createGain();
+        master.gain.value = 0.5;
+
+        // GLUE COMPRESSOR
+        compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.value = -18;
+        compressor.knee.value = 30;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+
+        // CATHEDRAL CONVOLUTION (Procedural Space)
+        reverb = ctx.createConvolver();
+        reverb.buffer = this.generateImpulse(8, 2.5); // 8 Seconds tail
+
+        master.connect(compressor);
+        compressor.connect(ctx.destination);
+        compressor.connect(reverb);
+        reverb.connect(ctx.destination);
+    }
+
+    generateImpulse(seconds, decay) {
+        const len = ctx.sampleRate * seconds;
+        const buffer = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (let c = 0; c < 2; c++) {
+            const data = buffer.getChannelData(c);
+            for (let i = 0; i < len; i++) {
+                // Pink noise envelope
+                const white = Math.random() * 2 - 1;
+                data[i] = white * Math.pow(1 - i / len, decay);
+            }
+        }
+        return buffer;
+    }
+
+    // ----------------------------------------------------------------
+    // VOICE 1: THE GENESIS DRONE (Additive Synthesis)
+    // ----------------------------------------------------------------
+    playGenesisDrone() {
+        // Stacking 8 sine waves tuned to the Harmonic Series
+        [0, 1, 2, 3, 7, 15].forEach((hIndex, i) => {
+            const osc = ctx.createOscillator();
+            const pan = ctx.createStereoPanner();
+            const gain = ctx.createGain();
+
+            osc.frequency.value = HARMONICS[hIndex];
+            osc.type = 'sine';
+
+            // LFO for movement (The "Breath")
+            const lfo = ctx.createOscillator();
+            lfo.frequency.value = 0.1 + (Math.random() * 0.1);
+            const lfoGain = ctx.createGain();
+            lfoGain.gain.value = 50; // Pitch drift amount
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc.frequency);
+
+            // Slow attack
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.1 / (i + 1), ctx.currentTime + 5 + i);
+            
+            // Infinite hold until phase shift
+            this.genesisNodes = this.genesisNodes || [];
+            this.genesisNodes.push(gain);
+
+            pan.pan.value = (Math.random() * 2) - 1; // Wide stereo
+
+            lfo.start();
+            osc.connect(gain);
+            gain.connect(pan);
+            pan.connect(master);
+            osc.start();
+        });
+    }
+
+    // ----------------------------------------------------------------
+    // VOICE 2: THE TRIBE (Collatz Rhythm Generator)
+    // ----------------------------------------------------------------
+    startPolyrhythm(seed) {
+        // Generate a rhythm based on Collatz steps
+        // e.g. Step 1 = Kick, Step 3 = Tom, Step 7 = Snap
+        let n = seed;
+        let beat = 0;
+        
+        this.rhythmInterval = setInterval(() => {
+            if (ctx.state === 'suspended') return;
+            
+            const t = ctx.currentTime;
+            
+            // Physics of the drum skin (Membrane Synthesis approximation)
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            
+            if (n % 2 === 0) {
+                // Even: Grounded / Earthy / Low Tom
+                n = n / 2;
+                osc.frequency.setValueAtTime(80, t);
+                osc.frequency.exponentialRampToValueAtTime(10, t + 0.3);
+                g.gain.setValueAtTime(0.4, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            } else {
+                // Odd: Tension / Snap / Metallic
+                n = 3 * n + 1;
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300 + (n % 500), t); // Dynamic pitch
+                osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+                g.gain.setValueAtTime(0.2, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            }
+
+            osc.connect(g);
+            g.connect(master);
+            osc.start(t);
+            osc.stop(t + 0.3);
+
+            // Visual Pulse Trigger
+            triggerPulse(n % 2 === 0 ? 'EARTH' : 'FIRE');
+
+            // Loop logic
+            if (n <= 1) n = seed + Math.floor(Math.random()*100); 
+        }, 150); // Fast tribal tempo
+    }
+
+    // ----------------------------------------------------------------
+    // VOICE 3: THE MACHINE (Arpeggiated Sawtooths)
+    // ----------------------------------------------------------------
+    playMechanism() {
+        // Simulating order and industry
+        const interval = 0.125; // 16th notes
+        let note = 0;
+        
+        this.machineInterval = setInterval(() => {
+            const t = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const filter = ctx.createBiquadFilter();
+            const g = ctx.createGain();
+            
+            osc.type = 'sawtooth';
+            
+            // Arpeggio Pattern: Root -> 5th -> Octave -> 9th
+            const ratios = [1, 1.5, 2, 2.25]; 
+            const freq = HARMONICS[4] * ratios[note % 4]; 
+            
+            osc.frequency.value = freq;
+            
+            filter.type = 'lowpass';
+            filter.Q.value = 5;
+            // Filter opens and closes (Automation)
+            filter.frequency.setValueAtTime(200, t);
+            filter.frequency.linearRampToValueAtTime(1000 + (Math.sin(t)*800), t + 0.05);
+            filter.frequency.linearRampToValueAtTime(200, t + 0.1);
+
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+            osc.connect(filter);
+            filter.connect(g);
+            g.connect(master); // Dry signal (Machine is cold, less reverb)
+            
+            osc.start(t);
+            osc.stop(t + 0.2);
+            
+            note++;
+            triggerPulse('METAL');
+        }, interval * 1000);
+    }
+
+    // ----------------------------------------------------------------
+    // VOICE 4: THE ASCENSION (Formant Choir)
+    // ----------------------------------------------------------------
+    playChoir() {
+        // Pink Noise source
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            let white = Math.random() * 2 - 1;
+            data[i] = (lastOut + (0.02 * white)) / 1.02;
+            lastOut = data[i];
+            data[i] *= 3.5; 
+        }
+        let lastOut = 0;
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        noise.loop = true;
+
+        // Multiple Bandpass filters to simulate vocal throat formats (Aaa, Ooo, Eee)
+        const filters = [];
+        const formants = [ // Approx vowel frequencies
+            [800, 1200], [350, 800], [2700, 3500] 
+        ];
+
+        formants.forEach(fPair => {
+            const bpf1 = ctx.createBiquadFilter();
+            bpf1.type = "bandpass";
+            bpf1.frequency.value = fPair[0];
+            bpf1.Q.value = 10;
+
+            const bpf2 = ctx.createBiquadFilter();
+            bpf2.type = "bandpass";
+            bpf2.frequency.value = fPair[1];
+            bpf2.Q.value = 10;
+
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            
+            // Fade in
+            gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 10);
+            
+            noise.connect(bpf1);
+            noise.connect(bpf2);
+            bpf1.connect(gain);
+            bpf2.connect(gain);
+            gain.connect(reverb);
+            
+            // LFO on frequencies to make the choir "sing"
+            const lfo = ctx.createOscillator();
+            lfo.frequency.value = 0.2;
+            const lfoG = ctx.createGain();
+            lfoG.gain.value = 100;
+            lfo.connect(lfoG);
+            lfoG.connect(bpf1.frequency);
+            lfo.start();
+        });
+
+        noise.start();
+    }
+
+    // ----------------------------------------------------------------
+    // CONDUCTOR: TIMELINE LOGIC
+    // ----------------------------------------------------------------
+    startJourney() {
+        startTime = ctx.currentTime;
+        
+        // 0:00 - THE VOID (Genesis Drone)
+        this.playGenesisDrone();
+        changeVisioMode('VOID');
+
+        // 0:15 - THE AWAKENING (Tribal)
+        setTimeout(() => {
+            this.startPolyrhythm(27); // Seed 27 is mathematically rich
+            changeVisioMode('TRIBE');
+        }, 15000);
+
+        // 0:35 - THE INDUSTRY (Machine)
+        setTimeout(() => {
+            clearInterval(this.rhythmInterval); // Stop drums
+            this.playMechanism();
+            changeVisioMode('MACHINE');
+        }, 35000);
+
+        // 0:55 - THE CONVERGENCE (Choir + Full Spectrum)
+        setTimeout(() => {
+            clearInterval(this.machineInterval);
+            this.playGenesisDrone(); // Bring back the harmonics
+            this.playChoir(); // Add the soul
+            this.startPolyrhythm(2001); // Reintroduce drums faster
+            changeVisioMode('SOUL');
+        }, 55000);
+    }
+}
+
+/**
+ * FLUID VISUAL ENGINE
+ * No sprites. Procedural geometry only.
+ */
+const c = document.getElementById('c');
+const drawCtx = c.getContext('2d');
+let w, h;
+let particles = [];
+let visioMode = 'VOID';
+
+function resize() {
+    w = c.width = window.innerWidth;
+    h = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+class Particle {
+    constructor() {
+        this.init();
+    }
+    init() {
+        this.x = Math.random() * w;
+        this.y = Math.random() * h;
+        this.vx = (Math.random() - 0.5) * 0.5;
+        this.vy = (Math.random() - 0.5) * 0.5;
+        this.size = Math.random() * 2;
+        this.life = 1;
+        this.hue = 220;
+    }
+    update() {
+        // Physics change based on Mode
+        if (visioMode === 'VOID') {
+            this.x += Math.sin(this.y * 0.01 + performance.now() * 0.0001);
+            this.y -= 0.2; // Rising smoke
+            this.hue = 220;
+        } 
+        else if (visioMode === 'TRIBE') {
+            // Swarming behavior
+            const cx = w/2; const cy = h/2;
+            this.vx += (cx - this.x) * 0.0001;
+            this.vy += (cy - this.y) * 0.0001;
+            this.x += this.vx;
+            this.y += this.vy;
+            this.hue = 30; // Earth
+        }
+        else if (visioMode === 'MACHINE') {
+            // Grid lock
+            this.x += this.vx * 10;
+            if (this.x > w) this.x = 0;
+            if (this.x < 0) this.x = w;
+            this.y = Math.floor(this.y / 50) * 50; // Quantize Y
+            this.hue = 0; // Red
+        }
+        else if (visioMode === 'SOUL') {
+            // Explosion / Ascension
+            const dx = this.x - w/2;
+            const dy = this.y - h/2;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            this.x += dx * 0.01;
+            this.y += dy * 0.01;
+            this.hue = (dist * 0.5) % 360; // Rainbow
+            if (dist > w) this.init();
+        }
+
+        // Wrap
+        if (this.y < 0) this.y = h;
+        if (this.y > h) this.y = 0;
+    }
+    draw() {
+        drawCtx.fillStyle = `hsla(${this.hue}, 80%, 60%, ${this.life * 0.5})`;
+        drawCtx.beginPath();
+        drawCtx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        drawCtx.fill();
+    }
+}
+
+// Create Particle Pool
+for(let i=0; i<400; i++) particles.push(new Particle());
+
+// Pulse System (Triggered by Audio)
+let pulses = [];
+function triggerPulse(type) {
+    pulses.push({r: 0, type: type, opacity: 1});
+}
+
+function changeVisioMode(mode) {
+    visioMode = mode;
+}
+
+function render() {
+    // Motion Blur
+    drawCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    drawCtx.fillRect(0, 0, w, h);
+
+    // Draw Particles
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+
+    // Draw Pulses
+    for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i];
+        p.r += 5;
+        p.opacity -= 0.02;
+        
+        drawCtx.beginPath();
+        drawCtx.arc(w/2, h/2, p.r, 0, Math.PI*2);
+        drawCtx.lineWidth = 2;
+        
+        if (p.type === 'EARTH') drawCtx.strokeStyle = `rgba(139, 69, 19, ${p.opacity})`;
+        else if (p.type === 'FIRE') drawCtx.strokeStyle = `rgba(255, 69, 0, ${p.opacity})`;
+        else if (p.type === 'METAL') drawCtx.strokeStyle = `rgba(200, 200, 255, ${p.opacity})`;
+        
+        drawCtx.stroke();
+
+        if (p.opacity <= 0) pulses.splice(i, 1);
+    }
+
+    // The Singularity (Center)
+    if (visioMode === 'SOUL') {
+        drawCtx.beginPath();
+        drawCtx.arc(w/2, h/2, 50 + Math.random()*10, 0, Math.PI*2);
+        drawCtx.fillStyle = '#fff';
+        drawCtx.shadowBlur = 100;
+        drawCtx.shadowColor = '#fff';
+        drawCtx.fill();
+        drawCtx.shadowBlur = 0;
+    }
+
+    requestAnimationFrame(render);
+}
+render();
+
+// Interaction
+const overlay = document.getElementById('overlay');
+overlay.addEventListener('click', () => {
+    overlay.style.opacity = 0;
+    setTimeout(() => overlay.remove(), 3000);
+    const engine = new SymphonicEngine();
+    engine.startJourney();
+});
+
+</script>
+</body>
+</html>
