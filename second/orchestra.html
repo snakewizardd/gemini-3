@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BACH // SINGULARITY // SYMPHONY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Montserrat:wght@300;600&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #020202;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #e5c15d;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, #000 90%);
+            pointer-events: none;
+        }
+
+        #ui-container {
+            position: relative;
+            z-index: 20;
+            text-align: center;
+            transition: opacity 1s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 6vw;
+            margin: 0;
+            letter-spacing: 0.3em;
+            background: linear-gradient(to bottom, #fff, #e5c15d, #8a6e2f);
+            -webkit-background-clip: text;
+            color: transparent;
+            filter: drop-shadow(0 0 20px rgba(229, 193, 93, 0.3));
+            animation: pulseText 4s infinite ease-in-out;
+        }
+
+        h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
+            letter-spacing: 0.8em;
+            color: #8a6e2f;
+            margin-top: 0px;
+            margin-bottom: 50px;
+            text-transform: uppercase;
+            opacity: 0.7;
+        }
+
+        button {
+            background: rgba(229, 193, 93, 0.05);
+            color: #e5c15d;
+            border: 1px solid #e5c15d;
+            padding: 20px 50px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 4px;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(229, 193, 93, 0.1);
+        }
+
+        button:hover {
+            background: rgba(229, 193, 93, 0.2);
+            box-shadow: 0 0 50px rgba(229, 193, 93, 0.4);
+            letter-spacing: 6px;
+        }
+
+        #status-bar {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            z-index: 15;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 0.4em;
+            color: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+        }
+
+        .movement-title {
+            display: block;
+            font-size: 1.2rem;
+            color: #e5c15d;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(229, 193, 93, 0.5);
+        }
+
+        @keyframes pulseText {
+            0%, 100% { opacity: 0.9; }
+            50% { opacity: 0.6; }
+        }
+
+        /* CRT Scanline Effect */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px;
+            z-index: 99;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div id="overlay"></div>
+    <canvas id="canvas"></canvas>
+
+    <div id="ui-container">
+        <div>
+            <h1>SINGULARITY</h1>
+            <h2>Generative Symphony</h2>
+            <button id="btn-start">Initialize Audio Core</button>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        <span id="move-title" class="movement-title"></span>
+        <span id="move-desc">AWAITING CONDUCTOR</span>
+    </div>
+
+    <script>
+        /**
+         * SINGULARITY ENGINE v2.0
+         * High-fidelity Generative Audio Engine
+         */
+
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            rootFreq: 36.71, // D1 (Deep Bass)
+            tempo: 100,
+            lookahead: 25.0, // ms
+            scheduleAheadTime: 0.1 // s
+        };
+
+        // D Harmonic Minor (Exotic, Cinematic)
+        const SCALE = [0, 2, 3, 5, 7, 8, 11]; 
+
+        // Global Audio State
+        const CTX = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        let masterGain;
+        let compressor;
+        let reverbNode;
+        let analyser;
+        
+        let nextNoteTime = 0.0;
+        let timerID;
+        let current16thNote = 0;
+        let measureCount = 0;
+        let movementIndex = 0;
+        let isPlaying = false;
+
+        // --- AUDIO ENGINE ---
+
+        function initAudio() {
+            audioCtx = new CTX();
+            
+            // 1. Dynamics Compressor (The Glue)
+            compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.value = -10;
+            compressor.knee.value = 40;
+            compressor.ratio.value = 12;
+            compressor.attack.value = 0.005;
+            compressor.release.value = 0.25;
+
+            // 2. Convolution Reverb (The Hall)
+            reverbNode = audioCtx.createConvolver();
+            generateImpulse(3.5); // 3.5s tail
+
+            // 3. Master Gain
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.8;
+
+            // 4. Analyser (The Visuals)
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.85;
+
+            // Routing: Voices -> Compressor -> Reverb -> Analyser -> Master -> Out
+            compressor.connect(reverbNode);
+            reverbNode.connect(masterGain);
+            // Dry signal mix
+            compressor.connect(masterGain);
+            
+            masterGain.connect(analyser);
+            masterGain.connect(audioCtx.destination);
+        }
+
+        function generateImpulse(duration) {
+            const rate = audioCtx.sampleRate;
+            const length = rate * duration;
+            const impulse = audioCtx.createBuffer(2, length, rate);
+            const L = impulse.getChannelData(0);
+            const R = impulse.getChannelData(1);
+
+            for (let i = 0; i < length; i++) {
+                // Exponential decay
+                const decay = Math.pow(1 - i / length, 2.5);
+                L[i] = (Math.random() * 2 - 1) * decay;
+                R[i] = (Math.random() * 2 - 1) * decay;
+            }
+            reverbNode.buffer = impulse;
+        }
+
+        // --- SYNTHESIS ---
+
+        function getFreq(degree, octave) {
+            const scaleLen = SCALE.length;
+            const octShift = Math.floor(degree / scaleLen);
+            const noteIndex = (degree % scaleLen + scaleLen) % scaleLen;
+            const midi = 26 + (octave + octShift) * 12 + SCALE[noteIndex]; // 26 is D1
+            return 440 * Math.pow(2, (midi - 69) / 12);
+        }
+
+        class Synthesizer {
+            constructor(type, pan) {
+                this.type = type;
+                this.pan = pan;
+            }
+
+            play(freq, time, dur, vel) {
+                if (!audioCtx) return;
+
+                const panner = audioCtx.createStereoPanner();
+                panner.pan.value = this.pan + (Math.random() * 0.1 - 0.05);
+
+                const mainGain = audioCtx.createGain();
+                
+                // Connect to compressor (bus)
+                panner.connect(compressor);
+
+                // ENSEMBLE GENERATOR (Layering)
+                const count = this.type === 'bass' ? 2 : (this.type === 'pad' ? 4 : 3);
+                
+                for(let i=0; i<count; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const oscGain = audioCtx.createGain();
+                    
+                    // Timbre Definition
+                    if (this.type === 'strings_staccato') {
+                        osc.type = 'sawtooth';
+                        // Spiccato envelope
+                        oscGain.gain.setValueAtTime(0, time);
+                        oscGain.gain.linearRampToValueAtTime(vel * 0.15, time + 0.05);
+                        oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+                    } 
+                    else if (this.type === 'brass') {
+                        osc.type = 'sawtooth';
+                        // Brass swell filter
+                        const filter = audioCtx.createBiquadFilter();
+                        filter.type = 'lowpass';
+                        filter.Q.value = 2;
+                        filter.frequency.setValueAtTime(300, time);
+                        filter.frequency.exponentialRampToValueAtTime(2500, time + 0.1); // The "Blat"
+                        
+                        oscGain.gain.setValueAtTime(0, time);
+                        oscGain.gain.linearRampToValueAtTime(vel * 0.3, time + 0.1);
+                        oscGain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+                        
+                        osc.connect(filter);
+                        filter.connect(oscGain);
+                        oscGain.connect(mainGain);
+                        
+                        osc.frequency.value = freq;
+                        osc.detune.value = (Math.random() - 0.5) * 15; // Wide detune
+                        osc.start(time);
+                        osc.stop(time + dur + 1);
+                        continue; // Skip standard connect
+                    }
+                    else if (this.type === 'pad') {
+                        osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+                        oscGain.gain.setValueAtTime(0, time);
+                        oscGain.gain.linearRampToValueAtTime(vel * 0.1, time + 1.0);
+                        oscGain.gain.linearRampToValueAtTime(0, time + dur + 2.0);
+                    }
+                    else if (this.type === 'bass') {
+                        osc.type = 'sawtooth';
+                        const filter = audioCtx.createBiquadFilter();
+                        filter.type = 'lowpass';
+                        filter.frequency.value = 150;
+                        
+                        oscGain.gain.setValueAtTime(0, time);
+                        oscGain.gain.linearRampToValueAtTime(vel * 0.4, time + 0.2);
+                        oscGain.gain.exponentialRampToValueAtTime(0.001, time + dur + 0.5);
+                        
+                        osc.connect(filter);
+                        filter.connect(oscGain);
+                        oscGain.connect(mainGain);
+                        
+                        osc.frequency.value = freq;
+                        osc.detune.value = (Math.random() - 0.5) * 8;
+                        osc.start(time);
+                        osc.stop(time + dur + 1);
+                        continue;
+                    }
+
+                    // Standard connections
+                    osc.frequency.value = freq;
+                    // Detune creates the "Symphonic" width
+                    osc.detune.value = (Math.random() - 0.5) * (this.type === 'pad' ? 10 : 20);
+                    
+                    osc.connect(oscGain);
+                    oscGain.connect(mainGain);
+                    osc.start(time);
+                    osc.stop(time + dur + 2.0);
+                }
+
+                mainGain.connect(panner);
+                
+                // Garbage collection safety
+                setTimeout(() => {
+                    mainGain.disconnect();
+                    panner.disconnect();
+                }, (dur + 3) * 1000);
+            }
+
+            playPerc(time, type) {
+                if (!audioCtx) return;
+                
+                const gain = audioCtx.createGain();
+                gain.connect(compressor);
+
+                if (type === 'hit') {
+                    // Orchestral Bass Drum / Timpani
+                    const osc = audioCtx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(120, time);
+                    osc.frequency.exponentialRampToValueAtTime(20, time + 0.5);
+                    
+                    gain.gain.setValueAtTime(1.0, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.8);
+                    
+                    // Add some noise for "skin" texture
+                    const noise = audioCtx.createBufferSource();
+                    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for(let i=0; i<d.length; i++) d[i] = (Math.random()*2-1) * 0.5;
+                    noise.buffer = buf;
+                    
+                    const lp = audioCtx.createBiquadFilter();
+                    lp.type = 'lowpass';
+                    lp.frequency.value = 300;
+                    
+                    osc.connect(gain);
+                    noise.connect(lp);
+                    lp.connect(gain);
+                    
+                    osc.start(time); osc.stop(time + 0.8);
+                    noise.start(time); noise.stop(time + 0.8);
+                }
+                else if (type === 'snare') {
+                    const noise = audioCtx.createBufferSource();
+                    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for(let i=0; i<d.length; i++) d[i] = Math.random() * 2 - 1;
+                    noise.buffer = buf;
+
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.value = 1500;
+
+                    gain.gain.setValueAtTime(0.4, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    noise.start(time); noise.stop(time + 0.3);
+                }
+            }
+        }
+
+        // --- COMPOSITION LOGIC ---
+
+        const Inst = {
+            violins: new Synthesizer('strings_staccato', -0.5),
+            cellos: new Synthesizer('strings_staccato', 0.5),
+            bass: new Synthesizer('bass', 0),
+            brass: new Synthesizer('brass', 0.2),
+            choir: new Synthesizer('pad', 0)
+        };
+
+        const CHORD_PROG = [
+            [0, 2, 4],    // i
+            [5, 7, 9],    // VI
+            [3, 5, 7],    // iv
+            [4, 6, 8, 1]  // V7 (Dominant tension)
+        ];
+
+        function scheduleNote(beatNumber, time) {
+            const measure = Math.floor(measureCount);
+            const barStep = Math.floor(measure / 4); // Changes every 4 bars roughly
+            
+            // Determine Movement
+            let section = 0; // Intro
+            if (measure > 4) section = 1; // Build
+            if (measure > 12) section = 2; // Drive
+            if (measure > 20) section = 3; // Climax
+            if (measure > 28) section = 4; // Chaos/Res
+            if (measure > 36) { measureCount = 0; section = 0; } // Loop
+            
+            updateUI(section);
+
+            const chordIdx = measure % CHORD_PROG.length;
+            const chord = CHORD_PROG[chordIdx];
+            const root = chord[0];
+
+            // 1. The Foundation (Bass Drone)
+            if (beatNumber === 0 && measure % 2 === 0) {
+                Inst.bass.play(getFreq(root, 1), time, 4.0, 0.8);
+                if(section > 1) Inst.bass.play(getFreq(root, 0), time, 4.0, 1.0); // Sub bass
+            }
+
+            // 2. The Engine (String Ostinato)
+            if (section >= 1) {
+                // 16th note arpeggios
+                const arpNote = chord[beatNumber % chord.length];
+                // Velocity dynamics creates "groove"
+                const vel = (beatNumber % 4 === 0) ? 1.0 : 0.6;
+                
+                if (section === 4) {
+                    // Crazy runs in climax
+                     Inst.violins.play(getFreq(root + (beatNumber%8), 3), time, 0.15, vel);
+                } else {
+                     Inst.violins.play(getFreq(arpNote, 3), time, 0.15, vel);
+                }
+
+                // Counterpoint Cello
+                if (section >= 2 && beatNumber % 4 === 0) {
+                    const counterNote = chord[(beatNumber/4) % chord.length];
+                    Inst.cellos.play(getFreq(counterNote, 2), time, 0.3, 0.7);
+                }
+            }
+
+            // 3. The Power (Brass & Choir)
+            if (section >= 3) {
+                // Big Brass Stabs on beats
+                if (beatNumber === 0 || beatNumber === 10) {
+                    Inst.brass.play(getFreq(root, 2), time, 1.0, 0.9);
+                    Inst.brass.play(getFreq(chord[1], 2), time, 1.0, 0.8);
+                }
+                // Choir Pad
+                if (beatNumber === 0) {
+                    Inst.choir.play(getFreq(root, 4), time, 4.0, 0.4);
+                    Inst.choir.play(getFreq(chord[2], 4), time, 4.0, 0.4);
+                }
+            }
+
+            // 4. Percussion
+            if (section >= 2) {
+                if (beatNumber === 0) Inst.bass.playPerc(time, 'hit');
+                if (section >= 3) {
+                     if (beatNumber === 8) Inst.bass.playPerc(time, 'snare');
+                     if (beatNumber === 12) Inst.bass.playPerc(time, 'hit'); // Syncopation
+                }
+            }
+        }
+
+        function scheduler() {
+            // While there are notes that will need to play before the next interval, 
+            // schedule them and advance the pointer.
+            while (nextNoteTime < audioCtx.currentTime + CONFIG.scheduleAheadTime) {
+                scheduleNote(current16thNote, nextNoteTime);
+                
+                // Advance time by a 16th note
+                const secondsPerBeat = 60.0 / CONFIG.tempo;
+                nextNoteTime += 0.25 * secondsPerBeat;
+                
+                current16thNote++;
+                if (current16thNote === 16) {
+                    current16thNote = 0;
+                    measureCount++;
+                }
+            }
+            timerID = window.setTimeout(scheduler, CONFIG.lookahead);
+        }
+
+        // --- VISUALS ---
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let w, h;
+        let dataArray; // For FFT data
+
+        function resize() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function draw() {
+            requestAnimationFrame(draw);
+            
+            // Get frequency data if audio is initialized
+            let bassEnergy = 0;
+            let midEnergy = 0;
+            if (analyser) {
+                if(!dataArray) dataArray = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(dataArray);
+                
+                // Calculate average energy for bass (approx bins 0-10)
+                for(let i=0; i<10; i++) bassEnergy += dataArray[i];
+                bassEnergy = bassEnergy / 10 / 255; // Normalize 0-1
+
+                // Mids
+                for(let i=20; i<100; i++) midEnergy += dataArray[i];
+                midEnergy = midEnergy / 80 / 255;
+            }
+
+            // Background Trail
+            ctx.fillStyle = 'rgba(2, 2, 2, 0.2)';
+            ctx.fillRect(0, 0, w, h);
+
+            const cx = w/2;
+            const cy = h/2;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // Camera Shake on Bass
+            if(bassEnergy > 0.4) {
+                const shake = (bassEnergy - 0.4) * 20;
+                ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+            }
+
+            // Rotating Core
+            ctx.rotate(Date.now() * 0.0002);
+
+            // Draw FFT Rings
+            ctx.lineWidth = 2;
+            for(let i=0; i<3; i++) {
+                ctx.beginPath();
+                // Color shift
+                const alpha = 0.2 + (midEnergy * 0.8);
+                ctx.strokeStyle = `rgba(229, 193, 93, ${alpha})`; 
+                
+                const radius = 100 + (i * 60) + (bassEnergy * 100);
+                
+                // Jagged circle based on wave
+                for(let j=0; j<=Math.PI*2; j+=0.1) {
+                    const rOffset = (dataArray ? dataArray[Math.floor((j/(Math.PI*2))*50)] : 0) * 0.2;
+                    const x = Math.cos(j) * (radius + rOffset);
+                    const y = Math.sin(j) * (radius + rOffset);
+                    if(j===0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            // Center Sun
+            const sunGlow = ctx.createRadialGradient(0,0, 10, 0,0, 100);
+            sunGlow.addColorStop(0, '#fff');
+            sunGlow.addColorStop(0.2, '#e5c15d');
+            sunGlow.addColorStop(1, 'transparent');
+            ctx.fillStyle = sunGlow;
+            ctx.beginPath();
+            ctx.arc(0, 0, 20 + bassEnergy * 60, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // --- UI LOGIC ---
+
+        const MOVEMENT_NAMES = [
+            "I. ORIGIN", "II. AWAKENING", "III. ASCENSION", "IV. SINGULARITY", "V. ENTROPY"
+        ];
+
+        function updateUI(section) {
+            const title = document.getElementById('move-title');
+            const desc = document.getElementById('move-desc');
+            
+            if(title.innerText !== MOVEMENT_NAMES[section]) {
+                title.style.opacity = 0;
+                setTimeout(() => {
+                    title.innerText = MOVEMENT_NAMES[section];
+                    title.style.opacity = 1;
+                }, 500);
+            }
+            
+            let descriptor = "STRINGS & DRONE";
+            if(section === 2) descriptor = "FULL ORCHESTRA ENTRANCE";
+            if(section === 3) descriptor = "FORTISSIMO MAESTOSO";
+            if(section === 4) descriptor = "TEMPO RUBATO";
+            desc.innerText = descriptor;
+        }
+
+        document.getElementById('btn-start').addEventListener('click', () => {
+            if(isPlaying) return;
+            
+            // Hide Button
+            document.getElementById('ui-container').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui-container').style.display = 'none', 1000);
+
+            initAudio();
+            
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            isPlaying = true;
+            nextNoteTime = audioCtx.currentTime + 0.5;
+            scheduler();
+            draw();
+        });
+
+    </script>
+</body>
+</html>

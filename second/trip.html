@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUANTUM ROSS // OMEGA</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            width: 100vw;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.2) saturation(1.2);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Let clicks pass through to canvas if needed */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #header {
+            display: flex;
+            justify-content: space-between;
+            color: #00ffaa;
+            text-shadow: 0 0 10px #00ffaa;
+            font-size: 14px;
+            letter-spacing: 2px;
+        }
+
+        #phase-display {
+            text-align: center;
+            color: #fff;
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        #progress-container {
+            width: 100%;
+            height: 4px;
+            background: #111;
+            position: relative;
+        }
+
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #00ffaa;
+            box-shadow: 0 0 15px #00ffaa;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: #fff;
+            margin: 0 0 20px 0;
+            letter-spacing: -2px;
+            background: linear-gradient(90deg, #00ffaa, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        button {
+            background: transparent;
+            color: #00ffaa;
+            border: 2px solid #00ffaa;
+            padding: 15px 50px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #00ffaa;
+            color: #000;
+            box-shadow: 0 0 30px #00ffaa;
+        }
+
+        /* Glitch effect for text */
+        @keyframes scanline {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(100vh); }
+        }
+        .scan {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 2px;
+            background: rgba(255,255,255,0.1);
+            animation: scanline 5s linear infinite;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="c"></canvas>
+    <div class="scan"></div>
+
+    <div id="ui-layer">
+        <div id="header">
+            <span>SYS.QUANTUM.RENDER</span>
+            <span id="time-display">00:00:00</span>
+        </div>
+        <div id="phase-display">INITIALIZING...</div>
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1>OMEGA PAINTER</h1>
+        <button id="btn">INITIATE SEQUENCE</button>
+        <p style="color:#666; margin-top: 20px; font-size: 0.8rem;">AUDIO/VISUAL EXPERIENCE // 50 PHASES</p>
+    </div>
+
+    <script>
+        /* ----------------------------------------------------------------
+           CONFIGURATION
+           ---------------------------------------------------------------- */
+        const CONFIG = {
+            duration: 90000, // 90 seconds for 50 phases
+            phases: 50
+        };
+
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true }); // Optimized for glitch FX
+        let width, height, cx, cy;
+
+        let startTime = 0;
+        let isRunning = false;
+        let frameCount = 0;
+
+        // Resizing
+        const resize = () => {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            // Fill black on resize to prevent clearing
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0,0,width,height);
+        };
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ----------------------------------------------------------------
+           AUDIO ENGINE (Web Audio API)
+           ---------------------------------------------------------------- */
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            reverb: null,
+            filter: null,
+            scale: [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00], // C Lydianish
+            
+            init() {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                
+                // Master Chain: Limit -> Filter -> Reverb -> Out
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.4;
+
+                // Global Lowpass Filter (opens up over time)
+                this.filter = this.ctx.createBiquadFilter();
+                this.filter.type = 'lowpass';
+                this.filter.frequency.value = 200; // Starts muffled
+                this.filter.Q.value = 1;
+
+                // Convolver (Reverb) - Procedural Impulse Response
+                this.reverb = this.ctx.createConvolver();
+                this.reverb.buffer = this.createImpulse(3.0); // 3 seconds tail
+
+                // Routing
+                this.master.connect(this.filter);
+                this.filter.connect(this.ctx.destination);
+                this.filter.connect(this.reverb);
+                this.reverb.connect(this.ctx.destination);
+            },
+
+            createImpulse(duration) {
+                const rate = this.ctx.sampleRate;
+                const len = rate * duration;
+                const buffer = this.ctx.createBuffer(2, len, rate);
+                for (let c = 0; c < 2; c++) {
+                    const d = buffer.getChannelData(c);
+                    for (let i = 0; i < len; i++) {
+                        // Exponential decay noise
+                        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+                    }
+                }
+                return buffer;
+            },
+
+            // Plays a procedural tone based on current intensity
+            playTone(intensity, type) {
+                if (!this.ctx) return;
+                
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const pan = this.ctx.createStereoPanner();
+
+                // Select freq based on intensity (higher intensity = higher pitch/chaos)
+                let freqIndex = Math.floor(Math.random() * this.scale.length);
+                if (intensity > 0.8) freqIndex = Math.floor(Math.random() * this.scale.length); // Full range
+                else if (intensity < 0.3) freqIndex = Math.floor(Math.random() * 3); // Lows only
+                
+                let freq = this.scale[freqIndex];
+                
+                // Octave shift based on type
+                if (type === 'SPARKLE') freq *= 4;
+                if (type === 'BASS') freq /= 2;
+                if (type === 'GLITCH') freq = freq + (Math.random()*50 - 25);
+
+                osc.frequency.value = freq;
+                
+                // Synthesis Types
+                if (type === 'PAD') osc.type = 'triangle';
+                else if (type === 'GLITCH') osc.type = 'sawtooth';
+                else osc.type = 'sine';
+
+                // Panning
+                pan.pan.value = (Math.random() * 2) - 1;
+
+                // Envelope
+                const now = this.ctx.currentTime;
+                const dur = type === 'PAD' ? 2.0 : 0.5;
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(type === 'BASS' ? 0.3 : 0.1, now + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+                osc.connect(pan);
+                pan.connect(this.master);
+                
+                osc.start();
+                osc.stop(now + dur + 0.1);
+            },
+
+            setFilter(val) {
+                // val is 0 to 1
+                if(this.filter) {
+                    // Map 0-1 to 200Hz - 10000Hz
+                    const freq = 200 + (val * 8000);
+                    this.filter.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.5);
+                }
+            }
+        };
+
+        /* ----------------------------------------------------------------
+           PHASE DEFINITIONS (THE 50 STEPS)
+           ---------------------------------------------------------------- */
+        
+        // We group 50 phases into "Archetypes" to manage the code logic
+        const PHASES_LIST = [
+            // 1-5: THE VOID
+            "QUANTUM SINGULARITY", "DARK MATTER INJECTION", "VACUUM FLUCTUATION", "PRE-BANG TENSION", "PHOTON GENESIS",
+            // 6-10: THE GRID
+            "DIMENSIONAL TETHERING", "X-AXIS CALIBRATION", "Y-AXIS CALIBRATION", "Z-DEPTH RENDERING", "WIREFRAME MATRIX",
+            // 11-15: THE HORIZON
+            "GRADIENT DESCENT", "NEON ATMOSPHERE", "HORIZON DELIMITER", "SKYBOX RENDERING", "SOLAR FLARE ALPHA",
+            // 16-20: THE TERRAIN
+            "TECTONIC SHIFT", "POLYGONAL MOUNTAINS", "VALLEY ALGORITHMS", "EROSION SIMULATION", "PEAK GEOMETRY",
+            // 21-25: THE FLUIDS
+            "LIQUID STATE LOGIC", "OCEANIC DATA", "REFLECTION MAPPING", "WAVEFORM SYNTHESIS", "TIDAL FORCES",
+            // 26-30: THE FLORA
+            "SEED ALGORITHM", "RECURSIVE BRANCHING", "FRACTAL LEAVES", "DIGITAL BLOOM", "BIOLUMINESCENCE",
+            // 31-35: THE STRUCTURES
+            "MONOLITH EXTRACTION", "CITY GENERATION", "DATA SKYSCRAPERS", "LIGHTWAY NETWORKS", "URBAN DENSITY",
+            // 36-40: THE WEATHER
+            "CLOUD COMPUTING", "ACID RAIN CYCLES", "LIGHTNING RENDERING", "WIND VECTORS", "STORM FRONT",
+            // 41-45: THE CELESTIAL
+            "STARFIELD ARRAY", "NEBULA GASES", "GALACTIC SPIRAL", "COMET TRAJECTORIES", "SUPERNOVA PREP",
+            // 46-50: THE COLLAPSE
+            "REALITY DISTORTION", "MEMORY LEAK", "PIXEL SORTING", "SYSTEM CRASH", "ENTROPY FINAL"
+        ];
+
+        /* ----------------------------------------------------------------
+           VISUAL FX LIBRARY
+           ---------------------------------------------------------------- */
+        
+        function drawVoid(intensity) {
+            // Random faint particles
+            ctx.fillStyle = `rgba(255, 255, 255, ${intensity * 0.1})`;
+            for(let i=0; i<5; i++) {
+                ctx.fillRect(Math.random()*width, Math.random()*height, 2, 2);
+            }
+            // Center pulse
+            if(Math.random() > 0.9) {
+                ctx.strokeStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(cx, cy, Math.random()*200, 0, Math.PI*2);
+                ctx.stroke();
+            }
+        }
+
+        function drawGrid(intensity, time) {
+            ctx.strokeStyle = `hsl(${180 + Math.sin(time)*50}, 100%, 50%)`;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.2;
+            
+            // Perspective Floor
+            ctx.beginPath();
+            ctx.moveTo(0, height);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(width, height);
+            ctx.stroke();
+
+            // Horizontal lines moving down
+            let offset = (Date.now() / 10) % 50;
+            let y = cy + offset + (Math.random()*50);
+            if (y < height) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+        }
+
+        function drawHorizon(intensity) {
+            // Smooth gradient fills
+            const grad = ctx.createLinearGradient(0, 0, 0, height);
+            grad.addColorStop(0, `hsla(${200 + intensity*60}, 80%, 10%, 0.1)`);
+            grad.addColorStop(0.5, `hsla(${300 + intensity*60}, 80%, 40%, 0.1)`);
+            grad.addColorStop(1, `hsla(0, 0%, 0%, 0.1)`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,width,height);
+        }
+
+        function drawTerrain(intensity) {
+            // Jagged lines
+            ctx.beginPath();
+            ctx.moveTo(0, height);
+            let segments = 20;
+            let amp = 100 + (intensity * 200);
+            
+            for(let i=0; i<=segments; i++) {
+                let x = (width/segments) * i;
+                let noise = Math.random() * amp;
+                ctx.lineTo(x, cy + 100 - noise);
+            }
+            ctx.lineTo(width, height);
+            ctx.fillStyle = `rgba(0, ${100 + intensity*155}, ${200-intensity*100}, 0.5)`;
+            ctx.fill();
+        }
+
+        function drawFlora(intensity) {
+            // Recursive trees growing from bottom
+            const startX = Math.random() * width;
+            const startH = 50 + Math.random() * 100;
+            
+            ctx.strokeStyle = `hsl(${100 + Math.random()*50}, 70%, 60%)`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(startX, height);
+            ctx.lineTo(startX, height - startH);
+            ctx.stroke();
+
+            // Simple branches
+            ctx.beginPath();
+            ctx.moveTo(startX, height - startH);
+            ctx.lineTo(startX - 20, height - startH - 20);
+            ctx.moveTo(startX, height - startH);
+            ctx.lineTo(startX + 20, height - startH - 20);
+            ctx.stroke();
+            
+            if (intensity > 0.5) {
+                // Flowers
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(startX + 20, height - startH - 20, 3, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function drawStructures(intensity) {
+            // Vertical blocks
+            let x = Math.random() * width;
+            let w = 20 + Math.random() * 50;
+            let h = 100 + Math.random() * 300;
+            
+            ctx.fillStyle = `hsla(${280}, 60%, 20%, 0.3)`;
+            ctx.fillRect(x, height - h, w, h);
+            
+            // Windows
+            ctx.fillStyle = `hsla(${50}, 100%, 80%, 0.8)`;
+            if(Math.random()>0.5) {
+                ctx.fillRect(x + 5, height - h + (Math.random()*h), 5, 5);
+            }
+        }
+
+        function drawCelestial(intensity) {
+            // Stars
+            let x = Math.random() * width;
+            let y = Math.random() * cy; // Upper half
+            ctx.fillStyle = '#fff';
+            let size = Math.random() * 3;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Aura
+            ctx.fillStyle = `rgba(255,255,255,0.1)`;
+            ctx.beginPath();
+            ctx.arc(x, y, size*4, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function drawGlitch() {
+            // Pixel Shift
+            const sliceHeight = 20 + Math.random() * 50;
+            const y = Math.random() * height;
+            
+            try {
+                // Getting image data can be heavy, do it sparingly
+                if (Math.random() > 0.7) {
+                    const imgData = ctx.getImageData(0, y, width, sliceHeight);
+                    const offset = (Math.random() - 0.5) * 50;
+                    ctx.putImageData(imgData, offset, y);
+                }
+                
+                // Invert colors strip
+                if (Math.random() > 0.9) {
+                    ctx.globalCompositeOperation = 'difference';
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(0, Math.random()*height, width, 20);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+            } catch (e) {
+                // Ignore CORS issues or memory glitches
+            }
+        }
+
+        /* ----------------------------------------------------------------
+           MAIN LOOP
+           ---------------------------------------------------------------- */
+        
+        function runLoop() {
+            if (!isRunning) return;
+            requestAnimationFrame(runLoop);
+
+            const elapsed = Date.now() - startTime;
+            let progress = elapsed / CONFIG.duration;
+            if (progress > 1) progress = 1;
+
+            // Update UI
+            const phaseIndex = Math.floor(progress * CONFIG.phases); // 0 to 49
+            const currentPhaseName = PHASES_LIST[Math.min(phaseIndex, 49)];
+            
+            const phaseDisplay = document.getElementById('phase-display');
+            if (phaseDisplay.innerText !== currentPhaseName) {
+                phaseDisplay.style.opacity = 0;
+                setTimeout(() => {
+                    phaseDisplay.innerText = `${phaseIndex + 1}/50: ${currentPhaseName}`;
+                    phaseDisplay.style.opacity = 1;
+                }, 100);
+            }
+            
+            document.getElementById('progress-bar').style.width = (progress * 100) + '%';
+            document.getElementById('time-display').innerText = (elapsed/1000).toFixed(2);
+
+            // AUDIO UPDATE
+            // Open filter as we progress
+            AudioEngine.setFilter(progress);
+            
+            // Randomly trigger notes based on phase density
+            // Higher progress = more frequent notes
+            if (Math.random() < (0.02 + (progress * 0.1))) {
+                let type = 'PAD';
+                if (phaseIndex < 5) type = 'BASS';
+                else if (phaseIndex > 45) type = 'GLITCH';
+                else if (phaseIndex > 20 && phaseIndex < 30) type = 'SPARKLE';
+                
+                AudioEngine.playTone(progress, type);
+            }
+
+
+            // VISUAL ROUTER (The 50 Phase Logic mapped to Archetypes)
+            
+            // Reset Common Settings
+            ctx.globalAlpha = 1.0;
+            ctx.lineWidth = 1;
+
+            if (phaseIndex < 5) {
+                // 1-5: VOID
+                drawVoid(progress);
+            } 
+            else if (phaseIndex < 10) {
+                // 6-10: GRID
+                drawGrid(progress, elapsed);
+            }
+            else if (phaseIndex < 15) {
+                // 11-15: HORIZON
+                drawHorizon(progress);
+            }
+            else if (phaseIndex < 20) {
+                // 16-20: TERRAIN
+                drawTerrain((phaseIndex-15)/5);
+                if(Math.random() > 0.9) drawGrid(progress, elapsed); // Residue
+            }
+            else if (phaseIndex < 25) {
+                // 21-25: FLUIDS
+                ctx.fillStyle = `rgba(0, 50, 100, 0.05)`;
+                ctx.fillRect(0, height/2, width, height/2); // Water fill
+                // Reflections
+                if(Math.random() > 0.8) {
+                    ctx.fillStyle = `rgba(255,255,255,0.2)`;
+                    ctx.fillRect(Math.random()*width, height/2 + Math.random()*100, 50, 2);
+                }
+            }
+            else if (phaseIndex < 30) {
+                // 26-30: FLORA
+                if(Math.random() > 0.5) drawFlora((phaseIndex-25)/5);
+            }
+            else if (phaseIndex < 35) {
+                // 31-35: STRUCTURES
+                if(Math.random() > 0.7) drawStructures(progress);
+            }
+            else if (phaseIndex < 40) {
+                // 36-40: WEATHER
+                // Rain
+                ctx.strokeStyle = `rgba(150, 150, 200, 0.5)`;
+                ctx.beginPath();
+                let rx = Math.random()*width;
+                let ry = Math.random()*height;
+                ctx.moveTo(rx, ry);
+                ctx.lineTo(rx+5, ry+20);
+                ctx.stroke();
+                // Clouds
+                if(Math.random() > 0.9) {
+                    ctx.fillStyle = `rgba(200,200,200,0.05)`;
+                    ctx.beginPath();
+                    ctx.arc(Math.random()*width, Math.random()*height/2, 50, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+            else if (phaseIndex < 45) {
+                // 41-45: CELESTIAL
+                if(Math.random() > 0.2) drawCelestial(progress);
+            }
+            else if (phaseIndex < 50) {
+                // 46-50: COLLAPSE
+                drawGlitch();
+                // Whiteout buildup
+                ctx.fillStyle = `rgba(255, 255, 255, 0.01)`;
+                ctx.fillRect(0,0,width,height);
+            }
+            else {
+                // FINISH
+                isRunning = false;
+                document.getElementById('phase-display').innerText = "SIMULATION COMPLETE";
+                document.getElementById('start-screen').style.display = 'flex';
+                document.getElementById('start-screen').style.background = 'rgba(255,255,255,0.9)';
+                document.querySelector('#start-screen h1').style.color = '#000';
+                document.querySelector('#start-screen h1').innerText = "REBOOT?";
+            }
+        }
+
+        /* ----------------------------------------------------------------
+           BOOT
+           ---------------------------------------------------------------- */
+        document.getElementById('btn').addEventListener('click', () => {
+            const ui = document.getElementById('start-screen');
+            ui.style.display = 'none';
+            
+            // Clear previous run
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0,0,width,height);
+            
+            AudioEngine.init();
+            if (AudioEngine.ctx.state === 'suspended') AudioEngine.ctx.resume();
+
+            startTime = Date.now();
+            isRunning = true;
+            runLoop();
+        });
+
+    </script>
+</body>
+</html>
