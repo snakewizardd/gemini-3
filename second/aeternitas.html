@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETERNITAS // TETRACTYS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap');
+
+        body {
+            margin: 0;
+            background: #050505;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* Soft bloom filter for the ethereal look */
+            filter: blur(1px) contrast(1.2) brightness(1.2);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: rgba(255, 215, 0, 0.7); /* Muted Gold */
+            transition: opacity 4s ease;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 20px;
+            margin-bottom: 3rem;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: transparent;
+            color: rgba(255, 215, 0, 0.8);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            padding: 20px 60px;
+            font-family: inherit;
+            font-size: 1.1rem;
+            letter-spacing: 6px;
+            cursor: pointer;
+            border-radius: 50%;
+            width: 200px;
+            height: 200px;
+            transition: all 2s ease;
+        }
+
+        button:hover {
+            background: rgba(255, 215, 0, 0.05);
+            border-color: rgba(255, 215, 0, 0.8);
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.1);
+            letter-spacing: 10px;
+        }
+
+        #readout {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 215, 0, 0.4);
+            font-size: 0.9rem;
+            letter-spacing: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 3s;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="sacred-geo"></canvas>
+    <div id="readout">CONSTRUCTING HARMONIC LATTICE...</div>
+
+    <div id="ui">
+        <h1>AETERNITAS</h1>
+        <button onclick="begin()">COMMENCE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sacred-geo');
+        const ctx = canvas.getContext('2d');
+
+        let w, h, cx, cy;
+        let isRunning = false;
+        let time = 0;
+        
+        // AUDIO REACTION STATE
+        let energy = 0; // Volume follower
+        let currentModeName = "";
+
+        // TETRACTYS CONFIG
+        const POINTS = 10; // 1 + 2 + 3 + 4
+        let nodes = [];
+        let globalRotation = 0;
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            cx = w / 2;
+            cy = h / 2;
+            if(nodes.length === 0) initTetractys();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE ROTATING TETRACTYS
+           ------------------------------------------------ */
+        
+        class Node {
+            constructor(row, col, totalRows) {
+                this.row = row;
+                this.col = col;
+                // Calculate normalized position in triangle
+                this.normX = (col - row/2) * 1.2; 
+                this.normY = (row - totalRows/2) * 1.0;
+                
+                this.active = 0; // Light up intensity
+            }
+
+            update() {
+                this.active *= 0.95; // Decay light
+            }
+
+            draw(rot, scale) {
+                // 3D rotation projection
+                const cos = Math.cos(rot);
+                const sin = Math.sin(rot);
+
+                let x = this.normX * scale;
+                let y = this.normY * scale;
+
+                // Rotate
+                const rx = x * cos - y * sin;
+                const ry = x * sin + y * cos;
+
+                // Draw Node
+                const size = 4 + (energy * 10) + (this.active * 10);
+                
+                ctx.fillStyle = `rgba(255, 220, 150, ${0.2 + this.active})`;
+                ctx.beginPath();
+                ctx.arc(cx + rx, cy + ry, size, 0, Math.PI*2);
+                ctx.fill();
+
+                return { x: cx + rx, y: cy + ry };
+            }
+        }
+
+        function initTetractys() {
+            nodes = [];
+            // 4 Rows: 1, 2, 3, 4 points
+            let rowCount = 4;
+            for(let r = 0; r < rowCount; r++) {
+                for(let c = 0; c <= r; c++) {
+                    nodes.push(new Node(r, c, rowCount));
+                }
+            }
+        }
+
+        function pulseNode(index) {
+            if(nodes[index]) nodes[index].active = 1.0;
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+
+            time += 0.002;
+            globalRotation += 0.001 + (energy * 0.001);
+
+            // Clear with Trail
+            ctx.fillStyle = 'rgba(5, 5, 10, 0.1)'; // Subtle trail
+            ctx.fillRect(0, 0, w, h);
+
+            // Draw Geometry
+            let coords = [];
+            const scale = Math.min(w, h) * 0.15 + (Math.sin(time)*50);
+
+            // Update & Get Coords
+            nodes.forEach(n => {
+                n.update();
+                coords.push(n.draw(globalRotation, scale));
+            });
+
+            // Draw Connections (The Lattice)
+            ctx.strokeStyle = `rgba(255, 215, 0, ${0.05 + energy * 0.1})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            
+            // Connect every node to every other node if distance is short
+            for(let i=0; i<coords.length; i++) {
+                for(let j=i+1; j<coords.length; j++) {
+                    const d = Math.hypot(coords[i].x - coords[j].x, coords[i].y - coords[j].y);
+                    if(d < scale * 1.5) {
+                        ctx.moveTo(coords[i].x, coords[i].y);
+                        ctx.lineTo(coords[j].x, coords[j].y);
+                    }
+                }
+            }
+            ctx.stroke();
+
+            // Background Halo
+            const grad = ctx.createRadialGradient(cx, cy, scale, cx, cy, scale * 3);
+            grad.addColorStop(0, `rgba(100, 80, 255, ${energy * 0.1})`);
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE INSTRUCTIVE VOICE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb, compressor;
+
+        // PYTHAGOREAN TUNING (Just Intonation)
+        const ROOT = 146.83; // D3 (Sacred Tone)
+        // 7 Notes of the scale
+        const SCALE_RATIOS = [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8]; 
+        
+        // The 10 Tetractys Layers mappings (Row 1 to 4)
+        // We map the 7 notes into the 10 slots
+        const TETRACTYS_MAP = [
+            0,              // Row 1: Root (The Monad)
+            4, 0,           // Row 2: Fifth, Octave (The Dyad)
+            2, 4, 6,        // Row 3: Third, Fifth, Seventh (The Triad)
+            1, 3, 5, 0      // Row 4: Second, Fourth, Sixth, Octave (The Tetrad)
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // HEAVY COMPRESSION (To hold the wall of sound together)
+            compressor = actx.createDynamicsCompressor();
+            compressor.threshold.value = -24;
+            compressor.knee.value = 30;
+            compressor.ratio.value = 12;
+            compressor.attack.value = 0.01;
+            compressor.release.value = 0.25;
+
+            master = actx.createGain();
+            master.gain.value = 1.0; // Base volume (Comp pushes it up)
+
+            // Ethereal Reverb (Infinite Hall)
+            reverb = actx.createConvolver();
+            createImpulse(10); // 10 second tail
+
+            const revGain = actx.createGain();
+            revGain.gain.value = 0.7; // Very Wet
+
+            master.connect(compressor);
+            compressor.connect(actx.destination);
+            master.connect(revGain);
+            revGain.connect(reverb);
+            reverb.connect(actx.destination);
+
+            // Start the "Endless" loop
+            scheduleCycle();
+        }
+
+        function createImpulse(len) {
+            const sr = actx.sampleRate;
+            const length = sr * len;
+            const impulse = actx.createBuffer(2, length, sr);
+            for (let i = 0; i < length; i++) {
+                // Exponential decay for smooth tail
+                const decay = Math.pow(1 - i / length, 4);
+                impulse.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay;
+                impulse.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay;
+            }
+            reverb.buffer = impulse;
+        }
+
+        function scheduleCycle() {
+            if(!isRunning) return;
+
+            // Cycle length is long (breath)
+            const now = actx.currentTime;
+            const duration = 12; // 12 second chord cycle
+
+            // Trigger the Tetractys (10 Voices)
+            playTetractysChord(now, duration);
+
+            // Update visuals
+            updateReadout();
+
+            setTimeout(scheduleCycle, duration * 800); // Overlap slightly
+        }
+
+        function playTetractysChord(t, dur) {
+            // Determine Octave Shifts for texture
+            const baseOctave = 1; 
+
+            // We iterate through the 10 points of the Tetractys
+            TETRACTYS_MAP.forEach((ratioIndex, i) => {
+                
+                // Subtle Delay based on row (Strumming the dimensions)
+                // Row 1 = index 0
+                // Row 2 = index 1-2
+                // Row 3 = index 3-5
+                // Row 4 = index 6-9
+                let delay = 0;
+                if(i > 0) delay += 0.5;
+                if(i > 2) delay += 0.5;
+                if(i > 5) delay += 0.5;
+                
+                // Jitter the delay for organic feel
+                delay += Math.random() * 2.0;
+
+                const startTime = t + delay;
+                const ratio = SCALE_RATIOS[ratioIndex];
+                
+                // Frequencies: Lower rows are bassier, higher rows are airier
+                let octaveMult = 1;
+                if(i === 0) octaveMult = 0.5; // Deep Bass Monad
+                if(i > 5) octaveMult = 2;     // High Tetrad
+
+                const freq = ROOT * ratio * octaveMult * baseOctave;
+
+                createVoice(startTime, freq, dur);
+
+                // Trigger Visual Pulse
+                setTimeout(() => pulseNode(i), delay * 1000);
+            });
+        }
+
+        function createVoice(t, freq, dur) {
+            const osc = actx.createOscillator();
+            const osc2 = actx.createOscillator(); // Layering for richness
+            const gain = actx.createGain();
+            const filter = actx.createBiquadFilter();
+
+            // OSC 1: The Body (Sine/Triangle hybrid)
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+
+            // OSC 2: The String/Air (Sawtooth detuned)
+            osc2.type = 'sawtooth';
+            osc2.frequency.value = freq;
+            osc2.detune.value = Math.random() * 10 - 5; // Chorus effect
+
+            // Filter: Lowpass to remove harsh digital buzz, keep "String" warmth
+            filter.type = 'lowpass';
+            filter.frequency.value = freq * 4; 
+            filter.Q.value = 1;
+
+            // Envelope: The "Endless" Piano String
+            // Slow Attack (No percussion, just swell), Very Long Release
+            const attack = 2 + Math.random();
+            const hold = dur * 0.5;
+            const release = dur;
+
+            gain.gain.setValueAtTime(0, t);
+            // Swell up
+            gain.gain.linearRampToValueAtTime(0.08, t + attack);
+            // Hold/Decay slowly
+            gain.gain.setValueAtTime(0.08, t + attack + hold);
+            // Fade out
+            gain.gain.exponentialRampToValueAtTime(0.001, t + attack + hold + release);
+
+            // Energy tracker for visuals
+            setTimeout(() => energy = 1, (t - actx.currentTime)*1000 + (attack*1000));
+            setTimeout(() => energy = 0.2, (t - actx.currentTime)*1000 + (attack*1000) + (hold*1000));
+
+            osc.connect(filter);
+            osc2.connect(filter);
+            filter.connect(gain);
+            gain.connect(master);
+
+            osc.start(t);
+            osc2.start(t);
+            osc.stop(t + attack + hold + release + 2);
+            osc2.stop(t + attack + hold + release + 2);
+        }
+
+        function updateReadout() {
+            const phrases = [
+                "ALIGNING MONAD",
+                "HARMONIZING DYAD",
+                "STABILIZING TRIAD",
+                "EXPANDING TETRAD",
+                "RESONANCE LOCKED"
+            ];
+            const el = document.getElementById('readout');
+            el.style.opacity = 0;
+            setTimeout(() => {
+                el.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+                el.style.opacity = 1;
+            }, 1000);
+        }
+
+        function begin() {
+            isRunning = true;
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 4000);
+            
+            document.getElementById('readout').style.opacity = 1;
+
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            render();
+        }
+        
+        // Initial draw
+        resize();
+        render(); // Start passive animation
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATOM 61 // ASCENSION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* Crisp, sharp neon */
+            filter: contrast(1.5) saturate(1.3);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            transition: opacity 0.5s ease;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: 10px;
+            margin: 0;
+            color: #fff;
+            text-shadow: 0 0 30px #00ffff;
+            text-transform: uppercase;
+        }
+
+        p {
+            font-size: 1rem;
+            letter-spacing: 5px;
+            color: #ff00ff;
+            margin-bottom: 40px;
+            font-weight: bold;
+        }
+
+        button {
+            background: rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            color: #fff;
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px #00ffff;
+            transition: 0.2s;
+            backdrop-filter: blur(5px);
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #00ffff, 0 0 30px #ff00ff;
+            transform: scale(1.05);
+        }
+
+        #flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+            transition: opacity 0.1s;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="atom"></canvas>
+    <div id="flash"></div>
+
+    <div id="ui">
+        <h1>ATOM 61</h1>
+        <p>THE SHIVA PROTOCOL</p>
+        <button onclick="ignite()">ASCEND MOUNT SINAI</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('atom');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let w, h, cx, cy;
+        let isRunning = false;
+        let time = 0;
+        
+        // SYNC VARS
+        let beatPulse = 0; // 0.0 to 1.0
+        let sidechain = 0; // Ducks the visuals (opacity/scale)
+
+        // CONFIG
+        // Promethium (61) Configuration
+        const SHELLS = [
+            { r: 120, count: 5, speed: 2.5, color: '#00ffff' }, // K (Inner)
+            { r: 220, count: 12, speed: 1.8, color: '#ff00ff' }, // L
+            { r: 340, count: 20, speed: 1.2, color: '#00ff00' }, // M
+            { r: 480, count: 24, speed: 0.8, color: '#ffff00' }  // N (Outer)
+        ];
+
+        let particles = [];
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            cx = w / 2;
+            cy = h / 2;
+            initParticles();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE SERPENT ELECTRONS
+           ------------------------------------------------ */
+
+        class Electron {
+            constructor(shellDef, index) {
+                this.shell = shellDef;
+                
+                // Even distribution on ring/sphere
+                this.angleOffset = (Math.PI * 2 * index) / shellDef.count;
+                this.orbitTilt = (Math.random() - 0.5) * Math.PI; // Random tilt for 3D atom look
+                
+                this.trail = [];
+                this.trailLength = 15;
+                
+                // Calculate current position placeholders
+                this.x = 0; this.y = 0; this.z = 0;
+                this.projX = 0; this.projY = 0; this.scale = 0;
+            }
+
+            update() {
+                // 1. Orbital Math
+                const t = time * this.shell.speed + this.angleOffset;
+                
+                // Base circular orbit on XZ plane
+                let tx = Math.cos(t) * this.shell.radius;
+                let tz = Math.sin(t) * this.shell.radius;
+                let ty = 0;
+
+                // 2. "Sea Serpent" Undulation (Sine wave on Y axis)
+                // Reacts to the beat pulse
+                const waveAmplitude = 30 + (beatPulse * 50);
+                ty += Math.sin(t * 5) * waveAmplitude;
+
+                // 3. Apply Orbit Tilt (3D Rotation)
+                // Rotate around X axis
+                let y = ty * Math.cos(this.orbitTilt) - tz * Math.sin(this.orbitTilt);
+                let z = ty * Math.sin(this.orbitTilt) + tz * Math.cos(this.orbitTilt);
+                let x = tx;
+
+                // 4. Global Rotation (The Shiva Spin)
+                const globalRot = time * 0.2;
+                let finalX = x * Math.cos(globalRot) - z * Math.sin(globalRot);
+                let finalZ = x * Math.sin(globalRot) + z * Math.cos(globalRot);
+
+                // 5. Store 3D coords for sorting
+                this.x = finalX;
+                this.y = y;
+                this.z = finalZ;
+
+                // 6. Trail History
+                this.trail.push({x: finalX, y: y, z: finalZ});
+                if (this.trail.length > this.trailLength) this.trail.shift();
+            }
+
+            draw() {
+                // PROJECT 3D -> 2D
+                const fov = 800;
+                
+                // Draw Trail (The Serpent Body)
+                // We iterate backwards to draw tail first
+                ctx.lineWidth = (3 * (fov / (fov + this.z)));
+                ctx.lineCap = 'round';
+                
+                for (let i = 0; i < this.trail.length - 1; i++) {
+                    const p1 = this.trail[i];
+                    const p2 = this.trail[i+1];
+                    
+                    const scale1 = fov / (fov + p1.z);
+                    const scale2 = fov / (fov + p2.z);
+                    
+                    if (scale1 < 0 || scale2 < 0) continue; // Clip behind camera
+
+                    const x1 = cx + p1.x * scale1;
+                    const y1 = cy + p1.y * scale1;
+                    const x2 = cx + p2.x * scale2;
+                    const y2 = cy + p2.y * scale2;
+
+                    // Opacity fades down the tail
+                    const alpha = (i / this.trail.length);
+                    ctx.strokeStyle = this.shell.color;
+                    ctx.globalAlpha = alpha * (1 - sidechain * 0.5); // Duck visual
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                }
+
+                // Draw Head (Electron)
+                const scale = fov / (fov + this.z);
+                if (scale > 0) {
+                    const sx = cx + this.x * scale;
+                    const sy = cy + this.y * scale;
+                    const ss = (8 * scale) + (beatPulse * 10);
+
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, ss, 0, Math.PI*2);
+                    ctx.fill();
+                    
+                    // Glow
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = this.shell.color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            SHELLS.forEach(shell => {
+                for(let i=0; i<shell.count; i++) {
+                    particles.push(new Electron(shell, i));
+                }
+            });
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+
+            time += 0.02;
+            beatPulse *= 0.9; // Decay the kick intensity
+            sidechain *= 0.9; // Release the ducking
+
+            // 1. Clear Background (Void Black)
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+
+            // 2. Update Physics
+            particles.forEach(p => p.update());
+
+            // 3. Sort by Depth (Painter's Algorithm)
+            // This fixes the rendering glitch - draw furthest items first
+            particles.sort((a, b) => b.z - a.z);
+
+            // 4. Draw Nucleus (The Sun)
+            // We draw it 'behind' close particles but 'in front' of far ones?
+            // For simplicity in this stylized view, we draw nucleus in the middle layer
+            // But let's just draw it first with additive blending so it shines through
+            
+            const nucleusSize = 60 + (beatPulse * 40);
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, nucleusSize * 3);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.2, '#ff00de'); // Magenta Core
+            grad.addColorStop(0.5, '#00ffff'); // Cyan Corona
+            grad.addColorStop(1, 'transparent');
+            
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, nucleusSize * 4, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Solid Core
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, nucleusSize * 0.5, 0, Math.PI*2);
+            ctx.fill();
+
+            // 5. Draw Electrons (Serpents)
+            ctx.globalCompositeOperation = 'lighter'; // Neon blend
+            particles.forEach(p => p.draw());
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: SLAP HOUSE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, sidechainNode;
+        
+        // E Minor Pentatonic (Powerful, Deep)
+        const BASS_NOTES = [41.20, 49.00, 55.00, 61.74, 73.42]; // E1 scale
+
+        let nextTime = 0;
+        let tick = 0;
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Compressor (The Marshmello Glue)
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -12;
+            comp.ratio.value = 20;
+            comp.connect(actx.destination);
+
+            master = actx.createGain();
+            master.gain.value = 0.7;
+            master.connect(comp);
+
+            // Sidechain Node (Everything connects here except Kick)
+            sidechainNode = actx.createGain();
+            sidechainNode.connect(master);
+
+            nextTime = actx.currentTime + 0.1;
+            scheduler();
+        }
+
+        function scheduler() {
+            const bpm = 126;
+            const beatLen = 60 / bpm;
+            const sixteenth = beatLen / 4;
+            const lookahead = 0.1;
+
+            while (nextTime < actx.currentTime + lookahead) {
+                playTick(nextTime, tick);
+                nextTime += sixteenth;
+                tick++;
+            }
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playTick(t, i) {
+            const step = i % 16;
+            
+            // 1. KICK (The Pulse)
+            if (step % 4 === 0) {
+                playKick(t);
+                // TRIGGER DUCKING (Audio & Visual)
+                sidechainNode.gain.cancelScheduledValues(t);
+                sidechainNode.gain.setValueAtTime(0, t); // Cut volume
+                sidechainNode.gain.linearRampToValueAtTime(1, t + 0.1); // Ramp back up
+                
+                beatPulse = 1.0; // Visual expand
+                sidechain = 1.0; // Visual fade
+            }
+
+            // 2. SLAP BASS (The Funk)
+            // Pattern: X..X ..X. .X.. X...
+            const bassTrigs = [0, 3, 6, 10, 14];
+            if (bassTrigs.includes(step)) {
+                const freq = BASS_NOTES[Math.floor(Math.random() * 3)];
+                playSlapBass(t, freq);
+            }
+
+            // 3. HI HATS (Offbeat)
+            if (step % 4 === 2) {
+                playHat(t);
+            }
+
+            // 4. LEAD STAB (The Shine)
+            // Every 8 steps
+            if (step % 8 === 0 && step !== 0) {
+                playStab(t, BASS_NOTES[4] * 4); // High E
+            }
+        }
+
+        /* --- SYNTHESIS --- */
+        
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            g.gain.setValueAtTime(1.0, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            osc.connect(g); g.connect(master); // Direct to master
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playSlapBass(t, freq) {
+            // FM Synth for that "Donk" sound
+            const op1 = actx.createOscillator(); // Carrier
+            const op2 = actx.createOscillator(); // Modulator
+            const op2g = actx.createGain();
+            const g = actx.createGain();
+
+            op1.type = 'square';
+            op1.frequency.value = freq;
+
+            op2.type = 'sine';
+            op2.frequency.value = freq * 2; // Octave up modulator
+
+            // FM Routing
+            op2.connect(op2g);
+            op2g.connect(op1.frequency);
+            op1.connect(g);
+            g.connect(sidechainNode); // Affected by ducking
+
+            // Envelope (Short and punchy)
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.8, t + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+            // FM Amount Envelope
+            op2g.gain.setValueAtTime(800, t);
+            op2g.gain.exponentialRampToValueAtTime(1, t + 0.1);
+
+            op1.start(t); op1.stop(t + 0.3);
+            op2.start(t); op2.stop(t + 0.3);
+        }
+
+        function playHat(t) {
+            // White noise buffer
+            const bSize = actx.sampleRate * 0.05;
+            const b = actx.createBuffer(1, bSize, actx.sampleRate);
+            const d = b.getChannelData(0);
+            for(let i=0; i<bSize; i++) d[i] = Math.random()*2-1;
+
+            const src = actx.createBufferSource();
+            src.buffer = b;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 8000;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.3, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+            src.connect(f); f.connect(g); g.connect(sidechainNode);
+            src.start(t);
+        }
+
+        function playStab(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass'; f.frequency.value = 800;
+            f.frequency.linearRampToValueAtTime(2000, t + 0.1);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+            osc.connect(f); f.connect(g); g.connect(sidechainNode);
+            osc.start(t); osc.stop(t + 0.3);
+        }
+
+        function ignite() {
+            isRunning = true;
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 1000);
+            
+            // Flash
+            const flash = document.getElementById('flash');
+            flash.style.opacity = 1;
+            setTimeout(() => flash.style.opacity = 0, 800);
+
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+    </script>
+</body>
+</html>

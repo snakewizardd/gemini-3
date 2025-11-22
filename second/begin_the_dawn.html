@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAWN OVER THE SILENT LAKE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,400&display=swap');
+
+        body {
+            margin: 0;
+            background: #020205;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none; /* Immersion */
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            transition: filter 5s ease;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #E0Cda8; /* Pale Gold */
+            transition: opacity 2s ease;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 300;
+            letter-spacing: 5px;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(224, 205, 168, 0.3);
+        }
+
+        p {
+            font-size: 1.2rem;
+            font-style: italic;
+            opacity: 0.7;
+            margin-bottom: 40px;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid rgba(224, 205, 168, 0.4);
+            color: #E0Cda8;
+            padding: 15px 50px;
+            font-family: inherit;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.8s ease;
+            border-radius: 2px;
+        }
+
+        button:hover {
+            background: rgba(224, 205, 168, 0.1);
+            box-shadow: 0 0 30px rgba(224, 205, 168, 0.2);
+            letter-spacing: 2px;
+        }
+
+        #subtitles {
+            position: absolute;
+            bottom: 10%;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+            font-size: 1.5rem;
+            font-style: italic;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="lake"></canvas>
+    <div id="subtitles"></div>
+    
+    <div id="ui">
+        <h1>THE SILENT LAKE</h1>
+        <p>A GENERATIVE SYMPHONY</p>
+        <button onclick="beginPiece()">BEGIN THE DAWN</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('lake');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let w, h, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // NARRATIVE STATE
+        let phase = 0; // 0:Dawn, 1:Strings, 2:Harp/Horn, 3:Climax, 4:Dissolve
+        let intensity = 0; 
+        let breath = 0; // Tidal motion
+
+        // VISUAL PARTICLES
+        let particles = [];
+        let goldThreads = [];
+
+        function resize() {
+            w = window.innerWidth; h = window.innerHeight;
+            canvas.width = w; canvas.height = h;
+            cx = w/2; cy = h/2;
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: LIQUID GOLD & STARDUST
+           ------------------------------------------------ */
+
+        class Stardust {
+            constructor() {
+                this.x = Math.random() * w;
+                this.y = Math.random() * h * 0.5; // Top half mainly
+                this.size = Math.random() * 1.5;
+                this.alpha = 0;
+                this.targetAlpha = Math.random() * 0.8;
+                this.speedY = Math.random() * 0.2;
+            }
+            update() {
+                this.y += this.speedY;
+                this.alpha += (this.targetAlpha - this.alpha) * 0.01;
+                if(this.y > h) this.y = 0;
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        class GoldThread {
+            constructor() {
+                this.points = [];
+                this.yBase = h/2 + (Math.random() - 0.5) * 200;
+                this.offset = Math.random() * 100;
+                this.speed = 0.002 + Math.random() * 0.003;
+                this.color = `hsla(${35 + Math.random()*15}, 80%, 70%, 0.1)`; // Gold hue
+            }
+            draw() {
+                ctx.beginPath();
+                for(let x = 0; x < w; x+=20) {
+                    // Sine wave combinations for "Fluid" look
+                    const y = this.yBase + 
+                              Math.sin(x * 0.01 + time * this.speed + this.offset) * 50 +
+                              Math.sin(x * 0.003 + time * 0.2) * (breath * 30);
+                    if(x===0) ctx.moveTo(x,y);
+                    else ctx.lineTo(x,y);
+                }
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        function initVisuals() {
+            for(let i=0; i<100; i++) particles.push(new Stardust());
+            for(let i=0; i<30; i++) goldThreads.push(new GoldThread());
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.01;
+            breath = (Math.sin(time * 0.5) + 1) / 2; // 0 to 1 tidal swell
+
+            // Background: Deep Blue -> Dawn Gradient
+            let r = 2 + (phase * 10);
+            let g = 2 + (phase * 5);
+            let b = 5 + (phase * 10);
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            
+            // Add trail effect
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
+            ctx.fillRect(0,0,w,h);
+
+            // Draw Gold Threads (The Orchestra)
+            if(phase >= 1) {
+                ctx.globalCompositeOperation = 'lighter';
+                goldThreads.forEach(t => t.draw());
+            }
+
+            // Draw Stardust (The Piano/Harp)
+            if(phase >= 2) {
+                particles.forEach(p => { p.update(); p.draw(); });
+            }
+            
+            // The Sun/Zenith
+            if(phase >= 3) {
+                const sunSize = intensity * 100;
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sunSize * 4);
+                grad.addColorStop(0, `rgba(255, 255, 230, ${intensity * 0.5})`);
+                grad.addColorStop(1, 'transparent');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0,0,w,h);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: PROCEDURAL ORCHESTRA
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+
+        // HARMONY: Eb Major (Noble, Warm)
+        // Chords: Ebmaj9, Fm9, Gm7, Abmaj7(#11)
+        const SCALE = {
+            Eb: 155.56, F: 174.61, G: 196.00, Ab: 207.65, Bb: 233.08, C: 261.63, D: 293.66
+        };
+        
+        // Specific Voicings for "Velvety" feel
+        const CHORDS = [
+            [SCALE.Eb, SCALE.G, SCALE.Bb, SCALE.D, SCALE.F], // Ebmaj9
+            [SCALE.F, SCALE.Ab, SCALE.C, SCALE.Eb, SCALE.G], // Fm9
+            [SCALE.G, SCALE.Bb, SCALE.D, SCALE.F], // Gm7
+            [SCALE.Ab, SCALE.C, SCALE.Eb, SCALE.G, SCALE.D*2] // Abmaj7#11
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Chain
+            master = actx.createGain();
+            master.gain.value = 0.7;
+            
+            // Huge Cathedral Reverb
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6; // 6 seconds tail
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let i=0;i<len;i++) {
+                const d = Math.pow(1-i/len, 3);
+                buf.getChannelData(0)[i] = (Math.random()*2-1)*d;
+                buf.getChannelData(1)[i] = (Math.random()*2-1)*d;
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            startComposition();
+        }
+
+        // INSTRUMENTS -----------------------------
+
+        function playCelesta(t, note) {
+            // Glassy, bell-like, tremolo
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            const pan = actx.createStereoPanner();
+            
+            osc.type = 'sine';
+            osc.frequency.value = note * 4; // High octave
+
+            // Tremolo
+            const lfo = actx.createOscillator();
+            lfo.frequency.value = 6; // 6hz flutter
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 0.2;
+            lfo.connect(lfoG);
+            lfoG.connect(g.gain);
+            lfo.start(t);
+
+            // Envelope (Hammer strike)
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.4, t + 0.05);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+
+            pan.pan.value = Math.random() - 0.5;
+
+            osc.connect(g); g.connect(pan); pan.connect(master);
+            osc.start(t); osc.stop(t+4);
+        }
+
+        function playStrings(t, chord) {
+            // Velvety, slow attack
+            chord.forEach((freq, i) => {
+                // Ensemble effect: 3 oscillators per note
+                [-5, 0, 5].forEach(detune => {
+                    const osc = actx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = freq;
+                    osc.detune.value = detune;
+
+                    const filter = actx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 600; // Dark tone
+
+                    const g = actx.createGain();
+                    g.gain.setValueAtTime(0, t);
+                    g.gain.linearRampToValueAtTime(0.03, t + 4); // Slow swell
+                    g.gain.linearRampToValueAtTime(0, t + 12); // Fade
+
+                    osc.connect(filter); filter.connect(g); g.connect(master);
+                    osc.start(t); osc.stop(t+12);
+                });
+            });
+        }
+
+        function playOboe(t, freq) {
+            // Plaintive, nasal, vibrato
+            const osc = actx.createOscillator();
+            osc.type = 'triangle'; // Base tone
+            osc.frequency.value = freq * 2;
+
+            // Vibrato
+            const vib = actx.createOscillator();
+            vib.frequency.value = 4.5;
+            const vibG = actx.createGain();
+            vibG.gain.value = 5;
+            vib.connect(vibG); vibG.connect(osc.frequency);
+            vib.start(t);
+
+            // Formant Filter
+            const f = actx.createBiquadFilter();
+            f.type = 'bandpass';
+            f.Q.value = 2;
+            f.frequency.value = 1200; // Oboe formant
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t + 1.0);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 6.0);
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+6);
+        }
+
+        function playHarp(t, chord) {
+            // Arpeggio shimmer
+            chord.forEach((freq, i) => {
+                setTimeout(() => {
+                    const osc = actx.createOscillator();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq * 4;
+                    
+                    const g = actx.createGain();
+                    g.gain.setValueAtTime(0, t);
+                    g.gain.linearRampToValueAtTime(0.05, t + 0.05);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+                    
+                    osc.connect(g); g.connect(master);
+                    osc.start(t); osc.stop(t+2);
+                }, i * 100); // Staggered
+            });
+        }
+
+        function playPiano(t, note) {
+            // Crystalline, FM-ish
+            const osc = actx.createOscillator();
+            const mod = actx.createOscillator();
+            const modG = actx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.value = note * 4;
+            
+            mod.frequency.value = note * 8;
+            modG.gain.value = 500;
+            
+            mod.connect(modG); modG.connect(osc.frequency);
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
+
+            osc.connect(g); g.connect(master);
+            mod.start(t); osc.start(t); osc.stop(t+3);
+        }
+
+        // THE COMPOSITION (TIMELINE) ----------------
+
+        function startComposition() {
+            const now = actx.currentTime;
+            const subtitle = document.getElementById('subtitles');
+            
+            // Helper for subtitles
+            const sub = (text, time) => {
+                setTimeout(() => {
+                    subtitle.style.opacity = 0;
+                    setTimeout(() => { subtitle.innerText = text; subtitle.style.opacity = 1; }, 1000);
+                }, time * 1000);
+            };
+
+            // 0:00 - INTRO (The Trembling Note)
+            sub("A glimmer of dawn...", 0);
+            phase = 0;
+            playCelesta(now, SCALE.Eb);
+            setTimeout(() => playCelesta(now + 4, SCALE.Bb), 4000);
+            setTimeout(() => playCelesta(now + 8, SCALE.G), 8000);
+
+            // 0:10 - STRINGS & OBOE (Development)
+            setTimeout(() => {
+                sub("Threads of liquid gold...", 0);
+                phase = 1;
+                playStrings(actx.currentTime, CHORDS[0]); // Eb
+                playOboe(actx.currentTime + 2, SCALE.G);
+            }, 12000);
+
+            setTimeout(() => {
+                playStrings(actx.currentTime, CHORDS[1]); // Fm
+                playOboe(actx.currentTime + 2, SCALE.Ab);
+            }, 20000);
+
+            // 0:30 - EXPANSION (Harp, Horns, Swells)
+            setTimeout(() => {
+                sub("The tide rises...", 0);
+                phase = 2;
+                playStrings(actx.currentTime, CHORDS[2]); // Gm
+                playHarp(actx.currentTime, CHORDS[2]);
+                playOboe(actx.currentTime, SCALE.Bb);
+            }, 30000);
+
+            setTimeout(() => {
+                playStrings(actx.currentTime, CHORDS[3]); // Abmaj7
+                playHarp(actx.currentTime, CHORDS[3]);
+            }, 40000);
+
+            // 0:50 - THE ZENITH (Piano, Climax)
+            setTimeout(() => {
+                sub("Sunlight breaking through...", 0);
+                phase = 3;
+                intensity = 1.0;
+                
+                // Big Chord
+                playStrings(actx.currentTime, [SCALE.Eb, SCALE.G, SCALE.Bb, SCALE.D, SCALE.F, SCALE.Bb*2]);
+                
+                // Crystalline Piano Motif
+                const melody = [SCALE.Bb, SCALE.C, SCALE.D, SCALE.Eb, SCALE.G];
+                melody.forEach((n, i) => {
+                    playPiano(actx.currentTime + (i*0.5), n);
+                });
+            }, 50000);
+
+            // 1:05 - DISSOLVE (The Memory)
+            setTimeout(() => {
+                sub("Dissolving into silence...", 0);
+                phase = 4;
+                intensity = 0;
+                // Single Sustained Tone (High strings root)
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = SCALE.Eb * 4;
+                g.gain.setValueAtTime(0, actx.currentTime);
+                g.gain.linearRampToValueAtTime(0.1, actx.currentTime + 2);
+                g.gain.linearRampToValueAtTime(0, actx.currentTime + 10);
+                osc.connect(g); g.connect(master);
+                osc.start(actx.currentTime);
+            }, 65000);
+
+            // 1:15 - END
+            setTimeout(() => {
+                subtitle.style.opacity = 0;
+                isRunning = false;
+            }, 75000);
+        }
+
+        function beginPiece() {
+            isRunning = true;
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            resize();
+            initVisuals();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            render();
+        }
+
+        resize();
+
+    </script>
+</body>
+</html>

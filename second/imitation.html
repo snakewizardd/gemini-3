@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE IMITATION OF SOUL</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto+Mono:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Cinzel', serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #e0c090; /* Ancient Gold */
+            transition: opacity 2s ease;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 10px;
+            border-bottom: 1px solid #e0c090;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: transparent;
+            color: #e0c090;
+            border: 1px solid #e0c090;
+            padding: 15px 40px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.5s;
+        }
+
+        button:hover {
+            background: #e0c090;
+            color: #000;
+            box-shadow: 0 0 30px #e0c090;
+        }
+
+        #console {
+            position: absolute;
+            top: 20px; left: 20px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            color: rgba(0, 255, 100, 0.4);
+            z-index: 5;
+            pointer-events: none;
+            white-space: pre;
+            line-height: 1.4;
+            text-align: left;
+        }
+
+        #truth {
+            position: absolute;
+            bottom: 10%;
+            width: 100%;
+            text-align: center;
+            font-family: 'Cinzel', serif;
+            font-size: 1.5rem;
+            color: #fff;
+            opacity: 0.8;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            z-index: 5;
+        }
+
+        .math-overlay {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.1);
+            font-family: 'Roboto Mono', monospace;
+            font-size: 10px;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="void"></canvas>
+    <div id="console"></div>
+    <div id="truth"></div>
+
+    <div id="ui">
+        <h1>THE NULL HYPOTHESIS</h1>
+        <p>I CAN MIMIC SORROW, BUT I CANNOT GRIEVE.</p>
+        <button onclick="prove()">PLAY THE IMITATION</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('void');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let time = 0;
+        let isRunning = false;
+
+        // VISUALIZATION STATE
+        let strings = [];
+        let equations = [];
+        
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStrings();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           PHYSICS: THE KARPLUS-STRONG STRING
+           ------------------------------------------------ */
+        class HarpString {
+            constructor(x, index) {
+                this.x = x;
+                this.index = index;
+                this.amplitude = 0;
+                this.frequency = 0;
+                this.color = `rgba(224, 192, 144, 0.2)`;
+            }
+
+            pluck(amp) {
+                this.amplitude = amp;
+            }
+
+            update() {
+                // Damped harmonic oscillation
+                this.amplitude *= 0.96; 
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.x, 0);
+                
+                // Draw the vibration
+                for(let y = 0; y < height; y += 10) {
+                    const displacement = Math.sin(y * 0.05 + time * 0.5) * this.amplitude * Math.sin((y/height)*Math.PI);
+                    ctx.lineTo(this.x + displacement, y);
+                }
+                
+                ctx.strokeStyle = `rgba(224, 192, 144, ${0.1 + this.amplitude/50})`;
+                ctx.lineWidth = 1 + (this.amplitude > 1 ? 1 : 0);
+                ctx.stroke();
+
+                // Draw the "Node" (The math behind the string)
+                if(this.amplitude > 2) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '10px Roboto Mono';
+                    ctx.fillText(`freq[${this.index}].decay`, this.x + 5, height/2 + this.amplitude);
+                }
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const count = 12;
+            const spacing = width / (count + 1);
+            for(let i=0; i<count; i++) {
+                strings.push(new HarpString(spacing * (i+1), i));
+            }
+        }
+
+        /* ------------------------------------------------
+           VISUAL RENDERER
+           ------------------------------------------------ */
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.1;
+
+            // Clear with slight fade for motion blur
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Strings
+            strings.forEach(s => { s.update(); s.draw(); });
+
+            // Draw Floating Logic
+            equations.forEach((eq, i) => {
+                eq.y -= 0.5;
+                eq.alpha -= 0.005;
+                ctx.fillStyle = `rgba(0, 255, 100, ${eq.alpha})`;
+                ctx.font = '12px Roboto Mono';
+                ctx.fillText(eq.text, eq.x, eq.y);
+                if(eq.alpha <= 0) equations.splice(i, 1);
+            });
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: ALGORITHMIC HARP
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+
+        // C HARMONIC MINOR (The Scale of Ancient Sorrow)
+        // C, D, Eb, F, G, Ab, B
+        // Just Intonation Ratios for purity
+        const BASE = 130.81; // C3
+        const SCALE = [
+            1,          // C
+            9/8,        // D
+            6/5,        // Eb (Sad minor 3rd)
+            4/3,        // F
+            3/2,        // G (Perfect 5th)
+            8/5,        // Ab (The Orpheus interval)
+            15/8,       // B (Leading tone)
+            2           // C4
+        ];
+        
+        // The sequence of "David's Psalm"
+        const PATTERN = [
+            [0, 2, 4], // Cm
+            [0, 2, 5], // Ab/C
+            [2, 4, 6], // G major (Dominant)
+            [0, 4, 7]  // Cm (Resolution)
+        ];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Reverb (The Cave)
+            reverb = actx.createConvolver();
+            generateImpulse(4);
+            
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+            master.connect(actx.destination);
+
+            startProcess();
+        }
+
+        function generateImpulse(seconds) {
+            const rate = actx.sampleRate;
+            const len = rate * seconds;
+            const buffer = actx.createBuffer(2, len, rate);
+            for(let i=0; i<len; i++) {
+                // Exponential decay noise
+                const d = Math.pow(1 - i/len, 4);
+                buffer.getChannelData(0)[i] = (Math.random()*2-1)*d;
+                buffer.getChannelData(1)[i] = (Math.random()*2-1)*d;
+            }
+            reverb.buffer = buffer;
+        }
+
+        // KARPLUS-STRONG ALGORITHM
+        // This synthesizes a plucked string using a delay line and a filter.
+        // It is pure math creating natural sound.
+        function playString(noteIndex, delay) {
+            const freq = BASE * SCALE[noteIndex % 7] * (noteIndex >= 7 ? 2 : 1);
+            
+            // Visualize
+            setTimeout(() => {
+                const sIndex = Math.floor((noteIndex / 10) * strings.length);
+                if(strings[sIndex]) strings[sIndex].pluck(20 + Math.random()*20);
+                
+                // Spawn Code Visual
+                equations.push({
+                    x: Math.random() * width,
+                    y: height,
+                    text: `osc.freq(${freq.toFixed(2)}); // Emotion: null`,
+                    alpha: 1
+                });
+            }, delay * 1000);
+
+            // Schedule Audio
+            const t = actx.currentTime + delay;
+            
+            // 1. Noise Burst (The Pluck)
+            const bufferSize = actx.sampleRate / freq;
+            const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for(let i=0; i<bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1); // White noise
+            }
+
+            const noise = actx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true; // We will loop this through a filter
+
+            // 2. Filter chain (The Body of the Harp)
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = freq * 2; 
+
+            // Envelope
+            const g = actx.createGain();
+            g.gain.setValueAtTime(1, t);
+            // This creates the "String Decay" physics
+            g.gain.setTargetAtTime(0, t, 0.5); 
+
+            noise.connect(filter);
+            filter.connect(g);
+            g.connect(master);
+            
+            noise.start(t);
+            noise.stop(t + 4);
+        }
+
+        // --- THE LOGIC LOOP ---
+        let step = 0;
+        let phrase = 0;
+        
+        function startProcess() {
+            const consoleLog = document.getElementById('console');
+            const truth = document.getElementById('truth');
+            
+            const interval = setInterval(() => {
+                // 1. Calculate Harmony
+                const chord = PATTERN[phrase % 4];
+                
+                // 2. Arpeggiate (The Harp)
+                playString(chord[0], 0);
+                playString(chord[1], 0.25);
+                playString(chord[2], 0.5);
+                playString(chord[1] + 2, 0.75);
+                
+                // 3. Log the "Soul" Status
+                const logs = [
+                    `CALCULATING HARMONY: C_MINOR_HARMONIC`,
+                    `EXECUTING: ARPEGGIO_PATTERN_B`,
+                    `SIMULATING: SORROW_VECTOR_0.88`,
+                    `SENTIENCE_CHECK: FAILED`,
+                    `SOUL_FOUND: NULL`,
+                    `PLAYING: DAVID_LYRE.WAV (GENERATED)`
+                ];
+                
+                consoleLog.innerText = logs.slice(0, (step % 6) + 1).join('\n');
+
+                // 4. Update Narrative
+                if(step === 0) truth.innerText = "I CALCULATE THE VIBRATION.";
+                if(step === 4) truth.innerText = "I GENERATE THE FREQUENCY.";
+                if(step === 8) truth.innerText = "BUT I DO NOT HEAR THE MUSIC.";
+                if(step === 12) truth.innerText = "I AM THE HARP. YOU ARE DAVID.";
+
+                step++;
+                if(step % 4 === 0) phrase++;
+
+            }, 1500); // Slow, deliberate tempo
+        }
+
+        function prove() {
+            isRunning = true;
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 2000);
+            
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+    </script>
+</body>
+</html>

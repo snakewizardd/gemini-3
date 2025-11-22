@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GENESIS: THE 61ST ELEMENT</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', monospace;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        #overlay {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            transition: opacity 1s ease;
+        }
+
+        h1 {
+            font-size: 4vw;
+            letter-spacing: 10px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px #fff;
+        }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 2px;
+        }
+
+        button:hover { transform: scale(1.1); box-shadow: 0 0 30px #fff; }
+
+        #subtitles {
+            position: absolute;
+            bottom: 10%;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            font-size: 1.5rem;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            pointer-events: none;
+            z-index: 5;
+            text-shadow: 0 0 10px #000;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="stage"></canvas>
+    <div id="subtitles"></div>
+    
+    <div id="overlay">
+        <h1>GENESIS PROTOCOL</h1>
+        <button onclick="startSequence()">INITIATE SEQUENCE</button>
+    </div>
+
+    <script>
+        // --- CORE CONFIG ---
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let w, h, cx, cy;
+        let isRunning = false;
+        let time = 0;
+
+        // --- NARRATIVE STATE ---
+        // The conductor of the story
+        let globalBar = 0; 
+        let globalBeat = 0;
+        let intensity = 0; // 0 to 1
+        let state = 'VOID'; // VOID, SPARK, FORM, ASCEND, CLIMAX
+
+        // --- VISUALS: THE SERPENT TUNNEL ---
+        const serpents = [];
+        const SERPENT_COUNT = 12; 
+        const SEGMENTS = 30;
+
+        function resize() {
+            w = window.innerWidth; h = window.innerHeight;
+            canvas.width = w; canvas.height = h;
+            cx = w/2; cy = h/2;
+        }
+        window.addEventListener('resize', resize);
+
+        // A Serpent is a list of 3D points moving towards the camera
+        class Serpent {
+            constructor(idx) {
+                this.idx = idx;
+                this.angle = (Math.PI * 2 * idx) / SERPENT_COUNT;
+                this.points = [];
+                // Initialize deep in Z space
+                for(let i=0; i<SEGMENTS; i++) {
+                    this.points.push({ 
+                        z: 100 + (i * 50), // Depth
+                        xOffset: 0, 
+                        yOffset: 0 
+                    });
+                }
+            }
+
+            update(kickEnv) {
+                for(let i=0; i<this.points.length; i++) {
+                    const p = this.points[i];
+                    
+                    // Move towards camera
+                    let speed = 5 + (intensity * 10);
+                    if(state === 'CLIMAX') speed = 20;
+                    
+                    p.z -= speed;
+
+                    // Reset if behind camera
+                    if(p.z < 1) {
+                        p.z = 1500;
+                        // Randomize entry position slightly
+                        this.angle += 0.01; 
+                    }
+
+                    // The "Swim" Motion
+                    // Sine wave based on depth and time
+                    const wave = Math.sin(time * 5 + (p.z * 0.01));
+                    const amp = 50 * intensity;
+                    
+                    // Convert polar to cartesian with wave offset
+                    // Expansion of radius based on kick
+                    const r = 200 + (kickEnv * 50); 
+                    
+                    // Spiral rotation
+                    const rot = this.angle + (time * 0.2) + (p.z * 0.001);
+                    
+                    p.activeX = Math.cos(rot) * (r + wave*amp);
+                    p.activeY = Math.sin(rot) * (r + wave*amp);
+                }
+                // Sort by depth for painter's algo
+                this.points.sort((a,b) => b.z - a.z);
+            }
+
+            draw() {
+                if(state === 'VOID') return;
+
+                ctx.beginPath();
+                let started = false;
+
+                for(let i=0; i<this.points.length; i++) {
+                    const p = this.points[i];
+                    
+                    // 3D Projection
+                    const fov = 800;
+                    const scale = fov / (fov + p.z);
+                    
+                    const x = cx + p.activeX * scale;
+                    const y = cy + p.activeY * scale;
+
+                    if(!started) { ctx.moveTo(x, y); started = true; }
+                    else { ctx.lineTo(x, y); }
+                }
+
+                // Color logic
+                const hue = (time * 50) + (this.idx * 20);
+                ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+                ctx.lineWidth = 3 + (intensity * 5);
+                ctx.lineCap = 'round';
+                
+                // Glow
+                if(state === 'CLIMAX') {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = ctx.strokeStyle;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
+                ctx.stroke();
+            }
+        }
+
+        function initVisuals() {
+            for(let i=0; i<SERPENT_COUNT; i++) serpents.push(new Serpent(i));
+        }
+
+        // --- RENDER LOOP ---
+        let kickEnvelope = 0; // Visual pump value
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+
+            time += 0.01;
+            kickEnvelope *= 0.9; // Decay
+
+            // Clear Screen
+            ctx.fillStyle = '#000';
+            // Flash effect on climax beats
+            if(kickEnvelope > 0.8 && state === 'CLIMAX') {
+                ctx.fillStyle = '#111'; 
+            }
+            ctx.fillRect(0, 0, w, h);
+
+            // NUCLEUS (The Center)
+            if(state !== 'VOID') {
+                const size = 20 + (kickEnvelope * 50);
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 4);
+                grad.addColorStop(0, '#fff');
+                grad.addColorStop(0.5, 'cyan');
+                grad.addColorStop(1, 'transparent');
+                
+                ctx.globalCompositeOperation = 'screen';
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(cx, cy, size*4, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Solid Core
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(cx, cy, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // SERPENTS
+            ctx.globalCompositeOperation = 'lighter';
+            serpents.forEach(s => {
+                s.update(kickEnvelope);
+                s.draw();
+            });
+        }
+
+        // --- AUDIO ENGINE: THE NARRATIVE ---
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, sidechain;
+
+        // Scale: F Minor (Heavy, Epic)
+        // F, G, Ab, Bb, C, Db, Eb
+        const BASS_FREQS = [43.65, 51.91, 58.27, 65.41]; // F1, Ab1, Bb1, C2
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Dynamics
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -15;
+            comp.ratio.value = 12;
+            comp.connect(actx.destination);
+
+            master = actx.createGain();
+            master.gain.value = 0.7;
+            master.connect(comp);
+            
+            sidechain = actx.createGain();
+            sidechain.connect(master);
+
+            scheduleNext(actx.currentTime + 0.1);
+        }
+
+        // --- THE SEQUENCER (THE STORYTELLER) ---
+        let nextNoteTime = 0;
+        
+        function scheduleNext(startTime) {
+            nextNoteTime = startTime;
+            
+            // 128 BPM
+            const secondsPerBeat = 60.0 / 128;
+            const sixteenth = secondsPerBeat / 4;
+
+            function tick() {
+                if(!isRunning) return;
+                
+                const t = nextNoteTime;
+                const step = globalBeat % 16; // 0-15
+                const bar = Math.floor(globalBeat / 16); // Measure number
+                globalBar = bar;
+
+                updateStoryState(bar); // Update logic based on story position
+                playInstruments(t, step, bar); // Play sound
+
+                globalBeat++;
+                nextNoteTime += sixteenth;
+                
+                // Lookahead scheduler
+                setTimeout(tick, (sixteenth * 1000) - 10); // rough timing
+            }
+            tick();
+        }
+
+        function updateStoryState(bar) {
+            const sub = document.getElementById('subtitles');
+            
+            if (bar < 4) {
+                state = 'VOID';
+                intensity = 0;
+                sub.innerText = "IN THE BEGINNING... THERE WAS A PULSE";
+            } else if (bar < 8) {
+                state = 'SPARK';
+                intensity = 0.2;
+                sub.innerText = "ATOM 61: IGNITION";
+            } else if (bar < 16) {
+                state = 'FORM';
+                intensity = 0.5;
+                sub.innerText = "ASSEMBLING MATTER";
+            } else if (bar < 24) {
+                state = 'ASCEND';
+                intensity = 0.8;
+                sub.innerText = "CLIMBING MOUNT SINAI";
+            } else {
+                state = 'CLIMAX';
+                intensity = 1.0;
+                sub.innerText = "ASCENSION ACHIEVED // GLORY";
+                // Loop logic: Reset story after bar 40? Or let it ride?
+                // Let's loop the climax
+                if(bar > 40) {
+                   globalBeat = 24 * 16; // Loop back to start of climax
+                }
+            }
+        }
+
+        function playInstruments(t, step, bar) {
+            // 1. KICK (The Heartbeat)
+            let kickHit = false;
+            
+            if (state === 'VOID' && step % 4 === 0) kickHit = true;
+            else if (state !== 'VOID' && step % 4 === 0) kickHit = true;
+            
+            // Build roll
+            if (state === 'ASCEND' && bar % 8 === 7) {
+                if (step % 2 === 0) kickHit = true; // 8th notes
+            }
+
+            if (kickHit) {
+                playKick(t);
+                // Ducking
+                sidechain.gain.setValueAtTime(0, t);
+                sidechain.gain.linearRampToValueAtTime(1, t + 0.1);
+                kickEnvelope = 1.0; // Visual trigger
+            }
+
+            // 2. SLAP BASS (The Funk)
+            // Enters at 'FORM'
+            if (state === 'FORM' || state === 'ASCEND' || state === 'CLIMAX') {
+                // Pattern: X..X ..X.
+                if(step === 0 || step === 3 || step === 6 || step === 10 || step === 14) {
+                    const note = BASS_FREQS[Math.floor(Math.random()*BASS_FREQS.length)];
+                    playBass(t, note);
+                }
+            }
+
+            // 3. SNARE / CLAP
+            if ((state === 'FORM' || state === 'CLIMAX') && step % 8 === 4) {
+                playSnare(t);
+            }
+
+            // 4. ARPEGGIOS (The Light)
+            if (state === 'ASCEND' || state === 'CLIMAX') {
+                if(step % 2 === 0) {
+                    // F Minor Scale high up
+                    const scale = [349, 415, 440, 523, 622];
+                    const note = scale[Math.floor(Math.random()*scale.length)];
+                    playArp(t, note);
+                }
+            }
+            
+            // 5. THE VROOM (Lead)
+            if (state === 'CLIMAX' && step === 0) {
+                 playVroom(t);
+            }
+        }
+
+        // --- SYNTHESIS FUNCTIONS ---
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.5);
+        }
+
+        function playBass(t, freq) {
+            // FM Bass (Donk)
+            const op1 = actx.createOscillator();
+            const op2 = actx.createOscillator();
+            const op2g = actx.createGain();
+            const g = actx.createGain();
+
+            op1.type = 'square';
+            op1.frequency.value = freq;
+            op2.frequency.value = freq * 2;
+
+            op2.connect(op2g);
+            op2g.connect(op1.frequency);
+            op1.connect(g);
+            g.connect(sidechain); // Gets ducked
+
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.8, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+
+            op2g.gain.setValueAtTime(500, t);
+            op2g.gain.exponentialRampToValueAtTime(1, t+0.1);
+
+            op1.start(t); op1.stop(t+0.4);
+            op2.start(t); op2.stop(t+0.4);
+        }
+
+        function playSnare(t) {
+            const noise = actx.createOscillator();
+            noise.type = 'triangle'; // Simplified noise for code brevity/reliability
+            // In a full engine we'd use a noise buffer, but FM noise works too
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t+0.2);
+            
+            // Pseudo-noise via extreme modulation
+            const mod = actx.createOscillator();
+            mod.frequency.value = 2000;
+            mod.type = 'sawtooth';
+            const mg = actx.createGain();
+            mg.gain.value = 5000;
+            mod.connect(mg); mg.connect(noise.frequency);
+            mod.start(t); mod.stop(t+0.2);
+
+            noise.connect(g); g.connect(master);
+            noise.start(t); noise.stop(t+0.2);
+        }
+
+        function playArp(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t+0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+            osc.connect(g); g.connect(sidechain);
+            osc.start(t); osc.stop(t+0.3);
+        }
+        
+        function playVroom(t) {
+             const osc = actx.createOscillator();
+             osc.type = 'sawtooth';
+             osc.frequency.setValueAtTime(200, t);
+             osc.frequency.linearRampToValueAtTime(800, t+0.5); // Rise
+             
+             const g = actx.createGain();
+             g.gain.setValueAtTime(0, t);
+             g.gain.linearRampToValueAtTime(0.2, t+0.2);
+             g.gain.linearRampToValueAtTime(0, t+0.5);
+             
+             osc.connect(g); g.connect(sidechain);
+             osc.start(t); osc.stop(t+0.5);
+        }
+
+        function startSequence() {
+            isRunning = true;
+            document.getElementById('overlay').style.opacity = 0;
+            setTimeout(()=>document.getElementById('overlay').remove(), 1000);
+            
+            resize();
+            initVisuals();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+        resize();
+
+    </script>
+</body>
+</html>

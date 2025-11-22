@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORTEX // OVERLOAD</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            cursor: none;
+            font-family: 'Courier New', monospace;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            display: block;
+        }
+
+        #warning {
+            position: absolute;
+            z-index: 999;
+            width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #f0f;
+            text-align: center;
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 4vw;
+            text-shadow: 2px 2px 0px #0ff;
+            animation: shake 0.2s infinite;
+        }
+
+        p { color: #fff; max-width: 600px; line-height: 1.5; margin-bottom: 30px; }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: 4px solid #f0f;
+            padding: 20px 60px;
+            font-size: 2rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px #f0f;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #000;
+            color: #fff;
+            box-shadow: 0 0 100px #0ff;
+            transform: scale(1.1);
+        }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) skewX(-5deg); }
+            20% { transform: translate(-2px, -1px) skewX(5deg); }
+            100% { transform: translate(0, 0); }
+        }
+
+        #glitch-text {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10vw;
+            font-weight: 900;
+            color: rgba(255,255,255,0.1);
+            pointer-events: none;
+            mix-blend-mode: exclusion;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="cortex"></canvas>
+    <div id="glitch-text"></div>
+
+    <div id="warning">
+        <h1>SENSORY OVERLOAD</h1>
+        <p>WARNING: CONTAINS EXTREME STROBING AND BINAURAL AUDIO.<br>FULL SCREEN. HEADPHONES. MAX VOLUME.</p>
+        <button onclick="overload()">INITIATE OVERLOAD</button>
+    </div>
+
+    <script>
+        /* 
+           THE ARCHITECTURE OF ECSTASY 
+           ---------------------------
+           1. Audio: SuperSaw Clusters + Binaural Detuning + Fibonacci Polyrhythms
+           2. Visual: Recursive Frame Feedback + Polar Coordinate Warping
+        */
+
+        const canvas = document.getElementById('cortex');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Fast rendering
+        let w, h, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let intensity = 0; // 0.0 to 1.0 (The "Climax" slider)
+        let mouse = { x: 0.5, y: 0.5 };
+
+        // CORE STATE
+        let globalHue = 0;
+        let flash = 0;
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            cx = w / 2;
+            cy = h / 2;
+        }
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX / w;
+            mouse.y = e.clientY / h;
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: THE INFINITE VORTEX
+           ------------------------------------------------ */
+        
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.05 + (intensity * 0.1);
+            globalHue += 2 + (intensity * 10);
+            
+            // 1. FEEDBACK LOOP (The Trail Effect)
+            // We draw the previous frame slightly zoomed out to create the tunnel
+            ctx.save();
+            ctx.translate(cx, cy);
+            // Warp based on mouse
+            const zoom = 1.02 + (intensity * 0.05);
+            const rot = (mouse.x - 0.5) * 0.1;
+            ctx.scale(zoom, zoom);
+            ctx.rotate(rot);
+            ctx.translate(-cx, -cy);
+            
+            // Fade out old frame
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.1 - (intensity * 0.05)})`; // Less fade = more trails at high intensity
+            ctx.fillRect(0, 0, w, h);
+            
+            // Draw the old canvas back onto itself (Feedback)
+            ctx.drawImage(canvas, -10, -10, w+20, h+20);
+            ctx.restore();
+
+            // 2. GEOMETRY GENERATION
+            ctx.globalCompositeOperation = 'lighter'; // Additive blending (Glow)
+            
+            const spokes = 8 + Math.floor(intensity * 12);
+            const radius = 100 + Math.sin(time) * 50;
+            
+            ctx.lineWidth = 2 + intensity * 5;
+            
+            // Draw Mandelbrot-ish symmetry
+            for(let i=0; i<spokes; i++) {
+                const angle = (i / spokes) * Math.PI * 2 + time;
+                const x = cx + Math.cos(angle) * radius * (mouse.y * 2);
+                const y = cy + Math.sin(angle) * radius * (mouse.y * 2);
+                
+                const hue = (globalHue + i * 20) % 360;
+                ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+                ctx.fillStyle = `hsl(${hue + 180}, 100%, 50%)`;
+                
+                ctx.beginPath();
+                // Complex shape
+                ctx.moveTo(x, y);
+                ctx.lineTo(cx, cy);
+                
+                // Fractal branching
+                const x2 = x + Math.cos(angle * 3 + time) * 100;
+                const y2 = y + Math.sin(angle * 3 + time) * 100;
+                ctx.lineTo(x2, y2);
+                
+                // Crazy spirals
+                ctx.arc(x2, y2, 10 + intensity * 50, time * 5, time * 5 + Math.PI);
+                
+                ctx.stroke();
+                
+                if (Math.random() < intensity) {
+                    ctx.fill(); // Random flashes of solid color
+                }
+            }
+
+            // 3. THE "STROBE" LAYER
+            if (flash > 0) {
+                ctx.globalCompositeOperation = 'difference'; // Inverts colors
+                ctx.fillStyle = `rgba(255, 255, 255, ${flash})`;
+                ctx.fillRect(0, 0, w, h);
+                flash *= 0.8;
+            }
+
+            // Glitch Text
+            const text = document.getElementById('glitch-text');
+            if (Math.random() > 0.9) {
+                text.innerText = ["EUPHORIA", "SYNAPSE", "LIMITLESS", "VOID"][Math.floor(Math.random()*4)];
+                text.style.left = 50 + (Math.random()-0.5)*5 + "%";
+            }
+        }
+
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE GOD SYNTH
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, filter;
+        
+        // HARMONIC SERIES (Just Intonation - Pure Math)
+        // 1/1, 9/8, 5/4, 3/2, 5/3, 15/8, 2/1
+        const RATIOS = [1, 1.125, 1.25, 1.5, 1.666, 1.875, 2];
+        const BASE_FREQ = 110; // Low A
+
+        let nextTime = 0;
+        let beat = 0;
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Compressor to handle the wall of sound
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -20;
+            comp.ratio.value = 12;
+            
+            master = actx.createGain();
+            master.gain.value = 0.5;
+            
+            // Global Lowpass Filter (controlled by mouse Y)
+            filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 500;
+            
+            // Ping-Pong Delay
+            const delay = actx.createDelay();
+            delay.delayTime.value = 0.2; // 16th noteish
+            const delayFb = actx.createGain();
+            delayFb.gain.value = 0.6;
+            delay.connect(delayFb);
+            delayFb.connect(delay);
+            
+            master.connect(filter);
+            filter.connect(comp);
+            filter.connect(delay); // Send to delay
+            delay.connect(comp);   // Return to master
+            comp.connect(actx.destination);
+
+            // Modulate filter with mouse
+            setInterval(() => {
+                const target = 200 + (mouse.y * 10000);
+                filter.frequency.setTargetAtTime(target, actx.currentTime, 0.1);
+                intensity = mouse.y; // Sync visuals to audio intensity
+            }, 50);
+
+            nextTime = actx.currentTime + 0.1;
+            sequencer();
+        }
+
+        function sequencer() {
+            // Speed increases with intensity
+            const interval = 0.12 - (intensity * 0.08); 
+            
+            while (nextTime < actx.currentTime + 0.1) {
+                triggerEvent(nextTime, beat);
+                nextTime += interval;
+                beat++;
+            }
+            if(isRunning) setTimeout(sequencer, 25);
+        }
+
+        function triggerEvent(t, i) {
+            // 1. KICK DRUM (The Heart)
+            if (i % 4 === 0) playKick(t);
+
+            // 2. BASS LINE (The Body)
+            if (i % 2 === 0) playBass(t, i);
+
+            // 3. ARPEGGIOS (The Mind) - Super fast
+            if (intensity > 0.2) {
+                const ratio = RATIOS[Math.floor(Math.random() * RATIOS.length)];
+                const freq = BASE_FREQ * 4 * ratio; // High octave
+                playPluck(t, freq, (i%2===0) ? -0.5 : 0.5); // Stereo panning
+            }
+
+            // 4. THE WALL (The Climax)
+            if (intensity > 0.8 && i % 8 === 0) {
+                playSuperSawChord(t);
+                flash = 0.5; // Trigger visual strobe
+            }
+        }
+
+        /* --- SYNTHESIZERS --- */
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+            g.gain.setValueAtTime(1.0, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        function playBass(t, i) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            const g = actx.createGain();
+            
+            // Rolling bassline logic
+            const freq = BASE_FREQ * ((i % 8 === 0) ? 0.5 : 1);
+            osc.frequency.value = freq;
+            
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            
+            // Distort
+            const shaper = actx.createWaveShaper();
+            shaper.curve = makeDistortionCurve(50);
+            
+            osc.connect(g); g.connect(shaper); shaper.connect(filter);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        function playPluck(t, freq, pan) {
+            const osc = actx.createOscillator();
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            
+            const panner = actx.createStereoPanner();
+            panner.pan.value = pan;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.2, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+            osc.connect(g); g.connect(panner); panner.connect(filter);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+
+        function playSuperSawChord(t) {
+            // Play a massive chord of 3 notes, each with 5 detuned oscillators
+            [1, 1.5, 2].forEach(ratio => { // Root, Fifth, Octave
+                const base = BASE_FREQ * 2 * ratio;
+                for(let k=0; k<5; k++) {
+                    const osc = actx.createOscillator();
+                    osc.type = 'sawtooth';
+                    // Random detuning for "Thick" sound
+                    osc.frequency.value = base + (Math.random() * 10 - 5); 
+                    
+                    const g = actx.createGain();
+                    g.gain.setValueAtTime(0, t);
+                    g.gain.linearRampToValueAtTime(0.1, t+0.05);
+                    g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+                    
+                    // Pan Spread
+                    const pan = actx.createStereoPanner();
+                    pan.pan.value = (Math.random() * 2 - 1);
+                    
+                    osc.connect(g); g.connect(pan); pan.connect(filter);
+                    osc.start(t); osc.stop(t+0.5);
+                }
+            });
+        }
+
+        // Utility: Distortion Curve
+        function makeDistortionCurve(amount) {
+            let k = typeof amount === 'number' ? amount : 50,
+                n_samples = 44100,
+                curve = new Float32Array(n_samples),
+                deg = Math.PI / 180,
+                i = 0,
+                x;
+            for ( ; i < n_samples; ++i ) {
+                x = i * 2 / n_samples - 1;
+                curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
+            }
+            return curve;
+        }
+
+        /* --- BOOT --- */
+        function overload() {
+            isRunning = true;
+            document.getElementById('warning').style.opacity = 0;
+            setTimeout(() => document.getElementById('warning').remove(), 1000);
+            
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+        resize();
+
+    </script>
+</body>
+</html>

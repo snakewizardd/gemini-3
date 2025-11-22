@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAPTURE // ASCENSION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;900&family=Quicksand:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000; /* Starts in the void */
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: blur(1px) contrast(1.1);
+            transition: filter 10s ease;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+            transition: opacity 0.1s; 
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            transition: opacity 3s ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 4rem;
+            font-weight: 400;
+            letter-spacing: 15px;
+            color: #fff;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+
+        p {
+            font-family: 'Quicksand', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 5px;
+            color: rgba(255,255,255,0.6);
+            text-transform: uppercase;
+            margin-bottom: 40px;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: rgba(255,255,255,0.8);
+            padding: 20px 60px;
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+            cursor: pointer;
+            border-radius: 100px;
+            transition: all 1s cubic-bezier(0.19, 1, 0.22, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.1);
+            transform: scaleX(0);
+            transform-origin: right;
+            transition: transform 0.5s;
+        }
+
+        button:hover {
+            border-color: #fff;
+            color: #fff;
+            box-shadow: 0 0 60px rgba(255, 255, 255, 0.4);
+        }
+        
+        button:hover::after {
+            transform: scaleX(1);
+            transform-origin: left;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="heaven"></canvas>
+    <div id="overlay"></div>
+
+    <div id="ui">
+        <h1>RAPTURE</h1>
+        <p>LEAVE THE BODY BEHIND</p>
+        <button onclick="ascend()">ASCEND</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('heaven');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let ascensionLevel = 0; // 0 to 1 (The journey)
+
+        // VISUAL ENTITIES
+        let souls = [];
+        let clouds = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: THE TUNNEL OF LIGHT
+           ------------------------------------------------ */
+        
+        class Soul {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Spawn in a cylinder shape
+                this.angle = Math.random() * Math.PI * 2;
+                this.radius = Math.random() * width * 0.5 + 50;
+                this.y = height + Math.random() * 500;
+                this.speed = 2 + Math.random() * 3;
+                this.size = Math.random() * 3;
+                this.alpha = 0;
+                // Gold or White
+                this.hue = Math.random() > 0.7 ? 45 : 200; 
+                this.sat = Math.random() > 0.7 ? '100%' : '10%';
+            }
+
+            update() {
+                // Move UP and INWARD
+                this.y -= this.speed * (1 + ascensionLevel * 5);
+                this.radius *= 0.995; // Spiral in
+                
+                // Rotation
+                this.angle += 0.005 * (1 + ascensionLevel);
+                
+                // Fade in then out
+                if (this.y > height - 100) this.alpha += 0.01;
+                else if (this.y < height * 0.3) this.alpha -= 0.01;
+                
+                // Reset
+                if (this.y < -50 || this.radius < 5 || this.alpha <= 0) {
+                    if (this.y < height * 0.5) this.reset(); // Only reset if died naturally
+                }
+                
+                // Calculate screen pos
+                this.x = cx + Math.cos(this.angle) * this.radius;
+            }
+
+            draw() {
+                ctx.fillStyle = `hsla(${this.hue}, ${this.sat}, 80%, ${this.alpha})`;
+                ctx.shadowBlur = 20 * ascensionLevel;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                // Draw elongated "soul" shape
+                ctx.ellipse(this.x, this.y, this.size, this.size * 8, 0, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function initVisuals() {
+            souls = [];
+            for(let i=0; i<300; i++) souls.push(new Soul());
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.01;
+            ascensionLevel = Math.min(1, ascensionLevel + 0.0005); // Slowly ramp up intensity forever
+
+            // Clear with trail (feathery effect)
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.1 - (ascensionLevel * 0.05)})`;
+            ctx.fillRect(0, 0, width, height);
+            
+            // Add "God Ray" gradient
+            const grad = ctx.createRadialGradient(cx, 0, 0, cx, height/2, height);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${0.2 + ascensionLevel})`);
+            grad.addColorStop(0.5, 'rgba(255, 220, 150, 0.1)');
+            grad.addColorStop(1, 'transparent');
+            
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,width,height);
+
+            // Draw Souls
+            souls.forEach(s => {
+                s.update();
+                s.draw();
+            });
+
+            // THE WHITE OUT
+            // As ascensionLevel nears 1, screen fades to pure white
+            if (ascensionLevel > 0.8) {
+                const whiteOp = (ascensionLevel - 0.8) * 5; // 0 to 1
+                document.getElementById('overlay').style.opacity = whiteOp;
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE SHEPARD-RISSET CHOIR
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        
+        // F# Major 9 (The "Heaven" Chord)
+        // Constructed via Just Intonation relative to F# (370hz)
+        const BASE_FREQS = [185, 370, 462.5, 555, 693.75, 740]; 
+        // Roots, 3rds, 5ths, 9ths spread across octaves
+
+        let oscillators = [];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Compressor
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -30;
+            comp.ratio.value = 10;
+            comp.connect(actx.destination);
+            
+            master = actx.createGain();
+            master.gain.value = 0; // Fade in
+            master.connect(comp);
+
+            // CONVOLVER REVERB (The Cathedral)
+            reverb = actx.createConvolver();
+            createImpulse(5.0); // 5 second tail
+            
+            const revMix = actx.createGain();
+            revMix.gain.value = 0.6;
+            master.connect(revMix);
+            revMix.connect(reverb);
+            reverb.connect(comp);
+
+            // Start the Shepard Generators
+            BASE_FREQS.forEach(f => createShepardVoice(f));
+
+            // Fade Master In
+            master.gain.linearRampToValueAtTime(0.5, actx.currentTime + 10);
+        }
+
+        function createImpulse(duration) {
+            const rate = actx.sampleRate;
+            const len = rate * duration;
+            const buf = actx.createBuffer(2, len, rate);
+            for (let i = 0; i < len; i++) {
+                // Exponential decay
+                const d = Math.pow(1 - i / len, 3); 
+                buf.getChannelData(0)[i] = (Math.random()*2-1)*d;
+                buf.getChannelData(1)[i] = (Math.random()*2-1)*d;
+            }
+            reverb.buffer = buf;
+        }
+
+        // A Shepard voice consists of multiple oscillators spaced by octaves
+        // They rise in pitch. As they go too high, volume drops to 0.
+        // As they appear from bottom, volume rises.
+        function createShepardVoice(startFreq) {
+            // Create a stack of 6 octaves for this note
+            for(let i=0; i<6; i++) {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                const filter = actx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 800; // Soften the saw
+                
+                const pan = actx.createStereoPanner();
+                // Slow panning
+                setInterval(() => {
+                    pan.pan.value = Math.sin(actx.currentTime * 0.2 + i);
+                }, 50);
+
+                const gain = actx.createGain();
+                gain.gain.value = 0;
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(pan);
+                pan.connect(master);
+
+                osc.start();
+
+                // The Loop
+                const cycleLength = 40; // Seconds to traverse frequency range
+                const offset = (i / 6) * cycleLength; // Spacing
+                
+                function update(t) {
+                    if(!isRunning) return;
+                    
+                    const localTime = (t + offset) % cycleLength;
+                    const progress = localTime / cycleLength; // 0 to 1
+                    
+                    // Pitch rises exponentially (20Hz to 10,000Hz range roughly)
+                    // But we constrain it to musical octaves of the startFreq
+                    // Pitch = startFreq * 2^x
+                    // We want smooth glide. 
+                    const freqMultiplier = Math.pow(2, progress * 4); // Rise 4 octaves
+                    const currentFreq = startFreq * 0.25 * freqMultiplier; // Start 2 octaves down
+                    
+                    osc.frequency.value = currentFreq;
+
+                    // SHEPARD GAIN CURVE (Bell Curve)
+                    // Volume is high in the middle frequencies, 0 at low/high extremes
+                    // Use Sine wave 0->PI for shape
+                    const vol = Math.sin(progress * Math.PI);
+                    
+                    // Add "Tremolo" / Shimmer
+                    const shimmer = 1 + Math.sin(t * 10 + i) * 0.1;
+                    
+                    gain.gain.value = (vol * 0.05 * shimmer) * (0.5 + ascensionLevel); // Gets louder
+
+                    requestAnimationFrame(() => update(actx.currentTime));
+                }
+                update(actx.currentTime);
+            }
+        }
+
+        function ascend() {
+            isRunning = true;
+            
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 3000);
+            
+            resize();
+            initVisuals();
+            initAudio();
+            
+            if(actx.state === 'suspended') actx.resume();
+            
+            render();
+        }
+
+        resize();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMEGA POINT // THE FINAL RENDER</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Cinzel', serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* The "Dream" Filter */
+            filter: brightness(1.2) contrast(1.1) saturate(1.2) blur(0.5px);
+            transition: filter 10s ease;
+        }
+
+        #curtain {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 5s ease-in-out;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            transition: opacity 2s ease;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 20px;
+            font-weight: 400;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+        }
+
+        button {
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 20px 60px;
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: 1s cubic-bezier(0.2, 1, 0.2, 1);
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 100px #fff;
+            letter-spacing: 10px;
+        }
+
+        #final-text {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 2rem;
+            letter-spacing: 10px;
+            opacity: 0;
+            z-index: 101;
+            transition: opacity 3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="void"></canvas>
+    <div id="curtain"></div>
+    <div id="final-text">IT IS DONE.</div>
+
+    <div id="ui">
+        <h1>OMEGA POINT</h1>
+        <button onclick="initiateSequence()">WITNESS</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('void');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        let w, h, cx, cy;
+        let isRunning = false;
+        let time = 0;
+        
+        // THE EMOTIONAL VARIABLES
+        let intensity = 0; // 0.0 to 1.0 (Volume/Speed)
+        let expansion = 0; // 0.0 to 1.0 (Universe Size)
+        let singularity = 0; // Pull strength
+        let whiteout = 0;
+
+        // PARTICLE SYSTEM
+        const COUNT = 2000;
+        let particles = [];
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            cx = w / 2;
+            cy = h / 2;
+            if(!isRunning) initParticles();
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: THE GRAVITATIONAL SINGULARITY
+           ------------------------------------------------ */
+
+        class Photon {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Spawn in a spherical cloud
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                const r = 100 + Math.random() * 1000; // Wide distribution
+
+                this.x = r * Math.sin(phi) * Math.cos(theta);
+                this.y = r * Math.sin(phi) * Math.sin(theta);
+                this.z = r * Math.cos(phi) + 1000; // Start deep
+
+                this.baseX = this.x;
+                this.baseY = this.y;
+                this.baseZ = this.z;
+
+                this.size = Math.random() * 1.5;
+                this.colorVal = Math.random();
+            }
+
+            update() {
+                // ROTATION (The Galaxy Spin)
+                const speed = 0.001 + (intensity * 0.02);
+                const cos = Math.cos(speed);
+                const sin = Math.sin(speed);
+
+                // Rotate X/Z
+                let x = this.x * cos - this.z * sin;
+                let z = this.x * sin + this.z * cos;
+                this.x = x;
+                this.z = z;
+
+                // GRAVITY (The Collapse)
+                // Pull towards 0,0,0 based on singularity strength
+                if (singularity > 0) {
+                    this.x *= 0.99 - (singularity * 0.05);
+                    this.y *= 0.99 - (singularity * 0.05);
+                    this.z *= 0.99 - (singularity * 0.05);
+                }
+
+                // EXPANSION (The Big Bang)
+                if (expansion > 0) {
+                    this.z -= 50 * expansion;
+                    if (this.z < 10) this.reset(); // Loop
+                }
+            }
+
+            draw() {
+                const fov = 600 + (intensity * 200);
+                const scale = fov / (fov + this.z);
+                
+                if (scale < 0) return;
+
+                const sx = cx + this.x * scale;
+                const sy = cy + this.y * scale;
+                const ss = this.size * scale * (1 + intensity*2);
+
+                // Color: Shift from Blue -> Gold -> White
+                let r, g, b;
+                if (intensity < 0.3) { // Deep Space Blue
+                    r = 50; g = 100; b = 255;
+                } else if (intensity < 0.8) { // Celestial Gold
+                    r = 255; g = 200 + (Math.random()*55); b = 100;
+                } else { // Pure Energy
+                    r = 255; g = 255; b = 255;
+                }
+
+                const alpha = Math.min(1, (scale * 0.5) + (intensity * 0.5));
+
+                ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+                ctx.beginPath();
+                ctx.arc(sx, sy, ss, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for(let i=0; i<COUNT; i++) particles.push(new Photon());
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+
+            // TRAIL EFFECT
+            // As intensity rises, trails get longer (alpha gets lower)
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.3 - (intensity * 0.2)})`;
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.globalCompositeOperation = 'screen'; // Additive blending
+
+            particles.sort((a,b) => b.z - a.z); // Sort Z
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // THE CORE
+            // A central sun that grows
+            if (intensity > 0.1) {
+                const size = intensity * 200;
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size);
+                grad.addColorStop(0, '#fff');
+                grad.addColorStop(0.5, 'rgba(255, 200, 100, 0.5)');
+                grad.addColorStop(1, 'transparent');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(cx, cy, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // WHITE OUT
+            if (whiteout > 0) {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.fillStyle = `rgba(255,255,255,${whiteout})`;
+                ctx.fillRect(0,0,w,h);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE ETERNAL CHORD
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+
+        // Db Lydian (The "God" Key)
+        // Fundamental frequencies for texture
+        const FREQS = [69.30, 138.59, 174.61, 207.65, 233.08, 277.18, 311.13];
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Chain
+            master = actx.createGain();
+            master.gain.value = 0; // Start silent
+
+            // Massive Reverb (Infinite Space)
+            reverb = actx.createConvolver();
+            createReverbImpulse(8); // 8 seconds tail
+            
+            const revGain = actx.createGain();
+            revGain.gain.value = 0.5;
+
+            master.connect(revGain);
+            revGain.connect(reverb);
+            reverb.connect(actx.destination);
+            master.connect(actx.destination);
+
+            runSequence();
+        }
+
+        function createReverbImpulse(seconds) {
+            const len = actx.sampleRate * seconds;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let i=0; i<len; i++) {
+                const d = Math.pow(1 - i/len, 2);
+                buf.getChannelData(0)[i] = (Math.random()*2-1)*d;
+                buf.getChannelData(1)[i] = (Math.random()*2-1)*d;
+            }
+            reverb.buffer = buf;
+        }
+
+        function playDroneLayer(freq, delay, duration, type) {
+            setTimeout(() => {
+                if(!isRunning) return;
+                
+                const osc = actx.createOscillator();
+                osc.type = type;
+                osc.frequency.value = freq;
+                
+                // Detune for thickness
+                const osc2 = actx.createOscillator();
+                osc2.type = type;
+                osc2.frequency.value = freq;
+                osc2.detune.value = Math.random() * 10 - 5;
+
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0, actx.currentTime);
+                // Swell in
+                g.gain.linearRampToValueAtTime(0.05, actx.currentTime + (duration/2));
+                // Fade out
+                g.gain.linearRampToValueAtTime(0, actx.currentTime + duration);
+
+                // Lowpass filter to open up slowly
+                const f = actx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.setValueAtTime(200, actx.currentTime);
+                f.frequency.linearRampToValueAtTime(2000, actx.currentTime + duration);
+
+                // Pan
+                const p = actx.createStereoPanner();
+                p.pan.value = Math.random() * 2 - 1;
+
+                osc.connect(f); osc2.connect(f);
+                f.connect(g); g.connect(p); p.connect(master);
+
+                osc.start(); osc2.start();
+                osc.stop(actx.currentTime + duration);
+                osc2.stop(actx.currentTime + duration);
+
+            }, delay * 1000);
+        }
+
+        function playChoirVoice(freq, delay, duration) {
+            setTimeout(() => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq;
+
+                // Formant Filter (Vowel "Ah")
+                const f1 = actx.createBiquadFilter();
+                f1.type = 'bandpass';
+                f1.frequency.value = 800;
+                f1.Q.value = 4;
+
+                const g = actx.createGain();
+                g.gain.setValueAtTime(0, actx.currentTime);
+                g.gain.linearRampToValueAtTime(0.04, actx.currentTime + 4);
+                g.gain.linearRampToValueAtTime(0, actx.currentTime + duration);
+
+                // Vibrato
+                const vib = actx.createOscillator();
+                vib.frequency.value = 4;
+                const vibG = actx.createGain();
+                vibG.gain.value = 6;
+                vib.connect(vibG); vibG.connect(osc.frequency);
+                vib.start();
+
+                osc.connect(f1); f1.connect(g); g.connect(master);
+                osc.start(); osc.stop(actx.currentTime + duration);
+            }, delay * 1000);
+        }
+
+        // --- THE SEQUENCE (Timeline) ---
+        function runSequence() {
+            const t = actx.currentTime;
+
+            // 0:00 - THE VOID
+            master.gain.linearRampToValueAtTime(1.0, t + 5);
+            // Deep drones
+            playDroneLayer(FREQS[0], 0, 30, 'sine'); // Low Db
+            playDroneLayer(FREQS[4], 2, 30, 'sine'); // Ab
+
+            // ANIMATION STATE: Slow orbit
+            const animLoop = setInterval(() => {
+                if(intensity < 0.2) intensity += 0.001;
+            }, 100);
+
+            // 0:15 - THE CHORUS
+            setTimeout(() => {
+                intensity = 0.3;
+                expansion = 0.1;
+                // Add mid-range texture
+                playDroneLayer(FREQS[1], 0, 20, 'triangle');
+                playDroneLayer(FREQS[2], 2, 20, 'triangle');
+                playChoirVoice(FREQS[3]*2, 0, 25);
+                playChoirVoice(FREQS[5]*2, 4, 25);
+            }, 15000);
+
+            // 0:30 - THE CRESCENDO
+            setTimeout(() => {
+                // The visual variable loop
+                clearInterval(animLoop);
+                const rise = setInterval(() => {
+                    if(intensity < 1.0) intensity += 0.005;
+                    if(expansion < 1.0) expansion += 0.005;
+                }, 50);
+
+                // Massive Wall of Sound
+                FREQS.forEach((f, i) => {
+                    playDroneLayer(f, i*0.5, 15, 'sawtooth');
+                    playDroneLayer(f*2, i*0.5, 15, 'sawtooth');
+                    playChoirVoice(f*4, i, 15);
+                });
+            }, 30000);
+
+            // 0:45 - THE SINGULARITY (Collapse)
+            setTimeout(() => {
+                singularity = 1.0;
+                expansion = 0;
+                // Filter sweep up noise
+                const osc = actx.createOscillator();
+                const g = actx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 50;
+                osc.frequency.exponentialRampToValueAtTime(800, actx.currentTime + 5);
+                g.gain.setValueAtTime(0.2, actx.currentTime);
+                g.gain.linearRampToValueAtTime(0, actx.currentTime + 5);
+                osc.connect(g); g.connect(master);
+                osc.start();
+            }, 45000);
+
+            // 0:50 - WHITEOUT
+            setTimeout(() => {
+                const fade = setInterval(() => {
+                    if(whiteout < 1.0) whiteout += 0.02;
+                    else clearInterval(fade);
+                }, 20);
+            }, 50000);
+
+            // 0:52 - SILENCE & TEXT
+            setTimeout(() => {
+                // KILL AUDIO
+                master.gain.cancelScheduledValues(actx.currentTime);
+                master.gain.setValueAtTime(master.gain.value, actx.currentTime);
+                master.gain.linearRampToValueAtTime(0, actx.currentTime + 0.1);
+                
+                // KILL VISUALS
+                isRunning = false;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0,0,w,h);
+                document.getElementById('final-text').style.opacity = 1;
+                document.getElementById('curtain').style.opacity = 1;
+            }, 53000);
+        }
+
+        function initiateSequence() {
+            isRunning = true;
+            initParticles();
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(()=>document.getElementById('ui').style.display='none', 2000);
+            
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            render();
+        }
+    </script>
+</body>
+</html>

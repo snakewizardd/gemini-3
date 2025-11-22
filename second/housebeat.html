@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON OVERDRIVE // ADRENALINE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Audiowide&display=swap');
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Audiowide', cursive;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* Chromatic Aberration Simulation via CSS filters */
+            filter: contrast(1.4) saturate(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 20;
+            text-align: center;
+            color: #fff;
+            mix-blend-mode: exclusion;
+            transition: opacity 0.5s ease;
+        }
+
+        h1 {
+            font-size: 6rem;
+            margin: 0;
+            text-transform: uppercase;
+            text-shadow: 4px 4px 0px #ff0055, -4px -4px 0px #00ffff;
+            animation: shake 0.15s infinite;
+        }
+
+        p {
+            font-size: 1.5rem;
+            color: #00ff00;
+            letter-spacing: 5px;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: 4px solid #000;
+            padding: 20px 80px;
+            font-size: 2rem;
+            font-family: inherit;
+            font-weight: 900;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 10px 10px 0px #ff0055;
+            transition: transform 0.1s;
+        }
+
+        button:hover {
+            transform: translate(-5px, -5px);
+            box-shadow: 15px 15px 0px #00ffff;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 10%;
+            width: 100%;
+            text-align: center;
+            font-size: 4rem;
+            color: white;
+            font-weight: 900;
+            text-shadow: 0 0 20px white;
+            opacity: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(2px, 2px); }
+            50% { transform: translate(-2px, -2px); }
+            100% { transform: translate(2px, -2px); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="rave"></canvas>
+    <div id="status"></div>
+
+    <div id="ui">
+        <h1>ADRENALINE</h1>
+        <p>SENSORY OVERLOAD PROTOCOL</p>
+        <button onclick="detonate()">DETONATE</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('rave');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        let w, h, cx, cy;
+        let isRunning = false;
+        let time = 0;
+
+        // SYNC VARS
+        let kickValue = 0; // 0 to 1 (Explosion force)
+        let glitchAmount = 0; // 0 to 1
+        let globalHue = 0;
+
+        // PARTICLES
+        let particles = [];
+        
+        function resize() {
+            w = window.innerWidth; h = window.innerHeight;
+            canvas.width = w; canvas.height = h;
+            cx = w/2; cy = h/2;
+        }
+        window.addEventListener('resize', resize);
+
+        /* ------------------------------------------------
+           VISUALS: THE NEON RIOT
+           ------------------------------------------------ */
+
+        class Spark {
+            constructor(isExplosion) {
+                this.x = cx;
+                this.y = cy;
+                const angle = Math.random() * Math.PI * 2;
+                const force = isExplosion ? (Math.random() * 30 + 10) : (Math.random() * 5 + 2);
+                this.vx = Math.cos(angle) * force;
+                this.vy = Math.sin(angle) * force;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.01;
+                this.color = Math.random() > 0.5 ? '#ff0055' : '#00ffff'; // Neon Pink or Cyan
+                if(Math.random() > 0.9) this.color = '#ffffff'; // Flash white
+                this.size = Math.random() * 5 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.92; // Drag
+                this.vy *= 0.92;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                
+                // Stretch sparks based on velocity
+                const speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                const angle = Math.atan2(this.vy, this.vx);
+                
+                ctx.translate(this.x, this.y);
+                ctx.rotate(angle);
+                ctx.rect(0, -this.size/2, this.size + speed*2, this.size);
+                ctx.rotate(-angle);
+                ctx.translate(-this.x, -this.y);
+                
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+
+            time += 0.1;
+            kickValue *= 0.85; // Fast decay
+            glitchAmount *= 0.9;
+            globalHue += 5;
+
+            // 1. GLITCH & TRAILS
+            // Instead of clearing, we draw a semi-transparent black box
+            // But if glitching, we offset it
+            ctx.save();
+            if (kickValue > 0.5) {
+                const shake = (kickValue * 20);
+                ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+                // Chromatic split simulated by drawing background with offset color composite?
+                // Simple version: Just clear slightly
+            }
+            
+            ctx.fillStyle = `rgba(0,0,0,${0.2 - (kickValue * 0.1)})`; // More trails on beat
+            ctx.fillRect(-50, -50, w+100, h+100);
+            ctx.restore();
+
+            // 2. CENTER PULSE (The Speaker Cone)
+            const radius = 50 + (kickValue * 200);
+            
+            ctx.globalCompositeOperation = 'lighter'; // Neon Glow Mode
+            
+            // Draw concentric shockwaves
+            ctx.lineWidth = 5 + (kickValue * 10);
+            ctx.strokeStyle = `hsl(${globalHue}, 100%, 50%)`;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI*2);
+            ctx.stroke();
+            
+            ctx.strokeStyle = `hsl(${globalHue + 180}, 100%, 50%)`;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius * 0.6, 0, Math.PI*2);
+            ctx.stroke();
+
+            // 3. PARTICLES
+            particles.forEach((p, i) => {
+                p.update();
+                p.draw();
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+
+            // 4. STROBE
+            if(kickValue > 0.8) {
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(0,0,w,h);
+            }
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: ADRENALINE
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, sidechain;
+
+        // Scale: F Minor (Heavy)
+        // F, G, Ab, Bb, C, Db, Eb
+        const SCALE = [43.65, 51.91, 58.27, 65.41, 87.31]; // Bass notes
+        const LEAD_SCALE = [349.23, 415.30, 523.25, 698.46, 830.61]; // High notes
+
+        function initAudio() {
+            actx = new AC();
+            
+            // Master Limiter
+            const comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -10;
+            comp.ratio.value = 20;
+            comp.connect(actx.destination);
+            
+            master = actx.createGain();
+            master.gain.value = 0.7;
+            master.connect(comp);
+            
+            // Sidechain Bus (Ducks volume on Kick)
+            sidechain = actx.createGain();
+            sidechain.connect(master);
+
+            scheduleNext(actx.currentTime + 0.1);
+        }
+
+        // NARRATIVE STATE
+        let state = 'INTRO'; 
+        let globalBar = 0;
+        let globalBeat = 0;
+
+        function updateState(bar) {
+            const status = document.getElementById('status');
+            
+            if (bar < 4) {
+                state = 'INTRO';
+                status.innerText = "SYSTEM ONLINE";
+                status.style.opacity = 1;
+            } else if (bar < 8) {
+                state = 'BUILD';
+                status.innerText = "PRESSURE RISING";
+                status.style.color = "#ff0055";
+            } else if (bar < 24) {
+                state = 'DROP';
+                status.innerText = "OVERLOAD";
+                status.style.fontSize = "10rem";
+                if(bar % 2 === 0) status.style.opacity = 0.5; // Flash text
+                else status.style.opacity = 1;
+            } else {
+                state = 'BREAK';
+                status.innerText = "SYSTEM COOLING";
+                status.style.fontSize = "4rem";
+            }
+        }
+
+        let nextTime = 0;
+        function scheduleNext(t) {
+            const bpm = 150; // TRAP/DUBSTEP SPEED
+            const secPerBeat = 60/bpm;
+            const stepTime = secPerBeat / 4; // 16th notes
+
+            // Sequencer loop
+            const tick = () => {
+                if(!isRunning) return;
+                const now = actx.currentTime;
+                
+                if (now >= nextTime) {
+                    const step = globalBeat % 16;
+                    const bar = Math.floor(globalBeat / 16);
+                    
+                    if (step === 0) updateState(bar);
+                    playStep(nextTime, step, state);
+                    
+                    nextTime += stepTime;
+                    globalBeat++;
+                }
+                
+                requestAnimationFrame(tick);
+            };
+            tick();
+        }
+
+        function playStep(t, step, currentState) {
+            // 1. KICK (The Foundation)
+            let isKick = false;
+            
+            if (currentState === 'INTRO' && step % 8 === 0) isKick = true;
+            if (currentState === 'BUILD') {
+                // Acceleration
+                const barInPhase = globalBar % 4;
+                if (barInPhase < 2 && step % 4 === 0) isKick = true;
+                if (barInPhase === 2 && step % 2 === 0) isKick = true;
+                if (barInPhase === 3) isKick = true; // Machine gun roll
+            }
+            if (currentState === 'DROP') {
+                // Trap Pattern
+                if (step === 0) isKick = true;
+                if (step === 8) isKick = true; // Half time feel
+                if (step === 14) isKick = true;
+            }
+
+            if (isKick) {
+                playKick(t);
+                // Duck Volume
+                sidechain.gain.setValueAtTime(0, t);
+                sidechain.gain.linearRampToValueAtTime(1, t + 0.1);
+                // Visual Explosion
+                kickValue = 1.0;
+                for(let i=0; i<20; i++) particles.push(new Spark(true));
+            }
+
+            // 2. HI HATS (The Kinetic Bounce)
+            if (step % 2 === 0) {
+                // Pan hats L/R
+                playHat(t, step % 4 === 2 ? 1 : -1); 
+                if (Math.random() > 0.7) playHat(t + 0.05, 0); // Ratchet
+            }
+
+            // 3. SNARE / CLAP
+            if (currentState === 'DROP' && step === 8) {
+                playClap(t);
+            }
+
+            // 4. WOBBLE BASS (The Drop)
+            if (currentState === 'DROP') {
+                if (step === 0 || step === 3 || step === 6 || step === 10) {
+                    const note = SCALE[Math.floor(Math.random()*SCALE.length)];
+                    playWobble(t, note, 0.4);
+                }
+            }
+
+            // 5. NEON LEAD (The Hook)
+            if (currentState !== 'BUILD') {
+                if (step % 2 === 0 && Math.random() > 0.4) {
+                    const note = LEAD_SCALE[Math.floor(Math.random()*LEAD_SCALE.length)];
+                    // Glide logic
+                    playLead(t, note, Math.random() > 0.5); 
+                    // Visual sparks on lead notes
+                    particles.push(new Spark(false));
+                }
+            }
+            
+            // 6. VOCAL CHOP
+            if (step % 4 === 0 && Math.random() > 0.6) {
+                playVocal(t, LEAD_SCALE[0]);
+            }
+            
+            // 7. RISER
+            if (currentState === 'BUILD' && step === 0) {
+                playRiser(t);
+            }
+        }
+
+        /* --- SYNTHS --- */
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            
+            // Pitch drop (150Hz -> 40Hz)
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+            
+            g.gain.setValueAtTime(1.2, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+
+            // Distortion for "Hard" kick
+            const shaper = actx.createWaveShaper();
+            shaper.curve = makeDistortionCurve(20);
+
+            osc.connect(g); g.connect(shaper); shaper.connect(master); // Direct to master
+            osc.start(t); osc.stop(t + 0.4);
+        }
+
+        function playWobble(t, freq, dur) {
+            // Classic Dubstep Wobble
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.Q.value = 10; // Resonant
+
+            // LFO for the "Wub"
+            const lfo = actx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 6; // Speed of wobble (Hz)
+            const lfoG = actx.createGain();
+            lfoG.gain.value = 1000; // Depth of filter sweep
+            
+            lfo.connect(lfoG); lfoG.connect(filter.frequency);
+            
+            // Base filter freq
+            filter.frequency.setValueAtTime(200, t);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.linearRampToValueAtTime(0, t + dur);
+
+            osc.connect(filter); filter.connect(g); g.connect(sidechain);
+            osc.start(t); osc.stop(t + dur);
+            lfo.start(t); lfo.stop(t + dur);
+        }
+
+        function playLead(t, freq, glide) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            
+            // Glide (Portamento)
+            if (glide) {
+                osc.frequency.setValueAtTime(freq / 2, t);
+                osc.frequency.linearRampToValueAtTime(freq, t + 0.05);
+            } else {
+                osc.frequency.value = freq;
+            }
+
+            // Detune for "SuperSaw" feel
+            const osc2 = actx.createOscillator();
+            osc2.type = 'sawtooth';
+            osc2.frequency.value = freq;
+            osc2.detune.value = 15; 
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+            osc.connect(g); osc2.connect(g);
+            g.connect(sidechain);
+            osc.start(t); osc.stop(t + 0.3);
+            osc2.start(t); osc2.stop(t + 0.3);
+        }
+
+        function playVocal(t, freq) {
+            // Formant Synth
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            // Bitcrush effect via WaveShaper
+            const shaper = actx.createWaveShaper();
+            shaper.curve = makeDistortionCurve(100);
+
+            // Bandpass to simulate vocal tract
+            const filter = actx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.Q.value = 5;
+            filter.frequency.setValueAtTime(800, t);
+            filter.frequency.linearRampToValueAtTime(1500, t + 0.1); // "Ya-Ya" sound
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t + 0.05);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+
+            osc.connect(shaper); shaper.connect(filter); filter.connect(g); g.connect(sidechain);
+            osc.start(t); osc.stop(t+0.2);
+        }
+
+        function playHat(t, panPos) {
+            const osc = actx.createOscillator();
+            osc.type = 'square'; // Trap hat metallic sound
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 10000;
+            
+            const panner = actx.createStereoPanner();
+            panner.pan.value = panPos;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.2, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+
+            osc.connect(f); f.connect(g); g.connect(panner); panner.connect(master);
+            osc.start(t); osc.stop(t + 0.05);
+        }
+
+        function playClap(t) {
+            const noise = actx.createBufferSource();
+            const len = actx.sampleRate * 0.2;
+            const buf = actx.createBuffer(1, len, actx.sampleRate);
+            const d = buf.getChannelData(0);
+            for(let i=0;i<len;i++) d[i] = (Math.random()*2-1);
+            noise.buffer = buf;
+
+            const f = actx.createBiquadFilter();
+            f.type = 'bandpass'; f.frequency.value = 1500;
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.8, t);
+            g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+
+            noise.connect(f); f.connect(g); g.connect(master);
+            noise.start(t);
+        }
+
+        function playRiser(t) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.exponentialRampToValueAtTime(800, t + 0.4); // Pitch up
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.linearRampToValueAtTime(0, t+0.4);
+            
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t+0.4);
+        }
+
+        function makeDistortionCurve(amount) {
+            let k = typeof amount === 'number' ? amount : 50,
+            n_samples = 44100,
+            curve = new Float32Array(n_samples),
+            deg = Math.PI / 180,
+            i = 0,
+            x;
+            for ( ; i < n_samples; ++i ) {
+                x = i * 2 / n_samples - 1;
+                curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
+            }
+            return curve;
+        }
+
+        function detonate() {
+            isRunning = true;
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(()=> document.getElementById('ui').style.display = 'none', 500);
+            
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+    </script>
+</body>
+</html>
