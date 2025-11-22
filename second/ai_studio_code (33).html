@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Without Me (Halsey) - Physics Engine</title>
+    <style>
+        :root {
+            --gold: #e5c376;
+            --bg: #08090b;
+            --string-idle: #3a3a3a;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--gold);
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        #ui {
+            position: absolute;
+            z-index: 10;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, transparent 0%, var(--bg) 120%);
+        }
+        #lyrics {
+            font-size: 2.5rem;
+            text-align: center;
+            min-height: 3rem;
+            text-shadow: 0 0 20px rgba(229, 195, 118, 0.3);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s cubic-bezier(0.215, 0.610, 0.355, 1.000);
+        }
+        #lyrics.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        #meta {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            letter-spacing: 4px;
+            opacity: 0.6;
+            text-transform: uppercase;
+        }
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: var(--gold);
+            border: 1px solid var(--gold);
+            padding: 15px 40px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 40px;
+            transition: 0.3s;
+            letter-spacing: 2px;
+        }
+        button:hover {
+            background: var(--gold);
+            color: var(--bg);
+            box-shadow: 0 0 30px var(--gold);
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="ui">
+    <div id="lyrics"></div>
+    <div id="meta">Capo 4 • Physical Modeling Synthesis</div>
+    <button id="start-btn">INITIATE SEQUENCE</button>
+</div>
+
+<script>
+/**
+ * ADVANCED MUSICAL PHYSICS ENGINE
+ * -------------------------------
+ * 1. Audio: Spectral Subtractive Synthesis.
+ *    Models the harmonic decay of a steel string.
+ *    - Exciter: Burst of noise + Sawtooth (pick attack)
+ *    - Resonator: Lowpass filter closing exponentially (damping)
+ *    - Tension: Slight pitch envelope decay on attack
+ * 
+ * 2. Visual: Damped Harmonic Oscillator.
+ *    F = -kx - cv (Hooke's Law with damping)
+ */
+
+// --- CONFIGURATION ---
+const CAPO = 4;
+const TUNING_STANDARD = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63]; // E A D G B E
+// Adjust frequencies for Capo
+const BASE_FREQS = TUNING_STANDARD.map(f => f * Math.pow(2, CAPO/12));
+
+// --- AUDIO CONTEXT ---
+let actx;
+let masterGain;
+let compressor;
+let reverbNode;
+
+function initAudio() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    actx = new AudioContext();
+    
+    // Master Chain
+    masterGain = actx.createGain();
+    masterGain.gain.value = 0.6;
+
+    // Dynamics Compression (Guitar style)
+    compressor = actx.createDynamicsCompressor();
+    compressor.threshold.value = -24;
+    compressor.knee.value = 30;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.25;
+
+    // Convolution Reverb (Algorithmic impulse approximation)
+    const sampleRate = actx.sampleRate;
+    const length = sampleRate * 2.5; // 2.5s tail
+    const impulse = actx.createBuffer(2, length, sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+        const data = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            // Exponential decay noise
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 4);
+        }
+    }
+    reverbNode = actx.createConvolver();
+    reverbNode.buffer = impulse;
+    const reverbMix = actx.createGain();
+    reverbMix.gain.value = 0.3; // Wet level
+
+    // Routing
+    masterGain.connect(compressor);
+    compressor.connect(actx.destination);
+    compressor.connect(reverbNode);
+    reverbNode.connect(actx.destination);
+}
+
+// --- SYNTHESIS MODEL ---
+function playString(stringIndex, fret, velocity = 1.0) {
+    if (!actx) return;
+    const t = actx.currentTime;
+    
+    // Calculate Pitch: f = f0 * 2^(fret/12)
+    const frequency = BASE_FREQS[stringIndex] * Math.pow(2, fret/12);
+    
+    // 1. The Oscillator (The String)
+    const osc = actx.createOscillator();
+    // Sawtooth is rich in even/odd harmonics, closest to raw string
+    osc.type = 'sawtooth'; 
+    
+    // 2. The Filter (The Body/Wood Damping)
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 1; // Resonance
+
+    // 3. The Envelope (The Pluck)
+    const gain = actx.createGain();
+
+    // PITCH ENVELOPE (Simulation of tension spike on pluck)
+    osc.frequency.setValueAtTime(frequency + (2 * velocity), t);
+    osc.frequency.exponentialRampToValueAtTime(frequency, t + 0.1);
+
+    // FILTER ENVELOPE (Harmonics die out faster than fundamental)
+    // Start bright, get dull
+    const brightness = 2000 + (2000 * velocity);
+    filter.frequency.setValueAtTime(brightness, t);
+    filter.frequency.exponentialRampToValueAtTime(frequency, t + 0.1 + (2*velocity)); // Sustain phase
+
+    // AMPLITUDE ENVELOPE
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(velocity * 0.8, t + 0.005); // Attack
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 3.0); // Decay/Release
+
+    // Connect Graph
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+
+    osc.start(t);
+    osc.stop(t + 3.5);
+
+    // Trigger Visual
+    triggerStringVisual(stringIndex, velocity);
+}
+
+// --- VISUAL PHYSICS ---
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+let strings = [];
+
+class GuitarString {
+    constructor(index, y) {
+        this.index = index;
+        this.y = y; // Resting Y position
+        this.points = [];
+        this.numPoints = 50; // Resolution
+        
+        // Physics props
+        this.amplitude = 0;
+        this.velocity = 0;
+        this.frequency = 0.2; // Visual oscillation speed
+        this.damping = 0.94;  // Energy loss per frame
+        this.thickness = 1 + index * 0.6; // Lower strings thicker
+        
+        for(let i=0; i<=this.numPoints; i++) {
+            this.points.push(0); // Displacement
+        }
+    }
+
+    pluck(force) {
+        this.amplitude = 25 * force;
+        this.velocity = 5;
+        this.frequency = 0.3 + (Math.random() * 0.1);
+    }
+
+    update() {
+        // Damped Harmonic Motion
+        if (Math.abs(this.amplitude) > 0.1) {
+            this.amplitude *= this.damping;
+            
+            // Create standing wave visual
+            const time = Date.now() * this.frequency * 0.1;
+            for(let i=0; i<=this.numPoints; i++) {
+                // Sine wave based on position (standing wave nodes)
+                // Normalized x (0 to 1)
+                const x = i / this.numPoints; 
+                const sineShape = Math.sin(x * Math.PI); // 0 at ends, 1 in middle
+                
+                // Add some "shimmer" phase
+                const vibrato = Math.sin(time + (i*0.2));
+                
+                this.points[i] = this.amplitude * sineShape * vibrato;
+            }
+        } else {
+            this.amplitude = 0;
+        }
+    }
+
+    draw(width) {
+        ctx.beginPath();
+        ctx.strokeStyle = this.amplitude > 0.5 ? '#e5c376' : '#3a3a3a';
+        ctx.lineWidth = this.thickness;
+        // Add glow if vibrating
+        ctx.shadowBlur = this.amplitude * 0.5;
+        ctx.shadowColor = '#e5c376';
+        
+        ctx.moveTo(0, this.y);
+        
+        const segmentWidth = width / this.numPoints;
+        
+        for(let i=0; i<=this.numPoints; i++) {
+            const px = i * segmentWidth;
+            const py = this.y + (this.amplitude > 0 ? this.points[i] : 0);
+            
+            // Quadratic curve for smoothness
+            if(i < this.numPoints) {
+                 const nextPx = (i + 1) * segmentWidth;
+                 const nextPy = this.y + (this.amplitude > 0 ? this.points[i+1] : 0);
+                 const xc = (px + nextPx) / 2;
+                 const yc = (py + nextPy) / 2;
+                 ctx.quadraticCurveTo(px, py, xc, yc);
+            }
+        }
+        
+        ctx.stroke();
+        ctx.shadowBlur = 0; // Reset
+    }
+}
+
+function initVisuals() {
+    resize();
+    window.addEventListener('resize', resize);
+    
+    // Create 6 strings evenly spaced
+    const spacing = canvas.height / 7;
+    strings = [];
+    for(let i=0; i<6; i++) {
+        // Invert index so String 0 (Low E) is at bottom visually, or top?
+        // Tab standard: Top line is High E. 
+        // Let's draw High E (index 5) at top.
+        strings.push(new GuitarString(i, spacing * (6-i)));
+    }
+    
+    animate();
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if(strings.length) {
+        const spacing = canvas.height / 7;
+        strings.forEach((s, i) => s.y = spacing * (6-i));
+    }
+}
+
+function animate() {
+    ctx.fillStyle = '#08090b';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    strings.forEach(s => {
+        s.update();
+        s.draw(canvas.width);
+    });
+    
+    requestAnimationFrame(animate);
+}
+
+function triggerStringVisual(index, velocity) {
+    // Index 0 is Low E. In our strings array, index 0 is Low E.
+    if(strings[index]) strings[index].pluck(velocity);
+}
+
+// --- THE SEQUENCER (SONG DATA) ---
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const setText = txt => {
+    const el = document.getElementById('lyrics');
+    el.classList.remove('visible');
+    setTimeout(() => {
+        el.innerText = txt;
+        el.classList.add('visible');
+    }, 200);
+};
+
+// Tablature mapping for "Without Me" (Capo 4)
+// Chords: Bm7 -> Dsus2 -> A -> G
+async function playSong() {
+    const Q = 60000 / 136; // Quarter note duration roughly
+    const E = Q / 2;       // Eighth note
+    
+    // Helper for clean tab reading
+    const pluck = (str, fret, time) => {
+        playString(str, fret);
+        return sleep(time);
+    };
+
+    // Intro / Verse Loop
+    for (let loop = 0; loop < 2; loop++) {
+        
+        if(loop === 0) setText("Found you when your heart was broke");
+        else setText("I filled your cup until it overflowed");
+
+        // Measure 1: Bm7
+        // Shape: x24232 (relative to capo)
+        playString(1, 2, 1.0); // A string (Root)
+        await sleep(E);
+        playString(3, 4, 0.8); // G string
+        await sleep(E);
+        playString(2, 2, 0.8); // D string
+        await sleep(E);
+        playString(4, 3, 0.9); // B string
+        await sleep(E);
+        playString(5, 2, 0.8); // High E
+        await sleep(E);
+        playString(5, 0, 0.7); // Pull off to open E
+        await sleep(E*3);
+
+        // Measure 2: D (Dsus2ish)
+        // Shape: xx0230
+        playString(2, 0, 1.0); // D string (Root)
+        await sleep(E);
+        playString(3, 2, 0.8); // G string
+        await sleep(E);
+        playString(4, 3, 0.9); // B string
+        await sleep(E);
+        playString(5, 0, 0.8); // High E
+        await sleep(E*5);
+        
+        if(loop === 0) setText("Took it so far to keep you close");
+        else setText("I was afraid to leave you on your own");
+
+        // Measure 3: A
+        // Shape: x02220
+        playString(1, 0, 1.0); // A string (Root)
+        await sleep(E);
+        playString(3, 2, 0.8); 
+        await sleep(E);
+        playString(2, 2, 0.8);
+        await sleep(E);
+        playString(4, 2, 0.9); // B string C#
+        await sleep(E);
+        playString(5, 0, 0.8);
+        await sleep(E*3);
+
+        // Measure 4: G / Em transition
+        // Shape: 320033
+        playString(0, 3, 1.1); // Low E (Root G)
+        await sleep(E);
+        playString(1, 2, 0.8);
+        await sleep(E);
+        playString(2, 0, 0.8);
+        await sleep(E);
+        playString(4, 3, 0.9);
+        await sleep(E*5);
+    }
+
+    // Pre-Chorus Build
+    setText("I said I'd catch you if you fall");
+    
+    // Bm7 Strum
+    playString(1, 2, 1.0); await sleep(30);
+    playString(2, 4, 0.9); await sleep(30);
+    playString(3, 2, 0.9); await sleep(30);
+    playString(4, 3, 1.0); 
+    await sleep(Q * 4);
+
+    setText("And if they laugh, then f**k 'em all");
+    // D Strum
+    playString(2, 0, 1.0); await sleep(30);
+    playString(3, 2, 0.9); await sleep(30);
+    playString(4, 3, 1.0); await sleep(30);
+    playString(5, 2, 1.0);
+    await sleep(Q * 4);
+
+    setText("And then I got you off your knees");
+    // A Strum
+    playString(1, 0, 1.0); await sleep(30);
+    playString(2, 2, 0.9); await sleep(30);
+    playString(3, 2, 0.9); await sleep(30);
+    playString(4, 2, 1.0);
+    await sleep(Q * 4);
+
+    setText("Thinking you could live without me");
+    // G Strum
+    playString(0, 3, 1.2); await sleep(30);
+    playString(1, 2, 1.0); await sleep(30);
+    playString(2, 0, 1.0); await sleep(30);
+    playString(3, 0, 1.0); await sleep(30);
+    playString(4, 3, 1.2);
+    await sleep(Q * 8);
+    
+    setText("Without Me.");
+    document.getElementById('start-btn').style.display = 'block';
+    document.getElementById('start-btn').innerText = "REPLAY";
+}
+
+// --- INITIALIZATION ---
+
+initVisuals();
+
+document.getElementById('start-btn').addEventListener('click', function() {
+    this.style.display = 'none';
+    if(!actx) initAudio();
+    if(actx.state === 'suspended') actx.resume();
+    playSong();
+});
+
+</script>
+</body>
+</html>

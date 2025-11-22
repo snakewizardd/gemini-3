@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELECTRIC ORPHEUS: THE 72ND STEP</title>
+    <style>
+        body { margin: 0; background: #111; overflow: hidden; font-family: 'Courier New', monospace; }
+        canvas { position: absolute; top: 0; left: 0; filter: drop-shadow(0 0 10px rgba(255, 100, 0, 0.5)); }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: none; z-index: 10;
+        }
+
+        #title { font-size: 3rem; color: #d35400; text-shadow: 0 0 20px #e67e22; opacity: 0.8; margin-bottom: 20px; }
+        #status { color: #aaa; letter-spacing: 2px; margin-top: 10px; }
+        
+        #controls {
+            position: absolute; bottom: 30px; width: 100%;
+            text-align: center; color: #555; font-size: 0.8rem;
+        }
+
+        .overlay-btn {
+            background: rgba(0,0,0,0.8); color: #e67e22; border: 1px solid #e67e22;
+            padding: 20px 50px; font-size: 1.5rem; cursor: pointer; pointer-events: auto;
+            transition: 0.3s; letter-spacing: 5px; text-transform: uppercase;
+        }
+        .overlay-btn:hover { background: #e67e22; color: #000; box-shadow: 0 0 30px #e67e22; }
+
+        .hud-metric { position: absolute; font-size: 0.8rem; color: #e67e22; opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+    
+    <div id="ui-layer">
+        <div id="title" style="display:none;">ELECTRIC ORPHEUS</div>
+        <div id="start-container">
+            <button class="overlay-btn" id="init-btn">PLUG IN</button>
+        </div>
+        <div id="status"></div>
+    </div>
+
+    <div class="hud-metric" style="top: 20px; left: 20px;" id="harmonic-set-display">HARMONIC DEPTH: 0</div>
+    <div class="hud-metric" style="top: 20px; right: 20px;" id="note-display">FREQ: --</div>
+
+<script>
+
+// -------------------------------------------------------------------
+// 1. THE REVERSE COLLATZ TREE (THE HARMONY GENERATOR)
+// We find numbers that are exactly N iterations away from 1
+// -------------------------------------------------------------------
+function getParallelSet(targetDepth) {
+    // Breadth-first search reverse Collatz
+    let currentLevel = [1]; // Start at Singularity
+    let history = {1: true};
+    
+    for (let d = 0; d < targetDepth; d++) {
+        let nextLevel = [];
+        currentLevel.forEach(n => {
+            // Reverse Rule 1: Always can come from n*2
+            let branchA = n * 2;
+            // Prevent duplicate re-entry (basic cycle check)
+            if (!history[branchA]) {
+                nextLevel.push(branchA);
+                history[branchA] = true;
+            }
+
+            // Reverse Rule 2: If (n-1) % 3 == 0 and is Odd (and > 1), can come from (n-1)/3
+            if ((n - 1) % 3 === 0) {
+                let branchB = (n - 1) / 3;
+                // Collatz strict: (3n+1) creates EVEN numbers, so inputs must be ODD.
+                // If branchB is odd and > 1...
+                if (branchB % 2 !== 0 && branchB > 1 && !history[branchB]) {
+                    nextLevel.push(branchB);
+                    history[branchB] = true;
+                }
+            }
+        });
+        
+        // Prune to prevent exploding CPU (keep sound melodic, not noisy)
+        // We keep the "sweetest" harmonics
+        if (nextLevel.length > 8) {
+            // Sort helps keeps the values deterministic for melody
+            nextLevel.sort((a,b) => a - b); 
+            // Keep low, mid, high
+            nextLevel = [
+                nextLevel[0], 
+                nextLevel[Math.floor(nextLevel.length/2)], 
+                nextLevel[nextLevel.length-1]
+            ];
+        }
+        
+        currentLevel = nextLevel;
+    }
+    return currentLevel;
+}
+
+// -------------------------------------------------------------------
+// 2. THE GUITAR RIG (Audio Engine)
+// Tube warmth, Overdrive, Cab Sim
+// -------------------------------------------------------------------
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const ctx = new AudioCtx();
+
+// --- AMPS & EFFECTS ---
+const masterBus = ctx.createGain();
+masterBus.gain.value = 0.4;
+
+// 1. Distortion (Waveshaper) - The "Tube"
+function makeDistortionCurve(amount) {
+    const k = typeof amount === 'number' ? amount : 50;
+    const n_samples = 44100;
+    const curve = new Float32Array(n_samples);
+    const deg = Math.PI / 180;
+    for (let i = 0; i < n_samples; ++i) {
+        const x = i * 2 / n_samples - 1;
+        // Classic sigmoid distortion curve
+        curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+
+const overdrive = ctx.createWaveShaper();
+overdrive.curve = makeDistortionCurve(100); // Medium gain for "Classic Rock" tone
+overdrive.oversample = '4x';
+
+// 2. Tone Control (Lowpass Cabinet Sim)
+const cabinet = ctx.createBiquadFilter();
+cabinet.type = 'lowpass';
+cabinet.frequency.value = 3200; // Cut high fizz
+cabinet.Q.value = 0.5;
+
+// 3. Reverb (Stadium Hall)
+const reverb = ctx.createConvolver();
+// Impulse gen
+const length = ctx.sampleRate * 2.5;
+const imp = ctx.createBuffer(2, length, ctx.sampleRate);
+for(let i=0; i<length; i++){
+    let decay = Math.pow(1 - i/length, 2);
+    imp.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay * 0.5;
+    imp.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay * 0.5;
+}
+reverb.buffer = imp;
+
+// Routing: Note -> Overdrive -> Cabinet -> Reverb -> Master
+const guitarBus = ctx.createGain();
+guitarBus.connect(overdrive);
+overdrive.connect(cabinet);
+cabinet.connect(reverb);
+reverb.connect(masterBus);
+cabinet.connect(masterBus); // Dry/Wet mix (Cab goes direct + Reverb)
+masterBus.connect(ctx.destination);
+
+// A Minor Pentatonic Scale Frequencies (A2 to A5)
+const A_MINOR_PENT = [
+    82.4, 110.0, 123.47, 146.83, 164.81, 196.0, 220.0, // A2 range
+    246.94, 293.66, 329.63, 392.0, 440.0,             // A3 range
+    493.88, 587.33, 659.25, 783.99, 880.0,             // A4 range
+    987.77, 1174.66                                   // High solo
+];
+
+function getPentatonicNote(val) {
+    // Map the magnitude of the number to pitch height
+    // Logarithmic mapping fits music better
+    const index = Math.floor(Math.log2(val) * 2) % A_MINOR_PENT.length;
+    return A_MINOR_PENT[index] || 220;
+}
+
+function pluckGuitar(freq, velocity, isBend) {
+    const t = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator(); // Octave overtone
+    const env = ctx.createGain();
+    
+    // Waveform: Triangle/Saw mix sounds most like strings
+    osc.type = 'triangle';
+    osc2.type = 'sawtooth';
+
+    osc.frequency.setValueAtTime(freq, t);
+    osc2.frequency.setValueAtTime(freq, t); // slightly detuned later?
+    osc2.detune.value = 5; // Thickener
+
+    // Bend Logic: If math intensity is high, we slide INTO the note
+    if(isBend) {
+        osc.frequency.setValueAtTime(freq * 0.8, t); // Start lower
+        osc.frequency.linearRampToValueAtTime(freq, t + 0.2); // Bend up
+    }
+    
+    // Amplitude Envelope (ADSRish)
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(velocity, t + 0.05); // Attack
+    env.gain.exponentialRampToValueAtTime(velocity * 0.1, t + 0.5); // Sustain body
+    env.gain.exponentialRampToValueAtTime(0.001, t + 3.5); // Long decay (Let it ring)
+
+    // Output Mix
+    const oscMix = ctx.createGain();
+    oscMix.gain.value = 0.6; // Primary osc loud
+    const osc2Mix = ctx.createGain();
+    osc2Mix.gain.value = 0.3; // Overtone quiet
+
+    osc.connect(oscMix);
+    osc2.connect(osc2Mix);
+    oscMix.connect(env);
+    osc2Mix.connect(env);
+    
+    // Send to Guitar Amp Bus
+    env.connect(guitarBus);
+
+    osc.start(t);
+    osc2.start(t);
+    osc.stop(t+4);
+    osc2.stop(t+4);
+
+    // Trigger String Visual
+    triggerStringVisual(freq);
+}
+
+// -------------------------------------------------------------------
+// 3. VISUALS: THE 6 STRINGS OF ORPHEUS
+// -------------------------------------------------------------------
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+// 6 Physical Strings (E A D G B e)
+let strings = [];
+for(let i=0; i<6; i++) {
+    strings.push({
+        baseY: 0, // Set later
+        amplitude: 0,
+        frequency: 0.1 + i * 0.05,
+        color: i < 3 ? '#d35400' : '#e67e22' // Wound strings vs plain
+    });
+}
+
+function triggerStringVisual(freq) {
+    // Determine which visual string to pluck based on pitch height
+    let sIndex = Math.floor((freq - 80) / 150); 
+    if (sIndex < 0) sIndex = 0;
+    if (sIndex > 5) sIndex = 5;
+    
+    strings[sIndex].amplitude = 30 + Math.random() * 20;
+    strings[sIndex].color = '#fff'; // Flash white
+    setTimeout(() => { strings[sIndex].color = sIndex < 3 ? '#d35400' : '#e67e22'; }, 100);
+}
+
+function render() {
+    // Motion blur background
+    c.fillStyle = 'rgba(17, 17, 17, 0.3)';
+    c.fillRect(0,0,w,h);
+
+    const t = Date.now() * 0.001;
+    const spacing = h / 7;
+
+    strings.forEach((s, i) => {
+        s.baseY = spacing * (i+1);
+        
+        // Physics Decay
+        s.amplitude *= 0.92; // Damping
+        
+        c.beginPath();
+        c.strokeStyle = s.color;
+        c.lineWidth = s.amplitude > 1 ? 3 : 1;
+        if(s.color === '#fff') { c.lineWidth = 4; c.shadowBlur = 15; c.shadowColor = '#fff'; }
+        else { c.shadowBlur = 0; }
+
+        c.moveTo(0, s.baseY);
+
+        // SINE WAVE STRING MODEL
+        // y = A * sin(kx - wt)
+        // But shaped like a guitar string (fixed ends)
+        for (let x = 0; x <= w; x += 20) {
+            let envelope = Math.sin((x/w) * Math.PI); // Fixed at both ends
+            let vibration = Math.sin(x * 0.01 + t * s.frequency * 10) * s.amplitude * envelope;
+            // Add noise for "Raspiness"
+            if(s.amplitude > 5) vibration += (Math.random()-0.5)*2;
+            c.lineTo(x, s.baseY + vibration);
+        }
+        c.stroke();
+    });
+    
+    // Solo "Soul" Particle
+    // A small orb that tracks the math
+    c.fillStyle = 'rgba(255, 165, 0, 0.1)';
+    c.beginPath();
+    c.arc(w/2, h/2, currentSoloIntensity * 2, 0, Math.PI*2);
+    c.fill();
+
+    requestAnimationFrame(render);
+}
+let currentSoloIntensity = 0;
+
+// -------------------------------------------------------------------
+// 4. THE CONDUCTOR: "Parallel Iterations"
+// -------------------------------------------------------------------
+let iterationDepth = 10;
+let maxDepth = 72; // The request theme
+let tempo = 200; // ms per note
+
+function startSolo() {
+    document.getElementById('start-container').style.display = 'none';
+    document.getElementById('title').style.display = 'block';
+    document.getElementById('status').innerText = "GENERATING HARMONIC TREE: DEPTH 72";
+    
+    ctx.resume();
+    render(); // Start Vis
+    
+    // Play loop
+    queueNextBar();
+}
+
+function queueNextBar() {
+    if(iterationDepth >= maxDepth) iterationDepth = 10; // Loop logic? Or climax?
+    
+    // Get the harmonics for this specific depth
+    let set = getParallelSet(iterationDepth); 
+    
+    // UPDATE UI
+    document.getElementById('harmonic-set-display').innerText = `DEPTH: ${iterationDepth} // PARALLEL NODES: ${set.join(', ')}`;
+    
+    // Determine Phrase: High numbers = Solo Licks. Low numbers = Rhythm Chords.
+    let delayAccumulator = 0;
+    
+    // If Set has multiple numbers, Arpeggiate them like a chord sweep
+    set.forEach((val, index) => {
+        
+        let isLead = val > 100; // If big number, play as lead
+        let freq = getPentatonicNote(val);
+        
+        // Rhythm logic for backing "Loop"
+        // We artificially sequence the notes slightly apart
+        
+        let noteTime = (index * (tempo/set.length)) + Math.random()*50; // Slight "Human" slop
+        
+        setTimeout(() => {
+            // Pluck Sound
+            pluckGuitar(freq, isLead ? 0.8 : 0.4, isLead);
+            
+            currentSoloIntensity = val / 10;
+            document.getElementById('note-display').innerText = `NODE: ${val} | ${freq.toFixed(1)}Hz`;
+            
+        }, noteTime);
+    });
+
+    // Advance
+    iterationDepth++; 
+    // Faster as we go deeper? "Riding the wave"
+    let nextBarTime = tempo * 1.5; 
+    setTimeout(queueNextBar, nextBarTime);
+}
+
+document.getElementById('init-btn').addEventListener('click', startSolo);
+
+</script>
+</body>
+</html>

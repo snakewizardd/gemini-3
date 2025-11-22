@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Without Me - Full Arrangement</title>
+    <style>
+        :root {
+            --gold: #f0d58b;
+            --accent: #ff4d4d;
+            --bg: #050505;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'Montserrat', sans-serif;
+            color: var(--gold);
+            user-select: none;
+            transition: background-color 0.1s;
+        }
+        /* Screen Shake for Kick Drum */
+        body.kick-hit {
+            transform: scale(1.01);
+            background-color: #0a0a0a;
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: drop-shadow(0 0 10px rgba(240, 213, 139, 0.2));
+        }
+        #ui {
+            position: absolute;
+            z-index: 10;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, transparent 0%, #000 130%);
+        }
+        #lyrics-container {
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+        .lyric-line {
+            font-size: 2.5rem;
+            font-weight: 300;
+            text-align: center;
+            opacity: 0;
+            transform: translateZ(-50px) translateY(20px);
+            transition: all 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+            text-shadow: 0 0 30px rgba(240, 213, 139, 0.4);
+            letter-spacing: 2px;
+        }
+        .lyric-line.active {
+            opacity: 1;
+            transform: translateZ(0) translateY(0);
+        }
+        .lyric-line.out {
+            opacity: 0;
+            transform: translateZ(50px) translateY(-20px);
+            filter: blur(10px);
+        }
+        #controls {
+            margin-top: 60px;
+            pointer-events: auto;
+        }
+        button {
+            background: transparent;
+            color: var(--gold);
+            border: 1px solid var(--gold);
+            padding: 18px 50px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.3s;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+        }
+        button:hover {
+            background: var(--gold);
+            color: var(--bg);
+            box-shadow: 0 0 40px var(--gold);
+        }
+        #eq-viz {
+            position: absolute;
+            bottom: 50px;
+            display: flex;
+            gap: 5px;
+            height: 30px;
+            opacity: 0.5;
+        }
+        .bar { width: 4px; background: var(--gold); height: 5px; transition: height 0.1s; }
+    </style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="ui">
+    <div id="lyrics-container">
+        <div id="lyric-text" class="lyric-line"></div>
+    </div>
+    
+    <div id="controls">
+        <button id="start-btn">Start Experience</button>
+    </div>
+
+    <div id="eq-viz">
+        <!-- JS generates bars here -->
+    </div>
+</div>
+
+<script>
+/**
+ * MULTI-LAYER AUDIO ENGINE
+ * ------------------------
+ * 1. Guitar: Karplus-Strong Synthesis
+ * 2. Bass: Sine/Triangle FM Synthesis
+ * 3. Lead: Portamento Sawtooth with Reverb
+ * 4. Drums: White Noise (Snare) + Frequency Sweep (Kick)
+ */
+
+// --- TUNING CONFIG (Capo 4) ---
+// Standard: E A D G B E
+// Capo 4:   G# C# F# B D# G#
+const BASE_FREQS = [103.83, 138.59, 185.00, 246.94, 311.13, 415.30];
+
+// --- AUDIO CONTEXT & MIXER ---
+let actx, master, reverb, limiter;
+
+function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    actx = new AC();
+    
+    limiter = actx.createDynamicsCompressor();
+    limiter.threshold.value = -10;
+    limiter.ratio.value = 12;
+    
+    master = actx.createGain();
+    master.gain.value = 0.5;
+    
+    // Convolution Reverb
+    reverb = actx.createConvolver();
+    createReverbImpulse(2.0); // 2 second decay
+    
+    master.connect(limiter);
+    limiter.connect(actx.destination);
+    
+    // Mixer sends
+    limiter.connect(reverb);
+    reverb.connect(actx.destination);
+}
+
+function createReverbImpulse(duration) {
+    const rate = actx.sampleRate;
+    const length = rate * duration;
+    const impulse = actx.createBuffer(2, length, rate);
+    for (let c = 0; c < 2; c++) {
+        const d = impulse.getChannelData(c);
+        for (let i = 0; i < length; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3);
+        }
+    }
+    reverb.buffer = impulse;
+}
+
+// --- INSTRUMENT: GUITAR ---
+function playGuitar(stringIdx, fret, vel = 1) {
+    if (!actx) return;
+    const t = actx.currentTime;
+    const freq = BASE_FREQS[stringIdx] * Math.pow(2, fret/12);
+    
+    const osc = actx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, t);
+    
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.5;
+    filter.frequency.setValueAtTime(3000 * vel, t);
+    filter.frequency.exponentialRampToValueAtTime(freq * 2, t + 0.2);
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vel * 0.4, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
+    
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(master); // Dry
+    gain.connect(reverb); // Wet
+    
+    osc.start(t);
+    osc.stop(t + 3.1);
+    
+    visuals.pluckString(stringIdx, vel);
+}
+
+// --- INSTRUMENT: BASS (Sub) ---
+function playBass(midiNote, duration) {
+    const t = actx.currentTime;
+    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+    
+    const osc = actx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    
+    const sub = actx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(freq/2, t);
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.6, t + 0.05);
+    gain.gain.setValueAtTime(0.6, t + duration - 0.1);
+    gain.gain.linearRampToValueAtTime(0, t + duration);
+    
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+
+    osc.connect(filter);
+    sub.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    
+    osc.start(t);
+    sub.start(t);
+    osc.stop(t + duration + 0.1);
+    sub.stop(t + duration + 0.1);
+    
+    visuals.pulseBackground('bass');
+}
+
+// --- INSTRUMENT: DRUMS ---
+function playKick() {
+    const t = actx.currentTime;
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+    
+    gain.gain.setValueAtTime(1.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    
+    osc.connect(gain);
+    gain.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 0.5);
+    
+    visuals.kickHit();
+}
+
+function playSnare() {
+    const t = actx.currentTime;
+    const bufferSize = actx.sampleRate * 0.5;
+    const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    
+    const noise = actx.createBufferSource();
+    noise.buffer = buffer;
+    
+    const filter = actx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 1000;
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0.6, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    gain.connect(reverb);
+    
+    noise.start(t);
+}
+
+function playHiHat() {
+    const t = actx.currentTime;
+    // Simplified high freq noise
+    const osc = actx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = 800; // Base
+    
+    const filter = actx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 6000;
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 0.1);
+}
+
+// --- INSTRUMENT: LEAD VOCAL SYNTH ---
+function playLead(midiNote, duration, slide = false) {
+    const t = actx.currentTime;
+    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+    
+    const osc = actx.createOscillator();
+    osc.type = 'sine'; // Pure tone for that hollow vocal chop sound
+    
+    // Slide effect (Portamento)
+    if(slide) {
+        osc.frequency.setValueAtTime(freq * 0.8, t);
+        osc.frequency.linearRampToValueAtTime(freq, t + 0.1);
+    } else {
+        osc.frequency.setValueAtTime(freq, t);
+    }
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
+    gain.gain.setValueAtTime(0.3, t + duration - 0.05);
+    gain.gain.linearRampToValueAtTime(0, t + duration);
+    
+    // Delay/Echo simulation
+    const delay = actx.createDelay();
+    delay.delayTime.value = 0.25;
+    const delayGain = actx.createGain();
+    delayGain.gain.value = 0.4;
+    
+    osc.connect(gain);
+    gain.connect(master);
+    gain.connect(reverb);
+    gain.connect(delay);
+    delay.connect(delayGain);
+    delayGain.connect(reverb);
+    
+    osc.start(t);
+    osc.stop(t + duration + 0.5);
+    
+    visuals.leadNoteActive = true;
+    setTimeout(() => visuals.leadNoteActive = false, duration * 1000);
+}
+
+
+// --- VISUAL ENGINE ---
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+const visuals = {
+    strings: [],
+    particles: [],
+    leadNoteActive: false,
+    
+    init() {
+        window.addEventListener('resize', this.resize.bind(this));
+        this.resize();
+        
+        // Setup 6 strings
+        for(let i=0; i<6; i++) {
+            this.strings.push({
+                y: 0, baseIdx: i, amp: 0, points: new Array(50).fill(0)
+            });
+        }
+        
+        // Setup EQ Viz
+        const eqContainer = document.getElementById('eq-viz');
+        for(let i=0; i<20; i++) {
+            const d = document.createElement('div');
+            d.className = 'bar';
+            eqContainer.appendChild(d);
+        }
+        
+        this.loop();
+    },
+    
+    resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const space = canvas.height / 8;
+        this.strings.forEach((s, i) => s.y = space * (6.5 - i)); // Invert so low E is bottom
+    },
+    
+    pluckString(idx, force) {
+        if(this.strings[idx]) this.strings[idx].amp = 20 * force;
+        this.createParticles(this.strings[idx].y);
+    },
+    
+    kickHit() {
+        document.body.classList.add('kick-hit');
+        setTimeout(() => document.body.classList.remove('kick-hit'), 50);
+        // Add shockwave
+        this.particles.push({
+            type: 'shockwave', x: canvas.width/2, y: canvas.height/2, size: 0, alpha: 0.5
+        });
+    },
+
+    pulseBackground(type) {
+        // Handled via CSS mostly, but could add canvas flashes
+    },
+
+    createParticles(y) {
+        for(let i=0; i<5; i++) {
+            this.particles.push({
+                x: Math.random() * canvas.width,
+                y: y + (Math.random() * 10 - 5),
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                life: 1.0,
+                type: 'spark'
+            });
+        }
+    },
+    
+    loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw Strings
+        ctx.lineWidth = 2;
+        this.strings.forEach((s, i) => {
+            // Physics
+            s.amp *= 0.93;
+            const isVibrating = Math.abs(s.amp) > 0.1;
+            
+            ctx.beginPath();
+            ctx.strokeStyle = isVibrating ? '#f0d58b' : '#333';
+            ctx.shadowBlur = isVibrating ? 10 : 0;
+            ctx.shadowColor = '#f0d58b';
+            
+            if (isVibrating) {
+                for(let p=0; p<s.points.length; p++) {
+                    const ratio = p / s.points.length;
+                    const sine = Math.sin(ratio * Math.PI); // Bow shape
+                    const vib = Math.sin(Date.now() * 0.05 + p) * s.amp * sine;
+                    
+                    const x = (canvas.width / s.points.length) * p;
+                    const y = s.y + vib;
+                    if(p===0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+            } else {
+                ctx.moveTo(0, s.y);
+                ctx.lineTo(canvas.width, s.y);
+            }
+            ctx.stroke();
+        });
+        
+        // Draw Lead Halo
+        if(this.leadNoteActive) {
+            const cx = canvas.width/2;
+            const cy = canvas.height/2;
+            const grad = ctx.createRadialGradient(cx, cy, 100, cx, cy, 400);
+            grad.addColorStop(0, 'rgba(255, 77, 77, 0.1)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Draw Particles
+        this.particles.forEach((p, idx) => {
+            if(p.type === 'spark') {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+                ctx.fillStyle = `rgba(240, 213, 139, ${p.life})`;
+                ctx.fillRect(p.x, p.y, 3, 3);
+            } else if (p.type === 'shockwave') {
+                p.size += 10;
+                p.alpha -= 0.02;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${p.alpha})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            if(p.life <= 0 || p.alpha <= 0) this.particles.splice(idx, 1);
+        });
+        
+        // EQ Viz Animation
+        const bars = document.querySelectorAll('.bar');
+        bars.forEach(b => {
+            b.style.height = (Math.random() * (this.leadNoteActive ? 50 : 10) + 5) + 'px';
+        });
+
+        requestAnimationFrame(this.loop.bind(this));
+    }
+};
+
+// --- SONG DATA & SEQUENCING ---
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const lyricEl = document.getElementById('lyric-text');
+
+function setLyric(txt) {
+    lyricEl.classList.add('out');
+    setTimeout(() => {
+        lyricEl.innerText = txt;
+        lyricEl.classList.remove('out');
+        lyricEl.classList.add('active');
+    }, 300);
+}
+
+// 136 BPM Quarter Note = 441ms
+const Q = 60000 / 136; 
+const E = Q / 2;
+const S = Q / 4;
+
+// Guitar Patterns (Tab)
+// Capo 4 Relative: Bm -> D -> A -> G
+const patterns = {
+    Bm: async () => {
+        playGuitar(1, 2); await sleep(E); // Root (A string, 2nd fret)
+        playGuitar(3, 4); await sleep(E); 
+        playGuitar(2, 2); await sleep(E); 
+        playGuitar(4, 3); await sleep(E); 
+        playGuitar(5, 2); await sleep(E);
+        playGuitar(5, 0); await sleep(E*3);
+    },
+    D: async () => {
+        playGuitar(2, 0); await sleep(E); // Root D
+        playGuitar(3, 2); await sleep(E); 
+        playGuitar(4, 3); await sleep(E); 
+        playGuitar(5, 0); await sleep(E*5);
+    },
+    A: async () => {
+        playGuitar(1, 0); await sleep(E); // Root A
+        playGuitar(3, 2); await sleep(E);
+        playGuitar(2, 2); await sleep(E);
+        playGuitar(4, 2); await sleep(E);
+        playGuitar(5, 0); await sleep(E*3);
+    },
+    G: async () => {
+        playGuitar(0, 3); await sleep(E); // Root Low E
+        playGuitar(1, 2); await sleep(E);
+        playGuitar(2, 0); await sleep(E);
+        playGuitar(4, 3); await sleep(E*5);
+    },
+    // Strum helpers
+    strumBm: () => { playGuitar(1,2,1.2); playGuitar(2,4); playGuitar(3,2); playGuitar(4,3); },
+    strumD:  () => { playGuitar(2,0,1.2); playGuitar(3,2); playGuitar(4,3); playGuitar(5,2); },
+    strumA:  () => { playGuitar(1,0,1.2); playGuitar(2,2); playGuitar(3,2); playGuitar(4,2); },
+    strumG:  () => { playGuitar(0,3,1.5); playGuitar(1,2); playGuitar(2,0); playGuitar(3,0); }
+};
+
+// Melody helper (MIDI notes: Capo 4 makes Bm actual scale D#m/F#)
+// Actually lets use Relative Pitch to Capo for ease of reading code:
+// Relative Key: Bm (B=71). 
+// Actual Output is handled by audio engine, let's just use absolute MIDI for Lead.
+// Song Key: G# Minor (relative Bm is easy mentally). 
+// G#m Scale: G# A# B C# D# E F#
+// MIDI: G#4=68, B4=71, C#5=73, D#5=75, E5=76, F#5=78
+async function playChorusMelody() {
+    // "Tell me how's it feel"
+    // F# F# E D# B
+    playLead(78, Q, true); await sleep(Q); // Tell
+    playLead(78, Q); await sleep(Q); // me
+    playLead(76, Q); await sleep(Q); // how's
+    playLead(75, Q); await sleep(Q); // it
+    playLead(71, Q*2); await sleep(Q*4); // feel...
+
+    // "Sittin' up there"
+    // F# F# E D#
+    playLead(78, Q); await sleep(Q);
+    playLead(78, Q); await sleep(Q);
+    playLead(76, Q); await sleep(Q);
+    playLead(75, Q*2); await sleep(Q*5);
+
+    // "Feeling so high but too far away..."
+    // (Simplified for demo duration)
+}
+
+async function playFullSong() {
+    // --- INTRO / VERSE 1 ---
+    setLyric("Found you when your heart was broke");
+    playBass(56, Q*8); // G# (Low B relative)
+    patterns.Bm(); await sleep(Q*4);
+    
+    patterns.D(); await sleep(Q*4);
+    
+    setLyric("I filled your cup until it overflowed");
+    patterns.A(); await sleep(Q*4);
+    patterns.G(); await sleep(Q*4);
+
+    // --- PRE-CHORUS BUILD ---
+    setLyric("I said I'd catch you if you fall");
+    
+    // Bm
+    patterns.strumBm(); playBass(56, Q*4);
+    playKick(); await sleep(Q); playHiHat(); await sleep(Q); playHiHat(); await sleep(Q); playHiHat(); await sleep(Q);
+    
+    // D
+    patterns.strumD();
+    setLyric("And if they laugh, then f**k 'em all");
+    playKick(); await sleep(Q); playHiHat(); await sleep(Q); playKick(); await sleep(Q); playHiHat(); await sleep(Q);
+
+    // A
+    patterns.strumA(); playBass(54, Q*4);
+    setLyric("And then I got you off your knees");
+    playKick(); await sleep(Q); playKick(); await sleep(Q); playSnare(); await sleep(Q); playKick(); await sleep(Q);
+
+    // G Build
+    patterns.strumG();
+    setLyric("Put you right back on your feet");
+    playKick(); await sleep(S); playKick(); await sleep(S); playSnare(); await sleep(E);
+    playKick(); await sleep(S); playKick(); await sleep(S); playSnare(); await sleep(E);
+    
+    // --- CHORUS DROP ---
+    
+    // "Tell me how's it feel"
+    setLyric("Tell me how's it feel?");
+    
+    // Beat 1 (Bm)
+    patterns.strumBm(); playBass(56, Q*4); playKick(); playSnare(); 
+    playLead(78, E); await sleep(E); // Tell
+    playLead(78, E); await sleep(E); // Me
+    playSnare(); playLead(76, E); await sleep(E); // How's
+    playLead(75, E); await sleep(E); // It
+
+    // Beat 2 (D)
+    setLyric("Sittin' up there");
+    patterns.strumD(); playBass(59, Q*4); playKick();
+    playLead(71, Q*2); // Feel
+    playSnare(); await sleep(Q);
+    playKick(); await sleep(Q);
+    playSnare(); await sleep(Q);
+
+    // Beat 3 (A)
+    setLyric("Feeling so high");
+    patterns.strumA(); playBass(61, Q*4); playKick(); 
+    playLead(78, Q); // Sittin
+    playHiHat(); await sleep(Q);
+    playSnare(); playLead(76, Q); await sleep(Q); // Up
+    playKick(); playLead(75, Q); await sleep(Q); // There
+
+    // Beat 4 (G) - THE CLIMAX
+    setLyric("Caaan you liiive without me?");
+    patterns.strumG(); playBass(52, Q*8); 
+    
+    // Drum Roll
+    playKick(); playSnare(); await sleep(E);
+    playKick(); playSnare(); await sleep(E);
+    
+    // "Can you live"
+    playLead(83, Q*1.5, true); // High B (Can)
+    playSnare(); await sleep(Q); 
+    playLead(80, Q); // G# (You)
+    await sleep(Q);
+    
+    // "Without me"
+    playLead(78, Q); // F# (Live/Without)
+    playKick(); await sleep(Q);
+    playLead(75, Q*2, true); // D# (Me) slide down
+    playSnare(); await sleep(Q);
+    
+    // OUTRO
+    setLyric("Without Me.");
+    playKick(); playSnare(); patterns.strumBm();
+    
+    document.getElementById('start-btn').style.display = 'block';
+    document.getElementById('start-btn').innerText = "PLAY AGAIN";
+}
+
+// --- INIT ---
+
+visuals.init();
+
+document.getElementById('start-btn').addEventListener('click', function() {
+    this.style.display = 'none';
+    if(!actx) initAudio();
+    if(actx.state === 'suspended') actx.resume();
+    playFullSong();
+});
+
+</script>
+</body>
+</html>

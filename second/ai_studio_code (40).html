@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WITHOUT ME // GEMINI EDITION</title>
+    <style>
+        body {
+            margin: 0;
+            background: #050505;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Arial Black', sans-serif;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        #ui-layer {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            pointer-events: none; /* Let clicks pass to canvas if needed */
+            mix-blend-mode: difference;
+        }
+
+        h1 {
+            font-size: 5rem;
+            margin: 0;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: -2px;
+            text-shadow: 4px 4px 0px #ff00de, -4px -4px 0px #00eaff;
+            animation: twitch 3s infinite;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: #fff;
+            letter-spacing: 10px;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+
+        #btn-container {
+            position: absolute;
+            bottom: 10%;
+            z-index: 20;
+            width: 100%;
+            text-align: center;
+        }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: 4px solid #000;
+            padding: 20px 50px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 10px 10px 0px #ff00de;
+            transition: transform 0.1s;
+            pointer-events: auto;
+        }
+
+        button:active {
+            transform: translate(4px, 4px);
+            box-shadow: 6px 6px 0px #ff00de;
+        }
+
+        @keyframes twitch {
+            0%, 100% { transform: translate(0,0); }
+            95% { transform: translate(0,0); }
+            96% { transform: translate(-2px, 2px); }
+            97% { transform: translate(2px, -2px); }
+            98% { transform: translate(-2px, -2px); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas-container"></canvas>
+
+    <div id="ui-layer">
+        <h1>WITHOUT ME</h1>
+        <h2>GEMINI EDITION</h2>
+    </div>
+
+    <div id="btn-container">
+        <button id="playBtn">INITIATE</button>
+    </div>
+
+<script>
+/**
+ * HALSEY GEMINI AUDIO ENGINE
+ * - Dark Piano Synthesis
+ * - Distorted 808 Bass
+ * - Trap Percussion
+ */
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    limiter: null,
+
+    init() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        
+        // Master Chain
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.8;
+
+        // Hard Limiter for that modern loud sound
+        this.limiter = this.ctx.createDynamicsCompressor();
+        this.limiter.threshold.value = -10;
+        this.limiter.knee.value = 0;
+        this.limiter.ratio.value = 20; // Infinity:1
+        this.limiter.attack.value = 0.001;
+
+        this.master.connect(this.limiter);
+        this.limiter.connect(this.ctx.destination);
+    },
+
+    // THE PIANO (Dark, Detuned, Attack-heavy)
+    playPiano(freq, time, duration, velocity=1) {
+        const t = time;
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        
+        // Osc 1: Square/Triangle mix (Hollow sound)
+        osc1.type = 'square';
+        osc1.frequency.value = freq;
+        
+        // Osc 2: Detuned Saw (Texture)
+        osc2.type = 'sawtooth';
+        osc2.frequency.value = freq;
+        osc2.detune.value = 12; // Gemini duality detune
+
+        // Filter envelope (The "Pluck")
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(500, t);
+        filter.frequency.exponentialRampToValueAtTime(3000, t + 0.02);
+        filter.frequency.exponentialRampToValueAtTime(400, t + 0.4);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(velocity * 0.2, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+
+        osc1.start(t); osc2.start(t);
+        osc1.stop(t + duration); osc2.stop(t + duration);
+        
+        Visuals.flash('piano');
+    },
+
+    // THE 808 (Sub Bass + Distortion)
+    play808(freq, time, duration) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.5); // Pitch dive
+
+        const drive = this.ctx.createWaveShaper();
+        drive.curve = this.makeDistortionCurve(200); // Heavy saturation
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.8, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+
+        osc.connect(drive);
+        drive.connect(gain);
+        gain.connect(this.master);
+
+        osc.start(time);
+        osc.stop(time + duration);
+        
+        Visuals.flash('kick');
+    },
+
+    // TRAP HI-HAT
+    playHat(time) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = 8000;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 6000;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.15, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+        osc.start(time);
+        osc.stop(time + 0.05);
+    },
+
+    // TRAP SNARE (Crisp)
+    playSnare(time) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(200, time);
+        osc.frequency.exponentialRampToValueAtTime(100, time + 0.1);
+
+        const noise = this.ctx.createBufferSource();
+        const bufferSize = this.ctx.sampleRate * 0.2;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        noise.buffer = buffer;
+
+        const noiseFilter = this.ctx.createBiquadFilter();
+        noiseFilter.type = 'highpass';
+        noiseFilter.frequency.value = 1500;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.5, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+
+        osc.connect(gain);
+        noise.connect(noiseFilter);
+        noiseFilter.connect(gain);
+        gain.connect(this.master);
+
+        osc.start(time); osc.stop(time+0.2);
+        noise.start(time);
+        Visuals.flash('snare');
+    },
+
+    makeDistortionCurve(amount) {
+        const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    }
+};
+
+/**
+ * MUSIC DATA
+ * Capo 4 Logic applied to notes.
+ * Bm7 -> D#m7
+ */
+// Standard Tuning Frequencies
+const Strings = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
+
+function getNote(stringIdx, fret) {
+    const base = Strings[stringIdx];
+    // Capo 4 + Fret
+    const semitones = 4 + fret;
+    return base * Math.pow(2, semitones / 12);
+}
+
+// BPM 144 (Trap Speed)
+const BPM = 144; 
+const Beat = 60 / BPM;
+const Eighth = Beat / 2;
+
+const Sequencer = {
+    startTime: 0,
+    
+    play() {
+        this.startTime = AudioEngine.ctx.currentTime + 0.1;
+        document.getElementById('btn-container').style.display = 'none';
+        
+        // Loop the progression
+        this.schedulePattern(this.startTime);
+    },
+
+    schedulePattern(start) {
+        let t = start;
+        
+        // Bm7 Section (2 Bars)
+        // Bass: D# (String 1, Fret 2)
+        AudioEngine.play808(getNote(1, 2), t, Beat*4); 
+        this.playRiff_Bm7(t);
+        this.playDrumBeat(t); // Start drums immediately for "Gemini" energy
+
+        // Dsus2 Section (2 Bars)
+        // Bass: F# (String 2, Fret 4 -> Wait, Dsus2 root is D string open. Capo 4 = F#)
+        t += Beat * 4;
+        AudioEngine.play808(getNote(2, 0), t, Beat*4);
+        this.playRiff_Dsus2(t);
+        this.playDrumBeat(t);
+
+        // A Section (2 Bars)
+        // Bass: C# (String 1, Fret 0)
+        t += Beat * 4;
+        AudioEngine.play808(getNote(1, 0), t, Beat*4);
+        this.playRiff_A(t);
+        this.playDrumBeat(t);
+
+        // G Section (2 Bars)
+        // Bass: B (String 0, Fret 3)
+        t += Beat * 4;
+        AudioEngine.play808(getNote(0, 3), t, Beat*4);
+        this.playRiff_G(t);
+        this.playDrumBeat(t);
+
+        // Loop callback
+        const loopLen = Beat * 16;
+        setTimeout(() => this.schedulePattern(start + loopLen), (loopLen - 0.1) * 1000);
+    },
+
+    // EXACT TAB TRANSCRIPTION (Adapted to Speed)
+    playRiff_Bm7(t) {
+        // e|--------2-0-|
+        // B|------3-----|
+        // G|----2-------|
+        // D|--4---------|
+        // A|2-----------|
+        AudioEngine.playPiano(getNote(1, 2), t, Beat*2, 1.2); // Root Accent
+        AudioEngine.playPiano(getNote(2, 4), t + Eighth, Beat);
+        AudioEngine.playPiano(getNote(3, 2), t + 2*Eighth, Beat);
+        AudioEngine.playPiano(getNote(4, 3), t + 3*Eighth, Beat);
+        AudioEngine.playPiano(getNote(5, 2), t + 4*Eighth, Beat, 1.1); // High Melody
+        AudioEngine.playPiano(getNote(5, 0), t + 5*Eighth, Beat, 1.1);
+    },
+
+    playRiff_Dsus2(t) {
+        // D string root
+        AudioEngine.playPiano(getNote(2, 0), t, Beat*2, 1.2);
+        // Chord Hits
+        [getNote(3,2), getNote(4,3), getNote(5,0)].forEach(n => AudioEngine.playPiano(n, t+Beat, Beat));
+        [getNote(3,2), getNote(4,3), getNote(5,0)].forEach(n => AudioEngine.playPiano(n, t+Beat*2.5, Beat));
+    },
+
+    playRiff_A(t) {
+        // A string root
+        AudioEngine.playPiano(getNote(1, 0), t, Beat*2, 1.2);
+        // Arp
+        AudioEngine.playPiano(getNote(2, 2), t + Eighth, Beat);
+        AudioEngine.playPiano(getNote(3, 2), t + 2*Eighth, Beat);
+        AudioEngine.playPiano(getNote(4, 2), t + 3*Eighth, Beat);
+        AudioEngine.playPiano(getNote(5, 0), t + 4*Eighth, Beat, 1.1); // High E
+        AudioEngine.playPiano(getNote(4, 3), t + 5*Eighth, Beat, 1.1); // D note
+    },
+
+    playRiff_G(t) {
+        // Low E string root
+        AudioEngine.playPiano(getNote(0, 3), t, Beat*2, 1.2);
+        // Fill
+        AudioEngine.playPiano(getNote(2, 0), t + Beat, Beat);
+        AudioEngine.playPiano(getNote(3, 0), t + Beat + Eighth, Beat);
+        AudioEngine.playPiano(getNote(4, 3), t + Beat + 2*Eighth, Beat);
+    },
+
+    // TRAP BEAT PATTERN
+    playDrumBeat(t) {
+        // Kick: 1, 3.5ish
+        AudioEngine.play808(60, t, 0.5); // Hard Kick
+        AudioEngine.play808(60, t + Beat*2.5, 0.5); // Kick
+
+        // Snare: 3
+        AudioEngine.playSnare(t + Beat*2); 
+
+        // Hi-Hats: Every 1/8th, with rolls
+        for(let i=0; i<8; i++) {
+            if(i === 6) { // Roll at the end of bar
+                AudioEngine.playHat(t + i*Eighth);
+                AudioEngine.playHat(t + i*Eighth + Eighth/2);
+            } else {
+                AudioEngine.playHat(t + i*Eighth);
+            }
+        }
+    }
+};
+
+/**
+ * VISUALS
+ * "Gemini" Theme: Split screen Pink (Left) vs Blue (Right)
+ * Reactive to Bass (Shake) and Piano (Lines)
+ */
+const Visuals = {
+    canvas: document.getElementById('canvas-container'),
+    ctx: null,
+    flashIntensity: 0,
+    shake: 0,
+    colorFlip: false,
+
+    init() {
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.loop();
+    },
+
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    },
+
+    flash(type) {
+        if(type === 'kick') this.shake = 20;
+        if(type === 'piano') this.flashIntensity = 1;
+        if(type === 'snare') this.colorFlip = !this.colorFlip;
+    },
+
+    loop() {
+        // Decay
+        this.shake *= 0.8;
+        this.flashIntensity *= 0.9;
+
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        // Shake offset
+        const dx = (Math.random() - 0.5) * this.shake;
+        const dy = (Math.random() - 0.5) * this.shake;
+
+        this.ctx.save();
+        this.ctx.translate(dx, dy);
+
+        // SPLIT BACKGROUND
+        const c1 = this.colorFlip ? '#00eaff' : '#ff00de'; // Cyan / Magenta
+        const c2 = this.colorFlip ? '#ff00de' : '#00eaff';
+
+        // Left Side
+        this.ctx.fillStyle = c1;
+        this.ctx.globalAlpha = 0.1 + (this.shake/100);
+        this.ctx.fillRect(0, 0, w/2, h);
+
+        // Right Side
+        this.ctx.fillStyle = c2;
+        this.ctx.fillRect(w/2, 0, w/2, h);
+
+        // Center Line
+        this.ctx.strokeStyle = '#fff';
+        this.ctx.lineWidth = 2 + this.flashIntensity * 10;
+        this.ctx.beginPath();
+        this.ctx.moveTo(w/2, 0);
+        this.ctx.lineTo(w/2, h);
+        this.ctx.stroke();
+
+        // Circle Pulse
+        this.ctx.beginPath();
+        this.ctx.arc(w/2, h/2, 100 + this.shake*5, 0, Math.PI*2);
+        this.ctx.strokeStyle = '#fff';
+        this.ctx.lineWidth = 5;
+        this.ctx.stroke();
+
+        this.ctx.restore();
+
+        requestAnimationFrame(() => this.loop());
+    }
+};
+
+document.getElementById('playBtn').addEventListener('click', () => {
+    AudioEngine.init();
+    Visuals.init();
+    Sequencer.play();
+});
+</script>
+</body>
+</html>

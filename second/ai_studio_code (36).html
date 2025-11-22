@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Without Me - Full Audio Experience</title>
+    <style>
+        body {
+            margin: 0;
+            background: #050505;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            filter: blur(1px);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 4rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            color: transparent;
+            -webkit-text-stroke: 2px #f0d58b;
+            opacity: 0.3;
+            margin: 0;
+        }
+
+        #lyrics {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 20px;
+            min-height: 100px;
+            text-shadow: 0 0 20px rgba(240, 213, 139, 0.6);
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #lyrics.active {
+            opacity: 1;
+            transform: scale(1);
+            color: #f0d58b;
+        }
+
+        button {
+            background: #f0d58b;
+            color: #000;
+            border: none;
+            padding: 20px 60px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 50px;
+            box-shadow: 0 0 30px rgba(240, 213, 139, 0.4);
+            transition: 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 50px rgba(240, 213, 139, 0.8);
+        }
+
+        .flash {
+            animation: flashAnim 0.1s;
+        }
+
+        @keyframes flashAnim {
+            0% { background: #222; }
+            100% { background: #050505; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas-container"></canvas>
+
+    <div id="ui">
+        <h1>Without Me</h1>
+        <div id="lyrics"></div>
+        <button id="btn">PLAY FULL SONG</button>
+    </div>
+
+<script>
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+
+    init() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.4;
+        
+        // Create Reverb (Impulse Response)
+        this.reverb = this.ctx.createConvolver();
+        this.createReverbBuffer();
+        
+        this.master.connect(this.ctx.destination);
+        this.master.connect(this.reverb);
+        this.reverb.connect(this.ctx.destination);
+    },
+
+    createReverbBuffer() {
+        const len = this.ctx.sampleRate * 2; // 2 seconds
+        const buffer = this.ctx.createBuffer(2, len, this.ctx.sampleRate);
+        for (let c = 0; c < 2; c++) {
+            const data = buffer.getChannelData(c);
+            for (let i = 0; i < len; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+            }
+        }
+        this.reverb.buffer = buffer;
+    },
+
+    // 1. Clean Guitar (Sine/Tri mix for purity)
+    playGuitarNote(freq, time, duration) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.4, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 2000;
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+        
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+        
+        Visuals.spawnParticle(freq);
+    },
+
+    // 2. SuperSaw Synth (For the Chorus Chords)
+    playSuperSawChord(freqs, time, duration) {
+        freqs.forEach((f, i) => {
+            // Detune oscillators for "Thick" sound
+            const createOsc = (detune) => {
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = f;
+                osc.detune.value = detune;
+                
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(400, time);
+                filter.frequency.exponentialRampToValueAtTime(3000, time + 0.1); // "Wah" opening effect
+                filter.frequency.exponentialRampToValueAtTime(400, time + duration); 
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.15 / freqs.length, time + 0.05);
+                gain.gain.setValueAtTime(0.15 / freqs.length, time + duration - 0.1);
+                gain.gain.linearRampToValueAtTime(0, time + duration);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.master);
+                osc.start(time);
+                osc.stop(time + duration + 0.2);
+            };
+            createOsc(-10);
+            createOsc(10);
+        });
+        Visuals.flashScreen();
+    },
+
+    // 3. Lead Vocal Synth (The Melody)
+    playLead(freq, time, duration, slideTo = null) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square'; // Hollow sound
+        osc.frequency.setValueAtTime(freq, time);
+        
+        if (slideTo) {
+            osc.frequency.linearRampToValueAtTime(slideTo, time + duration);
+        }
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+        filter.Q.value = 5;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.2, time + 0.05);
+        gain.gain.linearRampToValueAtTime(0, time + duration);
+
+        // Delay effect
+        const delay = this.ctx.createDelay();
+        delay.delayTime.value = 0.25;
+        const delayGain = this.ctx.createGain();
+        delayGain.gain.value = 0.4;
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+        gain.connect(delay);
+        delay.connect(delayGain);
+        delayGain.connect(gain); // Feedback loopish
+
+        osc.start(time);
+        osc.stop(time + duration + 0.5);
+    },
+
+    // 4. Drums
+    playKick(time) {
+        const osc = this.ctx.createOscillator();
+        osc.frequency.setValueAtTime(150, time);
+        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(1.5, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+        
+        osc.connect(gain);
+        gain.connect(this.master);
+        osc.start(time);
+        osc.stop(time + 0.5);
+        Visuals.pulseRing();
+    },
+
+    playSnare(time) {
+        const noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.2, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+        
+        const src = this.ctx.createBufferSource();
+        src.buffer = noiseBuffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 1500;
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.8, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+        
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+        src.start(time);
+    }
+};
+
+// --- MUSIC THEORY DATA ---
+// Song is roughly 136 BPM. 
+const BPM = 136;
+const Q = 60 / BPM; // Quarter note duration
+const E = Q / 2;    // Eighth note
+
+// Frequencies (Capo 4 Relative)
+// Bm7 (B D F# A) -> Real Pitch D# F# A# C#
+// Using relative notes for logic: B2=123Hz, D3=146Hz, F#3=185Hz, A3=220Hz, B3=246Hz, C#4=277Hz, D4=293Hz, E4=329Hz, F#4=370Hz
+const Notes = {
+    B2: 123.47,
+    D3: 146.83,
+    E3: 164.81,
+    Fsharp3: 185.00,
+    G3: 196.00,
+    A3: 220.00,
+    B3: 246.94,
+    Csharp4: 277.18,
+    D4: 293.66,
+    Dsharp4: 311.13,
+    E4: 329.63,
+    Fsharp4: 369.99,
+    G4: 392.00,
+    A4: 440.00,
+    B4: 493.88,
+    Csharp5: 554.37
+};
+
+// The vocal melody frequencies (Relative to key)
+// "Thinking you could live without me"
+// F# F# E D# B ...
+const Vocal = {
+    Fsharp: 369.99, // High F#
+    E: 329.63,
+    Dsharp: 311.13, // The blue note
+    B: 246.94,
+    Csharp: 277.18
+};
+
+// --- VISUALS ---
+const Visuals = {
+    canvas: document.getElementById('canvas-container'),
+    ctx: null,
+    particles: [],
+    rings: [],
+    
+    init() {
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.loop();
+    },
+    
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    },
+    
+    spawnParticle(freq) {
+        const y = this.canvas.height - ((freq / 500) * this.canvas.height);
+        this.particles.push({
+            x: this.canvas.width / 2 + (Math.random() - 0.5) * 200,
+            y: y,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 1,
+            color: `hsl(${Math.random()*50 + 30}, 80%, 60%)`
+        });
+    },
+
+    pulseRing() {
+        this.rings.push({ r: 10, opacity: 1 });
+    },
+    
+    flashScreen() {
+        document.body.classList.add('flash');
+        setTimeout(() => document.body.classList.remove('flash'), 100);
+    },
+
+    loop() {
+        this.ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Particles
+        this.particles.forEach((p, i) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.02;
+            this.ctx.fillStyle = p.color;
+            this.ctx.globalAlpha = p.life;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+            this.ctx.fill();
+            if(p.life <= 0) this.particles.splice(i, 1);
+        });
+
+        // Rings (Kick Drum)
+        this.ctx.strokeStyle = '#f0d58b';
+        this.ctx.lineWidth = 5;
+        this.rings.forEach((r, i) => {
+            r.r += 15;
+            r.opacity -= 0.05;
+            this.ctx.globalAlpha = Math.max(0, r.opacity);
+            this.ctx.beginPath();
+            this.ctx.arc(this.canvas.width/2, this.canvas.height/2, r.r, 0, Math.PI*2);
+            this.ctx.stroke();
+            if(r.opacity <= 0) this.rings.splice(i, 1);
+        });
+        
+        this.ctx.globalAlpha = 1;
+        requestAnimationFrame(() => this.loop());
+    }
+};
+
+// --- SEQUENCER ---
+const Sequencer = {
+    async play() {
+        const now = AudioEngine.ctx.currentTime;
+        document.getElementById('btn').style.display = 'none';
+        
+        // INTRO (Guitar Only)
+        this.setLyric("Found you when your heart was broke");
+        await this.playArpeggio('Bm', Q * 4);
+        await this.playArpeggio('D', Q * 4);
+        
+        this.setLyric("I filled your cup until it overflowed");
+        await this.playArpeggio('A', Q * 4);
+        await this.playArpeggio('G', Q * 4);
+
+        // BUILD UP
+        this.setLyric("I said I'd catch you if you fall");
+        this.playBeat(4);
+        await this.playArpeggio('Bm', Q * 4);
+        this.setLyric("And if they laugh then f*** 'em all");
+        await this.playArpeggio('D', Q * 4);
+        
+        this.setLyric("And then I got you off your knees");
+        this.playBeat(4);
+        await this.playArpeggio('A', Q * 4);
+        
+        this.setLyric("Put you right back on your feet");
+        // Drum Roll
+        let t = AudioEngine.ctx.currentTime;
+        AudioEngine.playSnare(t); AudioEngine.playSnare(t + E); AudioEngine.playSnare(t + 2*E); AudioEngine.playSnare(t + 3*E);
+        await this.playArpeggio('G', Q * 4);
+
+        // === THE CHORUS (DROP) ===
+        // Here we use the Synth Chords and Lead Melody
+        
+        await this.playChorusLine("Bm", "Tell me how's it feel sittin' up there?");
+        await this.playChorusLine("D", "Feeling so high but too far away...");
+        await this.playChorusLine("A", "You know I'm the one who put you up there");
+        await this.playChorusLine("G", "Name in the sky, does it ever get lonely?");
+
+        // THE BIG HOOK "Thinking you could live without me"
+        await this.playHook();
+        
+        setTimeout(() => {
+            document.getElementById('btn').style.display = 'block';
+            document.getElementById('btn').innerText = "PLAY AGAIN";
+        }, 2000);
+    },
+
+    setLyric(text) {
+        const el = document.getElementById('lyrics');
+        el.classList.remove('active');
+        setTimeout(() => {
+            el.innerText = text;
+            el.classList.add('active');
+        }, 100);
+    },
+
+    // Plays the guitar picking pattern from the tab
+    async playArpeggio(chord, durationMs) {
+        const t = AudioEngine.ctx.currentTime;
+        // Pattern: Root - 3rd - 5th ... roughly based on tab
+        if (chord === 'Bm') {
+            AudioEngine.playGuitarNote(Notes.B2, t, 2);
+            AudioEngine.playGuitarNote(Notes.Fsharp3, t + E, 1);
+            AudioEngine.playGuitarNote(Notes.D4, t + 2*E, 1);
+            AudioEngine.playGuitarNote(Notes.Fsharp4, t + 3*E, 1);
+        } else if (chord === 'D') {
+            AudioEngine.playGuitarNote(Notes.D3, t, 2);
+            AudioEngine.playGuitarNote(Notes.A3, t + E, 1);
+            AudioEngine.playGuitarNote(Notes.D4, t + 2*E, 1);
+            AudioEngine.playGuitarNote(Notes.Fsharp4, t + 3*E, 1);
+        } else if (chord === 'A') {
+            AudioEngine.playGuitarNote(Notes.A3, t, 2);
+            AudioEngine.playGuitarNote(Notes.E4, t + E, 1);
+            AudioEngine.playGuitarNote(Notes.Csharp4, t + 2*E, 1);
+            AudioEngine.playGuitarNote(Notes.E4, t + 3*E, 1);
+        } else if (chord === 'G') {
+            AudioEngine.playGuitarNote(Notes.G3, t, 2);
+            AudioEngine.playGuitarNote(Notes.D4, t + E, 1);
+            AudioEngine.playGuitarNote(Notes.G4, t + 2*E, 1);
+            AudioEngine.playGuitarNote(Notes.B3, t + 3*E, 1);
+        }
+        
+        return new Promise(r => setTimeout(r, durationMs * 1000));
+    },
+
+    // Play Kick/Snare pattern
+    playBeat(loops) {
+        const t = AudioEngine.ctx.currentTime;
+        for(let i=0; i<loops; i++) {
+            const start = t + (i * Q * 4); // 1 bar
+            AudioEngine.playKick(start);
+            AudioEngine.playSnare(start + Q);
+            AudioEngine.playKick(start + Q * 2);
+            AudioEngine.playKick(start + Q * 2.5);
+            AudioEngine.playSnare(start + Q * 3);
+        }
+    },
+
+    async playChorusLine(chordName, text) {
+        this.setLyric(text);
+        const t = AudioEngine.ctx.currentTime;
+
+        // SuperSaw Pads
+        let freqs = [];
+        if(chordName === "Bm") freqs = [Notes.B2, Notes.Fsharp3, Notes.D4];
+        if(chordName === "D")  freqs = [Notes.D3, Notes.A3, Notes.Fsharp4];
+        if(chordName === "A")  freqs = [Notes.A3, Notes.E4, Notes.Csharp5];
+        if(chordName === "G")  freqs = [Notes.G3, Notes.D4, Notes.B4];
+        
+        AudioEngine.playSuperSawChord(freqs, t, Q * 4);
+        
+        // Heavy Drums
+        AudioEngine.playKick(t);
+        AudioEngine.playSnare(t + Q);
+        AudioEngine.playKick(t + Q*2);
+        AudioEngine.playSnare(t + Q*3);
+
+        return new Promise(r => setTimeout(r, (Q * 4) * 1000));
+    },
+
+    // The specific melodic hook
+    async playHook() {
+        this.setLyric("Thinking you could live without me");
+        
+        const t = AudioEngine.ctx.currentTime;
+        
+        // Backing Chords (Bm then D)
+        AudioEngine.playSuperSawChord([Notes.B2, Notes.Fsharp3, Notes.D4], t, Q*4);
+        AudioEngine.playKick(t); AudioEngine.playSnare(t+Q); AudioEngine.playKick(t+Q*2); AudioEngine.playSnare(t+Q*3);
+        
+        // Melody: Thinking (F# F#) you (E) could (D#)
+        AudioEngine.playLead(Vocal.Fsharp, t, E);
+        AudioEngine.playLead(Vocal.Fsharp, t + E, E);
+        AudioEngine.playLead(Vocal.E, t + 2*E, E);
+        AudioEngine.playLead(Vocal.Dsharp, t + 3*E, Q); // "Could" - held longer
+
+        // "Live" (F# slide down)
+        // "Without" (D#)
+        // "Me" (B)
+        const t2 = t + 4*E; // Measure 2
+        AudioEngine.playLead(Vocal.Fsharp, t2, Q, Vocal.E); // Slide
+        AudioEngine.playLead(Vocal.Dsharp, t2 + Q, Q);
+        AudioEngine.playLead(Vocal.B, t2 + 2*Q, Q*2); // Held B
+        
+        await new Promise(r => setTimeout(r, (Q * 8) * 1000));
+        
+        this.setLyric("Live without me.");
+        AudioEngine.playSuperSawChord([Notes.A3, Notes.Csharp4, Notes.E4], AudioEngine.ctx.currentTime, Q*4);
+        AudioEngine.playLead(Vocal.B, AudioEngine.ctx.currentTime, Q*4);
+        
+        await new Promise(r => setTimeout(r, (Q * 4) * 1000));
+    }
+};
+
+document.getElementById('btn').addEventListener('click', () => {
+    AudioEngine.init();
+    Visuals.init();
+    Sequencer.play();
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WITHOUT ME - HALSEY | CAPO 4</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;600&display=swap');
+        
+        body { 
+            margin: 0; background: #050505; 
+            font-family: 'Inter', sans-serif; color: white; 
+            overflow: hidden; 
+        }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 10; pointer-events: none;
+        }
+
+        #lyrics {
+            font-size: clamp(1rem, 4vw, 2.5rem);
+            text-align: center;
+            max-width: 80%;
+            margin-bottom: 40px;
+            text-shadow: 0 0 20px #000;
+            min-height: 3rem;
+            color: #ccc;
+            transition: color 0.3s ease;
+        }
+
+        #chord-badge {
+            font-size: 1.2rem; color: #d4af37; letter-spacing: 4px;
+            margin-bottom: 20px; opacity: 0.8; font-weight: 600;
+        }
+
+        button {
+            pointer-events: auto;
+            background: rgba(212, 175, 55, 0.1);
+            color: #d4af37; border: 1px solid #d4af37;
+            padding: 20px 50px; font-size: 16px; cursor: pointer;
+            letter-spacing: 3px; transition: 0.3s; text-transform: uppercase;
+        }
+        button:hover { background: #d4af37; color: #000; box-shadow: 0 0 30px #d4af37; }
+
+        .active-word { color: #fff; text-shadow: 0 0 15px #fff; transform: scale(1.05); display: inline-block; }
+    </style>
+</head>
+<body>
+
+<canvas id="can"></canvas>
+
+<div id="ui-layer">
+    <div id="chord-badge">CAPO 4</div>
+    <div id="lyrics">"Without Me"</div>
+    <button id="play-btn">PLAY TABLATURE</button>
+</div>
+
+<script>
+/* ==========================================================================
+   AUDIO ENGINE: CAPO 4 GUITAR
+   ========================================================================== */
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb;
+
+// FREQUENCIES (Calculated for CAPO 4 - G# C# F# B D# G#)
+// Standard: E=82, A=110, D=146, G=196, B=246, E=329
+// Capo 4 (Up 4 semitones):
+const STRINGS = [
+    103.83, // 6: G# (Low)
+    138.59, // 5: C#
+    185.00, // 4: F#
+    246.94, // 3: B
+    311.13, // 2: D#
+    415.30  // 1: G# (High)
+];
+
+function initAudio() {
+    ctx = new AudioContext();
+    master = ctx.createGain();
+    master.gain.value = 0.3;
+    
+    // Convolver Reverb for Atmosphere
+    reverb = ctx.createConvolver();
+    const rate = ctx.sampleRate;
+    const len = rate * 3; 
+    const buf = ctx.createBuffer(2, len, rate);
+    for(let i=0; i<len; i++) {
+        let decay = Math.pow(1 - i/len, 3);
+        buf.getChannelData(0)[i] = (Math.random()*2-1)*decay;
+        buf.getChannelData(1)[i] = (Math.random()*2-1)*decay;
+    }
+    reverb.buffer = buf;
+    
+    master.connect(reverb);
+    reverb.connect(ctx.destination);
+    master.connect(ctx.destination);
+}
+
+function pluck(stringIdx, fret) {
+    if(ctx.state === 'suspended') ctx.resume();
+    
+    const t = ctx.currentTime;
+    // Calculate frequency: f = base * 2^(fret/12)
+    const freq = STRINGS[stringIdx] * Math.pow(2, fret / 12);
+    
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    // Guitar Tone
+    osc.type = 'triangle';
+    osc2.type = 'sawtooth'; // harmonics
+    osc2.detune.value = 3; 
+
+    osc.frequency.setValueAtTime(freq, t);
+    osc2.frequency.setValueAtTime(freq, t);
+
+    filter.type = 'lowpass';
+    filter.frequency.value = 800 + (freq * 2); // Brighter on high notes
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(1, t + 0.02); // Pluck
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 2.0); // Sustain
+
+    osc.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+
+    osc.start(t); osc2.start(t);
+    osc.stop(t + 2.5); osc2.stop(t + 2.5);
+    
+    // Trigger Visual
+    visualizeString(stringIdx, fret);
+}
+
+/* ==========================================================================
+   SONG DATA: THE SEQUENCER
+   ========================================================================== */
+// Helper to sleep
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+// NOTES FROM YOUR TAB (Strings are 0-5, 0=Low E, 5=High E)
+async function playIntro() {
+    updateLyrics("...");
+    updateChord("INTRO");
+    
+    // MEASURE 1: Bm7
+    // e|--------2---0---|
+    // B|------3---------|
+    // G|----2-----------|
+    // D|--4-------------|
+    // A|2---------------|
+    pluck(1, 2); await wait(300); // A-2
+    pluck(3, 4); await wait(300); // D-4
+    pluck(2, 2); await wait(300); // G-2
+    pluck(4, 3); await wait(300); // B-3
+    pluck(5, 2); await wait(300); // e-2
+    pluck(5, 0); await wait(600); // e-0 (Ring)
+
+    // MEASURE 2: Dsus2
+    // (Tab indicates ringing hold, minimal pluck)
+    updateChord("Dsus2");
+    await wait(1800); 
+
+    // MEASURE 3: A -> G
+    updateChord("A");
+    pluck(1, 0); await wait(300); // A-0
+    pluck(3, 2); await wait(300); // D-2
+    pluck(2, 2); await wait(300); // G-2
+    pluck(4, 2); await wait(300); // B-2
+    pluck(5, 0); await wait(300); // e-0
+    updateChord("G");
+    pluck(4, 3); await wait(600); // B-3
+    
+    // MEASURE 4: Sustain G
+    await wait(1500);
+    
+    // REPEAT Intro Pt 2 (Variant)
+    updateChord("Bm7");
+    pluck(1, 2); await wait(300); // A-2
+    pluck(3, 4); await wait(300); // D-4
+    pluck(2, 2); await wait(300); // G-2
+    pluck(4, 3); await wait(300); // B-3
+    pluck(5, 2); await wait(300); // e-2
+    pluck(5, 0); await wait(600); // e-0
+
+    updateChord("Dsus2");
+    // Variant: B|--3-3-2-|
+    pluck(4, 3); await wait(250);
+    pluck(4, 3); await wait(250);
+    pluck(4, 2); await wait(500);
+
+    updateChord("A");
+    pluck(1, 0); await wait(300); 
+    pluck(3, 2); await wait(300);
+    pluck(2, 2); await wait(300);
+    pluck(4, 2); await wait(300);
+    pluck(5, 0); await wait(300);
+    
+    updateChord("Em7");
+    // Variant: B|-2-0---| G|-----2-|
+    pluck(4, 3); await wait(400); 
+    pluck(4, 2); await wait(300);
+    pluck(4, 0); await wait(300);
+    pluck(2, 2); await wait(600);
+}
+
+async function playVerse1() {
+    // Chords: Bm7 - Dsus2 - A - G
+    const BPM = 1400; // Time per chord approx
+    
+    updateLyrics("Found you when your heart was broke");
+    strumChord("Bm7"); await wait(BPM);
+    strumChord("Dsus2"); await wait(BPM);
+    
+    updateLyrics("I filled your cup until it overflowed");
+    strumChord("A"); await wait(BPM);
+    strumChord("G"); await wait(BPM);
+
+    updateLyrics("Took it so far to keep you close");
+    strumChord("Bm7"); await wait(BPM);
+    strumChord("Dsus2"); await wait(BPM);
+
+    updateLyrics("I was afraid to leave you on your own");
+    strumChord("A"); await wait(BPM);
+    strumChord("Em7"); await wait(BPM);
+}
+
+async function playPreChorus() {
+    const BPM = 1400;
+    updateLyrics("I said I'd catch you if you fall");
+    strumChord("Bm7"); await wait(BPM);
+    strumChord("Dsus2"); await wait(BPM);
+
+    updateLyrics("And if they laugh, then f*ck 'em all");
+    strumChord("A"); await wait(BPM);
+    strumChord("G"); await wait(BPM);
+
+    updateLyrics("And then I got you off your knees");
+    strumChord("Bm7"); await wait(BPM/2);
+    
+    updateLyrics("Put you right back on your feet");
+    strumChord("Dsus2"); await wait(BPM*1.5);
+
+    updateLyrics("Just so you could take advantage of me");
+    strumChord("A"); await wait(BPM);
+    strumChord("Em7"); await wait(BPM);
+}
+
+async function playChorus() {
+    const BPM = 1300;
+    // A bit more intense - Faster Arpeggios
+    
+    updateLyrics("Tell me, how's it feel sittin' up there?");
+    pickPattern("Bm7"); await wait(BPM);
+    pickPattern("Dsus2"); await wait(BPM);
+    
+    updateLyrics("Feeling so high, but too far away to hold me");
+    pickPattern("A"); await wait(BPM);
+    pickPattern("G"); await wait(BPM);
+
+    updateLyrics("You know I'm the one who put you up there");
+    pickPattern("Bm7"); await wait(BPM);
+    pickPattern("Dsus2"); await wait(BPM);
+    
+    updateLyrics("Name in the sky, does it ever get lonely?");
+    pickPattern("A"); await wait(BPM);
+    pickPattern("Em7"); await wait(BPM);
+    
+    updateLyrics("Thinking you could live without me");
+    strumChord("Bm7"); await wait(1000);
+    strumChord("Dsus2"); await wait(1000);
+    
+    updateLyrics("Thinking you could live without me");
+    strumChord("A"); await wait(1000);
+    strumChord("G"); await wait(1000);
+}
+
+// ---- CHORD SHAPES (String index: fret) ----
+function strumChord(name) {
+    updateChord(name);
+    const s = 50; // strum speed
+    if(name === "Bm7") { pluck(1,2); setTimeout(()=>pluck(2,2), s); setTimeout(()=>pluck(3,4), s*2); setTimeout(()=>pluck(4,3), s*3); }
+    if(name === "Dsus2"){ pluck(3,0); setTimeout(()=>pluck(2,2), s); setTimeout(()=>pluck(4,3), s*2); setTimeout(()=>pluck(5,0), s*3); }
+    if(name === "A")    { pluck(1,0); setTimeout(()=>pluck(2,2), s); setTimeout(()=>pluck(3,2), s*2); setTimeout(()=>pluck(4,2), s*3); }
+    if(name === "G")    { pluck(0,3); setTimeout(()=>pluck(1,2); pluck(2,0), s); setTimeout(()=>pluck(4,3), s*2); }
+    if(name === "Em7")  { pluck(0,0); setTimeout(()=>pluck(1,2), s); setTimeout(()=>pluck(2,2), s*2); setTimeout(()=>pluck(4,3), s*3); }
+}
+
+// Intense Picking
+function pickPattern(name) {
+    updateChord(name);
+    const delay = 200;
+    if(name==="Bm7") { pluck(1,2); setTimeout(()=>pluck(2,2), delay); setTimeout(()=>pluck(3,4), delay*2); setTimeout(()=>pluck(4,3), delay*3); }
+    if(name==="Dsus2") { pluck(2,2); setTimeout(()=>pluck(3,2), delay); setTimeout(()=>pluck(4,3), delay*2); setTimeout(()=>pluck(5,0), delay*3); }
+    // Generic fill for others
+    else { strumChord(name); }
+}
+
+/* ==========================================================================
+   VISUALS & UI
+   ========================================================================== */
+const canvas = document.getElementById('can');
+const c = canvas.getContext('2d');
+let w, h;
+
+// String Physics
+let strings = [];
+for(let i=0; i<6; i++) {
+    strings.push({ y: 0, amp: 0, color: '#333', baseThickness: 1 + i*0.4 });
+}
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+function visualizeString(idx, fret) {
+    // Visual index logic (0 is Low G# - bottom of array, top of screen usually or vice versa)
+    // Let's draw Low String at Top (Index 0) to match Tab visual style slightly? 
+    // Actually usually Low string is bottom physically, top in Tab. Let's do Standard visual.
+    // 0 (Low E) = Bottom visual string.
+    
+    const sIdx = 5 - idx; // Invert so Low is bottom
+    strings[sIdx].amp = 20;
+    strings[sIdx].color = '#d4af37';
+}
+
+function updateLyrics(text) {
+    const el = document.getElementById('lyrics');
+    el.style.opacity = 0;
+    setTimeout(() => {
+        el.innerText = text;
+        el.style.opacity = 1;
+    }, 300);
+}
+
+function updateChord(text) {
+    document.getElementById('chord-badge').innerText = text;
+}
+
+function animate() {
+    c.fillStyle = 'rgba(5,5,5,0.2)';
+    c.fillRect(0,0,w,h);
+    
+    const spacing = h / 7;
+    
+    strings.forEach((s, i) => {
+        s.amp *= 0.9;
+        if(s.amp < 0.1) s.color = '#333';
+        
+        const y = spacing * (i+1);
+        
+        c.beginPath();
+        c.strokeStyle = s.color;
+        c.lineWidth = s.baseThickness;
+        c.moveTo(0, y);
+        
+        for(let x=0; x<=w; x+=10) {
+            const vib = Math.sin(x*0.1 + Date.now()*0.02) * s.amp * Math.sin((x/w)*Math.PI);
+            c.lineTo(x, y + vib);
+        }
+        c.stroke();
+        
+        // Draw Fret marker hint?
+        if(s.amp > 1) {
+            c.fillStyle = s.color;
+            c.globalAlpha = 0.2;
+            c.beginPath();
+            c.arc(w/2, y, s.amp, 0, Math.PI*2);
+            c.fill();
+            c.globalAlpha = 1.0;
+        }
+    });
+    
+    requestAnimationFrame(animate);
+}
+animate();
+
+document.getElementById('play-btn').addEventListener('click', (e) => {
+    initAudio();
+    e.target.style.display = 'none';
+    (async () => {
+        await playIntro();
+        await playVerse1();
+        await playPreChorus();
+        await playChorus();
+        updateLyrics("Live without me.");
+        updateChord("FIN");
+    })();
+});
+
+</script>
+</body>
+</html>
