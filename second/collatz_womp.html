@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PROMETHIUM 61 // THE QUANTUM HOWL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Italiana&family=Share+Tech+Mono&display=swap');
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            cursor: none; /* NO INPUT DESIRED */
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 1;
+            /* The visual mindfuckery filter */
+            filter: contrast(1.2) saturate(1.5); 
+        }
+
+        #ui-layer {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass to overlay */
+            mix-blend-mode: exclusion;
+        }
+
+        #numeric-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 14px;
+            white-space: pre;
+            text-align: center;
+            opacity: 0.5;
+            text-shadow: 0 0 5px red;
+        }
+
+        #start-overlay {
+            position: absolute;
+            z-index: 999;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #020005;
+            transition: opacity 3s cubic-bezier(0.4, 0, 1, 1);
+            cursor: crosshair;
+        }
+
+        .title {
+            text-align: center;
+            color: #d8c0a8;
+            opacity: 0.8;
+            animation: breathe 5s infinite ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Italiana', serif;
+            font-size: 3rem;
+            margin: 0;
+            letter-spacing: 15px;
+            font-weight: 400;
+            text-shadow: 0 0 20px #a00;
+        }
+        
+        p {
+            margin-top: 10px;
+            letter-spacing: 5px;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.5; filter: blur(2px); }
+            50% { opacity: 1; filter: blur(0px); }
+        }
+
+        .dissolve {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- VISUALS -->
+    <canvas id="canvas"></canvas>
+    <div id="ui-layer">
+        <div id="numeric-display"></div>
+    </div>
+
+    <!-- GATE -->
+    <div id="start-overlay">
+        <div class="title">
+            <h1>Pm-61</h1>
+            <p>QUANTUM COLLATZ SEQUENCER</p>
+        </div>
+    </div>
+
+    <script>
+        /*
+         * PROMETHIUM-61: THE QUANTUM HOWL
+         * Layers:
+         * 1. The 61 Flutes (Base Reality)
+         * 2. The Wolf Synth (Formant Synthesis)
+         * 3. The Collatz Electron Atom (Visual Chaos)
+         */
+
+        const TOTAL_FLUTES = 61; 
+        const LAYERS = 7;
+        
+        // GLOBAL VARS
+        let ctx, canvas, w, h, cx, cy;
+        let actx, master, reverb;
+        let audioRunning = false;
+        let startOverlay = document.getElementById('start-overlay');
+        let numDisplay = document.getElementById('numeric-display');
+        
+        // TIMERS
+        let time = 0;
+
+        // SCALE (E Minor / Aeolian)
+        // 1, 2, b3, 4, 5, b6, b7
+        const SCALE_RATIOS = [1, 1.122, 1.189, 1.335, 1.498, 1.587, 1.782]; 
+        const BASE_PITCH = 82.41; // Low E
+        
+        /* ----------------------------------------------------------------
+           THE WOLF ENGINE (Formant Filter Synthesis)
+           ---------------------------------------------------------------- */
+        class Wolf {
+            constructor() {
+                this.isActive = false;
+            }
+
+            howl() {
+                if(this.isActive || Math.random() > 0.3) return; // Wolves are shy
+                this.isActive = true;
+
+                const t = actx.currentTime;
+                const dur = 4 + Math.random() * 6; // Long howl
+
+                // 1. Source (Sawtooth for harsh glottal sound)
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                
+                // Pitch: Start low, glide up (head voice), glide down
+                const startFreq = 220 + Math.random()*50;
+                osc.frequency.setValueAtTime(startFreq, t);
+                osc.frequency.exponentialRampToValueAtTime(startFreq * 1.5, t + dur * 0.3); // Peak
+                osc.frequency.exponentialRampToValueAtTime(startFreq * 0.8, t + dur); // Fade
+
+                // 2. Throat Filter (The "Ooo" sound)
+                // Lowpass filter closing simulates mouth shape closing
+                const filter = actx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.Q.value = 6; // Resonant throat
+                
+                // Formant Glide
+                filter.frequency.setValueAtTime(600, t);
+                filter.frequency.linearRampToValueAtTime(900, t + dur * 0.3); // Open mouth
+                filter.frequency.linearRampToValueAtTime(300, t + dur); // Close to 'u'
+
+                // 3. Gain (Breath control)
+                const gain = actx.createGain();
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.3, t + 1); // Slow attack
+                gain.gain.linearRampToValueAtTime(0.3, t + dur - 2); 
+                gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+                // Wiring
+                osc.connect(filter);
+                filter.connect(gain);
+                // Heavy reverb for distance
+                gain.connect(reverb); 
+
+                osc.start(t);
+                osc.stop(t + dur + 1);
+
+                setTimeout(() => { this.isActive = false; }, (dur + 1)*1000);
+            }
+        }
+
+        const wolves = [new Wolf(), new Wolf(), new Wolf()];
+
+        /* ----------------------------------------------------------------
+           VISUALS: QUANTUM COLLATZ ATOM (61 ELECTRONS)
+           ---------------------------------------------------------------- */
+        
+        class CollatzElectron {
+            constructor(id) {
+                this.id = id;
+                this.angle = (Math.PI * 2 / 61) * id;
+                this.n = 2 + id; // Initial seed
+                this.r = 100;    // Current radius
+                this.targetR = 100;
+                this.baseR = 100 + (id % 7) * 40;
+                this.speed = 0.02 + (Math.random() * 0.02);
+                this.color = `hsla(${(id*5)%360}, 100%, 50%, 0.8)`;
+                
+                // The alternating horizontal movement tracker
+                this.hOffset = 0; 
+                this.hDir = (id % 2 === 0) ? 1 : -1;
+            }
+
+            step() {
+                // COLLATZ ALGORITHM STEP
+                if (this.n % 2 === 0) {
+                    this.n = this.n / 2;
+                    // Even numbers compress (gravity)
+                    this.targetR = this.baseR * 0.5;
+                    this.color = '#0ff'; // Cyan chill
+                } else {
+                    this.n = (3 * this.n) + 1;
+                    // Odd numbers expand (energy)
+                    this.targetR = this.baseR * 2.5;
+                    this.color = '#f0f'; // Magenta excited
+                }
+
+                // If loop crashes to 1, reset with chaotic large number derived from time
+                if (this.n < 2) {
+                    this.n = Math.floor(Math.random() * 1000) + 10;
+                }
+            }
+
+            update() {
+                // Move towards radius target
+                this.r += (this.targetR - this.r) * 0.05;
+                
+                // Orbit angle
+                this.angle += this.speed * ((this.targetR > 200) ? 0.5 : 1.5); // Angular momentum cons.
+                
+                // Horizontal Oscillation (Alternating direction)
+                this.hOffset += (this.targetR * 0.02) * this.hDir;
+                if (Math.abs(this.hOffset) > w/2) {
+                    this.hDir *= -1; // Bounce off screen edges conceptually
+                }
+            }
+
+            draw() {
+                // Polar to Cartesian
+                let x = cx + Math.cos(this.angle) * this.r;
+                let y = cy + Math.sin(this.angle) * this.r;
+
+                // ADDING THE "HORIZONTAL SYMPHONIC ENTERING"
+                // Instead of drawing a dot, we draw a horizontal interference line
+                // "Mindfuckery" Mode:
+                
+                const lineWidth = 1 + (this.n % 10);
+                
+                ctx.beginPath();
+                
+                // Alternating horizontal scanning lines passing through the electron position
+                if (this.id % 2 === 0) {
+                    // Rightward entry
+                    ctx.moveTo(x - this.hOffset, y);
+                    ctx.lineTo(x + this.r, y); 
+                } else {
+                    // Leftward entry
+                    ctx.moveTo(x + this.hOffset, y);
+                    ctx.lineTo(x - this.r, y);
+                }
+
+                // Color depends on velocity
+                ctx.strokeStyle = this.color;
+                ctx.globalAlpha = 0.3; // Transparency for layering
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Core Electron
+                ctx.fillStyle = '#fff';
+                ctx.globalAlpha = 1;
+                ctx.fillRect(x, y, 3, 3);
+            }
+        }
+
+        let electrons = [];
+        let numbersString = ""; // For the display
+
+        function initVisuals() {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            resize();
+            window.addEventListener('resize', resize);
+            
+            // Create the 61 Electrons of Promethium
+            electrons = [];
+            for(let i=0; i<61; i++) {
+                electrons.push(new CollatzElectron(i));
+            }
+            
+            // Trigger a collatz step periodically to sync with rhythm
+            setInterval(() => {
+                // Randomly update a chunk of electrons
+                electrons.forEach(e => {
+                    if(Math.random() > 0.8) e.step();
+                });
+                
+                // Update Numeric Display String (matrix rain style data)
+                let active = electrons.filter((e,i) => i%5==0).map(e => e.n).join(" ");
+                numDisplay.innerText = active + "\n" + (active.split("").reverse().join(""));
+            }, 500);
+        }
+        
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+            cx = w/2;
+            cy = h/2;
+        }
+
+        function drawVisuals() {
+            if(!audioRunning) return;
+            requestAnimationFrame(drawVisuals);
+            
+            // TRIPPY TRAILS (Mindfuckery requires ghosting)
+            // Composite difference makes it inverse colors periodically
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
+            ctx.fillRect(0, 0, w, h);
+            
+            // The Wonderland blending
+            ctx.globalCompositeOperation = 'lighter'; // or 'difference'
+
+            electrons.forEach(e => {
+                e.update();
+                e.draw();
+            });
+
+            // The Atom Nucleus - Pulsing
+            let pulse = 20 + Math.sin(actx.currentTime * 5) * 5;
+            ctx.fillStyle = 'rgba(255, 50, 50, 0.2)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, pulse, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        /* ----------------------------------------------------------------
+           AUDIO SYSTEM (FLUTES REUSED + WOLVES)
+           ---------------------------------------------------------------- */
+        
+        let noiseBuffer;
+
+        function initAudio() {
+            actx = new (window.AudioContext || window.webkitAudioContext)();
+            master = actx.createGain();
+            master.gain.value = 0.6; 
+            
+            reverb = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const length = rate * 6;
+            const decay = 2.5;
+            const imp = actx.createBuffer(2, length, rate);
+            
+            for (let c = 0; c < 2; c++) {
+                const chan = imp.getChannelData(c);
+                for (let i = 0; i < length; i++) {
+                    chan[i] = (Math.random() * 2 - 1) * Math.pow(1 - (i / length), decay);
+                }
+            }
+            reverb.buffer = imp;
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+            master.connect(actx.destination);
+
+            const bSize = 2 * rate;
+            noiseBuffer = actx.createBuffer(1, bSize, rate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bSize; i++) output[i] = Math.random() * 2 - 1;
+
+            startOrchestra();
+        }
+
+        // FLUTE CLASS (Reused but with more modulation)
+        class FluteVoice {
+            constructor(layerID) {
+                this.layer = layerID;
+                this.isPlaying = false;
+            }
+
+            play(pitch, duration) {
+                if(this.isPlaying) return;
+                this.isPlaying = true;
+                const t = actx.currentTime;
+                
+                // When a flute plays, trigger visual glitch on random electron
+                if (Math.random() > 0.5) {
+                    const idx = Math.floor(Math.random()*electrons.length);
+                    electrons[idx].n = 314159; // Inject large N
+                    electrons[idx].targetR = w/2;
+                }
+
+                // Audio Logic
+                const osc = actx.createOscillator();
+                osc.type = 'sine'; 
+                osc.frequency.value = pitch;
+
+                const lfo = actx.createOscillator();
+                lfo.frequency.value = 5; 
+                const lfoGain = actx.createGain();
+                lfoGain.gain.value = pitch * 0.02; 
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc.frequency);
+                lfo.start(t);
+
+                const breathNode = actx.createBufferSource();
+                breathNode.buffer = noiseBuffer;
+                breathNode.loop = true;
+                breathNode.playbackRate.value = 0.5 + (this.layer * 0.1); 
+
+                const gain = actx.createGain();
+                const breathGain = actx.createGain();
+
+                const noiseFilter = actx.createBiquadFilter();
+                noiseFilter.type = 'bandpass';
+                noiseFilter.frequency.value = pitch * 1.5;
+                noiseFilter.Q.value = 1;
+
+                osc.connect(gain);
+                breathNode.connect(noiseFilter);
+                noiseFilter.connect(breathGain);
+                
+                gain.connect(master);
+                breathGain.connect(master);
+
+                const attack = 0.5;
+                const vol = 0.05 / (1 + (Math.log(TOTAL_FLUTES) * 0.2)); 
+
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(vol, t + attack);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+                breathGain.gain.setValueAtTime(0, t);
+                breathGain.gain.linearRampToValueAtTime(vol * 0.6, t + 0.1);
+                breathGain.gain.linearRampToValueAtTime(0, t + duration);
+
+                osc.start(t);
+                breathNode.start(t);
+                
+                setTimeout(() => {
+                    osc.stop(); 
+                    breathNode.stop();
+                    osc.disconnect();
+                    this.isPlaying = false;
+                }, (duration+1) * 1000);
+            }
+        }
+
+        const flutes = [];
+        
+        function startOrchestra() {
+            // 7 Layers setup
+            const distro = [5, 10, 12, 10, 8, 8, 8]; 
+            distro.forEach((count, layerIdx) => {
+                for(let i=0; i<count; i++) flutes.push(new FluteVoice(layerIdx));
+            });
+            conduct();
+        }
+
+        function conduct() {
+            // FLUTES
+            flutes.forEach(f => {
+                if (f.isPlaying) return;
+                const pBase = 0.001 + (f.layer * 0.002); 
+                
+                if (Math.random() < pBase) {
+                    const octaveOffset = Math.floor(f.layer / 2);
+                    const octaveMultiplier = Math.pow(2, octaveOffset);
+                    const noteIdx = Math.floor(Math.random() * SCALE_RATIOS.length);
+                    let freq = BASE_PITCH * SCALE_RATIOS[noteIdx] * octaveMultiplier;
+                    if (f.layer === 6) freq *= 2; 
+                    const duration = 2 + (Math.random() * 4) + ((6 - f.layer) * 2);
+                    f.play(freq, duration);
+                }
+            });
+
+            // WOLVES
+            if (Math.random() < 0.005) { // Very Rare check per tick
+                wolves[Math.floor(Math.random() * wolves.length)].howl();
+            }
+
+            setTimeout(conduct, 100);
+        }
+
+        /* --- INIT --- */
+        startOverlay.addEventListener('click', () => {
+            initAudio();
+            initVisuals();
+            actx.resume();
+            
+            startOverlay.classList.add('dissolve');
+            audioRunning = true;
+            
+            document.body.style.cursor = 'none'; // Re-hide cursor
+            drawVisuals();
+        });
+
+    </script>
+</body>
+</html>
