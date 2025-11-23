@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>THE AVIARY // 61 FLUTES</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Italiana&display=swap');
+
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            cursor: none; /* NO MOUSE INTERACTION */
+            font-family: 'Italiana', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 1;
+        }
+
+        #start-overlay {
+            position: absolute;
+            z-index: 999;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            transition: opacity 3s cubic-bezier(0.4, 0, 1, 1);
+            cursor: pointer;
+        }
+
+        .title {
+            text-align: center;
+            color: #d8c0a8;
+            opacity: 0.8;
+            animation: breathe 4s infinite ease-in-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            letter-spacing: 15px;
+            font-weight: 400;
+            text-shadow: 0 0 20px #d8c0a8;
+        }
+        
+        p {
+            margin-top: 10px;
+            letter-spacing: 5px;
+            font-size: 0.9rem;
+            color: #777;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.5; transform: scale(0.98); }
+            50% { opacity: 1; transform: scale(1.02); }
+        }
+
+        .dissolve {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- VISUALS -->
+    <canvas id="canvas"></canvas>
+
+    <!-- START GATE (REQUIRED BY BROWSERS) -->
+    <div id="start-overlay">
+        <div class="title">
+            <h1>61 FLUTES</h1>
+            <p>TOUCH TO IGNITE THE INFINITE</p>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * THE AVIARY: ETERNAL AUTOPLAY MASTERPIECE
+         * 7 Layers of Audio / 61 Virtual Flute Agents
+         * No input required after initialization.
+         */
+
+        /* --- CONFIGURATION --- */
+        const TOTAL_FLUTES = 61; 
+        const LAYERS = 7;
+        
+        // E Major Lydian / Ethereal Scale logic
+        const SCALE_RATIOS = [1, 1.125, 1.25, 1.406, 1.5, 1.666, 1.875]; // Root, 2, 3, #4, 5, 6, 7
+        const BASE_PITCH = 82.41; // Low E
+        
+        // Global Systems
+        let ctx, canvas, w, h;
+        let actx, master, reverb;
+        let audioRunning = false;
+        let startOverlay = document.getElementById('start-overlay');
+        
+        // Time
+        let time = 0;
+
+        /* --- VISUAL SYSTEM (THE AURORA) --- */
+        const flows = [];
+        
+        function initVisuals() {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            resize();
+            window.addEventListener('resize', resize);
+            
+            // Create visual streams corresponding to the 7 layers
+            for(let i=0; i<LAYERS; i++) {
+                flows.push({
+                    y: (h / LAYERS) * i,
+                    points: [],
+                    color: `hsla(${20 + i*5}, 60%, 50%, 0.1)`,
+                    speed: 0.001 + (i * 0.0005)
+                });
+            }
+        }
+        
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+        }
+
+        // Simulating flow fields
+        function drawVisuals() {
+            if(!audioRunning) return;
+            
+            // Deep Trail Fade
+            ctx.fillStyle = 'rgba(0, 0, 2, 0.05)';
+            ctx.fillRect(0, 0, w, h);
+            
+            ctx.globalCompositeOperation = 'screen';
+            time += 0.01;
+
+            flows.forEach((layer, idx) => {
+                const layerFluctuation = Math.sin(time + idx) * 50;
+                
+                ctx.beginPath();
+                ctx.moveTo(0, layer.y);
+
+                // Create organic wave based on Flute Activity
+                for (let x = 0; x < w; x += 30) {
+                    const noise = Math.sin(x * 0.002 + time * layer.speed * 20) 
+                                + Math.cos(x * 0.01 - time);
+                    const y = layer.y + layerFluctuation + (noise * (h/6));
+                    
+                    // Draw random sparks for high notes
+                    if (Math.random() > 0.999 && idx > 4) {
+                        ctx.fillStyle = '#fff';
+                        ctx.fillRect(x, y, 2, 2);
+                    }
+                    
+                    ctx.lineTo(x, y);
+                }
+
+                ctx.strokeStyle = `hsla(${10 + idx * 8}, 70%, ${50 + idx * 5}%, 0.2)`;
+                ctx.lineWidth = 2 + (idx * 2); // Thicker for higher layers
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.stroke();
+            });
+            
+            ctx.globalCompositeOperation = 'source-over';
+            requestAnimationFrame(drawVisuals);
+        }
+
+        /* --- AUDIO SYSTEM (THE 61 FLUTES) --- */
+        
+        // Single Global Noise Buffer (For Breath sounds) - Optimization
+        let noiseBuffer;
+
+        function initAudio() {
+            actx = new (window.AudioContext || window.webkitAudioContext)();
+            master = actx.createGain();
+            
+            // Limit master volume to prevent clipping from 61 voices
+            master.gain.value = 0.6; 
+            
+            /* --- REVERB (The Cathedral) --- */
+            reverb = actx.createConvolver();
+            const rate = actx.sampleRate;
+            const length = rate * 6; // 6 seconds tail
+            const decay = 2.5;
+            const imp = actx.createBuffer(2, length, rate);
+            
+            for (let c = 0; c < 2; c++) {
+                const chan = imp.getChannelData(c);
+                for (let i = 0; i < length; i++) {
+                    chan[i] = (Math.random() * 2 - 1) * Math.pow(1 - (i / length), decay);
+                }
+            }
+            reverb.buffer = imp;
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+            // Dry mix
+            master.connect(actx.destination);
+
+            /* --- NOISE GEN (Breath) --- */
+            const bSize = 2 * rate;
+            noiseBuffer = actx.createBuffer(1, bSize, rate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bSize; i++) output[i] = Math.random() * 2 - 1;
+
+            startOrchestra();
+        }
+
+        /**
+         * THE FLUTE VOICE 
+         * Procedural Synthesis Node
+         */
+        class FluteVoice {
+            constructor(layerID) {
+                this.layer = layerID;
+                this.isPlaying = false;
+                this.osc = null;
+                this.gain = null;
+                this.breathGain = null;
+            }
+
+            play(pitch, duration) {
+                if(this.isPlaying) return;
+                this.isPlaying = true;
+                const t = actx.currentTime;
+                const release = 2.0;
+
+                // 1. TONE OSCILLATOR
+                this.osc = actx.createOscillator();
+                this.osc.type = 'sine'; // Flute core is Sine
+                this.osc.frequency.value = pitch;
+
+                // Vibrato LFO (Essential for realism)
+                const lfo = actx.createOscillator();
+                lfo.frequency.value = 4 + Math.random(); // 4-5hz wobbles
+                const lfoGain = actx.createGain();
+                lfoGain.gain.value = pitch * 0.02; // Depth
+                lfo.connect(lfoGain);
+                lfoGain.connect(this.osc.frequency);
+                lfo.start(t);
+
+                // 2. BREATH NOISE (The "Air" sound)
+                const breathNode = actx.createBufferSource();
+                breathNode.buffer = noiseBuffer;
+                breathNode.loop = true;
+                // Pitch shift noise down/up based on layer
+                breathNode.playbackRate.value = 0.5 + (this.layer * 0.1); 
+
+                // ENVELOPES
+                this.gain = actx.createGain(); // Tone Gain
+                this.breathGain = actx.createGain(); // Noise Gain
+
+                // Filter the noise (flutes aren't white noise, they are "chiff")
+                const noiseFilter = actx.createBiquadFilter();
+                noiseFilter.type = 'bandpass';
+                noiseFilter.frequency.value = pitch * 1.5;
+                noiseFilter.Q.value = 1;
+
+                // Wiring
+                this.osc.connect(this.gain);
+                breathNode.connect(noiseFilter);
+                noiseFilter.connect(this.breathGain);
+                
+                this.gain.connect(master);
+                this.breathGain.connect(master);
+
+                // --- SHAPING THE SOUND ---
+                // Lower layers = slower, heavier
+                // Higher layers = fast, sharp
+                const attack = 0.1 + (Math.random() * 0.5) + ((7-this.layer)*0.1);
+                const sustainVol = 0.05 / (1 + (Math.log(TOTAL_FLUTES) * 0.2)); // Dynamic mix mixing
+
+                // Tone Envelope (Swelling)
+                this.gain.gain.setValueAtTime(0, t);
+                this.gain.gain.linearRampToValueAtTime(sustainVol, t + attack);
+                this.gain.gain.linearRampToValueAtTime(sustainVol * 0.8, t + duration * 0.5); // Breathe out
+                this.gain.gain.exponentialRampToValueAtTime(0.001, t + duration + release);
+
+                // Breath Envelope (Short puff at start + low sustain)
+                this.breathGain.gain.setValueAtTime(0, t);
+                this.breathGain.gain.linearRampToValueAtTime(sustainVol * 0.5, t + 0.05); // Initial "Chiff"
+                this.breathGain.gain.exponentialRampToValueAtTime(sustainVol * 0.1, t + attack);
+                this.breathGain.gain.linearRampToValueAtTime(0, t + duration);
+
+                // Start
+                this.osc.start(t);
+                breathNode.start(t);
+
+                // Stop logic
+                const killTime = (duration + release + 1) * 1000;
+                
+                setTimeout(() => {
+                    if (this.osc) {
+                        this.osc.stop(); 
+                        breathNode.stop();
+                        this.osc.disconnect();
+                        this.gain.disconnect();
+                        lfo.stop();
+                        this.isPlaying = false;
+                    }
+                }, killTime);
+            }
+        }
+
+        /* --- THE CONDUCTOR (Zero Human Interaction) --- */
+        
+        // Create the army of flutes
+        const flutes = [];
+        
+        function startOrchestra() {
+            // Instantiate 61 Flutes
+            // Layer Dist:
+            // 0 (Bass): 5
+            // 1 (Tenor): 10
+            // 2 (Mid): 12
+            // 3 (Alto): 10
+            // 4 (Soprano): 8
+            // 5 (Descant): 8
+            // 6 (Piccolo): 8
+            const distro = [5, 10, 12, 10, 8, 8, 8]; // Sums to 61
+            
+            let idCount = 0;
+            distro.forEach((count, layerIdx) => {
+                for(let i=0; i<count; i++) {
+                    flutes.push(new FluteVoice(layerIdx));
+                }
+            });
+
+            console.log(`Orchestra assembled. ${flutes.length} flutes standing by.`);
+            
+            conduct();
+        }
+
+        // Automatic Generative Logic
+        function conduct() {
+            const now = actx.currentTime;
+            
+            // Loop through all 61 flutes and decide if they should play
+            flutes.forEach(f => {
+                if (f.isPlaying) return; // Busy flutes ignore conductor
+                
+                // Probabilities tuned per layer (lower layers = slower, higher = busier)
+                const pBase = 0.001 + (f.layer * 0.002); 
+                
+                if (Math.random() < pBase) {
+                    
+                    // --- MUSIC THEORY ENGINE ---
+                    // Pitch calc
+                    const octaveOffset = Math.floor(f.layer / 2); // 0, 0, 1, 1, 2, 2, 3...
+                    const octaveMultiplier = Math.pow(2, octaveOffset);
+                    
+                    // Select a note from scale ratios
+                    const noteIdx = Math.floor(Math.random() * SCALE_RATIOS.length);
+                    let freq = BASE_PITCH * SCALE_RATIOS[noteIdx] * octaveMultiplier;
+                    
+                    // Layer 6 (Piccolo) often plays harmonic overtones
+                    if (f.layer === 6) freq *= 2; 
+
+                    // Duration based on layer
+                    // Bass flutes hold for 6-12s, Piccolos for 1-3s
+                    const duration = 2 + (Math.random() * 4) + ((6 - f.layer) * 2);
+
+                    f.play(freq, duration);
+                }
+            });
+
+            // Conductor ticks every 100ms
+            setTimeout(conduct, 100);
+        }
+
+        /* --- INITIALIZATION HANDLER --- */
+        startOverlay.addEventListener('click', () => {
+            initAudio();
+            initVisuals();
+            actx.resume();
+            
+            startOverlay.classList.add('dissolve');
+            audioRunning = true;
+            
+            // Start visuals loop
+            requestAnimationFrame(drawVisuals);
+
+            // Hide the cursor logic manually for browser compat
+            document.body.style.cursor = 'none';
+        });
+
+    </script>
+</body>
+</html>
