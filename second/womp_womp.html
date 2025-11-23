@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WOMP // FLUID CHROME</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            cursor: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            /* The Androgyne Sheen */
+            filter: contrast(1.5) hue-rotate(20deg) drop-shadow(0 0 10px rgba(200, 0, 255, 0.5));
+        }
+
+        #start {
+            position: absolute;
+            z-index: 99;
+            color: #fff;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            font-size: 2rem;
+            text-align: center;
+            cursor: pointer;
+            mix-blend-mode: exclusion;
+        }
+
+        .shake {
+            animation: tremor 0.1s infinite;
+        }
+
+        @keyframes tremor {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            100% { transform: translate(-1px, -2px) rotate(-1deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="can"></canvas>
+    <div id="start">CLICK TO GUSH<br><span style="font-size:12px;opacity:0.6;">(VOLUME WARNING)</span></div>
+
+    <script>
+        // CONFIG
+        const WOMP_RATE = 2.5; // Wobbles per second (BPM equivalent ~150 half-time)
+        const BASS_FREQ = 60;  // Sub Bass
+        const MID_FREQ = 180;  // Androgynous Vocal Fundament (G3)
+        
+        let actx, master, limiter;
+        let isRunning = false;
+        let cvs, ctx, w, h;
+        
+        // VISUAL OBJECTS
+        let particles = [];
+        let centerRadius = 0;
+        let wompPhase = 0; // Tracks the LFO for visuals
+
+        // ================= AUDIO ENGINE ================= //
+        
+        // This is a custom "Vocal Womp" Synthesizer
+        function initAudio() {
+            actx = new (window.AudioContext || window.webkitAudioContext)();
+            master = actx.createGain();
+            master.gain.value = 0.5;
+
+            // Limiter to allow aggression without destroying speakers
+            let comp = actx.createDynamicsCompressor();
+            comp.threshold.value = -10;
+            comp.ratio.value = 12;
+            
+            master.connect(comp);
+            comp.connect(actx.destination);
+
+            startWompLoop();
+            startSub();
+        }
+
+        function makeDistortionCurve(amount) {
+            let k = typeof amount === 'number' ? amount : 50,
+                n_samples = 44100,
+                curve = new Float32Array(n_samples),
+                deg = Math.PI / 180,
+                i = 0,
+                x;
+            for ( ; i < n_samples; ++i ) {
+                x = i * 2 / n_samples - 1;
+                curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
+            }
+            return curve;
+        }
+
+        function startWompLoop() {
+            const osc1 = actx.createOscillator();
+            const osc2 = actx.createOscillator();
+            
+            // OSC 1: SAW (The Bite)
+            osc1.type = 'sawtooth';
+            osc1.frequency.value = MID_FREQ;
+            
+            // OSC 2: TRIANGLE (The Body, slightly detuned)
+            osc2.type = 'triangle';
+            osc2.frequency.value = MID_FREQ - 2;
+
+            // WAVE SHAPER (The Grit)
+            const shaper = actx.createWaveShaper();
+            shaper.curve = makeDistortionCurve(100);
+            shaper.oversample = '4x';
+
+            // FORMANT FILTER (The "Mouth")
+            // A Lowpass filter creates "Oooh", High cutoff creates "Aaaah"
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.Q.value = 6; // Very Resonant
+            
+            // LFO (The Rhythm)
+            const lfo = actx.createOscillator();
+            lfo.type = 'sawtooth'; // Hard ramp for aggressive punch
+            lfo.frequency.value = WOMP_RATE;
+
+            const lfoGain = actx.createGain();
+            lfoGain.gain.value = 2500; // How wide the filter opens
+
+            // VCA (Volume gating - chopping the sound)
+            const gate = actx.createGain();
+            gate.gain.value = 0;
+            const gateLfoGain = actx.createGain();
+            gateLfoGain.gain.value = 1.0;
+
+            // WIRING
+            lfo.connect(lfoGain);
+            lfoGain.connect(filter.frequency);
+            
+            // Connecting LFO to volume so it pulses
+            lfo.connect(gateLfoGain);
+            gateLfoGain.connect(gate.gain);
+
+            osc1.connect(shaper);
+            osc2.connect(shaper);
+            shaper.connect(filter);
+            filter.connect(gate);
+            gate.connect(master);
+
+            osc1.start();
+            osc2.start();
+            lfo.start();
+            
+            // VISUAL SYNC: Extract the LFO data roughly for the canvas
+            setInterval(() => {
+                const now = actx.currentTime;
+                // Simulating LFO phase for visual extraction 
+                // Sawtooth rises 0->1 repeatedly
+                wompPhase = (now * WOMP_RATE) % 1;
+            }, 16);
+        }
+
+        function startSub() {
+            const sub = actx.createOscillator();
+            sub.type = 'sine';
+            sub.frequency.value = BASS_FREQ; // 60Hz constant hum
+            
+            const gain = actx.createGain();
+            gain.gain.value = 0.8;
+            
+            sub.connect(gain);
+            gain.connect(master);
+            sub.start();
+        }
+
+        // ================= VISUAL ENGINE ================= //
+
+        function initVis() {
+            cvs = document.getElementById('can');
+            ctx = cvs.getContext('2d');
+            resize();
+            window.addEventListener('resize', resize);
+            loop();
+        }
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            cvs.width = w;
+            cvs.height = h;
+        }
+
+        // PARTICLE CLASS: "The Gush"
+        class Streamer {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = w / 2;
+                this.y = h / 2;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 5;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.history = [];
+                // Androgynous gradient colors: Cyan, Magenta, White, Neon Violet
+                const cols = ['#00FFFF', '#FF00FF', '#E0E0E0', '#9D00FF'];
+                this.col = cols[Math.floor(Math.random()*cols.length)];
+                this.life = 1;
+                this.width = Math.random() * 4 + 1;
+            }
+
+            update(burstMultiplier) {
+                // If the WOMP is hitting (sawtooth drops), boost speed
+                let boost = (1 + burstMultiplier * 2);
+                
+                this.x += this.vx * boost;
+                this.y += this.vy * boost;
+                this.life -= 0.02;
+
+                this.history.push({x: this.x, y: this.y});
+                if(this.history.length > 5) this.history.shift();
+
+                if(this.life <= 0 || this.x < 0 || this.x > w || this.y < 0 || this.y > h) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                for(let p of this.history) ctx.lineTo(p.x, p.y);
+                ctx.strokeStyle = this.col;
+                ctx.lineWidth = this.width * (wompPhase + 0.5); // Thicker on womp
+                ctx.lineCap = 'round';
+                
+                // Chrome shine effect
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.col;
+                
+                ctx.stroke();
+            }
+        }
+
+        // Create initial particles
+        for(let i=0; i<150; i++) particles.push(new Streamer());
+
+        function loop() {
+            requestAnimationFrame(loop);
+            if(!isRunning) return;
+
+            // Clear with fading trails (The Fluid effect)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; 
+            ctx.fillRect(0,0,w,h);
+            ctx.globalCompositeOperation = 'lighten';
+
+            // THE PULSE
+            // wompPhase goes 0 -> 1 over and over.
+            // When phase is low, it means the synth envelope is open.
+            
+            // Screen Shake calculation
+            if (wompPhase > 0.8) { 
+                let shake = (wompPhase - 0.8) * 40;
+                let sx = (Math.random()-0.5) * shake;
+                let sy = (Math.random()-0.5) * shake;
+                ctx.translate(sx, sy);
+                document.body.style.backgroundColor = '#100018'; // Flash purple black
+            } else {
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+                document.body.style.backgroundColor = '#000';
+            }
+
+            // Draw Core
+            let rad = 50 + (wompPhase * 100);
+            let grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, rad);
+            grad.addColorStop(0, '#FFF');
+            grad.addColorStop(0.3, '#00FFFF'); // Cyan
+            grad.addColorStop(0.6, '#9D00FF'); // Violet
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(w/2, h/2, rad, 0, Math.PI*2);
+            ctx.fill();
+
+            // Particles
+            particles.forEach(p => {
+                p.update(wompPhase);
+                p.draw();
+            });
+            
+            // THE FLUID OVERLAY
+            // Chromatic aberration rings
+            ctx.beginPath();
+            ctx.arc(w/2, h/2, rad * 1.5, 0, Math.PI*2);
+            ctx.strokeStyle = `rgba(0, 255, 255, ${0.5 - (wompPhase*0.5)})`;
+            ctx.lineWidth = 10;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(w/2, h/2, rad * 1.6, 0, Math.PI*2);
+            ctx.strokeStyle = `rgba(255, 0, 255, ${0.5 - (wompPhase*0.5)})`;
+            ctx.lineWidth = 10;
+            ctx.stroke();
+        }
+
+
+        // START HANDLER
+        document.getElementById('start').addEventListener('click', function() {
+            this.style.display = 'none';
+            isRunning = true;
+            initAudio();
+            initVis();
+            actx.resume();
+        });
+
+    </script>
+</body>
+</html>
