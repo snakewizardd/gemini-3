@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ω // THE OMEGA POINT // FINALITY</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Italiana&display=swap');
+
+        :root {
+            --void: #050505;
+            --cyan: #00f3ff;
+            --mag: #ff0055;
+            --gold: #ffd700;
+            --deep: #000080;
+        }
+
+        body {
+            margin: 0;
+            background: var(--void);
+            overflow: hidden;
+            font-family: 'Share Tech Mono', monospace;
+            cursor: none; /* The system observes itself */
+            height: 100vh;
+            width: 100vw;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            /* The Unified Field Filter */
+            filter: contrast(1.1) saturate(1.2);
+        }
+
+        #overlay {
+            position: absolute;
+            z-index: 100;
+            width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: var(--cyan);
+            transition: opacity 3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        h1 {
+            font-family: 'Italiana', serif;
+            font-size: 4rem;
+            letter-spacing: 10px;
+            margin: 0;
+            text-shadow: 0 0 20px var(--deep);
+            mix-blend-mode: screen;
+        }
+
+        p {
+            margin-top: 20px;
+            font-size: 1rem;
+            opacity: 0.7;
+            animation: pulse 2s infinite;
+        }
+
+        .dissolve {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #debug {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 10px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- VISUAL CANVAS -->
+    <canvas id="canvas"></canvas>
+
+    <!-- UI LAYER -->
+    <div id="overlay">
+        <h1>Ω MEGA POINT</h1>
+        <p>[ CLICK TO INITIATE SINGULARITY ]</p>
+    </div>
+
+    <div id="debug">waiting for prime mover...</div>
+
+    <script>
+        /**
+         * THE OMEGA POINT ENGINE
+         * INTEGRATING: PROMETHIUM 61 + 61 FLUTES + WITHOUT ME
+         * TUNING: JUST INTONATION E LYDIAN (432Hz Base Ref)
+         */
+
+        const CONFIG = {
+            baseFreq: 161.8, // Golden Ratio approx (E3)
+            collatzStart: 27, // A volatile seed
+            cycleDur: 20000, // ms per evolutionary phase
+            maxParticles: 200
+        };
+
+        // JUST INTONATION E LYDIAN RATIOS
+        // Root, M2, M3, #4 (Lydian), P5, M6, M7
+        const SCALES = {
+            lydian: [1, 9/8, 5/4, 45/32, 3/2, 5/3, 15/8],
+            // Harmonics for the wolves
+            overtones: [1, 2, 3, 4, 5, 6, 7, 8]
+        };
+
+        let actx, master, limiter, reverb;
+        let wolfPack = [];
+        let flutist;
+        let w, h, cx, cy;
+        let canvas, ctx;
+        let time = 0;
+        let isRunning = false;
+        
+        // --- GLOBAL STATE ---
+        const State = {
+            phase: 'GENESIS', // GENESIS -> CHAOS -> ORDER -> ASCENSION
+            tension: 0,       // 0.0 to 1.0
+            collatzVal: CONFIG.collatzStart,
+            collatzPath: [],
+            energy: 0
+        };
+
+        // --- AUDIO ENGINE ---
+        
+        async function initAudio() {
+            actx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // MASTER BUS
+            limiter = actx.createDynamicsCompressor();
+            limiter.threshold.value = -10;
+            limiter.knee.value = 40;
+            limiter.ratio.value = 12;
+            limiter.attack.value = 0;
+            limiter.release.value = 0.25;
+
+            // CONVOLUTION SIMULATION (Algorithmic Reverb)
+            reverb = await createReverb(actx);
+
+            limiter.connect(actx.destination);
+            reverb.connect(limiter);
+
+            // Initialize Instruments AFTER Context is ready
+            wolfPack = [new Wolf(), new Wolf(), new Wolf()];
+            flutist = new Flute();
+            
+            // Start the evolutionary clock
+            setInterval(evolve, CONFIG.cycleDur);
+            // Start the tick
+            requestAnimationFrame(tick);
+            
+            // Binaural Theta Layer (Brain Entrainment)
+            createBinauralDrone(161.8, 4.5); // E3 + Theta beat
+        }
+
+        // High Quality Algorithmic Reverb (The "Cathedral")
+        async function createReverb(ctx) {
+            const convolver = ctx.createConvolver();
+            // Generate impulse response
+            const rate = ctx.sampleRate;
+            const length = rate * 4; // 4 seconds tail
+            const decay = 2.0;
+            const impulse = ctx.createBuffer(2, length, rate);
+            const left = impulse.getChannelData(0);
+            const right = impulse.getChannelData(1);
+
+            for (let i = 0; i < length; i++) {
+                const n = i; // reverse index
+                left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / length, decay);
+                right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / length, decay);
+            }
+            convolver.buffer = impulse;
+            
+            const input = ctx.createGain();
+            const wet = ctx.createGain();
+            const dry = ctx.createGain();
+            
+            input.connect(dry);
+            input.connect(convolver);
+            convolver.connect(wet);
+            
+            dry.connect(limiter);
+            wet.connect(limiter);
+            
+            wet.gain.value = 0.5;
+            dry.gain.value = 0.7;
+            
+            return input;
+        }
+
+        function createBinauralDrone(freq, beatFreq) {
+            const lOsc = actx.createOscillator();
+            const rOsc = actx.createOscillator();
+            const lPan = actx.createStereoPanner();
+            const rPan = actx.createStereoPanner();
+            const gain = actx.createGain();
+
+            lOsc.frequency.value = freq;
+            rOsc.frequency.value = freq + beatFreq;
+            
+            lPan.pan.value = -1;
+            rPan.pan.value = 1;
+            
+            gain.gain.value = 0.05; // Subtle background
+
+            lOsc.connect(lPan).connect(gain);
+            rOsc.connect(rPan).connect(gain);
+            gain.connect(reverb);
+            
+            lOsc.start();
+            rOsc.start();
+        }
+
+        // --- SYNTHESIS CLASSES ---
+
+        class Wolf {
+            constructor() {
+                this.osc = actx.createOscillator();
+                this.osc.type = 'sawtooth';
+                this.filter = actx.createBiquadFilter();
+                this.filter.type = 'lowpass';
+                this.filter.Q.value = 8;
+                this.gain = actx.createGain();
+                this.gain.gain.value = 0;
+
+                this.osc.connect(this.filter).connect(this.gain).connect(reverb);
+                this.osc.start();
+            }
+
+            howl(freq, dur) {
+                const t = actx.currentTime;
+                this.osc.frequency.setValueAtTime(freq * 0.5, t); // Sub oscillator
+                this.osc.frequency.exponentialRampToValueAtTime(freq, t + dur * 0.2);
+                this.osc.frequency.exponentialRampToValueAtTime(freq * 0.8, t + dur);
+
+                // Formant simulation (The "Oooo" to "Aaa" sound)
+                this.filter.frequency.setValueAtTime(400, t);
+                this.filter.frequency.linearRampToValueAtTime(1200, t + dur * 0.4);
+                this.filter.frequency.exponentialRampToValueAtTime(300, t + dur);
+
+                this.gain.gain.setValueAtTime(0, t);
+                this.gain.gain.linearRampToValueAtTime(0.2, t + 0.1);
+                this.gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+                // Visual trigger
+                particles.push(new VisualAgent('howl', cx, cy));
+            }
+        }
+
+        class Flute {
+            constructor() {
+                // Shared noise buffer logic simulation
+            }
+
+            play(freq, dur) {
+                const t = actx.currentTime;
+                const osc = actx.createOscillator();
+                const gain = actx.createGain();
+                const lfo = actx.createOscillator();
+                const lfoGain = actx.createGain();
+
+                // Vibrato
+                lfo.frequency.value = 4 + Math.random(); // 4-5Hz Theta
+                lfoGain.gain.value = 2;
+                lfo.connect(lfoGain).connect(osc.frequency);
+                lfo.start(t); lfo.stop(t+dur);
+
+                osc.frequency.value = freq;
+                osc.type = 'sine';
+
+                // Breath (Filtered Noise)
+                const noise = actx.createOscillator();
+                noise.type = 'triangle'; // Approx noise for cheapness
+                const nFilter = actx.createBiquadFilter();
+                nFilter.type = 'bandpass';
+                nFilter.frequency.value = freq * 1.5; // Breath formant
+                const nGain = actx.createGain();
+                nGain.gain.value = 0.05;
+                
+                // FM Noise modulation for "chiff"
+                noise.frequency.value = freq * 2.13; // non-integer harmonic
+                noise.connect(nFilter).connect(nGain).connect(limiter);
+                noise.start(t); noise.stop(t+dur);
+
+                // Envelope
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.15, t + dur*0.2);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+                osc.connect(gain).connect(reverb);
+                osc.start(t);
+                osc.stop(t + dur);
+
+                // Visual
+                createFlowField(freq);
+            }
+        }
+
+        // --- MATH ENGINE (COLLATZ) ---
+
+        function nextCollatz(n) {
+            return (n % 2 === 0) ? n / 2 : (3 * n) + 1;
+        }
+
+        // --- VISUAL ENGINE ---
+
+        const particles = [];
+
+        class VisualAgent {
+            constructor(type, x, y) {
+                this.type = type;
+                this.x = x;
+                this.y = y;
+                this.life = 1.0;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.hist = [];
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= 0.005;
+                this.hist.push({x: this.x, y: this.y});
+                if(this.hist.length > 20) this.hist.shift();
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                if(this.type === 'howl') {
+                    ctx.strokeStyle = `rgba(255, 0, 85, ${this.life})`; // Mag
+                    ctx.lineWidth = 2;
+                    // Interference line style
+                    ctx.moveTo(0, this.y);
+                    ctx.lineTo(w, this.y);
+                } else if (this.type === 'flow') {
+                    ctx.strokeStyle = `rgba(0, 243, 255, ${this.life * 0.5})`; // Cyan
+                    ctx.lineWidth = 1;
+                    // Curve
+                    ctx.moveTo(this.hist[0].x, this.hist[0].y);
+                    for(let p of this.hist) ctx.lineTo(p.x, p.y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function createFlowField(freq) {
+            // Map freq to screen y
+            const y = h - ((freq / 2000) * h);
+            for(let i=0; i<5; i++) {
+                particles.push(new VisualAgent('flow', Math.random()*w, y));
+            }
+        }
+
+        // --- CONDUCTOR ---
+
+        // MOVED INSTANTIATION TO initAudio TO PREVENT CRASH
+
+        function evolve() {
+            // Cycle phases
+            const phases = ['GENESIS', 'CHAOS', 'ORDER', 'ASCENSION'];
+            let idx = phases.indexOf(State.phase);
+            idx = (idx + 1) % phases.length;
+            State.phase = phases[idx];
+            
+            // UI Update
+            document.getElementById('debug').innerText = `PHASE: ${State.phase} // TENSION: ${State.tension.toFixed(2)} // N: ${State.collatzVal}`;
+            
+            // Color Logic
+            if(State.phase === 'CHAOS') document.body.style.background = '#100005';
+            else if(State.phase === 'ORDER') document.body.style.background = '#000510';
+            else document.body.style.background = '#000';
+        }
+
+        function tick() {
+            if(!isRunning) return;
+            
+            time++;
+            
+            // 1. COLLATZ LOGIC (The Driver)
+            if(time % 10 === 0) {
+                let oldVal = State.collatzVal;
+                State.collatzVal = nextCollatz(State.collatzVal);
+                
+                // Reset on loop
+                if(State.collatzVal === 4 || State.collatzVal === 1 || State.collatzVal === 2) {
+                    if(Math.random() > 0.8) State.collatzVal = Math.floor(Math.random() * 100) + 10;
+                }
+
+                // Sonify
+                if(State.phase === 'CHAOS' || State.phase === 'ASCENSION') {
+                    if(State.collatzVal % 2 !== 0) { // ODD (Expansion)
+                         // Play Howl
+                         if(wolfPack.length > 0) {
+                            const wolf = wolfPack[Math.floor(Math.random()*wolfPack.length)];
+                            const note = SCALES.lydian[Math.floor(Math.random()*SCALES.lydian.length)] * (CONFIG.baseFreq / 2);
+                            wolf.howl(note, 2 + Math.random());
+                         }
+                    }
+                }
+            }
+
+            // 2. AVIARY LOGIC (The Harmony)
+            if(time % 40 === 0) { // Slower tick
+                if(State.phase === 'GENESIS' || State.phase === 'ORDER' || State.phase === 'ASCENSION') {
+                    if(Math.random() > 0.3 && flutist) {
+                        const scaleDeg = SCALES.lydian[Math.floor(Math.random() * SCALES.lydian.length)];
+                        // Spread across octaves
+                        const octave = Math.pow(2, Math.floor(Math.random()*3)); 
+                        flutist.play(CONFIG.baseFreq * scaleDeg * octave, 4 + Math.random()*4);
+                    }
+                }
+            }
+
+            // 3. VISUAL RENDER
+            render();
+
+            requestAnimationFrame(tick);
+        }
+
+        function render() {
+            // Trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            if(State.phase === 'ASCENSION') ctx.fillStyle = 'rgba(0, 0, 0, 0.02)'; // Longer trails
+            ctx.fillRect(0, 0, w, h);
+
+            // Center Nucleus
+            const pulse = Math.sin(time * 0.05) * 10;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 50 + pulse, 0, Math.PI*2);
+            
+            // Mind Fuckery Blend Modes
+            if(State.phase === 'CHAOS') {
+                ctx.strokeStyle = '#f0f';
+                ctx.globalCompositeOperation = 'difference';
+            } else {
+                ctx.strokeStyle = '#0ff';
+                ctx.globalCompositeOperation = 'screen';
+            }
+            
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Draw Orbitals (The "Without Me" Strings)
+            if(State.phase === 'ORDER' || State.phase === 'ASCENSION') {
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, 200, 50 + pulse, time*0.01, 0, Math.PI*2);
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.2)';
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, 200, 50 - pulse, -time*0.01, 0, Math.PI*2);
+                ctx.stroke();
+            }
+
+            // Update Particles
+            particles.forEach((p, i) => {
+                p.update();
+                p.draw(ctx);
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+        }
+
+        // --- INIT ---
+        
+        window.onload = () => {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            resize();
+            window.addEventListener('resize', resize);
+            
+            document.getElementById('overlay').addEventListener('click', () => {
+                document.getElementById('overlay').classList.add('dissolve');
+                initAudio();
+                isRunning = true;
+                State.collatzVal = Math.floor(Math.random() * 1000) + 500;
+            });
+        };
+
+        function resize() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+            cx = w / 2;
+            cy = h / 2;
+        }
+
+    </script>
+</body>
+</html>
