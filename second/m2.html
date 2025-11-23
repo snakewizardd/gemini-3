@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE ETERNAL HORIZON // MAGNUM OPUS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@100;900&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            filter: contrast(1.2) brightness(1.1);
+        }
+
+        #ui-layer {
+            position: absolute;
+            z-index: 10;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, rgba(0,0,0,0.6) 0%, #000 100%);
+            transition: opacity 2s ease-in-out;
+        }
+
+        h1 {
+            font-size: 6vw;
+            font-weight: 900;
+            letter-spacing: -5px;
+            color: transparent;
+            background: linear-gradient(to right, #fff, #00f2ff, #ff00aa);
+            -webkit-background-clip: text;
+            margin: 0;
+            text-shadow: 0 0 50px rgba(255,255,255,0.5);
+        }
+
+        p {
+            color: #fff;
+            letter-spacing: 10px;
+            font-weight: 100;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+        }
+
+        button {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.5);
+            color: #fff;
+            padding: 20px 60px;
+            font-family: inherit;
+            font-weight: 900;
+            font-size: 1.2rem;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: 0.3s;
+            border-radius: 50px;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.2);
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            transform: scale(1.1);
+            box-shadow: 0 0 80px rgba(255, 0, 170, 0.8);
+        }
+
+        #lyrics {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            text-align: center;
+            font-size: 8vw;
+            font-weight: 900;
+            color: rgba(255,255,255,0.1);
+            pointer-events: none;
+            z-index: 2;
+            mix-blend-mode: overlay;
+            transition: all 0.2s;
+        }
+        
+        .flash { animation: flashAnim 0.2s ease-out; }
+        @keyframes flashAnim { 0% { background: #fff; } 100% { background: transparent; } }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="world"></canvas>
+    <div id="flash-overlay" style="position:absolute;width:100%;height:100%;pointer-events:none;z-index:20;"></div>
+
+    <div id="lyrics"></div>
+
+    <div id="ui-layer">
+        <h1>ETERNAL</h1>
+        <p>THE FINAL EMOTION</p>
+        <button onclick="startOpus()">INITIATE EUPHORIA</button>
+    </div>
+
+    <script>
+        /**
+         * THE ETERNAL HORIZON
+         * A Generative Audio-Visual Odyssey
+         */
+
+        const canvas = document.getElementById('world');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let w, h, cx, cy;
+        let time = 0;
+        let isRunning = false;
+
+        // GLOBAL SYNC VARIABLES
+        let beat = 0;
+        let bar = 0;
+        let currentPhase = 0; // 0:Intro, 1:Build, 2:Drop, 3:Break, 4:Climax
+        let sidechain = 0; // 0.0 to 1.0
+        let kickTrigger = false;
+        let globalHue = 200;
+        let currentText = "";
+
+        /* ------------------------------------------------
+           AUDIO ENGINE CONSTANTS
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, sidechainBus, reverb;
+
+        // SCALES (Transposition Arrays)
+        // Base: F# Major
+        const ROOT = 369.99; // F#4
+        const SCALE_MAJ = [0, 2, 4, 5, 7, 9, 11]; // Major intervals
+        
+        // CHORD PROGRESSIONS (Degrees)
+        const PROG_A = [[1,3,5], [5,7,2], [6,1,3], [4,6,1]]; // I - V - vi - IV (Emotional)
+        const PROG_B = [[6,1,3], [4,6,1], [1,3,5], [5,7,2]]; // vi - IV - I - V (Trance)
+        
+        let currentProgression = PROG_A;
+        let rootFreq = ROOT; 
+        let speed = 0.01; // Visual speed
+
+        /* ------------------------------------------------
+           VISUAL ENGINE
+           ------------------------------------------------ */
+        let particles = [];
+        let shapes = [];
+
+        function resize() {
+            w = window.innerWidth; h = window.innerHeight;
+            canvas.width = w; canvas.height = h;
+            cx = w/2; cy = h/2;
+        }
+        window.addEventListener('resize', resize);
+
+        class Star {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = (Math.random() - 0.5) * w * 2;
+                this.y = (Math.random() - 0.5) * h * 2;
+                this.z = Math.random() * 2000 + 500;
+                this.size = Math.random();
+                this.color = Math.random() > 0.9 ? '#fff' : `hsl(${globalHue}, 80%, 70%)`;
+            }
+            update() {
+                // Move towards camera
+                this.z -= (10 + (speed * 500)) * (1 + sidechain);
+                
+                // Rotate field
+                const angle = time * 0.5;
+                const x = this.x * Math.cos(angle) - this.y * Math.sin(angle);
+                const y = this.x * Math.sin(angle) + this.y * Math.cos(angle);
+
+                // Projection
+                const fov = 500;
+                const scale = fov / (fov + this.z);
+                this.sx = cx + x * scale;
+                this.sy = cy + y * scale;
+                this.ss = this.size * scale * 5;
+
+                if (this.z < 1 || this.sx < 0 || this.sx > w || this.sy < 0 || this.sy > h) this.reset();
+            }
+            draw() {
+                const alpha = Math.min(1, 1000 / this.z);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(this.sx, this.sy, this.ss * (1+sidechain), 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        class Shard {
+            constructor() {
+                this.x = cx; this.y = cy;
+                this.angle = Math.random() * Math.PI * 2;
+                this.vel = 2 + Math.random() * 5;
+                this.life = 1;
+                this.hue = globalHue + (Math.random()*40 - 20);
+            }
+            update() {
+                this.x += Math.cos(this.angle) * this.vel * (1 + sidechain * 2);
+                this.y += Math.sin(this.angle) * this.vel * (1 + sidechain * 2);
+                this.life -= 0.01;
+            }
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = `hsl(${this.hue}, 100%, 60%)`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2 + (sidechain*10), 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        function initVisuals() {
+            for(let i=0; i<500; i++) particles.push(new Star());
+        }
+
+        function render() {
+            if(!isRunning) return;
+            requestAnimationFrame(render);
+            
+            time += 0.01;
+            sidechain *= 0.92; // Decay pump
+
+            // BG Clearing with Trails
+            ctx.fillStyle = 'rgba(0,0,0,0.2)'; 
+            ctx.fillRect(0, 0, w, h);
+
+            // GLOBAL CAMERA SHAKE (THE BOUNCE)
+            const zoom = 1.0 + (sidechain * 0.05);
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(zoom, zoom);
+            ctx.rotate(sidechain * 0.02 * Math.sin(time * 10));
+            ctx.translate(-cx, -cy);
+
+            // Render Particles
+            ctx.globalCompositeOperation = 'lighter';
+            particles.forEach(p => { p.update(); p.draw(); });
+            
+            // Render Explosions
+            shapes.forEach((s, i) => {
+                s.update();
+                s.draw();
+                if(s.life <= 0) shapes.splice(i, 1);
+            });
+
+            // THE CORE (Central Sun)
+            const sunSize = 50 + (sidechain * 150);
+            const sunGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sunSize * 4);
+            sunGrad.addColorStop(0, '#fff');
+            sunGrad.addColorStop(0.1, `hsl(${globalHue}, 100%, 50%)`);
+            sunGrad.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = sunGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, sunSize * 4, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+
+            // TEXT UPDATE
+            const el = document.getElementById('lyrics');
+            el.innerText = currentText;
+            el.style.transform = `translate(-50%, -50%) scale(${1 + sidechain * 0.2})`;
+            el.style.textShadow = `0 0 ${sidechain * 50}px white`;
+        }
+
+        /* ------------------------------------------------
+           AUDIO SCHEDULER & SYNTHESIS
+           ------------------------------------------------ */
+        let nextNoteTime = 0;
+        let tick = 0;
+
+        function startOpus() {
+            isRunning = true;
+            
+            // HIDE UI
+            const ui = document.getElementById('ui-layer');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+
+            resize();
+            initVisuals();
+            initAudio();
+            
+            if(actx.state === 'suspended') actx.resume();
+            render();
+        }
+
+        function initAudio() {
+            actx = new AC();
+            
+            // MASTER COMPRESSOR (The Glue)
+            master = actx.createDynamicsCompressor();
+            master.threshold.value = -12;
+            master.ratio.value = 12;
+            master.connect(actx.destination);
+
+            // SIDECHAIN BUS
+            sidechainBus = actx.createGain();
+            sidechainBus.connect(master);
+
+            // HUGE REVERB
+            reverb = actx.createConvolver();
+            generateReverb(3.0);
+            const revGain = actx.createGain();
+            revGain.gain.value = 0.4;
+            
+            sidechainBus.connect(revGain);
+            revGain.connect(reverb);
+            reverb.connect(master);
+
+            nextNoteTime = actx.currentTime + 0.1;
+            scheduler();
+        }
+
+        function generateReverb(duration) {
+            const len = actx.sampleRate * duration;
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let i=0; i<len; i++) {
+                const d = Math.pow(1 - i/len, 3);
+                buf.getChannelData(0)[i] = (Math.random()*2-1)*d;
+                buf.getChannelData(1)[i] = (Math.random()*2-1)*d;
+            }
+            reverb.buffer = buf;
+        }
+
+        function scheduler() {
+            const bpm = 150; // HIGH ENERGY
+            const beatLen = 60 / bpm;
+            const sixteenth = beatLen / 4;
+            const lookahead = 0.1;
+
+            while (nextNoteTime < actx.currentTime + lookahead) {
+                playTick(nextNoteTime, tick);
+                nextNoteTime += sixteenth;
+                tick++;
+            }
+            if(isRunning) setTimeout(scheduler, 25);
+        }
+
+        function playTick(t, i) {
+            const step = i % 16;
+            const barCount = Math.floor(i / 16);
+            
+            // STATE MACHINE ///////////////////////////
+            if (barCount === 0) { phase(0); currentText = "AWAKENING"; }
+            else if (barCount === 8) { phase(1); currentText = "RISING"; }
+            else if (barCount === 15) { currentText = "PREPARE"; }
+            else if (barCount === 16) { phase(2); currentText = "FLY"; }
+            else if (barCount === 32) { phase(3); currentText = "DRIFTING"; } // Break
+            else if (barCount === 40) { phase(1); currentText = "ONE MORE TIME"; } // Build 2
+            else if (barCount === 48) { phase(4); currentText = "ASCENSION"; } // Climax (Key change)
+            ////////////////////////////////////////////
+
+            // 1. KICK (Sidechain Trigger)
+            let kickHit = false;
+            if (currentPhase === 2 || currentPhase === 4) { // Drop
+                if (step % 4 === 0) kickHit = true;
+            } else if (currentPhase === 1) { // Build
+                if (barCount % 8 < 4 && step % 4 === 0) kickHit = true; // 1/4
+                if (barCount % 8 >= 4 && barCount % 8 < 6 && step % 2 === 0) kickHit = true; // 1/8
+                if (barCount % 8 >= 6 && step % 1 === 0) kickHit = true; // 1/16
+            }
+
+            if (kickHit) {
+                playKick(t);
+                // DUCK AUDIO
+                sidechainBus.gain.cancelScheduledValues(t);
+                sidechainBus.gain.setValueAtTime(0, t);
+                sidechainBus.gain.linearRampToValueAtTime(1, t + 0.1);
+                // VISUAL PUMP
+                sidechain = 1.0; 
+                // Spawn Shards
+                if (Math.random() > 0.5) for(let k=0; k<5; k++) shapes.push(new Shard());
+            }
+
+            // 2. SNARE / CLAP
+            if ((currentPhase === 2 || currentPhase === 4) && step % 8 === 4) {
+                playSnare(t);
+            }
+            // Build snare roll
+            if (currentPhase === 1 && kickHit) playSnare(t, 0.5);
+
+            // 3. CHORDS (SuperSaws)
+            // Play on beat 1 of every bar, or chopped in drop
+            let playChord = false;
+            if (currentPhase === 0 && step === 0) playChord = true; // Long pads
+            if ((currentPhase === 2 || currentPhase === 4) && (step === 0 || step === 3 || step === 6 || step === 10)) playChord = true; // Rhythmic
+
+            if (playChord) {
+                // Determine Chord from Progression
+                const progIdx = (Math.floor(barCount / 2)) % 4; // Change chord every 2 bars
+                const chordDegrees = currentProgression[progIdx];
+                
+                chordDegrees.forEach(deg => {
+                    // Convert degree to freq
+                    // Note: Scale logic simplified for code density
+                    // 1=0 semitones, 3=4 semitones, 5=7 semitones etc.
+                    let semi = 0;
+                    if(deg===1) semi=0;
+                    if(deg===2) semi=2;
+                    if(deg===3) semi=4;
+                    if(deg===4) semi=5;
+                    if(deg===5) semi=7;
+                    if(deg===6) semi=9;
+                    if(deg===7) semi=11;
+                    
+                    const freq = rootFreq * Math.pow(2, semi/12);
+                    playSuperSaw(t, freq, currentPhase === 0 ? 2 : 0.4);
+                });
+            }
+
+            // 4. VOCAL LEAD (The "Marshmello" Chop)
+            // Pentatonic Melody
+            if (currentPhase >= 2) {
+                const melody = [0, 4, 7, 9, 7, 4, 0, -3, 0, 4, 7, 12, 9, 7, 4, 0];
+                if (step % 2 === 0 && Math.random() > 0.3) {
+                    const note = melody[(step/2 + barCount) % 16];
+                    const freq = rootFreq * 2 * Math.pow(2, note/12);
+                    playVocalChop(t, freq);
+                }
+            }
+
+            // 5. HI-HATS (Rolling)
+            if (currentPhase >= 2) {
+                if (step % 2 === 0) playHat(t, step % 4 === 2); // Closed/Open
+                if (step % 4 === 0 && Math.random() > 0.8) playHat(t, true); // Random open
+            }
+        }
+
+        function phase(p) {
+            if (currentPhase === p) return;
+            currentPhase = p;
+
+            if (p === 0) { speed = 0.01; globalHue = 200; } // Blue Intro
+            if (p === 1) { speed = 0.05; globalHue = 50; }  // Yellow Build
+            if (p === 2) { speed = 0.10; globalHue = 300; } // Magenta Drop
+            if (p === 3) { speed = 0.01; globalHue = 180; } // Cyan Break
+            if (p === 4) { 
+                // KEY CHANGE! +2 Semitones
+                rootFreq = ROOT * Math.pow(2, 2/12); 
+                speed = 0.20; 
+                globalHue = 0; // Red/White Hot
+                
+                // Flash Screen
+                document.getElementById('flash-overlay').className = 'flash';
+                setTimeout(() => document.getElementById('flash-overlay').className = '', 500);
+            }
+        }
+
+        /* --- SYNTHS --- */
+
+        function playSuperSaw(t, freq, dur) {
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.1, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            g.connect(sidechainBus);
+
+            // 3 Oscillators per voice for thickness
+            const detunes = [-15, 0, 15];
+            detunes.forEach(d => {
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq;
+                osc.detune.value = d;
+                osc.connect(g);
+                osc.start(t); osc.stop(t + dur);
+            });
+        }
+
+        function playKick(t) {
+            const osc = actx.createOscillator();
+            const g = actx.createGain();
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.4);
+            g.gain.setValueAtTime(1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+            
+            osc.connect(g); g.connect(master); // Bypass sidechain
+            osc.start(t); osc.stop(t+0.4);
+        }
+
+        function playSnare(t, vol=0.5) {
+            const noise = actx.createBufferSource();
+            const b = actx.createBuffer(1, actx.sampleRate * 0.2, actx.sampleRate);
+            const d = b.getChannelData(0);
+            for(let i=0; i<d.length; i++) d[i] = Math.random()*2-1;
+            noise.buffer = b;
+
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 1000;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+            noise.connect(f); f.connect(g); g.connect(master);
+            noise.start(t);
+        }
+
+        function playHat(t, open) {
+            const dur = open ? 0.1 : 0.05;
+            const noise = actx.createOscillator();
+            noise.type = 'square'; // Metallic
+            // Actually logic for noise is better with buffer but square is chiptuney/trap
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 8000;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+            noise.connect(f); f.connect(g); g.connect(master);
+            noise.start(t); noise.stop(t+dur);
+        }
+
+        function playVocalChop(t, freq) {
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+
+            // Formant Filter for "Voice"
+            const f = actx.createBiquadFilter();
+            f.type = 'bandpass';
+            f.Q.value = 3;
+            f.frequency.setValueAtTime(800, t);
+            f.frequency.linearRampToValueAtTime(1400, t + 0.1);
+
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+            osc.connect(f); f.connect(g); g.connect(sidechainBus);
+            osc.start(t); osc.stop(t+0.3);
+        }
+
+        resize();
+    </script>
+</body>
+</html>
