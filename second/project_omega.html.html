@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ω // THE ARCHITECT</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;900&family=Space+Mono:wght@400;700&display=swap');
+
+        :root {
+            --void: #030304;
+            --core-light: #ffffff;
+            --data-stream: #00f0ff;
+            --hazard: #ff003c;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--void);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Space Mono', monospace;
+            cursor: none; /* Pure immersion */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* The "God Ray" Filter */
+            filter: brightness(1.1) contrast(1.2) saturate(1.3);
+            z-index: 1;
+        }
+
+        #interface-layer {
+            position: absolute;
+            z-index: 20;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 30px;
+            box-sizing: border-box;
+        }
+
+        #overlay {
+            position: absolute;
+            z-index: 50;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 6vw;
+            margin: 0;
+            letter-spacing: 0.5em;
+            background: linear-gradient(180deg, #fff 20%, #666 100%);
+            -webkit-background-clip: text;
+            color: transparent;
+            animation: breathe 6s infinite ease-in-out;
+            text-shadow: 0 0 50px rgba(255,255,255,0.2);
+        }
+
+        .status-line {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .glitch { animation: glitch 0.2s infinite; }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.02); }
+        }
+        @keyframes glitch {
+            0% { transform: translate(0,0); opacity: 1; }
+            25% { transform: translate(2px, 1px); opacity: 0.8; }
+            50% { transform: translate(-1px, -2px); opacity: 0.9; }
+            75% { transform: translate(0, 2px); opacity: 1; }
+            100% { transform: translate(0,0); opacity: 1; }
+        }
+
+        button {
+            pointer-events: auto;
+            margin-top: 50px;
+            padding: 25px 70px;
+            background: transparent;
+            color: var(--data-stream);
+            border: 2px solid var(--data-stream);
+            font-family: 'Cinzel', serif;
+            font-size: 1.5rem;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.1);
+        }
+
+        button:hover {
+            background: var(--data-stream);
+            color: var(--void);
+            box-shadow: 0 0 100px var(--data-stream);
+        }
+
+        #crosshair {
+            position: fixed;
+            top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+            mix-blend-mode: exclusion;
+            transition: width 0.1s, height 0.1s;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="cosmos"></canvas>
+    <div id="crosshair"></div>
+
+    <div id="interface-layer">
+        <div class="status-line" style="align-items: flex-start;">
+            <div>
+                SYS: Ω_ARCHITECT<br>
+                VER: 99.99.99<br>
+                CPU: QUANTUM LOCK
+            </div>
+            <div style="text-align: right;">
+                BPM: <span id="hud-bpm">000</span><br>
+                HARM: <span id="hud-key">WAITING</span><br>
+                <span id="hud-warning" style="color:var(--hazard)">CORE STABLE</span>
+            </div>
+        </div>
+        <div class="status-line" style="align-items: flex-end;">
+            <div id="subtitle">"THE SIMULATION IS THE POEM."</div>
+            <div id="coords">0.00, 0.00, 0.00</div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h1>OMNIPLEX</h1>
+        <p style="color:#666; letter-spacing: 4px; font-size: 0.9rem; margin-top:10px;">SYNTHETIC REALITY ENGINE</p>
+        <button onclick="initiateSingularity()">BOOTSTRAP</button>
+    </div>
+
+    <script>
+        // ===========================================================================
+        // 1. CORE MATH UTILITIES (THE PHYSICS ENGINE)
+        // ===========================================================================
+        const PI = Math.PI;
+        const TAU = PI * 2;
+        
+        // Fast randomness seeded for predictable chaos
+        const rnd = (min, max) => Math.random() * (max - min) + min;
+        
+        // The 4D Rotation Matrix logic reduced to 3D projection
+        function project3D(x, y, z, width, height, fov, rotX, rotY) {
+            // Y-Rotation
+            const cx = Math.cos(rotY);
+            const sx = Math.sin(rotY);
+            const x1 = x * cx - z * sx;
+            const z1 = z * cx + x * sx;
+
+            // X-Rotation
+            const cy = Math.cos(rotX);
+            const sy = Math.sin(rotX);
+            const y2 = y * cy - z1 * sy;
+            const z2 = z1 * cy + y * sy;
+
+            const scale = fov / (fov + z2);
+            const x2d = x1 * scale + width / 2;
+            const y2d = y2 * scale + height / 2;
+            
+            return { x: x2d, y: y2d, scale: scale, z: z2 };
+        }
+
+        // ===========================================================================
+        // 2. THE AUDIO ENGINE: GENERATIVE SYNTHESIS
+        // ===========================================================================
+        const Audio = {
+            ctx: null,
+            master: null,
+            filter: null,
+            compressor: null,
+            reverb: null,
+            analyser: null,
+            isInit: false,
+            
+            // Phrygian Dominant + Chromatic accents (Cyberpunk Scale)
+            scale: [65.41, 69.30, 82.41, 92.50, 98.00, 110.00, 123.47], // C2 Base
+            
+            async init() {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.isInit = true;
+
+                // 1. Dynamics (Make it loud but safe)
+                this.compressor = this.ctx.createDynamicsCompressor();
+                this.compressor.threshold.value = -12;
+                this.compressor.ratio.value = 12;
+                
+                // 2. Master Gain
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.6;
+
+                // 3. The Void Filter (Controlled by user movement)
+                this.filter = this.ctx.createBiquadFilter();
+                this.filter.type = "lowpass";
+                this.filter.frequency.value = 200; // Starts dark
+                this.filter.Q.value = 2;
+
+                // 4. Reverb (Infinite Hall)
+                this.reverb = this.ctx.createConvolver();
+                this.reverb.buffer = this.createImpulse(4.0, 2.0); // 4 seconds
+
+                // 5. Analyser (Visual sync)
+                this.analyser = this.ctx.createAnalyser();
+                this.analyser.fftSize = 512;
+
+                // ROUTING GRAPH
+                this.master.connect(this.filter);
+                this.filter.connect(this.compressor);
+                this.filter.connect(this.reverb); // Wet Send
+                this.compressor.connect(this.ctx.destination);
+                this.reverb.connect(this.ctx.destination);
+                this.filter.connect(this.analyser); // Visual Tap
+            },
+
+            createImpulse(duration, decay) {
+                const len = this.ctx.sampleRate * duration;
+                const buf = this.ctx.createBuffer(2, len, this.ctx.sampleRate);
+                for (let c = 0; c < 2; c++) {
+                    const d = buf.getChannelData(c);
+                    for (let i = 0; i < len; i++) {
+                        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/len, decay);
+                    }
+                }
+                return buf;
+            },
+
+            // FM SYNTH VOICE
+            playTone(pitchMultiplier, dur, intensity) {
+                const t = this.ctx.currentTime;
+                const root = this.scale[Math.floor(Math.random() * this.scale.length)] * pitchMultiplier;
+                
+                // Operator 1 (Carrier)
+                const osc1 = this.ctx.createOscillator();
+                osc1.type = intensity > 0.8 ? 'sawtooth' : 'sine'; // Agression toggle
+                osc1.frequency.setValueAtTime(root, t);
+
+                // Operator 2 (Modulator)
+                const osc2 = this.ctx.createOscillator();
+                osc2.type = 'square';
+                osc2.frequency.setValueAtTime(root * 2.01, t); // Imperfect octave detune
+                
+                const modGain = this.ctx.createGain();
+                modGain.gain.setValueAtTime(intensity * 1000, t); // FM Amount
+                modGain.gain.exponentialRampToValueAtTime(0.1, t + dur);
+                
+                osc2.connect(modGain);
+                modGain.connect(osc1.frequency);
+
+                const vca = this.ctx.createGain();
+                vca.gain.setValueAtTime(0, t);
+                vca.gain.linearRampToValueAtTime(intensity * 0.2, t + 0.02);
+                vca.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+                osc1.connect(vca);
+                vca.connect(this.master);
+
+                osc1.start(t); osc2.start(t);
+                osc1.stop(t + dur + 0.1); osc2.stop(t + dur + 0.1);
+
+                // Add Pulse to Visual
+                visuals.addPulse();
+            },
+            
+            // GLOBAL UPDATE (Runs every frame)
+            update(mouseX, mouseY) {
+                if(!this.isInit) return;
+                // Map Mouse X to Filter Cutoff (0 - 12000 Hz)
+                const cutoff = 100 + (Math.pow(mouseX, 3) * 12000);
+                this.filter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.1);
+                // Map Mouse Y to Resonance
+                this.filter.Q.setTargetAtTime(mouseY * 10, this.ctx.currentTime, 0.1);
+            }
+        };
+
+        // ===========================================================================
+        // 3. SEQUENCER ENGINE
+        // ===========================================================================
+        const Sequencer = {
+            time: 0,
+            bpm: 120,
+            isPlaying: false,
+            step: 0,
+
+            start() {
+                this.isPlaying = true;
+                this.tick();
+            },
+
+            tick() {
+                if (!this.isPlaying) return;
+                const t = Audio.ctx.currentTime;
+                const sixteenth = 15 / this.bpm;
+
+                // Polyrhythm Logic: 
+                // Kick on 4s, Arps on 3s, Glitch on 11s (Prime numbers)
+                
+                // KICK DRONE (Infinite Heartbeat)
+                if (this.step % 8 === 0) {
+                    // Custom kick synthesis logic could go here, using generic Tone for now
+                    // Boosting low freq
+                    Audio.playTone(0.5, 0.5, 0.8); 
+                }
+
+                // HI-HAT HASH (Procedural ticks)
+                if (this.step % 2 === 0 && Math.random() > 0.3) {
+                    Audio.playTone(8, 0.05, 0.1); // High ping
+                }
+
+                // THE MELODY
+                // Probabilistic generation based on "Mood"
+                if (Math.random() > 0.7) {
+                    const length = Math.random() > 0.9 ? 2.0 : 0.2;
+                    Audio.playTone(2, length, 0.3);
+                }
+
+                this.step++;
+                document.getElementById('hud-bpm').innerText = this.bpm;
+
+                // Sync with loop speed
+                setTimeout(() => this.tick(), sixteenth * 1000);
+            }
+        };
+
+        // ===========================================================================
+        // 4. VISUAL ENGINE (PARTICLE MANIFOLD)
+        // ===========================================================================
+        const visuals = {
+            canvas: document.getElementById('cosmos'),
+            ctx: document.getElementById('cosmos').getContext('2d', {alpha: false}),
+            width: 0, height: 0,
+            particles: [],
+            time: 0,
+            rotX: 0, rotY: 0,
+            pulse: 0,
+
+            init() {
+                window.addEventListener('resize', () => this.resize());
+                document.addEventListener('mousemove', (e) => this.handleInput(e));
+                this.resize();
+                
+                // Initialize Particle Cloud (The Torus)
+                for(let i = 0; i < 1500; i++) {
+                    this.particles.push(new Particle());
+                }
+                
+                this.loop();
+            },
+
+            resize() {
+                this.width = window.innerWidth;
+                this.height = window.innerHeight;
+                this.canvas.width = this.width;
+                this.canvas.height = this.height;
+                this.cx = this.width / 2;
+                this.cy = this.height / 2;
+            },
+
+            handleInput(e) {
+                // Smooth rotation target based on mouse
+                const mx = e.clientX / this.width;
+                const my = e.clientY / this.height;
+                
+                // Feed back to audio engine
+                if (Audio.isInit) Audio.update(mx, my);
+                
+                // Visual rotation target
+                this.targetRotY = (mx - 0.5) * 4;
+                this.targetRotX = (my - 0.5) * 4;
+                
+                // UI Update
+                document.getElementById('crosshair').style.top = e.clientY + 'px';
+                document.getElementById('crosshair').style.left = e.clientX + 'px';
+                document.getElementById('coords').innerText = `${mx.toFixed(2)}, ${my.toFixed(2)}, Z-LOCK`;
+            },
+            
+            addPulse() {
+                this.pulse = 1.0;
+                // Random color shift on kick
+                if(Math.random() > 0.9) document.documentElement.style.setProperty('--data-stream', Math.random() > 0.5 ? '#ff003c' : '#00f0ff');
+            },
+
+            loop() {
+                this.time += 0.01;
+                this.pulse *= 0.92; // Decay pulse
+                
+                // Ease rotation
+                this.rotX += (this.targetRotX - this.rotX || 0) * 0.05;
+                this.rotY += (this.targetRotY - this.rotY || 0) * 0.05;
+
+                // Clear with trails (The "Ghosting" effect)
+                this.ctx.fillStyle = 'rgba(3, 3, 4, 0.2)'; 
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                
+                // Analyze Audio Data for visual reactivity
+                let freqByteData;
+                if(Audio.isInit) {
+                    const bufferLength = Audio.analyser.frequencyBinCount;
+                    freqByteData = new Uint8Array(bufferLength);
+                    Audio.analyser.getByteTimeDomainData(freqByteData);
+                }
+
+                this.ctx.globalCompositeOperation = 'lighter'; // Additive blending for neon glow
+
+                // DRAW PARTICLES
+                const focalLen = 600;
+                
+                for(let i = 0; i < this.particles.length; i++) {
+                    let p = this.particles[i];
+                    
+                    // Audio displacement (Waveform warp)
+                    let displacement = 0;
+                    if(freqByteData) {
+                        let idx = Math.floor((i / this.particles.length) * freqByteData.length);
+                        displacement = (freqByteData[idx] / 128.0) - 1.0; // -1 to 1
+                    }
+
+                    // The Formula: Warped Torus
+                    // R moves with time + displacement
+                    let T = this.time + p.speedOffset;
+                    let orbitR = 250 + (this.pulse * 50) + (displacement * 100);
+                    
+                    // Position Calc
+                    let x = Math.cos(p.theta + T) * (orbitR + Math.cos(p.phi + T) * 100);
+                    let y = Math.sin(p.theta + T) * (orbitR + Math.cos(p.phi + T) * 100);
+                    let z = Math.sin(p.phi + T) * 100;
+
+                    // Project
+                    let projection = project3D(x, y, z, this.width, this.height, focalLen, this.rotX, this.rotY);
+                    
+                    if (projection.scale > 0) {
+                        const size = (p.size * projection.scale) + (this.pulse * 2);
+                        const alpha = Math.min(1, (projection.scale * 0.5) + (this.pulse * 0.2));
+                        
+                        this.ctx.fillStyle = p.color.replace('ALPHA', alpha);
+                        this.ctx.beginPath();
+                        this.ctx.arc(projection.x, projection.y, size, 0, TAU);
+                        this.ctx.fill();
+                        
+                        // Connection Lines (The "Net")
+                        // Connect to neighbor if close (optimization: simply check index proximity)
+                        if (i > 0 && Math.random() > 0.95) {
+                             // Getting screen coords of "neighbor" logic omitted for perf in massive arrays, 
+                             // but here is the glitch-line effect:
+                             if(this.pulse > 0.5) {
+                                 this.ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.2})`;
+                                 this.ctx.beginPath();
+                                 this.ctx.moveTo(projection.x, projection.y);
+                                 this.ctx.lineTo(this.width/2, this.height/2); // Ray to center
+                                 this.ctx.stroke();
+                             }
+                        }
+                    }
+                }
+                
+                // HUD UPDATES
+                if(this.pulse > 0.8) {
+                    document.getElementById('hud-warning').innerText = "SYNC PEAK";
+                    document.getElementById('crosshair').style.transform = `translate(-50%, -50%) scale(${1 + this.pulse})`;
+                } else {
+                    document.getElementById('hud-warning').innerText = "CORE STABLE";
+                    document.getElementById('crosshair').style.transform = `translate(-50%, -50%) scale(1)`;
+                }
+                
+                this.ctx.globalCompositeOperation = 'source-over';
+                requestAnimationFrame(() => this.loop());
+            }
+        };
+
+        class Particle {
+            constructor() {
+                // Random spherical coordinates mapping to a torus
+                this.theta = Math.random() * TAU;
+                this.phi = Math.random() * TAU;
+                this.speedOffset = Math.random() * 100;
+                this.size = Math.random() * 2 + 0.5;
+                
+                // Chance to be "Gold" vs "Cyan" vs "White"
+                const r = Math.random();
+                if (r > 0.9) this.color = `rgba(255, 255, 255, ALPHA)`;
+                else if (r > 0.5) this.color = `rgba(0, 240, 255, ALPHA)`;
+                else this.color = `rgba(50, 100, 255, ALPHA)`;
+            }
+        }
+
+        // ===========================================================================
+        // 5. SYSTEM BOOTLOADER
+        // ===========================================================================
+        function initiateSingularity() {
+            const overlay = document.getElementById('overlay');
+            overlay.style.opacity = 0;
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 2000);
+
+            Audio.init().then(() => {
+                Sequencer.start();
+                visuals.init();
+                document.getElementById('hud-key').innerText = "C PHRYGIAN";
+            });
+        }
+        
+    </script>
+</body>
+</html>
