@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TLV // OMNIPRESENCE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=Rajdhani:wght@300;700&display=swap');
+
+        body {
+            margin: 0;
+            background: #050505;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            cursor: none; /* Hide cursor for immersion */
+        }
+
+        #canvas {
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* CRT Scanline Effect for texture */
+        body::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+            mix-blend-mode: screen;
+        }
+
+        .hud-top, .hud-bottom {
+            display: flex;
+            justify-content: space-between;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            letter-spacing: 2px;
+            font-size: 14px;
+        }
+
+        #center-display {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 8vw;
+            margin: 0;
+            color: transparent;
+            -webkit-text-stroke: 2px rgba(255,255,255,0.8);
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+            opacity: 0.8;
+            letter-spacing: -5px;
+        }
+
+        #status {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: 10px;
+            color: #0ff;
+            margin-top: 10px;
+        }
+
+        #start-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 20;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            transition: opacity 1s ease;
+            cursor: pointer;
+        }
+
+        #start-btn {
+            padding: 20px 60px;
+            border: 2px solid #fff;
+            background: transparent;
+            color: #fff;
+            font-family: 'Orbitron';
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+        
+        #start-btn:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 50px #fff;
+        }
+
+        .instruction {
+            margin-top: 20px;
+            color: #666;
+            font-family: 'Rajdhani';
+            font-size: 0.9rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay">
+        <div id="start-btn">Initialize System</div>
+        <div class="instruction">[ USE HEADPHONES ]<br>MOVE CURSOR Y-AXIS TO CONTROL FILTER</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="hud">
+        <div class="hud-top">
+            <div id="freq-data">SYS: ONLINE</div>
+            <div id="bpm-display">-- BPM</div>
+        </div>
+        <div id="center-display">
+            <h1 id="hero-text">VOID</h1>
+            <div id="status">STANDBY</div>
+        </div>
+        <div class="hud-bottom">
+            <div>FILTER: <span id="filter-val">0%</span></div>
+            <div>PHASE: <span id="phase-val">0/6</span></div>
+        </div>
+    </div>
+
+<script>
+/**
+ * ARCHITECTURE:
+ * 1. AUDIO CORE: Procedural reverb, synthesis, and filter graph.
+ * 2. VISUAL CORE: 3D Starfield, Radial FFT simulation, RGB Shift.
+ * 3. CONDUCTOR: Timeline sequencer.
+ */
+
+// --- CONFIGURATION ---
+const COLORS = {
+    white: [255, 255, 255],
+    cyan: [0, 255, 255],
+    magenta: [255, 0, 255],
+    acid: [200, 255, 0],
+    red: [255, 50, 50],
+    deep: [50, 50, 255]
+};
+
+const TIMELINE = [
+    { bar: 0, bpm: 60,  text: "AWAKEN",   color: COLORS.white,  bass: 0.0, density: 50 },
+    { bar: 4, bpm: 124, text: "PULSE",    color: COLORS.cyan,   bass: 0.6, density: 100 },
+    { bar: 12, bpm: 128, text: "ASCEND",   color: COLORS.magenta,bass: 0.8, density: 200 },
+    { bar: 20, bpm: 128, text: "EUPHORIA", color: COLORS.deep,   bass: 0.8, density: 300 }, // Breakdown
+    { bar: 28, bpm: 140, text: "VELOCITY", color: COLORS.red,    bass: 2.5, density: 800 }, // Drop
+    { bar: 44, bpm: 150, text: "INFINITE", color: COLORS.acid,   bass: 3.0, density: 1500 } // Peak
+];
+
+// --- GLOBAL STATE ---
+let ctx, masterGain, filterNode, reverbNode, analyser;
+let isPlaying = false;
+let w, h;
+let beatPulse = 0;
+let mouseY = 0.5; // 0 to 1
+let mouseX = 0.5;
+let time = 0;
+let currentPhase = 0;
+let barCount = 0;
+let beatCount = 0;
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC();
+        
+        // Master Chain
+        masterGain = ctx.createGain();
+        masterGain.gain.value = 0.7;
+
+        // Master Filter (Controlled by Mouse Y)
+        filterNode = ctx.createBiquadFilter();
+        filterNode.type = "lowpass";
+        filterNode.frequency.value = 20000;
+        filterNode.Q.value = 5;
+
+        // Analyser for visuals
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+
+        // Procedural Reverb (The "Big Room" sound)
+        reverbNode = ctx.createConvolver();
+        reverbNode.buffer = AudioEngine.createImpulseResponse(2.5, 2.0); // 2.5s duration
+
+        // Compression to glue it together
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.value = -24;
+        compressor.knee.value = 30;
+        compressor.ratio.value = 12;
+
+        // Connections: Source -> Filter -> Compressor -> Master -> Destination
+        //                                         \-> Reverb -> Master
+        
+        filterNode.connect(compressor);
+        compressor.connect(masterGain);
+        compressor.connect(reverbNode);
+        reverbNode.connect(masterGain);
+        masterGain.connect(analyser);
+        analyser.connect(ctx.destination);
+        masterGain.connect(ctx.destination);
+    },
+
+    createImpulseResponse: (duration, decay) => {
+        const rate = ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = ctx.createBuffer(2, length, rate);
+        const left = impulse.getChannelData(0);
+        const right = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            const n = length - i;
+            // Noise with exponential decay
+            left[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            right[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playKick: (intensity) => {
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        // Pitch sweep (The "Thump")
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+        
+        // Amplitude envelope
+        gain.gain.setValueAtTime(intensity, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+
+        // Click (The "Beater" sound)
+        const clickOsc = ctx.createOscillator();
+        const clickGain = ctx.createGain();
+        clickOsc.type = 'square';
+        clickOsc.frequency.setValueAtTime(1000, t);
+        clickOsc.frequency.exponentialRampToValueAtTime(100, t + 0.02);
+        clickGain.gain.setValueAtTime(intensity * 0.3, t);
+        clickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.02);
+
+        osc.connect(gain);
+        clickOsc.connect(clickGain);
+        
+        gain.connect(filterNode);
+        clickGain.connect(filterNode); // Click goes to filter too
+
+        osc.start(t);
+        osc.stop(t + 0.4);
+        clickOsc.start(t);
+        clickOsc.stop(t + 0.05);
+    },
+
+    playBass: (freq, type = 'sawtooth') => {
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const panner = ctx.createStereoPanner(); // Movement
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        
+        // Stereo width modulation
+        panner.pan.setValueAtTime(Math.sin(t * 4), t);
+
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.linearRampToValueAtTime(0.0, t + 0.25);
+
+        osc.connect(panner);
+        panner.connect(gain);
+        gain.connect(filterNode);
+
+        osc.start(t);
+        osc.stop(t + 0.3);
+    },
+
+    playAtmosphere: (freq) => {
+        // High airy pad
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.05, t + 0.5);
+        gain.gain.linearRampToValueAtTime(0, t + 2);
+        osc.connect(gain);
+        gain.connect(reverbNode); // Send fully to reverb
+        osc.start(t);
+        osc.stop(t + 2.5);
+    }
+};
+
+// --- VISUAL ENGINE ---
+const particles = [];
+const STAR_COUNT = 2000;
+
+class Star {
+    constructor() {
+        this.init();
+    }
+    init() {
+        this.x = (Math.random() - 0.5) * w * 2;
+        this.y = (Math.random() - 0.5) * h * 2;
+        this.z = Math.random() * w;
+        this.pz = this.z; // Previous Z for streak effect
+        this.color = [255, 255, 255];
+    }
+    update(speed, color) {
+        this.z -= speed; // Move towards camera
+        if (this.z <= 1) this.init(), this.z = w;
+        this.color = color;
+    }
+    draw(ctx, centerX, centerY, shake) {
+        let sx = (this.x / this.z) * w + centerX;
+        let sy = (this.y / this.z) * h + centerY;
+        
+        // Previous position for trails (Warp effect)
+        let px = (this.x / (this.z + 20 + (beatPulse*50))) * w + centerX;
+        let py = (this.y / (this.z + 20 + (beatPulse*50))) * h + centerY;
+
+        // Shake effect
+        sx += (Math.random()-0.5) * shake;
+        sy += (Math.random()-0.5) * shake;
+
+        const r = (1 - this.z / w) * 4 * beatPulse + 0.5;
+        
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(sx, sy);
+        ctx.lineWidth = r;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = `rgba(${this.color[0]}, ${this.color[1]}, ${this.color[2]}, ${1 - this.z/w})`;
+        ctx.stroke();
+    }
+}
+
+// --- CONDUCTOR ---
+function updatePhase() {
+    // Find current phase based on bar count
+    for(let i=0; i<TIMELINE.length; i++) {
+        if(barCount >= TIMELINE[i].bar) currentPhase = i;
+    }
+    
+    const config = TIMELINE[currentPhase];
+    
+    // Update UI
+    document.getElementById('hero-text').innerText = config.text;
+    document.getElementById('hero-text').style.color = `rgb(${config.color.join(',')})`;
+    document.getElementById('hero-text').style.webkitTextStroke = `2px rgba(${config.color.join(',')}, 0.2)`;
+    document.getElementById('status').innerText = `SEQ: ${barCount}.${beatCount % 4}`;
+    document.getElementById('bpm-display').innerText = config.bpm + " BPM";
+    document.getElementById('phase-val').innerText = `${currentPhase+1}/${TIMELINE.length}`;
+
+    return config;
+}
+
+let nextNoteTime = 0;
+function scheduler() {
+    const config = updatePhase();
+    const secondsPerBeat = 60.0 / config.bpm;
+    
+    // Schedule ahead
+    while (nextNoteTime < ctx.currentTime + 0.1) {
+        scheduleNote(beatCount, config);
+        nextNoteTime += secondsPerBeat / 4; // 16th notes
+        beatCount++;
+        if (beatCount % 16 === 0) barCount++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function scheduleNote(beat, config) {
+    const quarter = beat % 4 === 0;
+    const eighth = beat % 2 === 0;
+    
+    // Kick Drum
+    if (quarter && config.bass > 0) {
+        AudioEngine.playKick(config.bass);
+        beatPulse = 1.2; // Trigger visual spike
+    }
+
+    // Rolling Bass (Trance style)
+    if (!quarter && eighth && config.bass > 0.5) {
+        // 1/8th note offbeat bass
+        AudioEngine.playBass(100, 'sawtooth');
+    }
+    
+    // Arpeggios (16th notes)
+    if(config.bass > 1.5) {
+        const scale = [220, 261, 329, 392, 440, 392, 329, 261]; // A Minor Arp
+        const note = scale[beat % 8];
+        if(Math.random() > 0.3) AudioEngine.playBass(note * 2, 'square');
+    }
+
+    // Atmospheric Pads
+    if(beat % 32 === 0) {
+        AudioEngine.playAtmosphere(440); // A4
+    }
+    if(beat % 32 === 16) {
+        AudioEngine.playAtmosphere(349); // F4
+    }
+}
+
+// --- MAIN LOOP ---
+function render() {
+    const config = TIMELINE[currentPhase];
+    
+    // Canvas Setup with Trails
+    ctx_v.fillStyle = 'rgba(0, 0, 0, 0.2)'; // Leaves trails
+    ctx_v.fillRect(0, 0, w, h);
+
+    // RGB Shift Logic (Simulates Chromatic Aberration on kicks)
+    const shiftIntensity = beatPulse * 10;
+    
+    // We will draw the scene 3 times (R, G, B) with offsets if pulse is high
+    const passes = [
+        { color: 'red', offX: shiftIntensity, offY: 0 },
+        { color: 'cyan', offX: -shiftIntensity, offY: 0 },
+        { color: 'white', offX: 0, offY: 0 } // Main pass
+    ];
+    
+    // Optimize: Only do RGB shift on heavy beats, otherwise single pass
+    const activePasses = beatPulse > 0.5 ? passes : [passes[2]];
+
+    activePasses.forEach(pass => {
+        ctx_v.save();
+        ctx_v.globalCompositeOperation = 'screen';
+        ctx_v.translate(pass.offX, pass.offY);
+        
+        // Draw Stars
+        // Warp speed calculation based on BPM and Phase
+        const warpSpeed = (config.bpm / 60) * (1 + beatPulse) * (config.density/500);
+        
+        particles.forEach((p, i) => {
+            if(i < config.density) {
+                p.update(warpSpeed, config.color);
+                // Link mouse to camera center (slight parallax)
+                const cx = w/2 + (mouseX - 0.5) * 200;
+                const cy = h/2 + (mouseY - 0.5) * 200;
+                p.draw(ctx_v, cx, cy, beatPulse * 5);
+            }
+        });
+
+        // Draw Radial Geometric Pulse
+        if (beatPulse > 0.1) {
+            ctx_v.strokeStyle = `rgba(${config.color.join(',')}, ${beatPulse * 0.5})`;
+            ctx_v.lineWidth = 2;
+            ctx_v.beginPath();
+            ctx_v.arc(w/2, h/2, 100 + (beatPulse*200), 0, Math.PI * 2);
+            ctx_v.stroke();
+        }
+
+        ctx_v.restore();
+    });
+
+    // Decay Pulse
+    beatPulse *= 0.9;
+
+    // Mouse Interaction -> Audio Filter
+    if(filterNode) {
+        // Y axis controls LowPass Frequency (Up = Open, Down = Closed)
+        const minFreq = 100;
+        const maxFreq = 20000;
+        // Exponential feel
+        const currentFreq = minFreq * Math.pow(maxFreq / minFreq, 1 - mouseY);
+        
+        // Smooth transition
+        filterNode.frequency.setTargetAtTime(currentFreq, ctx.currentTime, 0.1);
+        
+        // UI update
+        const pct = Math.floor((1-mouseY) * 100);
+        document.getElementById('filter-val').innerText = pct + "%";
+    }
+
+    requestAnimationFrame(render);
+}
+
+// --- INITIALIZATION ---
+const cvs = document.getElementById('canvas');
+const ctx_v = cvs.getContext('2d');
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+    // Re-init stars on resize to fill screen
+    particles.length = 0;
+    for(let i=0; i<STAR_COUNT; i++) particles.push(new Star());
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Mouse Interaction
+document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX / window.innerWidth;
+    mouseY = e.clientY / window.innerHeight;
+});
+
+document.getElementById('start-overlay').addEventListener('click', async () => {
+    await AudioEngine.init();
+    
+    // Hide overlay
+    document.getElementById('start-overlay').style.opacity = 0;
+    setTimeout(() => document.getElementById('start-overlay').remove(), 1000);
+
+    // Start Time
+    nextNoteTime = ctx.currentTime + 0.1;
+    isPlaying = true;
+    
+    scheduler();
+    render();
+});
+
+</script>
+</body>
+</html>

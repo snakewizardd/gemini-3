@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>THE BALLAD OF 27: ELECTRIC ORPHEUS</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #0a0a0a; 
+            overflow: hidden; 
+            font-family: 'Courier New', Courier, monospace;
+            color: #c0c0c0;
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            filter: contrast(1.1) saturate(1.2); 
+        }
+        #ui {
+            position: absolute;
+            bottom: 40px; left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+            width: 100%;
+        }
+        .hud {
+            font-size: 14px;
+            opacity: 0.7;
+            margin: 5px;
+            letter-spacing: 1px;
+        }
+        #play-btn {
+            pointer-events: auto;
+            background: transparent;
+            color: #d4af37;
+            border: 1px solid #d4af37;
+            padding: 15px 40px;
+            font-size: 18px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            transition: 0.5s;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.1);
+        }
+        #play-btn:hover {
+            background: #d4af37;
+            color: #000;
+            box-shadow: 0 0 50px rgba(212, 175, 55, 0.5);
+        }
+        #current-step { font-size: 40px; font-weight: bold; margin-bottom: 10px; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
+        #status { color: #666; margin-bottom: 30px; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+    <div id="current-step">N = ?</div>
+    <div id="status">WAITING FOR INPUT</div>
+    <div class="hud" id="freq-monitor">FREQ: -- Hz</div>
+    <div class="hud" id="tone-monitor">TONE: CLEAN CHANNEL</div>
+    <br>
+    <button id="play-btn">PLAY COMPOSITION</button>
+</div>
+
+<script>
+// ===========================================================================
+// 1. THE MUSICAL MATH: COLLATZ 27 TRAJECTORY
+// The number 27 takes 111 steps to reach 1, climbing to 9232 along the way.
+// This serves as our Sheet Music.
+// ===========================================================================
+function getTrajectory(seed) {
+    let seq = [seed];
+    while(seed > 1) {
+        if(seed % 2 === 0) seed = seed / 2;
+        else seed = (3 * seed) + 1;
+        seq.push(seed);
+    }
+    return seq;
+}
+
+const THE_BALLAD = getTrajectory(27); 
+const SCALE_E_MINOR_PENT = [
+    82.41,  110.00, 123.47, 146.83, 164.81, // E2 - G2 - A2 - B2 - D3
+    164.81, 196.00, 220.00, 246.94, 293.66, // E3 ...
+    329.63, 392.00, 440.00, 493.88, 587.33, // E4 ...
+    659.25, 783.99, 880.00, 987.77, 1174.66,// E5 ...
+    1318.51 // E6
+];
+
+function mapValueToNote(n) {
+    // Mapping logic:
+    // We map the raw Collatz value into the pentatonic array indices.
+    // We use a modulo and a logarithm to prevent 9232 from sounding ultrasonic.
+    // High N = High Intensity/Pitch.
+    
+    let intensity = Math.log2(n); // Squish the huge numbers down
+    let index = Math.floor(intensity * 2.5); 
+    
+    // Constraint: Keep inside the fretboard
+    if(index >= SCALE_E_MINOR_PENT.length) index = SCALE_E_MINOR_PENT.length - 1 + (index%2);
+    if(index < 0) index = 0;
+    
+    return SCALE_E_MINOR_PENT[index];
+}
+
+// ===========================================================================
+// 2. THE GUITAR RIG (WEB AUDIO)
+// Simulating a Fender Twin Reverb + Ibanez Tube Screamer
+// ===========================================================================
+const Actx = window.AudioContext || window.webkitAudioContext;
+const ctx = new Actx();
+const master = ctx.createGain();
+master.gain.value = 0.35; // Safety volume
+master.connect(ctx.destination);
+
+// EFFECTS CHAIN
+// Guitar -> Drive -> Cab -> Delay -> Reverb -> Master
+
+// A. The Drive (Distortion)
+const drive = ctx.createWaveShaper();
+function makeDistortionCurve(amount) {
+    let k = amount, n_samples = 44100, curve = new Float32Array(n_samples), x;
+    for (let i=0; i<n_samples; ++i) {
+        x = i * 2 / n_samples - 1;
+        curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+drive.curve = makeDistortionCurve(0); // Starts clean
+drive.oversample = '4x';
+
+// B. Cabinet Sim (LP Filter)
+const cab = ctx.createBiquadFilter();
+cab.type = 'lowpass';
+cab.frequency.value = 4000; // Tone knob rolled off
+
+// C. Delay (Atmosphere)
+const delay = ctx.createDelay();
+delay.delayTime.value = 0.45; // 450ms "Epic" delay
+const delayGain = ctx.createGain();
+delayGain.gain.value = 0.25;
+const delayFilter = ctx.createBiquadFilter(); // Analog decay
+delayFilter.frequency.value = 2000; 
+
+drive.connect(cab);
+cab.connect(master); // Dry signal
+
+// Wet chain
+cab.connect(delay);
+delay.connect(delayFilter);
+delayFilter.connect(delayGain);
+delayGain.connect(delay); // Loop
+delayGain.connect(master);
+
+// ===========================================================================
+// 3. PLAYBACK ENGINE: THE GUITARIST HANDS
+// ===========================================================================
+let currentTimeParams = { n: 0, tone: 'clean' };
+
+function pickString(freq, duration, intensity) {
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const harmonic = ctx.createOscillator(); // Overtone
+    const env = ctx.createGain();
+
+    // The String Sound Model
+    // Sine = pure, Triangle = warmth, Saw = bite. We blend.
+    if(intensity > 100) {
+        osc.type = 'sawtooth'; // High numbers scream
+        harmonic.type = 'square';
+    } else {
+        osc.type = 'triangle'; // Low numbers croon
+        harmonic.type = 'sine';
+    }
+
+    // Bend / Slide Physics
+    // If the math jumps high, we slide into the note
+    osc.frequency.setValueAtTime(freq * 0.9, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.05);
+    
+    harmonic.frequency.setValueAtTime(freq * 2.005, t); // Slight detuned octave
+    
+    // Amplitude Envelope (ADSR)
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.8, t + 0.02); // Pick attack
+    
+    if (intensity > 500) { // Infinite Sustain logic for "Solo" sections
+         env.gain.linearRampToValueAtTime(0.6, t + duration * 0.8); 
+         env.gain.exponentialRampToValueAtTime(0.001, t + duration + 1.0); 
+    } else {
+        env.gain.exponentialRampToValueAtTime(0.1, t + 0.3); // Quick decay for low numbers
+        env.gain.linearRampToValueAtTime(0, t + 0.8);
+    }
+
+    // Tone Control based on song intensity
+    let toneAmt = Math.min(intensity, 500);
+    drive.curve = makeDistortionCurve(toneAmt / 3); // Adjust distortion live
+    
+    // Oscillator Mix
+    const hGain = ctx.createGain();
+    hGain.gain.value = 0.2;
+    
+    osc.connect(env);
+    harmonic.connect(hGain);
+    hGain.connect(env);
+    
+    env.connect(drive);
+    
+    osc.start(t);
+    harmonic.start(t);
+    osc.stop(t + duration + 2);
+    harmonic.stop(t + duration + 2);
+    
+    // Update Visuals
+    currentTimeParams = { 
+        n: Math.round(freq), 
+        tone: intensity > 500 ? 'HIGH GAIN' : 'CLEAN' 
+    };
+    triggerVisualString(freq, duration);
+}
+
+// The Composition Logic
+function startBallad() {
+    document.getElementById('play-btn').style.display = 'none';
+    document.getElementById('status').innerText = "PLAYING: ORBIT SEQUENCE 27";
+    if(ctx.state === 'suspended') ctx.resume();
+
+    let timeCursor = 0;
+
+    THE_BALLAD.forEach((n, index) => {
+        let noteFreq = mapValueToNote(n);
+        
+        // DYNAMIC TIMING ALGORITHM
+        // We slow down for the big notes (peaks), speed up for the falls.
+        let prevN = index > 0 ? THE_BALLAD[index-1] : 0;
+        let noteDuration;
+        let timeGap;
+
+        // If climbing (Odd number or > prev), play emotional long note
+        if (n > prevN || n % 2 !== 0) {
+            timeGap = 800; // ms
+            noteDuration = 1.5; // seconds
+            if (n > 4000) { timeGap = 2000; noteDuration = 4.0; } // The Climax peaks
+        } else {
+            // If falling (dividing by 2), play quick run
+            timeGap = 180; // ms
+            noteDuration = 0.3; // seconds
+        }
+        
+        setTimeout(() => {
+            updateHUD(n);
+            pickString(noteFreq, noteDuration, n); // N controls Intensity
+        }, timeCursor);
+
+        timeCursor += timeGap;
+    });
+    
+    // The Final Resolution to 1
+    setTimeout(() => {
+         document.getElementById('status').innerText = "SEQUENCE COMPLETE";
+         document.getElementById('current-step').innerText = "1 (SINGULARITY)";
+    }, timeCursor + 1000);
+}
+
+function updateHUD(n) {
+    const stepsEl = document.getElementById('current-step');
+    stepsEl.innerText = `N = ${n}`;
+    document.getElementById('tone-monitor').innerText = `CH: ${n > 200 ? 'OVERDRIVE' : 'CLEAN'} | ${n%2===0 ? 'FALLING' : 'CLIMBING'}`;
+    
+    // "Heat" color effect on text
+    if(n > 1000) stepsEl.style.color = '#ff3300';
+    else if (n > 100) stepsEl.style.color = '#d4af37';
+    else stepsEl.style.color = '#fff';
+}
+
+
+// ===========================================================================
+// 4. VISUAL ENGINE: SINUSOIDAL STRING THEORY
+// ===========================================================================
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+
+let strings = [];
+
+// Initialize 6 strings (E A D G B E)
+for(let i=0; i<6; i++) {
+    strings.push({
+        y: 0,
+        amp: 0,
+        freq: 1 + (i * 0.5), // Visual vibration frequency
+        color: '#333'
+    });
+}
+
+function resize(){ w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; }
+window.onresize = resize; resize();
+
+function triggerVisualString(noteFreq, duration) {
+    // Map pitch to specific visual string
+    let sIdx = Math.floor( (noteFreq - 80) / 100 );
+    if(sIdx < 0) sIdx = 0; if(sIdx > 5) sIdx = 5;
+    
+    // Kick the physics
+    strings[sIdx].amp = 50; // Amplitude of shake
+    strings[sIdx].color = '#d4af37'; // Gold
+    
+    // Flash background on peaks
+    if(currentTimeParams.n > 1000) {
+        document.body.style.backgroundColor = '#1a0a00';
+        setTimeout(() => document.body.style.backgroundColor = '#0a0a0a', 100);
+    }
+}
+
+function render() {
+    c.fillStyle = 'rgba(10, 10, 10, 0.3)'; // Trail effect
+    c.fillRect(0,0,w,h);
+    
+    const gap = h/7;
+    const time = Date.now() * 0.02;
+
+    strings.forEach((s, i) => {
+        // Physics Damping
+        s.amp = s.amp * 0.93; 
+        if(s.amp < 0.1) { s.amp = 0; s.color = '#333'; }
+        
+        let baseY = gap * (i+1);
+        
+        c.beginPath();
+        c.lineWidth = s.amp > 1 ? 3 : 1;
+        c.strokeStyle = s.color;
+        c.moveTo(0, baseY);
+        
+        // SINE ALGORITHM
+        // Draws a wave that is constrained at the edges (like a guitar string)
+        // but vibrates in the middle.
+        for(let x=0; x<w; x+=10) {
+            let distFromCenter = Math.sin((x/w) * Math.PI); // 0 at edges, 1 at center
+            let y = baseY + Math.sin(x * 0.01 + time * s.freq) * s.amp * distFromCenter;
+            
+            // Add harmonics to the visual wave based on "Distortion" mode
+            if(s.color === '#d4af37') {
+                 y += Math.sin(x * 0.1) * (s.amp * 0.2); // Noise/Fuzz visual
+            }
+            
+            c.lineTo(x, y);
+        }
+        c.stroke();
+    });
+    
+    // Draw Flowing Data Points
+    // The number value floats up like smoke
+    if(strings.some(s => s.amp > 1)) {
+        c.fillStyle = 'rgba(212, 175, 55, 0.1)';
+        c.font = '20px Courier New';
+        c.fillText(currentTimeParams.n, w/2 + Math.sin(time)*50, h/2 - (time*10 % h/2));
+    }
+
+    requestAnimationFrame(render);
+}
+
+// INIT
+document.getElementById('play-btn').addEventListener('click', startBallad);
+render();
+
+</script>
+</body>
+</html>

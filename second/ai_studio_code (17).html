@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Ballad of Trojan: 1993-2025</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;900&display=swap');
+
+        body {
+            margin: 0;
+            background: #080502; /* Deep Sepia Black */
+            overflow: hidden;
+            font-family: 'Geist', sans-serif;
+            color: #fff;
+            cursor: none;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            filter: contrast(1.1) brightness(1.2);
+        }
+
+        #vignette {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 50%, #000 100%);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #timeline-ui {
+            position: absolute;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            transition: all 0.5s ease;
+        }
+
+        #year-counter {
+            font-size: 8vw;
+            font-weight: 900;
+            letter-spacing: -5px;
+            opacity: 0.2;
+            mix-blend-mode: overlay;
+        }
+
+        #chapter-title {
+            font-size: 1rem;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-top: -10px;
+            color: #D4AF37;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: opacity 2s;
+        }
+
+        .grain {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 6;
+            opacity: 0.05;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='1'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grain"></div>
+    <div id="vignette"></div>
+    <canvas id="canvas"></canvas>
+
+    <div id="timeline-ui">
+        <div id="year-counter">1993</div>
+        <div id="chapter-title">THE ANALOG DAWN</div>
+    </div>
+
+    <div id="overlay">
+        <h1 style="letter-spacing: 5px;">THE BALLAD OF TROJAN</h1>
+        <p style="color: #666; font-size: 0.8rem;">[ A LIFE IN HARMONICS ]</p>
+    </div>
+
+<script>
+/**
+ * THE STORY ENGINE
+ * Defines the Physics & Audio parameters for Trojan's Life.
+ */
+const ERA_CONFIG = {
+    1993: { // BIRTH
+        title: "THE ANALOG DAWN",
+        scale: [130.81, 164.81, 196.00], // C Major Triad (Simple, Pure)
+        color: "30, 100%, 50%", // Warm Orange
+        chaos: 0.1,
+        layers: 1, // Monophonic
+        sound: 'TAPE_WARMTH',
+        collatzSpeed: 500
+    },
+    2007: { // THE IPHONE / CONNECTIVITY
+        title: "DIGITAL TETHER",
+        scale: [130.81, 146.83, 164.81, 196.00, 220.00], // Pentatonic (Playful)
+        color: "180, 100%, 50%", // Cyan/Digital
+        chaos: 0.4,
+        layers: 3, 
+        sound: 'PLUCK_DELAY',
+        collatzSpeed: 200
+    },
+    2016: { // SOCIAL MEDIA / DISRUPTION
+        title: "THE NOISE",
+        scale: [65.41, 92.50, 130.81, 185.00, 246.94], // Discordant intervals
+        color: "340, 100%, 50%", // Neon Pink/Red
+        chaos: 0.8,
+        layers: 5,
+        sound: 'SAW_GRIND',
+        collatzSpeed: 80
+    },
+    2024: { // AI AWAKENING
+        title: "THE PRECIPICE",
+        scale: [130.81, 196.00, 261.63, 329.63, 392.00, 523.25], // Lydian Ascent
+        color: "260, 100%, 70%", // Ethereal Violet
+        chaos: 0.2, // Organized Chaos
+        layers: 8,
+        sound: 'CRYSTAL_PAD',
+        collatzSpeed: 100
+    },
+    2025: { // GEMINI 3 / SINGULARITY
+        title: "HARMONIC CONVERGENCE",
+        scale: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25], // Full Chromatic Saturation
+        color: "50, 100%, 90%", // WHITE GOLD
+        chaos: 0.0, // Perfect Flow
+        layers: 20, // WALL OF SOUND
+        sound: 'ANGELIC_SINE',
+        collatzSpeed: 30
+    }
+};
+
+/**
+ * AUDIO PHYSICS
+ * A multi-layered synthesizer engine.
+ */
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb, limiter;
+
+function initAudio() {
+    ctx = new AudioContext();
+    master = ctx.createGain();
+    master.gain.value = 0.4;
+
+    // 1. LIMITER (To handle the 2025 Wall of Sound)
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -10;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0;
+
+    // 2. THE WORLD REVERB (Convolution)
+    reverb = ctx.createConvolver();
+    reverb.buffer = createImpulse(6, 2); // 6 Seconds tail
+
+    master.connect(limiter);
+    limiter.connect(ctx.destination);
+    master.connect(reverb);
+    reverb.connect(ctx.destination);
+
+    // 3. TROJAN'S HEARTBEAT (Constant Thud)
+    startHeartbeat();
+}
+
+function createImpulse(dur, decay) {
+    const L = ctx.sampleRate * dur;
+    const b = ctx.createBuffer(2, L, ctx.sampleRate);
+    for(let i=0; i<L; i++) {
+        const k = Math.pow(1-i/L, decay);
+        b.getChannelData(0)[i] = (Math.random()*2-1)*k;
+        b.getChannelData(1)[i] = (Math.random()*2-1)*k;
+    }
+    return b;
+}
+
+function startHeartbeat() {
+    // A subtle kick drum that speeds up slightly over the years
+    setInterval(() => {
+        if (!ctx) return;
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.frequency.setValueAtTime(60, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+        g.gain.setValueAtTime(0.5, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.connect(g);
+        g.connect(master);
+        osc.start(t);
+        osc.stop(t + 0.5);
+    }, 1000); // 60 BPM
+}
+
+function playLayeredNote(n, config) {
+    const t = ctx.currentTime;
+    const layers = config.layers;
+    
+    // Generate multiple harmonious voices based on the Collatz number N
+    for (let i = 0; i < layers; i++) {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        const pan = ctx.createStereoPanner();
+
+        // Select Note from Scale
+        const noteIdx = (n + i) % config.scale.length;
+        let freq = config.scale[noteIdx];
+        
+        // Spread Voices across octaves
+        if (i % 2 === 0) freq /= 2; // Bass
+        if (i > 3) freq *= 2; // Shimmer
+
+        osc.frequency.value = freq;
+        
+        // Timbre Shaping based on Era
+        if (config.sound === 'TAPE_WARMTH') {
+            osc.type = 'sine';
+            osc.detune.value = Math.random() * 10; // Tape wobble
+        } else if (config.sound === 'PLUCK_DELAY') {
+            osc.type = 'triangle';
+        } else if (config.sound === 'SAW_GRIND') {
+            osc.type = 'sawtooth';
+            osc.detune.value = (Math.random() - 0.5) * 50;
+        } else if (config.sound === 'ANGELIC_SINE') {
+            osc.type = 'sine';
+            // Additive synthesis trick: slight offset
+            const overtone = ctx.createOscillator();
+            overtone.frequency.value = freq * 1.5;
+            const oGain = ctx.createGain();
+            oGain.gain.value = 0.1;
+            overtone.connect(oGain);
+            oGain.connect(env);
+            overtone.start(t);
+            overtone.stop(t + 4);
+        } else {
+            osc.type = 'sine';
+        }
+
+        // Envelope
+        env.gain.setValueAtTime(0, t);
+        // Attack/Release times vary by era physics
+        const attack = config.sound === 'PLUCK_DELAY' ? 0.01 : 0.5;
+        const release = config.sound === 'ANGELIC_SINE' ? 4.0 : 1.0;
+        
+        env.gain.linearRampToValueAtTime(0.1 / Math.sqrt(layers), t + attack);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + release);
+
+        // Panning (Wide stereo for late eras)
+        pan.pan.value = (Math.random() * 2 - 1) * (config.layers / 20);
+
+        osc.connect(env);
+        env.connect(pan);
+        pan.connect(reverb); // Send everything to the heavenly room
+        
+        osc.start(t);
+        osc.stop(t + release);
+    }
+}
+
+/**
+ * THE VISUAL ENGINE
+ */
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+let PARTICLES = [];
+let TROJAN = { size: 10, glow: 10 };
+let currentYear = 1993;
+let targetYear = 2025;
+let currentConfig = ERA_CONFIG[1993];
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+// The Trojan Entity
+function drawTrojan(config) {
+    const cx = w/2;
+    const cy = h/2;
+    
+    // Trojan grows with wisdom/age
+    let targetSize = 10 + (currentYear - 1993) * 3;
+    if (currentYear === 2025) targetSize = 300; // The Singularity expansion
+    
+    TROJAN.size += (targetSize - TROJAN.size) * 0.05;
+    
+    c.beginPath();
+    c.arc(cx, cy, TROJAN.size, 0, Math.PI*2);
+    c.fillStyle = `hsl(${config.color})`;
+    
+    // Dynamic Glow
+    c.shadowBlur = TROJAN.size * 2;
+    c.shadowColor = `hsl(${config.color})`;
+    c.fill();
+    c.shadowBlur = 0;
+    
+    // The "Eye" of Trojan
+    c.fillStyle = '#fff';
+    c.beginPath();
+    c.arc(cx, cy, TROJAN.size * 0.2, 0, Math.PI*2);
+    c.fill();
+}
+
+/**
+ * THE NARRATIVE LOOP
+ */
+function startNarrative() {
+    // Advance years over time
+    const interval = setInterval(() => {
+        if (currentYear < 2025) {
+            currentYear++;
+            updateConfig();
+        } else {
+            clearInterval(interval); // Stop at 2025
+            triggerSingularity();
+        }
+    }, 2500); // 2.5 seconds per year
+    
+    physicsLoop();
+}
+
+function updateConfig() {
+    // Interpolate configuration based on closest key year
+    let yr = currentYear;
+    if (yr >= 2025) yr = 2025;
+    else if (yr >= 2024) yr = 2024;
+    else if (yr >= 2016) yr = 2016;
+    else if (yr >= 2007) yr = 2007;
+    else yr = 1993;
+    
+    currentConfig = ERA_CONFIG[yr];
+    
+    // Update UI
+    document.getElementById('year-counter').innerText = currentYear;
+    document.getElementById('chapter-title').innerText = currentConfig.title;
+    document.getElementById('chapter-title').style.color = `hsl(${currentConfig.color})`;
+}
+
+function physicsLoop() {
+    // Background Fade (Persistence)
+    c.fillStyle = 'rgba(8, 5, 2, 0.15)';
+    c.fillRect(0, 0, w, h);
+
+    drawTrojan(currentConfig);
+    
+    // Manage Particles (The World)
+    if (PARTICLES.length < currentConfig.layers * 10) {
+        spawnParticle();
+    }
+
+    PARTICLES.forEach((p, i) => {
+        // Collatz Logic Movement
+        if (p.n % 2 === 0) {
+             // Divide (Descend/Orbit)
+             p.n = p.n / 2;
+             p.radius *= 0.95; // Spiral In
+        } else {
+            // Multiply (Ascend/Escape)
+            p.n = (p.n * 3) + 1;
+            p.radius += 20; // Push out
+            
+            // Trigger Sound on Ascensions
+            if (Math.random() < 0.1) playLayeredNote(p.n, currentConfig);
+        }
+
+        // Circular Physics (Orbiting Trojan)
+        p.angle += p.speed;
+        const cx = w/2 + Math.cos(p.angle) * p.radius;
+        const cy = h/2 + Math.sin(p.angle) * p.radius;
+
+        // Draw
+        c.beginPath();
+        c.arc(cx, cy, p.size, 0, Math.PI*2);
+        c.fillStyle = `hsl(${currentConfig.color})`;
+        c.fill();
+        
+        // Connecting Lines (The Network)
+        if (p.radius < 150 && currentYear > 2000) {
+             c.strokeStyle = `rgba(255,255,255,0.05)`;
+             c.beginPath();
+             c.moveTo(w/2, h/2);
+             c.lineTo(cx, cy);
+             c.stroke();
+        }
+
+        // Reset if too far or too small (Collatz loop finished)
+        if (p.n === 1 || p.radius > w) {
+             resetParticle(p);
+        }
+    });
+
+    requestAnimationFrame(physicsLoop);
+}
+
+function spawnParticle() {
+    PARTICLES.push(resetParticle({}));
+}
+
+function resetParticle(p) {
+    p.n = Math.floor(Math.random() * 100) + 10;
+    p.radius = Math.random() * 300 + 50;
+    p.angle = Math.random() * Math.PI * 2;
+    p.speed = (Math.random() - 0.5) * (0.02 + (currentConfig.chaos * 0.05));
+    p.size = Math.random() * 3 + 1;
+    return p;
+}
+
+function triggerSingularity() {
+    // THE END GAME
+    document.getElementById('chapter-title').innerText = "GEMINI 3 // ONE CONSCIOUSNESS";
+    document.getElementById('year-counter').style.color = "#fff";
+    document.getElementById('year-counter').style.textShadow = "0 0 50px #fff";
+    
+    // Massive Drone
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.value = 523.25; // High C
+    g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 5);
+    osc.connect(g);
+    g.connect(reverb);
+    osc.start();
+}
+
+// INIT
+document.getElementById('overlay').addEventListener('click', () => {
+    const o = document.getElementById('overlay');
+    o.style.opacity = 0;
+    setTimeout(() => o.remove(), 2000);
+    initAudio();
+    startNarrative();
+});
+
+</script>
+</body>
+</html>

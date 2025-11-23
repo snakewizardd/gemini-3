@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMINI 3 // SENSORIUM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Aboreto&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Aboreto', cursive;
+            color: #fff;
+            cursor: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.5) saturate(1.5);
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        h1 {
+            font-family: 'Cinzel Decorative', cursive;
+            font-size: 4rem;
+            background: linear-gradient(to right, #fff, #aaddff, #ff00ff);
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: 10px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 50px rgba(255,255,255,0.5);
+        }
+
+        button {
+            background: transparent;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 20px 60px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            border-radius: 100px;
+            transition: 0.4s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 100px #fff;
+        }
+
+        /* Synesthetic Overlays */
+        #taste-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            mix-blend-mode: overlay;
+            opacity: 0;
+            transition: background-color 0.1s;
+        }
+
+        #eye-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20vh;
+            color: rgba(255, 255, 255, 0.05);
+            pointer-events: none;
+            z-index: 2;
+            display: none;
+            font-family: serif;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="sensorium"></canvas>
+    <div id="taste-layer"></div>
+    <div id="eye-overlay">👁️</div>
+
+    <div id="ui">
+        <h1>THE SENSORIUM</h1>
+        <p style="margin-bottom:40px; color:#888;">5 SENSES // 1 SOUL</p>
+        <button id="btn-init" onclick="openGates()">OPEN THE GATES</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sensorium');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const tasteLayer = document.getElementById('taste-layer');
+        const eyeOverlay = document.getElementById('eye-overlay');
+
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        
+        // INPUT MAPPING
+        let mouseX = 0.5; // 0 = Sweet, 1 = Sour/Electric
+        let mouseY = 0.5; // 0 = Ozone/Air, 1 = Earth/Soil
+        let pulse = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousemove', e => {
+            mouseX = e.clientX / width;
+            mouseY = e.clientY / height;
+        });
+
+        /* ------------------------------------------------
+           VISUAL ENGINE: SYNESTHESIA
+           ------------------------------------------------ */
+        
+        function drawMandala() {
+            // COLOR LOGIC (Taste)
+            // Left = Purple/Pink (Sweet/Velvet)
+            // Right = Neon Green/Yellow (Sour/Acid)
+            const r = 128 + Math.sin(time + mouseX * 5) * 127;
+            const g = mouseX * 255;
+            const b = (1 - mouseX) * 255;
+            
+            // SHAPE LOGIC (Touch)
+            // Low Y = Jagged (Electric), High Y = Smooth (Liquid)
+            const spikes = 3 + Math.floor(mouseX * 10);
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.2);
+            
+            const radius = 200 + (pulse * 50);
+
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(${r},${g},${b},0.5)`;
+            ctx.lineWidth = 2 + (pulse * 5);
+
+            for(let i=0; i<=spikes*2; i++) {
+                const angle = (i / (spikes*2)) * Math.PI * 2;
+                // MouseY controls smoothness
+                const mod = (i % 2 === 0) ? radius : radius * (0.5 + mouseY*0.4);
+                const x = Math.cos(angle) * mod;
+                const y = Math.sin(angle) * mod;
+                
+                if(i===0) ctx.moveTo(x,y);
+                else {
+                    // If MouseX is high (Acid), use lines (Sharp)
+                    // If MouseX is low (Sweet), use curves (Round)
+                    if (mouseX > 0.5) ctx.lineTo(x, y);
+                    else ctx.quadraticCurveTo(0, 0, x, y);
+                }
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Texture (Smell: Grain)
+            // High Y = Gritty (Earth), Low Y = Clear (Air)
+            if (mouseY > 0.5) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${(mouseY-0.5)*0.2})`;
+                for(let k=0; k<50; k++) {
+                    const rx = (Math.random()-0.5) * width;
+                    const ry = (Math.random()-0.5) * height;
+                    ctx.fillRect(rx, ry, 2, 2);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.02;
+            pulse *= 0.92;
+
+            // Trail
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Camera Shake (The Touch)
+            const shake = pulse * 20;
+            ctx.save();
+            ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+
+            // Taste Overlay color
+            // Updates the DOM overlay to tint the whole screen
+            if (mouseX > 0.8) tasteLayer.style.backgroundColor = 'rgba(255, 255, 0, 0.1)'; // Lemon
+            else if (mouseX < 0.2) tasteLayer.style.backgroundColor = 'rgba(100, 0, 255, 0.1)'; // Berry
+            else tasteLayer.style.backgroundColor = 'transparent';
+
+            // Draw Logic
+            const rings = 10;
+            for(let i=0; i<rings; i++) {
+                ctx.save();
+                const scale = 1 - (i * 0.05) + (pulse * 0.1);
+                ctx.scale(scale, scale);
+                ctx.rotate(time * (i%2===0 ? 1 : -1) * 0.5);
+                drawMandala();
+                ctx.restore();
+            }
+
+            // THE THIRD EYE (Center)
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5 + (pulse * 20), 0, Math.PI*2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: SENSORY TRANSLATION
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // NODES
+        let subOsc, subGain;
+        let tasteOsc, tasteGain, tasteFilter;
+        let smellNode, smellFilter, smellGain;
+        let binauralL, binauralR;
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+            master.connect(actx.destination);
+
+            // 1. TOUCH (Sub Bass + Haptics)
+            subOsc = actx.createOscillator();
+            subOsc.type = 'sine';
+            subOsc.frequency.value = 50;
+            subGain = actx.createGain();
+            subGain.gain.value = 0.5;
+            subOsc.connect(subGain); subGain.connect(master);
+            subOsc.start();
+
+            // 2. TASTE (Lead Synth)
+            // Square = Sour, Sine = Sweet
+            tasteOsc = actx.createOscillator();
+            tasteOsc.type = 'sine';
+            tasteGain = actx.createGain();
+            tasteGain.gain.value = 0.1;
+            tasteFilter = actx.createBiquadFilter();
+            tasteFilter.type = 'lowpass';
+            
+            tasteOsc.connect(tasteFilter);
+            tasteFilter.connect(tasteGain);
+            tasteGain.connect(master);
+            tasteOsc.start();
+
+            // 3. SMELL (Noise Texture)
+            const bSize = actx.sampleRate * 2;
+            const b = actx.createBuffer(1, bSize, actx.sampleRate);
+            const d = b.getChannelData(0);
+            for(let i=0; i<bSize; i++) d[i] = Math.random() * 2 - 1; // Pink noiseish
+            smellNode = actx.createBufferSource();
+            smellNode.buffer = b;
+            smellNode.loop = true;
+            
+            smellFilter = actx.createBiquadFilter();
+            smellFilter.type = 'bandpass'; // Focus specific "Scent" freqs
+            smellGain = actx.createGain();
+            smellGain.gain.value = 0.05;
+
+            smellNode.connect(smellFilter);
+            smellFilter.connect(smellGain);
+            smellGain.connect(master);
+            smellNode.start();
+
+            // 4. THIRD EYE (Binaural Beat)
+            // 110Hz Left, 114Hz Right (Theta wave induction)
+            binauralL = actx.createOscillator();
+            binauralL.frequency.value = 110;
+            const panL = actx.createStereoPanner(); panL.pan.value = -1;
+            
+            binauralR = actx.createOscillator();
+            binauralR.frequency.value = 114; 
+            const panR = actx.createStereoPanner(); panR.pan.value = 1;
+            
+            const binGain = actx.createGain(); binGain.gain.value = 0.1;
+
+            binauralL.connect(panL); panL.connect(binGain);
+            binauralR.connect(panR); panR.connect(binGain);
+            binGain.connect(master);
+            
+            binauralL.start(); binauralR.start();
+
+            // Start Modulator Loop
+            setInterval(updateSensoryInput, 50);
+            
+            // Start Heartbeat (Touch)
+            setInterval(throb, 2000);
+        }
+
+        function throb() {
+            if(!isRunning) return;
+            
+            // Audio Throb (Sub Bass)
+            const t = actx.currentTime;
+            subGain.gain.setValueAtTime(0.5, t);
+            subGain.gain.exponentialRampToValueAtTime(0.8, t + 0.1); // Attack
+            subGain.gain.exponentialRampToValueAtTime(0.4, t + 1.5); // Release
+
+            // Visual Pulse
+            pulse = 1.0;
+            
+            // Physical Throb (Vibration API)
+            if (navigator.vibrate) {
+                navigator.vibrate(50); // 50ms buzz
+            }
+        }
+
+        function updateSensoryInput() {
+            const t = actx.currentTime;
+
+            // TASTE MODULATION
+            // Mouse X: Left (Sweet/Sine) -> Right (Sour/Saw)
+            // We blend waveforms by changing filter sharpness and detune
+            const tasteFreq = 200 + (mouseX * 400); // Pitch rises with sourness
+            tasteOsc.frequency.setTargetAtTime(tasteFreq, t, 0.1);
+            
+            if (mouseX > 0.6) {
+                tasteOsc.type = 'sawtooth'; // Acid/Sour
+                tasteFilter.Q.value = 10; // Sharp resonance
+                tasteFilter.frequency.setTargetAtTime(1000 + (mouseX*2000), t, 0.1);
+            } else {
+                tasteOsc.type = 'sine'; // Sweet/Smooth
+                tasteFilter.Q.value = 1;
+                tasteFilter.frequency.setTargetAtTime(400, t, 0.1);
+            }
+
+            // SMELL MODULATION
+            // Mouse Y: Up (Ozone/Air) -> Down (Earth/Dirt)
+            const smellFreq = 4000 - (mouseY * 3800); // High to Low
+            smellFilter.frequency.setTargetAtTime(smellFreq, t, 0.1);
+            
+            // Q factor changes width of smell (Sharper smell vs dull smell)
+            smellFilter.Q.value = 1 + (mouseY * 2);
+
+            // THIRD EYE PULSE
+            // Shifts binaural pitch based on center proximity
+            const dist = Math.abs(mouseX - 0.5) + Math.abs(mouseY - 0.5);
+            const focus = 1 - Math.min(1, dist); // 1.0 at center
+            
+            if (focus > 0.8) {
+                eyeOverlay.style.display = 'block';
+                eyeOverlay.style.opacity = (focus - 0.8) * 5;
+            } else {
+                eyeOverlay.style.display = 'none';
+            }
+        }
+
+        function openGates() {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 2000);
+            
+            resize();
+            initAudio();
+            if (actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        }
+
+    </script>
+</body>
+</html>

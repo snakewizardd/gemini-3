@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Without Me - Accurate Piano Tab</title>
+    <style>
+        body {
+            margin: 0;
+            background: #1a1a1a;
+            color: #f0f0f0;
+            font-family: 'Georgia', serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #container {
+            text-align: center;
+            width: 100%;
+            max-width: 700px;
+        }
+
+        h1 {
+            font-weight: normal;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        h3 {
+            color: #888;
+            font-weight: normal;
+            font-size: 0.9rem;
+            margin-top: 0;
+        }
+
+        #tab-display {
+            background: #000;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            text-align: left;
+            border-left: 4px solid #d4af37; /* Gold border */
+            color: #d4af37;
+            font-size: 0.85rem;
+            margin: 30px auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow-x: auto;
+            width: 90%;
+        }
+
+        .highlight {
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 0 8px #fff;
+        }
+
+        button {
+            background: #d4af37;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-family: 'Georgia', serif;
+            font-size: 1.1rem;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #fff;
+            transform: scale(1.05);
+        }
+
+        #status {
+            margin-top: 20px;
+            font-style: italic;
+            color: #666;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <h1>WITHOUT ME</h1>
+        <h3>Piano Arrangement • Capo 4 • BlueMatador Tab</h3>
+
+        <div id="tab-display">
+  Bm7         Dsus2           A           G
+e|--------2-0-|------------|------0-----|------------|
+B|------3-----|------------|----2---3---|------------|
+G|----2-------|------------|--2---------|------------|
+D|--4---------|------------|-2----------|------------|
+A|2-----------|------------|0-----------|------------|
+E|------------|------------|------------|------------|
+        </div>
+
+        <button id="playBtn">LOAD PIANO & PLAY</button>
+        <div id="status"></div>
+    </div>
+
+<script>
+/*
+    AUDIO ENGINE: PIANO SYNTHESIS
+    Uses additive synthesis (Sine + Triangle) with exponential decay 
+    to simulate the percussive yet soft sound of a piano.
+*/
+const Audio = {
+    ctx: null,
+    master: null,
+
+    init() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.6;
+        
+        // Compression to glue the piano notes together
+        const comp = this.ctx.createDynamicsCompressor();
+        comp.threshold.value = -20;
+        comp.ratio.value = 12;
+        
+        this.master.connect(comp);
+        comp.connect(this.ctx.destination);
+    },
+
+    playPianoNote(freq, time, duration, velocity = 1) {
+        const t = time;
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const osc3 = this.ctx.createOscillator();
+        
+        // Osc 1: Fundamental (Sine)
+        osc1.type = 'sine';
+        osc1.frequency.value = freq;
+        
+        // Osc 2: Triangle for body
+        osc2.type = 'triangle';
+        osc2.frequency.value = freq;
+        
+        // Osc 3: Slight detune for realism
+        osc3.type = 'sine';
+        osc3.frequency.value = freq;
+        osc3.detune.value = 5; 
+
+        const gain = this.ctx.createGain();
+        
+        // Piano Envelope
+        // Immediate attack
+        gain.gain.setValueAtTime(0, t);
+        // Sharp strike
+        gain.gain.linearRampToValueAtTime(velocity * 0.8, t + 0.01); 
+        // Decay to sustain level
+        gain.gain.exponentialRampToValueAtTime(velocity * 0.1, t + 0.5); 
+        // Release
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        osc3.connect(gain);
+        gain.connect(this.master);
+
+        osc1.start(t); osc2.start(t); osc3.start(t);
+        osc1.stop(t + duration); osc2.stop(t + duration); osc3.stop(t + duration);
+    },
+    
+    // Helper for chords
+    playChord(notes, time, duration) {
+        // Strum them slightly (arpeggiate very fast) for realism
+        notes.forEach((freq, i) => {
+            this.playPianoNote(freq, time + (i * 0.02), duration, 0.6);
+        });
+    }
+};
+
+/*
+    MUSIC THEORY: CAPO 4 LOGIC
+    The tab is written in Standard Tuning relative to Capo 4.
+    We calculate the real frequency by adding 4 semitones to standard pitch.
+*/
+
+// Base frequencies of open strings (Standard E A D G B e)
+// E2, A2, D3, G3, B3, E4
+const OpenStrings = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
+
+// Capo 4 Shift (+4 semitones)
+// Formula: f = f0 * (2 ^ (n/12))
+function getPitch(stringIndex, relativeFret) {
+    const openFreq = OpenStrings[stringIndex]; 
+    const totalSemitones = 4 + relativeFret; // Capo 4 + Tab Fret
+    return openFreq * Math.pow(2, totalSemitones / 12);
+}
+
+/*
+    TAB DATA (Transcription of BlueMatador)
+    String Indices: 0=LowE, 1=A, 2=D, 3=G, 4=B, 5=HighE
+    Tempo: ~68 BPM (Ballad feel)
+*/
+const BPM = 68; 
+const Beat = 60 / BPM;
+const Eighth = Beat / 2;
+const Sixteenth = Beat / 4;
+
+const Sequencer = {
+    async play() {
+        const btn = document.getElementById('playBtn');
+        const status = document.getElementById('status');
+        btn.disabled = true;
+        
+        const now = Audio.ctx.currentTime;
+        
+        // --- INTRO LINE 1 ---
+        status.innerText = "Playing Intro: Measure 1 (Bm7)...";
+        
+        // Bm7: Bass A-string 2
+        Audio.playPianoNote(getPitch(1, 2), now, Beat*4, 0.8); 
+        // Arp: D-4, G-2, B-3, e-2, e-0
+        Audio.playPianoNote(getPitch(2, 4), now + Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(3, 2), now + 2*Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(4, 3), now + 3*Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(5, 2), now + 4*Eighth, Beat); // The high F#
+        Audio.playPianoNote(getPitch(5, 0), now + 5*Eighth, Beat); // The E
+
+        // Dsus2: Measure 2
+        status.innerText = "Playing Intro: Measure 2 (Dsus2)...";
+        let t = now + Beat*4;
+        Audio.playPianoNote(getPitch(2, 0), t, Beat*4, 0.8); // Bass D-string 0
+        // Light chord fill
+        Audio.playChord([getPitch(3, 2), getPitch(4, 3), getPitch(5, 0)], t, Beat*3);
+
+        // A: Measure 3
+        status.innerText = "Playing Intro: Measure 3 (A)...";
+        t += Beat*4;
+        // Bass A-string 0
+        Audio.playPianoNote(getPitch(1, 0), t, Beat*4, 0.8);
+        // Arp: D-2, G-2, B-2, e-0, B-3
+        Audio.playPianoNote(getPitch(2, 2), t + Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(3, 2), t + 2*Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(4, 2), t + 3*Eighth, Beat*2); // C#
+        Audio.playPianoNote(getPitch(5, 0), t + 4*Eighth, Beat);   // E
+        Audio.playPianoNote(getPitch(4, 3), t + 5*Eighth, Beat);   // D (B-string 3)
+
+        // G: Measure 4
+        status.innerText = "Playing Intro: Measure 4 (G)...";
+        t += Beat*4;
+        // Bass Low E 3
+        Audio.playPianoNote(getPitch(0, 3), t, Beat*4, 0.9);
+        Audio.playChord([getPitch(2,0), getPitch(3,0), getPitch(4,3)], t, Beat*3);
+
+
+        // --- INTRO LINE 2 (Variation) ---
+        t += Beat*4;
+        status.innerText = "Playing Intro Line 2...";
+        
+        // Bm7 (Same as line 1)
+        Audio.playPianoNote(getPitch(1, 2), t, Beat*4, 0.8); 
+        Audio.playPianoNote(getPitch(2, 4), t + Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(3, 2), t + 2*Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(4, 3), t + 3*Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(5, 2), t + 4*Eighth, Beat); 
+        Audio.playPianoNote(getPitch(5, 0), t + 5*Eighth, Beat);
+
+        // Dsus2 (Variation: 3-3-2 on B string)
+        t += Beat*4;
+        Audio.playPianoNote(getPitch(2, 0), t, Beat*4, 0.8); // Bass
+        Audio.playPianoNote(getPitch(4, 3), t + 2*Eighth, Beat); // B-3
+        Audio.playPianoNote(getPitch(4, 3), t + 3*Eighth, Beat); // B-3
+        Audio.playPianoNote(getPitch(4, 2), t + 4*Eighth, Beat); // B-2
+
+        // A (Same as line 1)
+        t += Beat*4;
+        Audio.playPianoNote(getPitch(1, 0), t, Beat*4, 0.8);
+        Audio.playPianoNote(getPitch(2, 2), t + Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(3, 2), t + 2*Eighth, Beat*2);
+        Audio.playPianoNote(getPitch(4, 2), t + 3*Eighth, Beat*2); 
+        Audio.playPianoNote(getPitch(5, 0), t + 4*Eighth, Beat);   
+        Audio.playPianoNote(getPitch(4, 3), t + 5*Eighth, Beat); 
+
+        // Em7 (Variation Measure)
+        t += Beat*4;
+        Audio.playPianoNote(getPitch(0, 0), t, Beat*4, 0.9); // Bass Low E 0
+        Audio.playPianoNote(getPitch(4, 3), t + 2*Eighth, Beat); // B-3
+        Audio.playPianoNote(getPitch(4, 2), t + 3*Eighth, Beat); // B-2
+        Audio.playPianoNote(getPitch(4, 0), t + 4*Eighth, Beat); // B-0
+        Audio.playPianoNote(getPitch(3, 2), t + 5*Eighth, Beat); // G-2
+
+        // --- LOOP VERSE CHORDS ---
+        // Pattern A: Bm7 - Dsus2 - A - G
+        t += Beat*4;
+        this.scheduleLoop(t);
+    },
+
+    scheduleLoop(startTime) {
+        const status = document.getElementById('status');
+        status.innerText = "Looping Verse Chords...";
+        
+        let t = startTime;
+        const loopDuration = Beat * 16; // 4 bars * 4 beats
+
+        // We will just schedule one loop for demonstration to avoid infinite recursion complexity in this snippet
+        // To simulate the song continuing:
+        
+        // Bm7
+        Audio.playPianoNote(getPitch(1, 2), t, Beat*4, 0.8);
+        Audio.playChord([getPitch(2,4), getPitch(3,2), getPitch(4,3)], t, Beat*4);
+        
+        // Dsus2
+        t += Beat*4;
+        Audio.playPianoNote(getPitch(2, 0), t, Beat*4, 0.8);
+        Audio.playChord([getPitch(3,2), getPitch(4,3), getPitch(5,0)], t, Beat*4);
+        
+        // A
+        t += Beat*4;
+        Audio.playPianoNote(getPitch(1, 0), t, Beat*4, 0.8);
+        Audio.playChord([getPitch(2,2), getPitch(3,2), getPitch(4,2)], t, Beat*4);
+        
+        // G
+        t += Beat*4;
+        Audio.playPianoNote(getPitch(0, 3), t, Beat*4, 0.8);
+        Audio.playChord([getPitch(2,0), getPitch(3,0), getPitch(4,3)], t, Beat*4);
+        
+        setTimeout(() => {
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('playBtn').innerText = "PLAY AGAIN";
+            status.innerText = "Finished.";
+        }, (t - Audio.ctx.currentTime + Beat*4) * 1000);
+    }
+};
+
+document.getElementById('playBtn').addEventListener('click', () => {
+    Audio.init();
+    Sequencer.play();
+});
+
+</script>
+</body>
+</html>

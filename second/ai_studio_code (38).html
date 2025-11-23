@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Without Me - Sheet Music Version</title>
+    <style>
+        body {
+            margin: 0;
+            background: #0d0d12; /* Darker, sheet music ink vibe */
+            color: #fff;
+            font-family: 'Courier New', monospace; /* Monospace for sheet music feel */
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 90%;
+            max-width: 800px;
+            background: rgba(13, 13, 18, 0.7);
+            padding: 40px;
+            border: 1px solid #fff;
+            border-radius: 4px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #fff;
+            margin: 0 0 10px 0;
+        }
+
+        h2 {
+            font-size: 1rem;
+            color: #aaa;
+            font-weight: normal;
+            margin-bottom: 40px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 20px;
+            display: inline-block;
+        }
+
+        #lyrics {
+            font-size: 1.8rem;
+            line-height: 1.4;
+            font-weight: bold;
+            min-height: 80px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        .measure-counter {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        button {
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 15px 40px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 40px;
+            font-family: 'Courier New', monospace;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas-container"></canvas>
+
+    <div id="ui">
+        <h1>Without Me</h1>
+        <h2>Arr. based on Sheet Music (130 BPM)</h2>
+        <div id="lyrics">Click START to play</div>
+        <div id="measure-count" class="measure-counter">MEASURE: 0</div>
+        <button id="btn">START</button>
+    </div>
+
+<script>
+/* 
+   TRANSCRIPTION DATA:
+   Title: Without Me
+   Tempo: 130 BPM
+   Key: Eb Minor (6 Flats: Bb, Eb, Ab, Db, Gb, Cb)
+   
+   Chord Progression (from Tuba/Trombone staves):
+   1. Eb Minor (Eb-Gb-Bb)
+   2. Gb Major (Gb-Bb-Db)
+   3. Bb Minor (Bb-Db-F)
+   4. Ab Minor (Ab-Cb-Eb)
+*/
+
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    compressor: null,
+
+    init() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.4;
+        
+        // Add compression to handle the polyphony of the "Orchestra"
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -20;
+        this.compressor.knee.value = 40;
+        this.compressor.ratio.value = 12;
+        this.compressor.attack.value = 0;
+        this.compressor.release.value = 0.25;
+
+        this.master.connect(this.compressor);
+        this.compressor.connect(this.ctx.destination);
+    },
+
+    // WOODWIND ARPEGGIO SOUND (Flute/Clarinet vibe)
+    playWoodwind(freq, time, dur) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine'; // Pure tone for flute
+        osc.frequency.value = freq;
+
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = 'triangle'; // Breathiness
+        osc2.frequency.value = freq;
+        osc2.detune.value = 5; // Slight chorus
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.2, time + 0.05); // Soft attack
+        gain.gain.linearRampToValueAtTime(0.15, time + (dur*0.8));
+        gain.gain.linearRampToValueAtTime(0, time + dur);
+
+        osc.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.master);
+
+        osc.start(time);
+        osc.stop(time + dur + 0.1);
+        osc2.start(time);
+        osc2.stop(time + dur + 0.1);
+        
+        Visuals.spawnParticle(freq, 'woodwind');
+    },
+
+    // BRASS/BASS SOUND (Tuba/Trombone vibe)
+    playBrass(freq, time, dur) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth'; // Brassy buzz
+        osc.frequency.value = freq;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(100, time);
+        filter.frequency.exponentialRampToValueAtTime(600, time + 0.1); // "Blat" sound
+        filter.frequency.exponentialRampToValueAtTime(300, time + dur);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.4, time + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+
+        osc.start(time);
+        osc.stop(time + dur + 0.1);
+        
+        Visuals.spawnRing();
+    },
+
+    // LEAD MELODY
+    playLead(freq, time, dur) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, time);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.1, time + 0.02);
+        gain.gain.linearRampToValueAtTime(0, time + dur);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+
+        osc.start(time);
+        osc.stop(time + dur + 0.1);
+        Visuals.spawnParticle(freq, 'lead');
+    },
+    
+    // PERCUSSION
+    playKick(time) {
+        const osc = this.ctx.createOscillator();
+        osc.frequency.setValueAtTime(120, time);
+        osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.4);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.8, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+        osc.connect(gain);
+        gain.connect(this.master);
+        osc.start(time);
+        osc.stop(time + 0.4);
+    },
+    
+    playSnare(time) {
+        const bufferSize = this.ctx.sampleRate * 0.2; 
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 1000;
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.4, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.master);
+        noise.start(time);
+    }
+};
+
+// --- THEORY DATA (Matches Sheet Music) ---
+// Tempo: 130 BPM
+const BPM = 130;
+const Q = 60 / BPM; // Quarter Note
+const E = Q / 2;    // Eighth Note
+
+// Frequencies (Eb Minor Key)
+const Note = {
+    // Bass (Tuba/Trombone range)
+    Gb2: 92.50,
+    Ab2: 103.83,
+    Bb2: 116.54,
+    Db3: 138.59,
+    Eb3: 155.56,
+    F3:  174.61,
+    
+    // Mid (Chords)
+    Gb3: 185.00,
+    Ab3: 207.65,
+    Bb3: 233.08,
+    Cb3: 246.94, // B3
+    
+    // High (Flute/Melody range)
+    Db4: 277.18,
+    Eb4: 311.13,
+    F4:  349.23,
+    Gb4: 369.99,
+    Ab4: 415.30,
+    Bb4: 466.16,
+    Cb4: 493.88,
+    Db5: 554.37,
+    Eb5: 622.25,
+    Gb5: 739.99
+};
+
+// --- VISUALS ---
+const Visuals = {
+    canvas: document.getElementById('canvas-container'),
+    ctx: null,
+    particles: [],
+    rings: [],
+    
+    init() {
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.loop();
+    },
+    
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    },
+    
+    spawnParticle(freq, type) {
+        const x = (freq / 800) * this.canvas.width;
+        this.particles.push({
+            x: x + (Math.random()-0.5)*50,
+            y: this.canvas.height / 2,
+            vy: (Math.random() - 0.5) * 10,
+            life: 1,
+            color: type === 'woodwind' ? '#a8d' : '#fff'
+        });
+    },
+
+    spawnRing() {
+        this.rings.push({ r: 0, alpha: 1 });
+    },
+
+    loop() {
+        this.ctx.fillStyle = 'rgba(13, 13, 18, 0.3)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Particles (Woodwinds)
+        this.particles.forEach((p, i) => {
+            p.y += p.vy;
+            p.life -= 0.02;
+            this.ctx.fillStyle = p.color;
+            this.ctx.globalAlpha = p.life;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+            this.ctx.fill();
+            if(p.life <= 0) this.particles.splice(i, 1);
+        });
+
+        // Rings (Brass/Bass)
+        this.ctx.lineWidth = 2;
+        this.rings.forEach((r, i) => {
+            r.r += 5;
+            r.alpha -= 0.02;
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
+            this.ctx.beginPath();
+            this.ctx.arc(this.canvas.width/2, this.canvas.height/2, r.r, 0, Math.PI*2);
+            this.ctx.stroke();
+            if(r.alpha <= 0) this.rings.splice(i, 1);
+        });
+
+        requestAnimationFrame(() => this.loop());
+    }
+};
+
+// --- SEQUENCER ---
+const Sequencer = {
+    measureCount: 0,
+
+    async play() {
+        document.getElementById('btn').style.display = 'none';
+        this.measureCount = 0;
+        
+        // Intro Pattern (Matches Flute Arpeggios + Tuba Bass)
+        this.setLyric("Found you when your heart was broke");
+        await this.playMeasure('Ebm'); // Bar 1
+        await this.playMeasure('Gb');  // Bar 2
+        
+        this.setLyric("I filled your cup until it overflowed");
+        await this.playMeasure('Bbm'); // Bar 3
+        await this.playMeasure('Abm'); // Bar 4
+        
+        // Verse / Build
+        this.setLyric("Took it so far to keep you close");
+        await this.playMeasure('Ebm', true); 
+        await this.playMeasure('Gb', true);
+        
+        this.setLyric("I was afraid to leave you on your own");
+        await this.playMeasure('Bbm', true);
+        await this.playMeasure('Abm', true);
+
+        // Chorus (Full Melody)
+        await this.playChorus();
+
+        setTimeout(() => {
+            document.getElementById('btn').style.display = 'inline-block';
+            document.getElementById('btn').innerText = "PLAY AGAIN";
+        }, 1000);
+    },
+
+    updateMeasureUI() {
+        this.measureCount++;
+        document.getElementById('measure-count').innerText = "MEASURE: " + this.measureCount;
+    },
+
+    setLyric(text) {
+        document.getElementById('lyrics').innerText = text;
+    },
+
+    // Plays one measure (4 beats) based on the chord provided
+    // Patterns match the visual rise in the sheet music staves
+    async playMeasure(chord, withDrums = false) {
+        this.updateMeasureUI();
+        const t = AudioEngine.ctx.currentTime;
+
+        // 1. BASS (Whole notes/Half notes from Tuba)
+        if(chord === 'Ebm') AudioEngine.playBrass(Note.Eb3, t, Q*4); // Eb
+        if(chord === 'Gb')  AudioEngine.playBrass(Note.Gb3, t, Q*4); // Gb
+        if(chord === 'Bbm') AudioEngine.playBrass(Note.Bb2, t, Q*4); // Bb
+        if(chord === 'Abm') AudioEngine.playBrass(Note.Ab2, t, Q*4); // Ab
+
+        // 2. WOODWINDS (Eighth note arpeggios from Flute/Clarinet)
+        let arp = [];
+        // Eb Minor: Eb, Gb, Bb
+        if(chord === 'Ebm') arp = [Note.Eb4, Note.Gb4, Note.Bb4, Note.Eb5];
+        // Gb Major: Gb, Bb, Db
+        if(chord === 'Gb')  arp = [Note.Gb4, Note.Bb4, Note.Db5, Note.Gb5];
+        // Bb Minor: Bb, Db, F
+        if(chord === 'Bbm') arp = [Note.Bb3, Note.Db4, Note.F4,  Note.Bb4];
+        // Ab Minor: Ab, Cb, Eb
+        if(chord === 'Abm') arp = [Note.Ab3, Note.Cb3, Note.Eb4, Note.Ab4];
+
+        // Play Arpeggio Pattern (1 & 2 & 3 & 4 &)
+        for(let i=0; i<8; i++) {
+            // Oscillate through the notes: 0, 1, 2, 3, 2, 1, 0, 1
+            let noteIdx = i % 4;
+            AudioEngine.playWoodwind(arp[noteIdx], t + (i*E), E);
+        }
+
+        // 3. DRUMS
+        if(withDrums) {
+            AudioEngine.playKick(t);
+            AudioEngine.playSnare(t+Q);
+            AudioEngine.playKick(t+2*Q);
+            AudioEngine.playKick(t+2.5*Q);
+            AudioEngine.playSnare(t+3*Q);
+        }
+
+        return new Promise(r => setTimeout(r, Q * 4 * 1000));
+    },
+
+    async playChorus() {
+        const t = AudioEngine.ctx.currentTime;
+        
+        // Melody Line matches standard "Without Me" but transposed to sheet key (Eb Minor)
+        
+        // Line 1: "Tell me how's it feel..." (Over Ebm)
+        this.setLyric("Tell me, how's it feel sittin' up there?");
+        AudioEngine.playBrass(Note.Eb3, t, Q*4);
+        // Melody: Db, Db, Db, Cb, Bb...
+        AudioEngine.playLead(Note.Db5, t, E);
+        AudioEngine.playLead(Note.Db5, t+E, E);
+        AudioEngine.playLead(Note.Db5, t+2*E, E);
+        AudioEngine.playLead(Note.Cb4, t+3*E, E);
+        AudioEngine.playLead(Note.Bb4, t+3.5*E, Q); // "feel"
+        this.playDrums(t);
+        await new Promise(r => setTimeout(r, Q*4*1000));
+        this.updateMeasureUI();
+
+        // Line 2: "Feeling so high..." (Over Gb)
+        this.setLyric("Feeling so high, but too far away to hold me");
+        const t2 = AudioEngine.ctx.currentTime;
+        AudioEngine.playBrass(Note.Gb3, t2, Q*4);
+        AudioEngine.playLead(Note.Bb4, t2, Q);
+        AudioEngine.playLead(Note.Ab4, t2+Q, Q);
+        AudioEngine.playLead(Note.Gb4, t2+2*Q, Q);
+        this.playDrums(t2);
+        await new Promise(r => setTimeout(r, Q*4*1000));
+        this.updateMeasureUI();
+
+        // Line 3: "You know I'm the one..." (Over Bbm)
+        this.setLyric("You know I'm the one who put you up there");
+        const t3 = AudioEngine.ctx.currentTime;
+        AudioEngine.playBrass(Note.Bb2, t3, Q*4);
+        this.playDrums(t3);
+        await new Promise(r => setTimeout(r, Q*4*1000));
+        this.updateMeasureUI();
+
+        // Line 4: "Thinking you could live..." (Over Abm)
+        this.setLyric("Thinking you could live without me");
+        const t4 = AudioEngine.ctx.currentTime;
+        AudioEngine.playBrass(Note.Ab2, t4, Q*4);
+        
+        // Hook Melody
+        AudioEngine.playLead(Note.Bb4, t4, E);     // Think
+        AudioEngine.playLead(Note.Bb4, t4+E, E);   // ing
+        AudioEngine.playLead(Note.Ab4, t4+2*E, E); // you
+        AudioEngine.playLead(Note.Gb4, t4+3*E, E); // could
+        AudioEngine.playLead(Note.F4,  t4+4*E, E); // live
+        AudioEngine.playLead(Note.Db4, t4+5*E, E); // with
+        AudioEngine.playLead(Note.Eb4, t4+6*E, E); // out
+        AudioEngine.playLead(Note.Gb4, t4+7*E, Q); // me
+
+        this.playDrums(t4);
+        await new Promise(r => setTimeout(r, Q*4*1000));
+        this.updateMeasureUI();
+    },
+    
+    playDrums(start) {
+        AudioEngine.playKick(start);
+        AudioEngine.playSnare(start+Q);
+        AudioEngine.playKick(start+2*Q);
+        AudioEngine.playSnare(start+3*Q);
+    }
+};
+
+document.getElementById('btn').addEventListener('click', () => {
+    if(AudioEngine.ctx && AudioEngine.ctx.state === 'suspended') {
+        AudioEngine.ctx.resume();
+    }
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        Visuals.init();
+    }
+    Sequencer.play();
+});
+</script>
+</body>
+</html>

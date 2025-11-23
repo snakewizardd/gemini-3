@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Ascension of Spheres</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@300&display=swap');
+
+        body {
+            margin: 0;
+            background: #020204;
+            color: #e0e0e0;
+            font-family: 'Lato', sans-serif;
+            overflow: hidden;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            letter-spacing: 0.5rem;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            margin: 0;
+        }
+
+        .sphere-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.5;
+            margin-bottom: 5px;
+        }
+
+        .active-stat {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            cursor: pointer;
+            transition: opacity 1.5s ease;
+        }
+
+        #overlay h2 {
+            font-family: 'Cinzel', serif;
+            font-size: 3rem;
+            margin-bottom: 10px;
+            color: #d4af37;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="ui-layer">
+        <div>
+            <h1>THE ASCENSION</h1>
+            <p style="opacity: 0.5; font-size: 0.8rem;">DYNAMIC MODAL COLLATZ ENGINE</p>
+        </div>
+        
+        <div style="text-align: right;">
+            <div style="color: #d4af37;">
+                <div class="sphere-label">SPHERE IV: CELESTIAL (HIRAJOSHI)</div>
+                <div class="active-stat" id="stat-celestial">0 ENTITIES</div>
+            </div>
+            <div style="color: #87CEEB;">
+                <div class="sphere-label">SPHERE III: ASTRAL (LYDIAN)</div>
+                <div class="active-stat" id="stat-astral">0 ENTITIES</div>
+            </div>
+            <div style="color: #FF4500;">
+                <div class="sphere-label">SPHERE II: CONFLICT (PHRYGIAN)</div>
+                <div class="active-stat" id="stat-conflict">0 ENTITIES</div>
+            </div>
+            <div style="color: #8B4513;">
+                <div class="sphere-label">SPHERE I: TERRA (DORIAN)</div>
+                <div class="active-stat" id="stat-terra">0 ENTITIES</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h2>BEGIN THE ASCENSION</h2>
+        <p>[ CLICK TO TRAVERSE THE MATHEMATICAL SPHERES ]</p>
+    </div>
+
+<script>
+/**
+ * THE THEORY OF SPHERES
+ * 
+ * Instead of one scale, we map the Magnitude of N to different Modal Realities.
+ * 
+ * Sphere I (0-200): Terra. Dorian Scale. Acoustic, woody, cello.
+ * Sphere II (200-1000): Conflict. Phrygian Dominant. Distorted, brassy, tension.
+ * Sphere III (1000-5000): Astral. Lydian. Airy, glass, breathy.
+ * Sphere IV (5000+): Celestial. Hirajoshi. Pure sine, piercing, divine.
+ */
+
+const SPHERES = {
+    TERRA: {
+        max: 200,
+        color: '#8B4513', // Earth
+        ratios: [1, 9/8, 6/5, 4/3, 3/2, 5/3, 16/9], // Dorian (Minor feel but hopeful)
+        waveform: 'triangle', // Soft
+        attack: 0.1,
+        decay: 0.5
+    },
+    CONFLICT: {
+        max: 1000,
+        color: '#FF4500', // Fire
+        ratios: [1, 17/16, 5/4, 4/3, 3/2, 8/5, 16/9], // Phrygian Dominant (Exotic/Tense)
+        waveform: 'sawtooth', // Harsh
+        attack: 0.01,
+        decay: 0.3
+    },
+    ASTRAL: {
+        max: 5000,
+        color: '#87CEEB', // Sky
+        ratios: [1, 9/8, 5/4, 45/32, 3/2, 5/3, 15/8], // Lydian (Dreamy/Floating)
+        waveform: 'sine', // Pure but FM modulated
+        attack: 0.5,
+        decay: 1.5
+    },
+    CELESTIAL: {
+        max: Infinity,
+        color: '#FFD700', // Gold
+        ratios: [1, 9/8, 6/5, 3/2, 8/5], // Hirajoshi (Pentatonic, alien, open)
+        waveform: 'sine', 
+        attack: 0.05,
+        decay: 3.0
+    }
+};
+
+const ROOT_FREQ = 146.83; // D3 (Deep center)
+
+/**
+ * AUDIO ENGINE
+ */
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb;
+
+function initAudio() {
+    ctx = new AudioContext();
+    master = ctx.createGain();
+    master.gain.value = 0.3;
+
+    // THE GREAT HALL (Reverb)
+    reverb = ctx.createConvolver();
+    reverb.buffer = createImpulse(6, 3); // Huge space
+    master.connect(reverb);
+    reverb.connect(ctx.destination);
+    master.connect(ctx.destination); // Blend dry/wet
+}
+
+function createImpulse(dur, decay) {
+    const L = ctx.sampleRate * dur;
+    const b = ctx.createBuffer(2, L, ctx.sampleRate);
+    for(let i=0; i<L; i++) {
+        const k = Math.pow(1-i/L, decay);
+        b.getChannelData(0)[i] = (Math.random()*2-1)*k;
+        b.getChannelData(1)[i] = (Math.random()*2-1)*k;
+    }
+    return b;
+}
+
+/**
+ * DYNAMIC INSTRUMENTATION
+ */
+function getSphere(n) {
+    if (n < SPHERES.TERRA.max) return SPHERES.TERRA;
+    if (n < SPHERES.CONFLICT.max) return SPHERES.CONFLICT;
+    if (n < SPHERES.ASTRAL.max) return SPHERES.ASTRAL;
+    return SPHERES.CELESTIAL;
+}
+
+function playTone(n) {
+    const sphere = getSphere(n);
+    const t = ctx.currentTime;
+    
+    // CALCULATE PITCH BASED ON SPHERE'S MODE
+    // We define "octave" by how many times n fits in the scale length
+    const octaveOffset = Math.floor(Math.log2(Math.max(1, n/50))); 
+    const scaleIndex = n % sphere.ratios.length;
+    const ratio = sphere.ratios[scaleIndex];
+    
+    // Fundamental Frequency
+    let freq = ROOT_FREQ * ratio * Math.pow(2, octaveOffset);
+    
+    // Cap frequency to save ears
+    if (freq > 3000) freq = freq / 4; 
+    if (freq < 50) freq = freq * 4;
+
+    // SYNTHESIS
+    const osc = ctx.createOscillator();
+    const mod = ctx.createOscillator(); // FM for texture
+    const filter = ctx.createBiquadFilter();
+    const amp = ctx.createGain();
+    const pan = ctx.createStereoPanner();
+
+    osc.frequency.value = freq;
+    osc.type = sphere.waveform;
+
+    // Texture modulation based on sphere
+    if (sphere === SPHERES.TERRA) {
+        // Cello-ish vibrato
+        mod.frequency.value = 6; 
+        filter.type = 'lowpass';
+        filter.frequency.value = 800;
+    } else if (sphere === SPHERES.CONFLICT) {
+        // Metallic growl
+        mod.frequency.value = freq * 2.4; 
+        filter.type = 'bandpass';
+        filter.frequency.value = freq * 2;
+        filter.Q.value = 2;
+    } else {
+        // Bell/Glass overtones
+        mod.frequency.value = freq * 1.5;
+        filter.type = 'highpass';
+        filter.frequency.value = 200;
+    }
+
+    const modGain = ctx.createGain();
+    modGain.gain.value = sphere === SPHERES.CELESTIAL ? freq : freq * 0.3;
+
+    // ENVELOPE
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(0.1, t + sphere.attack);
+    amp.gain.exponentialRampToValueAtTime(0.001, t + sphere.attack + sphere.decay);
+
+    // ROUTING
+    mod.connect(modGain);
+    modGain.connect(osc.frequency);
+    osc.connect(filter);
+    filter.connect(amp);
+    amp.connect(pan);
+    
+    // Panning moves with the sphere (Low = Center, High = Wide)
+    pan.pan.value = (Math.random() * 2 - 1) * (sphere === SPHERES.TERRA ? 0.3 : 1);
+    
+    pan.connect(master);
+
+    osc.start(t);
+    mod.start(t);
+    osc.stop(t + sphere.attack + sphere.decay + 1);
+    mod.stop(t + sphere.attack + sphere.decay + 1);
+}
+
+/**
+ * THE ORCHESTRA MANAGER
+ * Simulates multiple entities rising and falling simultaneously.
+ */
+const ENTITIES = [];
+const MAX_ENTITIES = 12; // Marshmello density
+
+class Entity {
+    constructor() {
+        this.n = Math.floor(Math.random() * 50) + 10; // Start low (Terra)
+        this.active = true;
+        this.history = [];
+        this.sphere = SPHERES.TERRA;
+    }
+
+    step() {
+        if (!this.active) return;
+        
+        // Store history for visual trails
+        this.history.push({ n: this.n, sphere: this.sphere });
+        if (this.history.length > 30) this.history.shift();
+
+        // Play Sound
+        playTone(this.n);
+
+        // Update Sphere State
+        this.sphere = getSphere(this.n);
+
+        // Collatz Logic
+        if (this.n === 1) {
+            // Reincarnate with higher energy
+            this.n = Math.floor(Math.random() * 500) + 200; 
+            this.history = []; // Clear trail
+        } else if (this.n % 2 === 0) {
+            this.n = this.n / 2;
+        } else {
+            this.n = (this.n * 3) + 1;
+        }
+    }
+}
+
+function startOrchestra() {
+    // Create initial pool
+    for(let i=0; i<3; i++) ENTITIES.push(new Entity());
+
+    // Loop
+    setInterval(() => {
+        // Add new entities slowly to build density
+        if (ENTITIES.length < MAX_ENTITIES && Math.random() > 0.7) {
+            ENTITIES.push(new Entity());
+        }
+
+        // Step all entities
+        const counts = { TERRA: 0, CONFLICT: 0, ASTRAL: 0, CELESTIAL: 0 };
+        
+        ENTITIES.forEach(e => {
+            e.step();
+            if (e.sphere === SPHERES.TERRA) counts.TERRA++;
+            else if (e.sphere === SPHERES.CONFLICT) counts.CONFLICT++;
+            else if (e.sphere === SPHERES.ASTRAL) counts.ASTRAL++;
+            else counts.CELESTIAL++;
+        });
+
+        // Update UI
+        document.getElementById('stat-terra').innerText = counts.TERRA + " VOICES";
+        document.getElementById('stat-conflict').innerText = counts.CONFLICT + " VOICES";
+        document.getElementById('stat-astral').innerText = counts.ASTRAL + " VOICES";
+        document.getElementById('stat-celestial').innerText = counts.CELESTIAL + " VOICES";
+
+        // UI Intensity Styling
+        updateUIStyles(counts);
+
+    }, 200); // 300 BPM (Fast flow)
+}
+
+function updateUIStyles(counts) {
+    // Make the text glow if that sphere is active
+    const map = { 'stat-terra': counts.TERRA, 'stat-conflict': counts.CONFLICT, 'stat-astral': counts.ASTRAL, 'stat-celestial': counts.CELESTIAL };
+    const colors = { 'stat-terra': '#8B4513', 'stat-conflict': '#FF4500', 'stat-astral': '#87CEEB', 'stat-celestial': '#FFD700' };
+    
+    for (let id in map) {
+        const el = document.getElementById(id);
+        if (map[id] > 0) {
+            el.style.textShadow = `0 0 ${10 + (map[id]*5)}px ${colors[id]}`;
+            el.style.opacity = 1;
+        } else {
+            el.style.textShadow = 'none';
+            el.style.opacity = 0.3;
+        }
+    }
+}
+
+
+/**
+ * VISUALS: THE SPHERICAL TUNNEL
+ */
+const canvas = document.getElementById('canvas');
+const drawCtx = canvas.getContext('2d');
+let w, h;
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function draw() {
+    // Void background
+    drawCtx.fillStyle = 'rgba(2, 2, 4, 0.2)';
+    drawCtx.fillRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // Draw Sphere Boundaries (Rings)
+    drawCtx.lineWidth = 1;
+    
+    // Terra Ring
+    drawCtx.strokeStyle = 'rgba(139, 69, 19, 0.2)';
+    drawCtx.beginPath(); drawCtx.arc(cx, cy, 100, 0, Math.PI*2); drawCtx.stroke();
+    
+    // Conflict Ring
+    drawCtx.strokeStyle = 'rgba(255, 69, 0, 0.2)';
+    drawCtx.beginPath(); drawCtx.arc(cx, cy, 200, 0, Math.PI*2); drawCtx.stroke();
+
+    // Astral Ring
+    drawCtx.strokeStyle = 'rgba(135, 206, 235, 0.2)';
+    drawCtx.beginPath(); drawCtx.arc(cx, cy, 350, 0, Math.PI*2); drawCtx.stroke();
+
+    // Celestial Ring
+    drawCtx.strokeStyle = 'rgba(255, 215, 0, 0.2)';
+    drawCtx.beginPath(); drawCtx.arc(cx, cy, 500, 0, Math.PI*2); drawCtx.stroke();
+
+    // Draw Entities
+    ENTITIES.forEach(e => {
+        // Determine Radius based on Magnitude
+        let r;
+        const n = e.n;
+        if (n < 200) r = (n / 200) * 100;
+        else if (n < 1000) r = 100 + ((n-200)/800)*100;
+        else if (n < 5000) r = 200 + ((n-1000)/4000)*150;
+        else r = 350 + (Math.min(n, 20000)/20000)*200;
+
+        // Angle rotates over time
+        const angle = Date.now() * 0.001 + (e.n * 0.1);
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+
+        // Draw Core
+        drawCtx.beginPath();
+        drawCtx.arc(x, y, 4, 0, Math.PI*2);
+        drawCtx.fillStyle = e.sphere.color;
+        drawCtx.shadowBlur = 15;
+        drawCtx.shadowColor = e.sphere.color;
+        drawCtx.fill();
+        drawCtx.shadowBlur = 0;
+
+        // Draw Tail (History)
+        if (e.history.length > 1) {
+            drawCtx.beginPath();
+            drawCtx.strokeStyle = e.sphere.color;
+            drawCtx.lineWidth = 2;
+            for (let i = 0; i < e.history.length; i++) {
+                const hN = e.history[i].n;
+                // Recalculate historical radius (simplified)
+                let hR = Math.min(550, Math.log(hN)*50); 
+                const hAngle = (Date.now() - (e.history.length - i)*200) * 0.001 + (hN * 0.1);
+                const hX = cx + Math.cos(hAngle) * hR;
+                const hY = cy + Math.sin(hAngle) * hR;
+                if (i===0) drawCtx.moveTo(hX, hY);
+                else drawCtx.lineTo(hX, hY);
+            }
+            drawCtx.stroke();
+        }
+    });
+
+    requestAnimationFrame(draw);
+}
+
+// START
+document.getElementById('overlay').addEventListener('click', () => {
+    const o = document.getElementById('overlay');
+    o.style.opacity = 0;
+    setTimeout(() => o.remove(), 1500);
+    
+    initAudio();
+    startOrchestra();
+    draw();
+});
+
+</script>
+</body>
+</html>

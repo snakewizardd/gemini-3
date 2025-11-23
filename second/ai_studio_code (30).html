@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>THE ETHER | ANALOG CALM</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #080a10; 
+            overflow: hidden; 
+            font-family: 'Helvetica Neue', sans-serif; 
+            color: #8a9eb5;
+        }
+        canvas { 
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            z-index: 1; 
+            filter: blur(0.5px);
+        }
+        #interface {
+            position: absolute; z-index: 10;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        h1 {
+            font-weight: 100; letter-spacing: 10px; 
+            font-size: 16px; opacity: 0.5; text-transform: uppercase;
+            margin-bottom: 30px;
+        }
+        button {
+            pointer-events: auto;
+            background: transparent;
+            border: 1px solid #4a5e75;
+            color: #8a9eb5;
+            padding: 15px 50px;
+            letter-spacing: 3px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 1s ease;
+            border-radius: 50px;
+        }
+        button:hover {
+            border-color: #a4d1ff;
+            color: #a4d1ff;
+            box-shadow: 0 0 30px rgba(164, 209, 255, 0.1);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="c"></canvas>
+
+    <div id="interface">
+        <h1>Analog Calm</h1>
+        <button id="btn">INITIATE</button>
+    </div>
+
+<script>
+/**
+ * THE AUDIO CORE: "CLEAN DREAM"
+ * Architecture: Oscillator -> Filter (Tone) -> Stereo Delay -> Cathedral Reverb -> Master
+ */
+const Audio = window.AudioContext || window.webkitAudioContext;
+let ctx, master, delayL, delayR, reverb;
+
+const HARMONICS = {
+    // Lydian Mode in D (Dreamy/Spacey)
+    'roots': [73.42, 82.41, 110.00, 146.83], // D2, E2, A2, D3
+    'mids':  [146.83, 164.81, 220.00, 293.66, 329.63, 369.99], 
+    'highs': [440.00, 554.37, 587.33, 659.25, 739.99] // F# and C# emphasize the Lydian feel
+};
+
+function initAudio() {
+    ctx = new Audio();
+    master = ctx.createGain();
+    master.gain.value = 0.4;
+    master.connect(ctx.destination);
+
+    // 1. STEREO DELAY (The "U2" Effect)
+    // Ping pong effect creates width and calm
+    delayL = ctx.createDelay(); delayL.delayTime.value = 0.35; // Left Ear
+    delayR = ctx.createDelay(); delayR.delayTime.value = 0.50; // Right Ear (Different time)
+    
+    const fbL = ctx.createGain(); fbL.gain.value = 0.4;
+    const fbR = ctx.createGain(); fbR.gain.value = 0.4;
+
+    delayL.connect(fbL); fbL.connect(delayL);
+    delayR.connect(fbR); fbR.connect(delayR);
+
+    // Pan positions
+    const pannerL = ctx.createStereoPanner(); pannerL.pan.value = -0.7;
+    const pannerR = ctx.createStereoPanner(); pannerR.pan.value = 0.7;
+
+    delayL.connect(pannerL); pannerL.connect(master);
+    delayR.connect(pannerR); pannerR.connect(master);
+
+    // 2. CONVOLUTION REVERB (The "Cathedral")
+    reverb = ctx.createConvolver();
+    reverb.buffer = impulseResponse(4.0, 2.0, false); // 4 seconds long
+    reverb.connect(master);
+}
+
+function impulseResponse(duration, decay, reverse) {
+    const len = ctx.sampleRate * duration;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let i = 0; i < len; i++){
+        const n = reverse ? len - i : i;
+        // White noise with exponential decay
+        buf.getChannelData(0)[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / len, decay);
+        buf.getChannelData(1)[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / len, decay);
+    }
+    return buf;
+}
+
+/**
+ * THE GUITAR PHYSICS
+ */
+function pluck(freq, type = 'warm', pan = 0) {
+    if (ctx.state === 'suspended') ctx.resume();
+    
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator(); // Harmonics
+    const env = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    const panner = ctx.createStereoPanner();
+
+    const t = ctx.currentTime;
+
+    // Oscillator Tones
+    if(type === 'warm') {
+        osc.type = 'sine';
+        osc2.type = 'triangle';
+        osc2.detune.value = 4; 
+        filter.frequency.value = 800; // Muffled warmth
+    } else {
+        // Sparkling high notes
+        osc.type = 'triangle';
+        osc2.type = 'sine';
+        filter.frequency.value = 2400; // Open brilliance
+    }
+
+    osc.frequency.value = freq;
+    osc2.frequency.value = freq;
+
+    // Envelope (Very slow attack for that volume-swell ambient feel)
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.3, t + 0.1); // Gentle strum attack
+    env.gain.exponentialRampToValueAtTime(0.2, t + 1.5); 
+    env.gain.exponentialRampToValueAtTime(0.001, t + 6.0); // Long Sustain
+
+    // Connections
+    osc.connect(filter); osc2.connect(filter);
+    filter.connect(env);
+    env.connect(panner);
+    panner.pan.value = pan;
+
+    // ROUTING: 
+    // Dry -> Master
+    // Env -> Reverb (Wet)
+    // Env -> Delays (Wet)
+    
+    panner.connect(master);
+    env.connect(reverb);
+    if(Math.random() > 0.5) env.connect(delayL);
+    else env.connect(delayR);
+
+    osc.start(t); osc2.start(t);
+    osc.stop(t + 7); osc2.stop(t + 7);
+
+    // Trigger visual
+    ripples.push(new Ripple(w/2, h/2 + (pan * 200), type === 'warm' ? 40 : 20));
+}
+
+/**
+ * COMPOSER: The Algorithm
+ * Picks melodic phrasing based on consonant intervals
+ */
+let currentRootIndex = 0;
+function arpeggiator() {
+    // 1. Establish Base Note (Bass String)
+    let bass = HARMONICS.roots[currentRootIndex];
+    pluck(bass, 'warm', 0); // Center pan
+    
+    // 2. Play delicate Arpeggio over it
+    // Staggered timing: 
+    // 0ms: Bass
+    // 400ms: Mid
+    // 800ms: High
+    // 1200ms: Mid
+    
+    setTimeout(() => {
+        // Pick a random harmonizing mid
+        let mid = HARMONICS.mids[Math.floor(Math.random() * HARMONICS.mids.length)];
+        pluck(mid, 'bright', -0.4);
+    }, 400);
+
+    setTimeout(() => {
+        // Pick a harmonizing high, occasionaly harmonize with octave
+        let high = HARMONICS.highs[Math.floor(Math.random() * HARMONICS.highs.length)];
+        pluck(high, 'bright', 0.4);
+    }, 900);
+    
+    setTimeout(() => {
+         // Return to mid
+        let mid = HARMONICS.mids[Math.floor(Math.random() * HARMONICS.mids.length)];
+        pluck(mid, 'bright', 0.2);
+    }, 1400);
+
+
+    // Progression Logic (Slowly cycle the roots: D -> A -> E -> D)
+    if(Math.random() > 0.7) {
+        currentRootIndex = (currentRootIndex + 1) % HARMONICS.roots.length;
+    }
+
+    // Repeat Loop speed
+    let bpm = 4000; // very slow measures
+    setTimeout(arpeggiator, bpm);
+}
+
+/**
+ * VISUALS: Bio-Luminescent Ocean
+ */
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h, ripples = [];
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+class Ripple {
+    constructor(x, y, intensity) {
+        this.x = x;
+        this.y = y;
+        this.r = 1;
+        this.life = 1;
+        this.intensity = intensity; // Width of the wave
+        this.drift = (Math.random() - 0.5);
+    }
+    draw() {
+        this.r += 0.5; // Expansion speed (Slow)
+        this.life -= 0.002; // Long fade
+        this.x += this.drift;
+        
+        c.beginPath();
+        // Post-rock style thin elegant lines
+        c.lineWidth = 0.5 * this.intensity * this.life; 
+        c.strokeStyle = `rgba(164, 209, 255, ${this.life * 0.5})`;
+        c.ellipse(this.x, this.y, this.r * 2, this.r * 0.5, 0, 0, Math.PI*2);
+        c.stroke();
+    }
+}
+
+function animate() {
+    // Soft trails
+    c.fillStyle = 'rgba(8, 10, 16, 0.1)';
+    c.fillRect(0, 0, w, h);
+    
+    // Render horizontal horizon line
+    c.strokeStyle = 'rgba(255,255,255,0.05)';
+    c.beginPath();
+    c.moveTo(0, h/2); c.lineTo(w, h/2);
+    c.stroke();
+
+    ripples.forEach((r, i) => {
+        r.draw();
+        if(r.life <= 0) ripples.splice(i, 1);
+    });
+    
+    requestAnimationFrame(animate);
+}
+
+// Controls
+const btn = document.getElementById('btn');
+btn.addEventListener('click', () => {
+    initAudio();
+    btn.style.opacity = 0; 
+    document.querySelector('h1').innerText = "BREATHE";
+    arpeggiator(); // Begin music
+    animate(); // Begin video
+    
+    setTimeout(() => { btn.remove(); }, 2000);
+});
+
+</script>
+</body>
+</html>

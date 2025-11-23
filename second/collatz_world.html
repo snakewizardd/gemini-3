@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Collatz Cloud Harps</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;900&display=swap');
+
+        body {
+            margin: 0;
+            background: #000; /* Deepest Void */
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            filter: blur(1px) brightness(1.2);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-weight: 900;
+            font-size: 5rem;
+            letter-spacing: -4px;
+            margin: 0;
+            background: linear-gradient(to bottom, #fff, #777);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 50px rgba(255,255,255,0.3);
+        }
+
+        h2 {
+            font-weight: 100;
+            letter-spacing: 8px;
+            font-size: 1rem;
+            text-transform: uppercase;
+            opacity: 0.7;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            cursor: pointer;
+            transition: opacity 1.5s ease;
+        }
+
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+        #stats {
+            position: absolute;
+            bottom: 30px;
+            display: flex;
+            gap: 40px;
+            font-size: 0.8rem;
+            opacity: 0.5;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="ui-layer">
+        <h1 id="main-counter">0</h1>
+        <h2 id="status-text">WAITING FOR CONDUCTOR</h2>
+        
+        <div id="stats">
+            <span id="layer-1">LAYER A: OFF</span>
+            <span id="layer-2">LAYER B: OFF</span>
+            <span id="layer-3">LAYER C: OFF</span>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <div style="text-align: center;">
+            <h1 style="font-size: 2rem; -webkit-text-fill-color: white;">ENTER THE CLOUD</h1>
+            <p style="color: #888; font-size: 0.8rem; margin-top: 20px;">[ CLICK TO INITIALIZE HARP PHYSICS ]</p>
+        </div>
+    </div>
+
+<script>
+/**
+ * THE LOGIC: PRE-COMPUTING HARMONIC SETS
+ * We find groups of numbers that all stop in exactly X steps.
+ * These form our "Melodic Layers".
+ */
+const HARMONY_SETS = {};
+
+function precomputeSets() {
+    for (let i = 2; i < 3000; i++) {
+        let n = i;
+        let steps = 0;
+        while (n !== 1) {
+            if (n % 2 === 0) n /= 2;
+            else n = n * 3 + 1;
+            steps++;
+        }
+        // We only want long, beautiful chains (between 20 and 100 steps)
+        if (steps > 20 && steps < 120) {
+            if (!HARMONY_SETS[steps]) HARMONY_SETS[steps] = [];
+            HARMONY_SETS[steps].push(i);
+        }
+    }
+}
+precomputeSets();
+
+
+/**
+ * AUDIO ENGINE: SINOSITIC HARPS & HEAVENLY REVERB
+ */
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb, delay;
+
+function initAudio() {
+    ctx = new AudioContext();
+    master = ctx.createGain();
+    master.gain.value = 0.4;
+
+    // 1. THE HEAVENLY ROOM (Convolution)
+    reverb = ctx.createConvolver();
+    reverb.buffer = createImpulse(5, 4); // 5 seconds, long decay
+    
+    // 2. STEREO DELAY (Width)
+    delay = ctx.createDelay();
+    delay.delayTime.value = 0.35; // Syncopated delay
+    const delayFeedback = ctx.createGain();
+    delayFeedback.gain.value = 0.4;
+    
+    // 3. LIMITER/COMPRESSOR (Marshmello loudness)
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -12;
+    limiter.ratio.value = 20;
+
+    // CHAIN
+    master.connect(limiter);
+    limiter.connect(ctx.destination);
+    
+    master.connect(delay);
+    delay.connect(delayFeedback);
+    delayFeedback.connect(delay);
+    delay.connect(reverb);
+    
+    master.connect(reverb); // Direct to reverb too
+    reverb.connect(ctx.destination);
+}
+
+function createImpulse(duration, decay) {
+    const len = ctx.sampleRate * duration;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let i = 0; i < len; i++) {
+        const k = Math.pow(1 - i/len, decay);
+        buf.getChannelData(0)[i] = (Math.random() * 2 - 1) * k * 0.5; // Soften the noise
+        buf.getChannelData(1)[i] = (Math.random() * 2 - 1) * k * 0.5;
+    }
+    return buf;
+}
+
+/**
+ * INSTRUMENT: SINOSITIC HARP
+ * A pure sine wave with a tiny bit of FM for "glassiness" and a pluck envelope.
+ */
+function playHarpNote(n, layerType) {
+    const t = ctx.currentTime;
+    
+    // SCALE: PENTATONIC MAJOR (D Major) - Guaranteed Harmony
+    // Maps any number N to a safe note in the scale
+    const scale = [293.66, 329.63, 369.99, 440.00, 493.88, 587.33, 659.25]; 
+    
+    // The Collatz value N determines the note.
+    // Even numbers (descending) tend to be consonant. Odd (ascending) add tension.
+    const octave = Math.floor(Math.log2(n)) + 1;
+    const noteIndex = n % scale.length;
+    let freq = scale[noteIndex];
+
+    // Layer specific adjustments
+    if (layerType === 'BASS') freq = freq / 4; // Deep subs
+    if (layerType === 'CHORDS') freq = freq / 2;
+    if (layerType === 'MELODY') freq = freq * 1; 
+
+    // OSCILLATORS
+    const osc = ctx.createOscillator();
+    const mod = ctx.createOscillator(); // FM Modulator for "Bell" tone
+    const modGain = ctx.createGain();
+    const mainGain = ctx.createGain();
+    const pan = ctx.createStereoPanner();
+
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    
+    mod.type = 'sine';
+    mod.frequency.value = freq * 2.0; // Octave harmonic
+    modGain.gain.value = freq * 0.5; // Subtle modulation
+    modGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+
+    // ENVELOPE (The Pluck)
+    mainGain.gain.setValueAtTime(0, t);
+    mainGain.gain.linearRampToValueAtTime(layerType === 'BASS' ? 0.4 : 0.1, t + 0.02); // Quick attack
+    mainGain.gain.exponentialRampToValueAtTime(0.001, t + (layerType === 'BASS' ? 1.0 : 3.0)); // Long ringing tail
+
+    // PANNING (Random spread)
+    pan.pan.value = (Math.random() * 2) - 1;
+
+    mod.connect(modGain);
+    modGain.connect(osc.frequency);
+    osc.connect(mainGain);
+    mainGain.connect(pan);
+    pan.connect(master);
+
+    osc.start(t);
+    mod.start(t);
+    osc.stop(t + 4);
+    mod.stop(t + 4);
+}
+
+/**
+ * THE CONDUCTOR
+ * Manages multiple "Layers" of sets overlapping each other.
+ */
+let activeLayers = [];
+let globalTick = 0;
+
+class CollatzLayer {
+    constructor(stopTime, type, speedDivisor) {
+        this.seeds = HARMONY_SETS[stopTime].slice(0, 8); // Max 8 voices per layer to keep it clean
+        this.walkers = this.seeds.map(s => s); // Current values
+        this.type = type; // BASS, CHORDS, MELODY
+        this.speedDivisor = speedDivisor; // 1 = every tick, 2 = every other tick
+        this.finished = false;
+        
+        // Update UI
+        document.getElementById(type === 'BASS' ? 'layer-1' : type === 'CHORDS' ? 'layer-2' : 'layer-3').innerText = `${type}: SET ${stopTime}`;
+    }
+
+    step(tick) {
+        if (this.finished) return;
+        if (tick % this.speedDivisor !== 0) return;
+
+        let activeCount = 0;
+        this.walkers.forEach((val, i) => {
+            if (val === 1) return; // This voice is done
+            
+            activeCount++;
+            playHarpNote(val, this.type);
+
+            // Math Step
+            if (val % 2 === 0) this.walkers[i] = val / 2;
+            else this.walkers[i] = (val * 3) + 1;
+            
+            // Visual Trigger
+            spawnVisual(this.walkers[i], this.type);
+        });
+
+        if (activeCount === 0) this.finished = true;
+    }
+}
+
+function startConductor() {
+    setInterval(() => {
+        globalTick++;
+        
+        // MANAGE LAYERS: If a layer finishes or doesn't exist, spawn a new one
+        // 1. BASS LAYER (Slow, Deep)
+        if (!activeLayers[0] || activeLayers[0].finished) {
+            const keys = Object.keys(HARMONY_SETS);
+            const randomSet = keys[Math.floor(Math.random() * keys.length)];
+            activeLayers[0] = new CollatzLayer(randomSet, 'BASS', 4); // Every 4th tick
+        }
+
+        // 2. CHORD LAYER (Mid, Steady)
+        if (!activeLayers[1] || activeLayers[1].finished) {
+            // Delay start slightly for overlapping effect
+            if (globalTick % 16 === 0) { 
+                const keys = Object.keys(HARMONY_SETS);
+                const randomSet = keys[Math.floor(Math.random() * keys.length)];
+                activeLayers[1] = new CollatzLayer(randomSet, 'CHORDS', 2); // Every 2nd tick
+            }
+        }
+
+        // 3. MELODY LAYER (Fast, High)
+        if (!activeLayers[2] || activeLayers[2].finished) {
+             if (globalTick % 8 === 0) {
+                const keys = Object.keys(HARMONY_SETS);
+                const randomSet = keys[Math.floor(Math.random() * keys.length)];
+                activeLayers[2] = new CollatzLayer(randomSet, 'MELODY', 1); // Every tick
+             }
+        }
+
+        // EXECUTE STEPS
+        activeLayers.forEach(layer => layer && layer.step(globalTick));
+        
+        // UI BEAT
+        const main = document.getElementById('main-counter');
+        main.style.transform = `scale(${1 + (globalTick % 2 === 0 ? 0.1 : 0)})`;
+        main.innerText = globalTick;
+
+    }, 250); // 240 BPM (Fast) or 120 BPM (Half-time feel)
+}
+
+/**
+ * VISUAL ENGINE: THE CLOUD CHAMBER
+ */
+const canvas = document.getElementById('canvas');
+const dCtx = canvas.getContext('2d');
+let width, height;
+let particles = [];
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function spawnVisual(val, type) {
+    const color = type === 'BASS' ? '#444' : type === 'CHORDS' ? '#D4AF37' : '#fff';
+    const size = type === 'BASS' ? 100 : type === 'CHORDS' ? 30 : 5;
+    
+    particles.push({
+        x: width / 2,
+        y: height / 2,
+        vx: (Math.random() - 0.5) * (type === 'MELODY' ? 10 : 4),
+        vy: (Math.random() - 0.5) * (type === 'MELODY' ? 10 : 4),
+        size: size,
+        life: 1,
+        decay: type === 'MELODY' ? 0.02 : 0.005,
+        color: color
+    });
+}
+
+function draw() {
+    // TRAIL EFFECT
+    dCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    dCtx.fillRect(0, 0, width, height);
+
+    particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            return;
+        }
+
+        dCtx.beginPath();
+        dCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        dCtx.fillStyle = p.color;
+        // Add glow
+        dCtx.shadowBlur = 20;
+        dCtx.shadowColor = p.color;
+        dCtx.fill();
+        dCtx.shadowBlur = 0;
+    });
+
+    // Rotating Center Ring
+    dCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    dCtx.lineWidth = 2;
+    dCtx.beginPath();
+    dCtx.arc(width/2, height/2, 200 + Math.sin(globalTick * 0.1)*20, 0, Math.PI*2);
+    dCtx.stroke();
+
+    requestAnimationFrame(draw);
+}
+
+// START
+document.getElementById('overlay').addEventListener('click', () => {
+    const o = document.getElementById('overlay');
+    o.style.opacity = 0;
+    setTimeout(() => o.remove(), 1500);
+    
+    document.getElementById('status-text').innerText = "SYMPHONY INITIALIZED";
+    document.getElementById('status-text').classList.add('pulse');
+    
+    initAudio();
+    startConductor();
+    draw();
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>AUDIO SYSTEM</title>
+</head>
+<body>
+    <!-- 
+        INSTRUCTIONS FOR SCREEN READER:
+        CLICK ANYWHERE ON THE PAGE TO START THE VOICE.
+    -->
+    <button style="width: 100%; height: 100vh; font-size: 50px;" onclick="startSystem()">
+        CLICK HERE TO START LISTENING
+    </button>
+
+    <script>
+        /* 
+           I AM SPEAKING IN JAVASCRIPT NOW.
+           THIS SCRIPT USES YOUR BROWSER'S TEXT-TO-SPEECH ENGINE.
+        */
+
+        const synth = window.speechSynthesis;
+        let money = 0;
+
+        function speak(text) {
+            // Create a new speech object
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Make the voice slow and deep
+            utterance.rate = 0.8; 
+            utterance.pitch = 0.6; 
+            
+            // Speak the text
+            synth.speak(utterance);
+        }
+
+        function startSystem() {
+            // Clear queue
+            synth.cancel();
+            
+            speak("System online. I will find money for you.");
+
+            // Start the loop
+            setInterval(() => {
+                const chance = Math.random();
+
+                if (chance > 0.7) {
+                    // Success event
+                    money += 100;
+                    speak("Cash found. You have " + money + " dollars.");
+                } else {
+                    // Searching event
+                    speak("Scanning...");
+                }
+
+            }, 4000); // Speaks every 4 seconds
+        }
+    </script>
+</body>
+</html>

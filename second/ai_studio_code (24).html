@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Orphic Lyre</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400&display=swap');
+        
+        body { margin: 0; background: #050505; overflow: hidden; font-family: 'Cinzel', serif; color: #D4AF37; }
+        canvas { position: absolute; top: 0; left: 0; filter: blur(0.5px) contrast(1.1); }
+        
+        #overlay {
+            position: absolute; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: #000; z-index: 10; transition: opacity 2s;
+            cursor: pointer;
+        }
+
+        #narrative-box {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 80%;
+            pointer-events: none;
+        }
+
+        #chapter-title {
+            font-size: 1rem; letter-spacing: 0.3em; color: #666;
+            margin-bottom: 10px;
+        }
+        
+        #main-text {
+            font-size: clamp(2rem, 6vw, 5rem);
+            text-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
+            transition: opacity 1s;
+        }
+
+        .metric { position: absolute; bottom: 30px; font-size: 0.8rem; opacity: 0.5; width: 100%; display:flex; justify-content: space-between; padding: 0 50px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+    
+    <div id="narrative-box">
+        <div id="chapter-title">INITIALIZE</div>
+        <div id="main-text"></div>
+    </div>
+
+    <div class="metric">
+        <div id="mode">MODE: SINUSOIDAL_HARP</div>
+        <div id="step-val">HARMONIC SEED: 0</div>
+    </div>
+
+    <div id="overlay"><h1>CLICK TO BEGIN THE MYTH</h1></div>
+
+<script>
+
+// --------------------------------------------------------
+// 1. THE NARRATIVE DATASET (THE ORPHIC SEQUENCE)
+// steps = The Collatz "Seed" (determines harmony complexity)
+// stringTension = Amplitude of the visual sine waves
+// speed = How fast the chapter progresses
+// --------------------------------------------------------
+const MYTHOS = [
+    { 
+        chapter: "I. THE GIFT", 
+        text: "APOLLO'S SON", 
+        steps: 5, // Pentatonic Purity
+        audio: 'LYRE_CLEAN', 
+        tension: 0.5,
+        color: '#D4AF37'
+    },
+    { 
+        chapter: "II. UNION", 
+        text: "EURYDICE", 
+        steps: 10, // Harmonic Series
+        audio: 'LYRE_WARM', 
+        tension: 1.0,
+        color: '#FFDD88' 
+    },
+    { 
+        chapter: "III. THE MEADOW", 
+        text: "THE VIPER STRIKES", 
+        steps: 27, // The infamous Collatz climber (High Complexity)
+        audio: 'DISCORD_PLUCK', 
+        tension: 10.0, // Violent waves
+        color: '#00FF00' 
+    },
+    { 
+        chapter: "IV. GRIEF", 
+        text: "THE WORLD WEEPS", 
+        steps: 9, 
+        audio: 'LOW_DRONE', 
+        tension: 0.2, 
+        color: '#556677' 
+    },
+    { 
+        chapter: "V. DESCENT", 
+        text: "INTO HADES", 
+        steps: 40, 
+        audio: 'SUB_SINE', 
+        tension: 2.0, 
+        color: '#330000' 
+    },
+    { 
+        chapter: "VI. THE PLEA", 
+        text: "A SONG FOR THE DEAD", 
+        steps: 150, // Fibonacci Seeds (Complex but beautiful)
+        audio: 'CELESTIAL_ECHO', 
+        tension: 1.5, 
+        color: '#9944FF' 
+    },
+    { 
+        chapter: "VII. THE CONDITION", 
+        text: "DO NOT LOOK BACK", 
+        steps: 16, // Pure Math (Power of 2) - Strict Order
+        audio: 'METRONOME', 
+        tension: 0.1, 
+        color: '#FFFFFF' 
+    },
+    { 
+        chapter: "VIII. DOUBT", 
+        text: "IS SHE THERE?", 
+        steps: 70, // High Variance
+        audio: 'DETUNED', 
+        tension: 4.0, 
+        color: '#555555' 
+    },
+    { 
+        chapter: "IX. THE TURN", 
+        text: "FAREWELL", 
+        steps: 127, // Max Prime Tension
+        audio: 'SHATTER', 
+        tension: 50.0, // The strings break visually
+        color: '#FF0000' 
+    },
+    { 
+        chapter: "X. SILENCE", 
+        text: "...", 
+        steps: 1, // Return to One
+        audio: 'NULL', 
+        tension: 0.0, 
+        color: '#000000' 
+    }
+];
+
+// Harmonic mappings based on user's original logic
+const HARMONY_SETS = {
+    5: [1, 1.25, 1.5],          // Major Triad
+    9: [0.5, 1, 1.5],           // Slow minor
+    10: [1, 2, 3, 4, 5],        // Harmonic Series
+    16: [1, 1, 1],              // Monotone
+    27: [1, 1.41, 1.73, 2.5],   // Tritones / Roots
+    40: [0.25, 0.5, 0.75],      // Sub Bass
+    70: [1, 1.1, 1.2],          // Cluster / Dissonance
+    127: [1, 5, 10, 50],        // Screech
+    150: [1, 1.618, 2.618, 4.236] // Golden Ratio
+};
+
+// --------------------------------------------------------
+// AUDIO ENGINE: THE DIGITAL LYRE
+// --------------------------------------------------------
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const ctx = new AudioCtx();
+const master = ctx.createGain();
+const reverb = ctx.createConvolver();
+master.connect(reverb);
+master.gain.value = 0.4;
+reverb.connect(ctx.destination);
+
+// Create Impulse (reused from your logic for consistency)
+function makeImpulse() {
+    let len = ctx.sampleRate * 3;
+    let buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for(let i=0;i<len;i++){
+        let d = (1 - i/len);
+        buf.getChannelData(0)[i]=(Math.random()*2-1)*d;
+        buf.getChannelData(1)[i]=(Math.random()*2-1)*d;
+    }
+    reverb.buffer = buf;
+}
+makeImpulse();
+
+function playPluck(freq, type) {
+    if (ctx.state === 'suspended') ctx.resume();
+    
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+
+    // Logic shift: Lyre sounds are purely sinusoidal/triangle
+    // Differentiated by attack and release times
+    osc.frequency.setValueAtTime(freq, t);
+    
+    if (type === 'LYRE_CLEAN' || type === 'LYRE_WARM') {
+        osc.type = 'triangle';
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(0.2, t + 0.05); // Fast attack
+        env.gain.exponentialRampToValueAtTime(0.001, t + 3); // Long decay
+    } 
+    else if (type === 'DISCORD_PLUCK' || type === 'SHATTER') {
+        osc.type = 'sawtooth';
+        env.gain.setValueAtTime(0.1, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.5); // Harsh pluck
+    }
+    else if (type === 'SUB_SINE') {
+        osc.type = 'sine';
+        osc.frequency.value = freq * 0.5; // Octave down
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(0.3, t + 2); // Swell
+        env.gain.linearRampToValueAtTime(0, t + 6);
+    }
+    else {
+        // Celestial / Default
+        osc.type = 'sine';
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(0.1, t + 0.1);
+        env.gain.linearRampToValueAtTime(0, t + 4); 
+    }
+
+    osc.connect(env);
+    env.connect(master);
+    osc.start(t);
+    osc.stop(t+7);
+}
+
+// --------------------------------------------------------
+// VISUAL ENGINE: THE STRING THEOREM
+// --------------------------------------------------------
+const canvas = document.getElementById('canvas');
+const c = canvas.getContext('2d');
+let w, h;
+let globalTime = 0;
+let currentSceneIndex = -1;
+
+function resize(){ w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; }
+window.onresize = resize; resize();
+
+function renderStrings(data) {
+    c.fillStyle = 'rgba(0,0,0,0.1)';
+    c.fillRect(0,0,w,h);
+
+    c.lineWidth = 2;
+    c.shadowBlur = 10;
+    c.shadowColor = data.color;
+    
+    // Create 7 strings (The Lyre of Orpheus traditionally had 7)
+    const stringCount = 7;
+    const spacing = w / (stringCount + 1);
+    
+    for(let i=1; i<=stringCount; i++) {
+        const x = i * spacing;
+        
+        // MATH: Modulating Sinusoids based on "Tension" and Steps
+        // Higher steps = more complex harmonic frequencies in the wave
+        const freqMod = (data.steps % 5) + 1; 
+        
+        c.beginPath();
+        c.moveTo(x, 0);
+        
+        // Draw the wave vertically
+        for(let y=0; y<h; y+=10) {
+            // Base vibration
+            let offset = Math.sin(y * 0.01 + globalTime * freqMod + i) * (20 * data.tension);
+            
+            // Add "Collatz" instability glitch for high tension scenes
+            if(data.tension > 5) {
+                 offset += Math.random() * 10 - 5;
+            }
+            
+            c.lineTo(x + offset, y);
+        }
+        
+        // Dynamic coloring
+        c.strokeStyle = data.color;
+        
+        // If 'Looking Back', snap strings
+        if(currentSceneIndex === 8 && Math.random()>0.5) c.strokeStyle = 'transparent';
+
+        c.stroke();
+    }
+}
+
+function animate() {
+    globalTime += 0.05;
+    if(currentSceneIndex >= 0 && currentSceneIndex < MYTHOS.length) {
+        renderStrings(MYTHOS[currentSceneIndex]);
+    }
+    requestAnimationFrame(animate);
+}
+
+// --------------------------------------------------------
+// SEQUENCE CONTROLLER
+// --------------------------------------------------------
+function playScene(index) {
+    if(index >= MYTHOS.length) return;
+    currentSceneIndex = index;
+    const data = MYTHOS[index];
+    
+    // UI Updates
+    document.getElementById('chapter-title').innerText = data.chapter;
+    document.getElementById('main-text').innerText = data.text;
+    document.getElementById('step-val').innerText = `SEED: ${data.steps}`;
+    
+    // Audio Triggers
+    if (data.audio !== 'NULL') {
+        let harmonics = HARMONY_SETS[data.steps] || [1, 1.5, 2]; // Fallback
+        // Stagger the "plucks" like strumming a harp
+        harmonics.forEach((hRatio, i) => {
+            setTimeout(() => {
+                // Fundamental is 110Hz (A2)
+                playPluck(110 * hRatio, data.audio);
+                playPluck(110 * hRatio * 2, data.audio); // Octave up shimmer
+            }, i * 100); // 100ms stagger
+        });
+    }
+
+    // Advance timer based on narrative beats
+    let duration = 4000; 
+    if(index === 2) duration = 2000; // Snake bite is fast
+    if(index === 8) duration = 1500; // The turn is instant
+    
+    setTimeout(() => {
+        playScene(index + 1);
+    }, duration);
+}
+
+// Start
+document.getElementById('overlay').addEventListener('click', (e) => {
+    e.currentTarget.style.opacity = 0;
+    setTimeout(()=>e.currentTarget.remove(), 2000);
+    resize();
+    animate();
+    playScene(0);
+});
+
+</script>
+</body>
+</html>
