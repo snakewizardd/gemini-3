@@ -1,0 +1,507 @@
+<!-- 
+    PROJECT: BLACKBIRD // MK.II
+    MODE: ACOUSTIC SIMULATION
+    LOGIC: SEQUENTIAL PATTERN MATRIX
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ω // BLACKBIRD // MECHANIZED</title>
+    <style>
+        :root {
+            --void: #050505;
+            --bird: #ffae00; /* Amber */
+            --wing: #ffffff;
+            --string: rgba(255, 255, 255, 0.1);
+            --fret: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            background: var(--void);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        #hud {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-shadow: 0 0 10px black;
+        }
+
+        #measure-display {
+            font-size: 10vw;
+            font-weight: 900;
+            color: transparent;
+            -webkit-text-stroke: 1px var(--bird);
+            opacity: 0.2;
+            transition: all 0.1s;
+            text-transform: uppercase;
+            letter-spacing: -5px;
+        }
+
+        #lyric-display {
+            margin-top: 10px;
+            font-size: 1.2rem;
+            color: var(--wing);
+            text-shadow: 0 0 10px var(--wing);
+            letter-spacing: 3px;
+            text-align: center;
+            min-height: 30px;
+            font-weight: bold;
+        }
+
+        #tab-visual {
+            position: absolute;
+            bottom: 150px;
+            display: flex;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: var(--bird);
+            opacity: 0.7;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 40px;
+            z-index: 20;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            pointer-events: auto;
+            background: rgba(10,10,10,0.9);
+            padding: 15px 30px;
+            border: 1px solid var(--bird);
+            border-radius: 4px;
+        }
+
+        button {
+            background: var(--bird);
+            color: black;
+            border: none;
+            padding: 12px 30px;
+            font-weight: 900;
+            font-size: 1rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px var(--bird);
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: white;
+            box-shadow: 0 0 30px white;
+            transform: scale(1.05);
+        }
+
+        input[type=range] {
+            width: 150px;
+            accent-color: var(--bird);
+        }
+
+        .pulse { animation: pulse 0.2s ease-out; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.2; transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <canvas id="stage"></canvas>
+
+    <div id="hud">
+        <div id="measure-display">WAITING</div>
+        <div id="lyric-display">CPU IDLE // LOAD "BLACKBIRD"</div>
+        <div id="tab-visual"></div>
+    </div>
+
+    <div id="controls">
+        <button onclick="SIM.start()">EXECUTE</button>
+        <div style="display:flex; flex-direction:column; color:var(--bird); font-size:0.7rem; font-weight:bold;">
+            <label>TEMPO</label>
+            <input type="range" min="70" max="110" value="94" oninput="SIM.setBPM(this.value)">
+            <span id="bpm-val">94 BPM</span>
+        </div>
+    </div>
+
+    <script>
+        // ======================================================
+        // 1. ACOUSTIC PHYSICS ENGINE
+        // ======================================================
+        const TUNING = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63]; // Standard E
+        
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            
+            init() {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.4;
+                
+                // Compressor to unify picking levels
+                const comp = this.ctx.createDynamicsCompressor();
+                comp.threshold.value = -20;
+                comp.ratio.value = 4;
+                
+                this.master.connect(comp);
+                comp.connect(this.ctx.destination);
+                
+                return this.ctx.resume();
+            },
+
+            play(stringIdx, fret, time) {
+                if(fret === -1) return;
+                
+                const base = TUNING[stringIdx];
+                const freq = base * Math.pow(2, fret/12);
+                
+                // 1. Transient (Pluck sound)
+                const osc = this.ctx.createOscillator();
+                osc.type = 'triangle'; // Softer than sawtooth
+                osc.frequency.value = freq;
+                
+                // 2. Harmonic (The string metallic buzz)
+                const harmonic = this.ctx.createOscillator();
+                harmonic.type = 'sawtooth';
+                harmonic.frequency.value = freq;
+
+                // Envelopes
+                const g1 = this.ctx.createGain();
+                const g2 = this.ctx.createGain();
+                
+                // Main Body
+                g1.gain.setValueAtTime(0, time);
+                g1.gain.linearRampToValueAtTime(0.5, time + 0.01);
+                g1.gain.exponentialRampToValueAtTime(0.01, time + 1.5); // Short decay
+
+                // Metallic top end
+                g2.gain.setValueAtTime(0, time);
+                g2.gain.linearRampToValueAtTime(0.1, time + 0.01);
+                g2.gain.exponentialRampToValueAtTime(0.001, time + 0.2); // Very short
+
+                osc.connect(g1); g1.connect(this.master);
+                harmonic.connect(g2); g2.connect(this.master);
+
+                osc.start(time); osc.stop(time + 2);
+                harmonic.start(time); harmonic.stop(time + 2);
+
+                Visuals.pluck(stringIdx, 1);
+            }
+        };
+
+        // ======================================================
+        // 2. TAB TRANSCRIPTION (The Logic)
+        // ======================================================
+        // 0=E, 1=A, 2=D, 3=G, 4=B, 5=e
+        // T = beat in the measure (0.0 to X.X)
+        
+        const RIFFS = {
+            // Meas 1: G - Am7 - G/B (3/4)
+            "INTRO_WALK": {
+                beats: 3,
+                notes: [
+                    {s:0, f:3, t:0.0}, {s:4, f:0, t:0.0}, // G
+                    {s:3, f:0, t:0.5},
+                    {s:1, f:0, t:1.0}, {s:4, f:1, t:1.0}, // Am7
+                    {s:3, f:0, t:1.5},
+                    {s:1, f:2, t:2.0}, {s:4, f:3, t:2.0}, // G/B
+                    {s:3, f:0, t:2.5}
+                ]
+            },
+            // Meas 2: High G drone (4/4)
+            "HIGH_G": {
+                beats: 4,
+                notes: [
+                    {s:0, f:3, t:0.0}, // Low G (optional in some tabs, but anchors it)
+                    {s:1, f:10, t:0.0}, {s:4, f:12, t:0.0},
+                    {s:3, f:0, t:0.5},
+                    {s:1, f:10, t:1.0}, {s:4, f:12, t:1.0},
+                    {s:3, f:0, t:1.5},
+                    {s:1, f:10, t:2.0}, {s:4, f:12, t:2.0},
+                    {s:3, f:0, t:2.5},
+                    {s:1, f:10, t:3.0}, {s:4, f:12, t:3.0},
+                    {s:3, f:0, t:3.5}
+                ]
+            },
+            // Meas 5: Broken Wings 1 (C - A7 - D - B7) (4/4)
+            "WINGS_1": {
+                beats: 4,
+                notes: [
+                    {s:1, f:3, t:0.0}, {s:4, f:5, t:0.0}, {s:3, f:0, t:0.5}, // C
+                    {s:1, f:7, t:1.0}, {s:4, f:8, t:1.0}, {s:3, f:0, t:1.5}, // A7
+                    {s:1, f:5, t:2.0}, {s:4, f:7, t:2.0}, {s:3, f:0, t:2.5}, // D
+                    {s:1, f:9, t:3.0}, {s:4, f:10, t:3.0}, {s:3, f:0, t:3.5}  // B7
+                ]
+            },
+            // Meas 6: Broken Wings 2 (Em - Eb) (4/4)
+            "WINGS_2": {
+                beats: 4,
+                notes: [
+                    {s:1, f:7, t:0.0}, {s:4, f:8, t:0.0}, {s:3, f:0, t:0.5}, // Em
+                    {s:1, f:7, t:1.0}, {s:4, f:8, t:1.0}, {s:3, f:0, t:1.5},
+                    {s:1, f:6, t:2.0}, {s:4, f:8, t:2.0}, {s:3, f:0, t:2.5}, // Eb
+                    {s:1, f:6, t:3.0}, {s:4, f:8, t:3.0}, {s:3, f:0, t:3.5}
+                ]
+            },
+            // Meas 7: All Your Life (D - A7 - C - Cm) (3/2 aka 6/4)
+            "LIFE": {
+                beats: 6,
+                notes: [
+                    {s:1, f:5, t:0.0}, {s:4, f:7, t:0.0}, {s:3, f:0, t:0.5}, // D
+                    {s:1, f:7, t:1.0}, {s:4, f:8, t:1.0}, {s:3, f:0, t:1.5}, // A7
+                    {s:1, f:3, t:2.0}, {s:4, f:5, t:2.0}, {s:3, f:0, t:2.5}, // C
+                    {s:1, f:3, t:3.0}, {s:4, f:5, t:3.0}, {s:3, f:0, t:3.5},
+                    {s:1, f:3, t:4.0}, {s:4, f:4, t:4.0}, {s:3, f:0, t:4.5}, // Cm
+                    {s:1, f:3, t:5.0}, {s:4, f:4, t:5.0}, {s:3, f:0, t:5.5}
+                ]
+            },
+            // Meas 8: Waiting (G/B - A7 - Am7 - D7) (4/4)
+            "WAITING": {
+                beats: 4,
+                notes: [
+                    {s:1, f:2, t:0.0}, {s:4, f:3, t:0.0}, {s:3, f:0, t:0.5}, // G/B
+                    {s:1, f:2, t:1.0}, {s:4, f:3, t:1.0}, {s:3, f:0, t:1.5}, 
+                    {s:1, f:0, t:2.0}, {s:4, f:2, t:2.0}, {s:3, f:0, t:2.5}, // A7/Open
+                    {s:1, f:0, t:3.0}, {s:4, f:2, t:3.0}, {s:3, f:0, t:3.5}
+                ]
+            },
+            // Resolution (Am7 - D7 - G)
+            "RESOLVE": {
+                beats: 4,
+                notes: [
+                    {s:2, f:0, t:0.0}, {s:4, f:1, t:0.0}, {s:3, f:0, t:0.5}, // Am7
+                    {s:2, f:0, t:1.0}, {s:4, f:1, t:1.0}, {s:3, f:0, t:1.5},
+                    {s:0, f:3, t:2.0}, {s:4, f:0, t:2.0}, {s:3, f:0, t:2.5}, // G (Low)
+                    {s:1, f:2, t:3.0}, {s:4, f:3, t:3.0} // G/B link
+                ]
+            },
+            // Interlude/Fly (F - Em - Dm - C - Bb - C)
+            "FLY_1": {
+                beats: 4,
+                notes: [
+                    {s:1, f:8, t:0.0}, {s:4, f:10, t:0.0}, {s:3, f:0, t:0.5}, // F
+                    {s:1, f:7, t:1.0}, {s:4, f:8, t:1.0}, {s:3, f:0, t:1.5},  // Em
+                    {s:1, f:5, t:2.0}, {s:4, f:6, t:2.0}, {s:3, f:0, t:2.5},  // Dm
+                    {s:1, f:3, t:3.0}, {s:4, f:5, t:3.0}, {s:3, f:0, t:3.5}   // C
+                ]
+            },
+            "FLY_2": {
+                beats: 4,
+                notes: [
+                    {s:1, f:1, t:0.0}, {s:4, f:3, t:0.0}, {s:3, f:0, t:0.5}, // Bb
+                    {s:1, f:1, t:1.0}, {s:4, f:3, t:1.0}, {s:3, f:0, t:1.5},
+                    {s:1, f:3, t:2.0}, {s:4, f:5, t:2.0}, {s:3, f:0, t:2.5}, // C
+                    {s:1, f:3, t:3.0}, {s:4, f:5, t:3.0}, {s:3, f:0, t:3.5}
+                ]
+            },
+             "FLY_3": {
+                beats: 4,
+                notes: [
+                    {s:1, f:1, t:0.0}, {s:4, f:3, t:0.0}, {s:3, f:0, t:0.5}, // Bb
+                    {s:1, f:1, t:1.0}, {s:4, f:3, t:1.0}, {s:3, f:0, t:1.5},
+                    {s:1, f:0, t:2.0}, {s:4, f:2, t:2.0}, {s:3, f:0, t:2.5}, // A7
+                    {s:1, f:0, t:3.0}, {s:4, f:2, t:3.0}, {s:3, f:0, t:3.5}
+                ]
+            }
+        };
+
+        const SONG_STRUCTURE = [
+            // Intro
+            { r: "INTRO_WALK", l: "" },
+            { r: "HIGH_G", l: "BLACKBIRD SINGING" },
+            { r: "INTRO_WALK", l: "IN THE DEAD" },
+            { r: "HIGH_G", l: "OF NIGHT" },
+            
+            // Verse 1
+            { r: "WINGS_1", l: "TAKE THESE BROKEN WINGS" },
+            { r: "WINGS_2", l: "AND LEARN TO FLY" },
+            { r: "LIFE", l: "ALL YOUR LIFE" },
+            { r: "WAITING", l: "YOU WERE ONLY WAITING" },
+            { r: "RESOLVE", l: "FOR THIS MOMENT TO ARISE" },
+            { r: "HIGH_G", l: "" }, // Interlude
+
+            // Verse 2
+            { r: "INTRO_WALK", l: "BLACKBIRD SINGING" },
+            { r: "HIGH_G", l: "IN THE DEAD OF NIGHT" },
+            { r: "WINGS_1", l: "TAKE THESE SUNKEN EYES" },
+            { r: "WINGS_2", l: "AND LEARN TO SEE" },
+            { r: "LIFE", l: "ALL YOUR LIFE" },
+            { r: "WAITING", l: "YOU WERE ONLY WAITING" },
+            { r: "RESOLVE", l: "FOR THIS MOMENT TO BE FREE" },
+
+            // Fly Section
+            { r: "FLY_1", l: "BLACKBIRD FLY" },
+            { r: "FLY_2", l: "" },
+            { r: "FLY_1", l: "BLACKBIRD FLY" },
+            { r: "FLY_3", l: "INTO THE LIGHT" },
+            { r: "INTRO_WALK", l: "OF A DARK BLACK NIGHT" },
+            { r: "HIGH_G", l: "" }
+        ];
+
+        // ======================================================
+        // 3. SEQUENCER
+        // ======================================================
+        const SIM = {
+            bpm: 94,
+            isPlaying: false,
+            startTime: 0,
+            barIndex: 0,
+            nextBarTime: 0,
+            
+            start() {
+                document.querySelector('button').style.display = 'none';
+                AudioEngine.init().then(() => {
+                    this.isPlaying = true;
+                    this.nextBarTime = AudioEngine.ctx.currentTime + 0.5;
+                    this.barIndex = 0;
+                    this.tick();
+                });
+            },
+
+            setBPM(val) {
+                this.bpm = parseInt(val);
+                document.getElementById('bpm-val').innerText = this.bpm + " BPM";
+            },
+
+            tick() {
+                if(!this.isPlaying) return;
+
+                // Lookahead scheduling
+                if (AudioEngine.ctx.currentTime + 0.1 >= this.nextBarTime) {
+                    this.playBar(this.barIndex);
+                    
+                    // Calculate next bar time
+                    const currentBlock = SONG_STRUCTURE[this.barIndex % SONG_STRUCTURE.length];
+                    const riff = RIFFS[currentBlock.r];
+                    const beats = riff.beats;
+                    const duration = (60 / this.bpm) * beats;
+                    
+                    this.nextBarTime += duration;
+                    this.barIndex = (this.barIndex + 1) % SONG_STRUCTURE.length;
+                }
+
+                requestAnimationFrame(this.tick.bind(this));
+            },
+
+            playBar(idx) {
+                const block = SONG_STRUCTURE[idx % SONG_STRUCTURE.length];
+                const riffName = block.r;
+                const lyric = block.l;
+                const riffData = RIFFS[riffName];
+                const now = this.nextBarTime;
+                const beatLen = 60 / this.bpm;
+
+                // UI
+                document.getElementById('measure-display').innerText = riffName;
+                document.getElementById('measure-display').classList.remove('pulse');
+                void document.getElementById('measure-display').offsetWidth;
+                document.getElementById('measure-display').classList.add('pulse');
+                
+                document.getElementById('lyric-display').innerText = lyric;
+
+                // Schedule Notes
+                riffData.notes.forEach(note => {
+                    AudioEngine.play(note.s, note.f, now + (note.t * beatLen));
+                });
+            }
+        };
+
+        // ======================================================
+        // 4. VISUALS (CYBER-STRINGS)
+        // ======================================================
+        const Visuals = {
+            cvs: document.getElementById('stage'),
+            ctx: document.getElementById('stage').getContext('2d'),
+            strings: [0,0,0,0,0,0],
+            
+            init() {
+                this.resize();
+                window.onresize = () => this.resize();
+                this.loop();
+            },
+            
+            resize() {
+                this.cvs.width = window.innerWidth;
+                this.cvs.height = window.innerHeight;
+            },
+
+            pluck(s, v) {
+                this.strings[s] = 30; // Amplitude
+            },
+
+            loop() {
+                const w = this.cvs.width;
+                const h = this.cvs.height;
+                this.ctx.clearRect(0,0,w,h);
+
+                // Draw Fretboard Lines (Background)
+                for(let i=0; i<12; i++) {
+                    const x = w * (i/12);
+                    this.ctx.fillStyle = 'rgba(255,255,255,0.02)';
+                    this.ctx.fillRect(x, 0, 1, h);
+                }
+
+                const spacing = h / 8;
+                const top = spacing * 1.5;
+
+                for(let i=0; i<6; i++) {
+                    const y = top + (i * spacing);
+                    const amp = this.strings[i];
+                    
+                    this.ctx.beginPath();
+                    
+                    // String Color Logic
+                    if(amp > 1) {
+                        this.ctx.strokeStyle = '#ffae00'; // Amber active
+                        this.ctx.shadowColor = '#ffae00';
+                        this.ctx.shadowBlur = 20;
+                        this.ctx.lineWidth = 3;
+                    } else {
+                        this.ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                        this.ctx.shadowBlur = 0;
+                        this.ctx.lineWidth = 1 + (i*0.3); // Bass strings thicker
+                    }
+
+                    this.ctx.moveTo(0, y);
+                    
+                    // Wave Physics
+                    for(let x=0; x<w; x+=10) {
+                        const freq = 0.02 + (i * 0.01); // Higher strings tighter frequency
+                        const dy = Math.sin(x*freq + Date.now()*0.02) * amp * Math.sin(x/w * Math.PI);
+                        this.ctx.lineTo(x, y + dy);
+                    }
+                    
+                    this.ctx.stroke();
+                    this.strings[i] *= 0.92; // Decay
+                }
+                
+                requestAnimationFrame(() => this.loop());
+            }
+        };
+        Visuals.init();
+
+    </script>
+</body>
+</html>
