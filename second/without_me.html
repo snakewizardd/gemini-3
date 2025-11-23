@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ω // WITHOUT ME // ACCELERATED</title>
+    <style>
+        :root {
+            --void: #080808;
+            --neon: #00f3ff; /* Cyber Blue */
+            --hot: #ff0055;   /* Aggressive Pink */
+            --string: rgba(255, 255, 255, 0.15);
+        }
+
+        body {
+            margin: 0;
+            background: var(--void);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            filter: blur(0.5px) contrast(1.2);
+        }
+
+        #hud {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #chord-display {
+            font-size: 12vw;
+            font-weight: 900;
+            color: transparent;
+            -webkit-text-stroke: 2px var(--string);
+            opacity: 0.3;
+            transition: all 0.1s;
+            text-transform: uppercase;
+        }
+
+        #lyric-display {
+            margin-top: 20px;
+            font-size: 1.5rem;
+            color: var(--neon);
+            text-shadow: 0 0 10px var(--neon);
+            letter-spacing: 2px;
+            text-align: center;
+            min-height: 40px;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 50px;
+            z-index: 20;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            pointer-events: auto;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border: 1px solid var(--neon);
+        }
+
+        button {
+            background: var(--neon);
+            color: black;
+            border: none;
+            padding: 15px 40px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px var(--neon);
+        }
+
+        button:hover {
+            background: white;
+            box-shadow: 0 0 40px white;
+        }
+
+        input[type=range] {
+            width: 200px;
+            accent-color: var(--hot);
+        }
+
+        .flash {
+            animation: flashbang 0.1s ease-out;
+        }
+
+        @keyframes flashbang {
+            0% { -webkit-text-stroke: 4px var(--hot); opacity: 1; transform: scale(1.1); }
+            100% { -webkit-text-stroke: 2px var(--string); opacity: 0.3; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="stage"></canvas>
+
+    <div id="hud">
+        <div id="chord-display">READY</div>
+        <div id="lyric-display">SYSTEM STANDBY // CAPO 4</div>
+    </div>
+
+    <div id="controls">
+        <button onclick="SIM.start()">INITIATE // FASTER</button>
+        <div style="display:flex; flex-direction:column; color:var(--neon); font-size:0.8rem;">
+            <label>TEMPO OVERRIDE</label>
+            <input type="range" min="60" max="120" value="82" oninput="SIM.setBPM(this.value)">
+            <span id="bpm-val">82 BPM</span>
+        </div>
+    </div>
+
+    <script>
+        // ======================================================
+        // 1. THE ARCHITECT'S TUNING (PHYSICS)
+        // ======================================================
+        const TUNING = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63]; // E A D G B E
+        const CAPO = 4;
+
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            reverb: null,
+            
+            init() {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.5;
+
+                // Cyber-Reverb (Infinite Hall)
+                this.reverb = this.ctx.createConvolver();
+                this.reverb.buffer = this.impulse(3.0);
+                
+                this.master.connect(this.ctx.destination);
+                this.master.connect(this.reverb);
+                this.reverb.connect(this.ctx.destination);
+                
+                return this.ctx.resume();
+            },
+
+            impulse(d) {
+                const r = this.ctx.sampleRate;
+                const len = r*d;
+                const b = this.ctx.createBuffer(2, len, r);
+                for(let c=0;c<2;c++){
+                    let d=b.getChannelData(c);
+                    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len, 2);
+                }
+                return b;
+            },
+
+            // The "Pluck" Synthesis
+            play(stringIdx, fret, time, vel=1) {
+                if(fret === -1) return;
+                const t = time;
+                
+                // Pitch Logic
+                const base = TUNING[stringIdx];
+                const semi = CAPO + fret;
+                const freq = base * Math.pow(2, semi/12);
+
+                // 1. Attack (Pick noise)
+                const n = this.ctx.createBufferSource();
+                const nb = this.ctx.createBuffer(1, 1000, this.ctx.sampleRate);
+                const nd = nb.getChannelData(0);
+                for(let i=0;i<1000;i++) nd[i]=Math.random()*2-1;
+                n.buffer = nb;
+                const ng = this.ctx.createGain();
+                ng.gain.value = 0.2 * vel;
+                ng.gain.exponentialRampToValueAtTime(0.01, t+0.02);
+                n.connect(ng); ng.connect(this.master);
+                n.start(t);
+
+                // 2. Sustain (String)
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq;
+                
+                const f = this.ctx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.setValueAtTime(freq*6, t);
+                f.frequency.exponentialRampToValueAtTime(freq, t+0.2); // "Twang" decay
+
+                const g = this.ctx.createGain();
+                g.gain.setValueAtTime(0, t);
+                g.gain.linearRampToValueAtTime(0.4*vel, t+0.005);
+                g.gain.exponentialRampToValueAtTime(0.001, t+2.5);
+
+                osc.connect(f); f.connect(g); g.connect(this.master);
+                osc.start(t); osc.stop(t+3);
+
+                // Visual Trigger
+                Visuals.pluck(stringIdx, vel);
+            }
+        };
+
+        // ======================================================
+        // 2. THE DATA (TAB & CHORDS)
+        // ======================================================
+        
+        // Exact Intro Tab from your request
+        const INTRO_TAB = [
+            // Meas 1: Bm7
+            {s:1, f:2, t:0.0}, {s:2, f:4, t:0.5}, {s:3, f:2, t:1.0}, {s:4, f:3, t:1.5}, {s:5, f:2, t:2.0}, {s:5, f:0, t:2.5},
+            // Meas 2: Dsus2
+            {s:2, f:0, t:4.0}, {s:3, f:2, t:4.5}, {s:4, f:3, t:5.0}, {s:5, f:0, t:5.5},
+            // Meas 3: A
+            {s:1, f:0, t:8.0}, {s:2, f:2, t:8.5}, {s:3, f:2, t:9.0}, {s:4, f:2, t:9.5}, {s:5, f:0, t:10.0}, {s:4, f:3, t:10.5},
+            // Meas 4: G/Em7
+            {s:0, f:3, t:12.0}, {s:1, f:2, t:12.5}, {s:2, f:0, t:13.0}, {s:3, f:0, t:13.5}, {s:4, f:3, t:14.0}, {s:5, f:3, t:14.5}
+        ];
+
+        // Chords for the Loop
+        const CHORDS = {
+            "Bm7":   [-1, 2, 4, 2, 3, 2],
+            "Dsus2": [-1, -1, 0, 2, 3, 0],
+            "A":     [-1, 0, 2, 2, 2, 0],
+            "Em7":   [0, 2, 2, 0, 3, 3],
+            "G":     [3, 2, 0, 0, 3, 3]
+        };
+
+        const LOOP_SEQ = [
+            { c: "Bm7",   l: "Found you when your heart was broke" },
+            { c: "Dsus2", l: "I filled your cup until it overflowed" },
+            { c: "A",     l: "Took it so far to keep you close" },
+            { c: "Em7",   l: "I was afraid to leave you on your own" }
+        ];
+
+        // ======================================================
+        // 3. THE SEQUENCER (THE BRAIN)
+        // ======================================================
+        const SIM = {
+            bpm: 82, // FASTER
+            isPlaying: false,
+            startTime: 0,
+            lookahead: 0.1,
+            nextNoteTime: 0,
+            step: 0,
+            mode: 'INTRO', // INTRO -> LOOP
+            loopIndex: 0,
+
+            start() {
+                document.querySelector('button').style.display = 'none';
+                AudioEngine.init().then(() => {
+                    this.isPlaying = true;
+                    this.nextNoteTime = AudioEngine.ctx.currentTime + 0.1;
+                    this.tick();
+                });
+            },
+
+            setBPM(val) {
+                this.bpm = parseInt(val);
+                document.getElementById('bpm-val').innerText = this.bpm + " BPM";
+            },
+
+            tick() {
+                if(!this.isPlaying) return;
+                const secPerBeat = 60 / this.bpm;
+                const secPerStep = secPerBeat / 4; // 16th notes
+
+                while(this.nextNoteTime < AudioEngine.ctx.currentTime + this.lookahead) {
+                    this.schedule(this.step, this.nextNoteTime);
+                    this.nextNoteTime += secPerStep;
+                    this.step++;
+                }
+                requestAnimationFrame(this.tick.bind(this));
+            },
+
+            schedule(step, time) {
+                // --- INTRO MODE ---
+                if(this.mode === 'INTRO') {
+                    // Convert step to beats (step is 16th, tab 't' is beats)
+                    const beat = step / 4;
+                    
+                    // Find notes in tab that match this beat
+                    const notes = INTRO_TAB.filter(n => Math.abs(n.t - beat) < 0.01);
+                    notes.forEach(n => {
+                        AudioEngine.play(n.s, n.f, time, 1.2);
+                        Visuals.flashChord(beat < 4 ? "Bm7" : beat < 8 ? "Dsus2" : beat < 12 ? "A" : "G");
+                    });
+
+                    if(beat >= 16) {
+                        this.mode = 'LOOP';
+                        this.step = 0; // Reset for loop
+                    }
+                }
+                
+                // --- LOOP MODE (STRUMMING) ---
+                else {
+                    const loopLen = 64; // 4 bars of 16 steps
+                    const localStep = step % 16; // Step within bar
+                    const barIdx = Math.floor((step % loopLen) / 16);
+                    
+                    const data = LOOP_SEQ[barIdx];
+                    const frets = CHORDS[data.c];
+
+                    // UI Update
+                    if(localStep === 0) {
+                        Visuals.flashChord(data.c);
+                        document.getElementById('lyric-display').innerText = data.l;
+                    }
+
+                    // STRUMMING PATTERN (Driving 16ths)
+                    // D . D U . U D U
+                    // 0 . 4 6 . 10 12 14
+                    
+                    if(localStep === 0) this.strum(frets, time, 1.0, 'down'); // BIG DOWN
+                    if(localStep === 4) this.strum(frets, time, 0.7, 'down');
+                    if(localStep === 6) this.strum(frets, time, 0.6, 'up');
+                    if(localStep === 10) this.strum(frets, time, 0.6, 'up');
+                    if(localStep === 12) this.strum(frets, time, 0.8, 'down');
+                    if(localStep === 14) this.strum(frets, time, 0.5, 'up');
+                }
+            },
+
+            strum(frets, time, vel, dir) {
+                // Strum physics: slight delay between strings
+                const speed = 0.03; // Fast strum
+                if(dir === 'down') {
+                    for(let i=0; i<6; i++) {
+                        if(frets[i] !== -1) AudioEngine.play(i, frets[i], time + (i*speed), vel);
+                    }
+                } else {
+                    for(let i=5; i>=0; i--) {
+                        if(frets[i] !== -1) AudioEngine.play(i, frets[i], time + ((5-i)*speed), vel*0.8);
+                    }
+                }
+            }
+        };
+
+        // ======================================================
+        // 4. VISUALS (CYBER-STRINGS)
+        // ======================================================
+        const Visuals = {
+            cvs: document.getElementById('stage'),
+            ctx: document.getElementById('stage').getContext('2d'),
+            strings: [0,0,0,0,0,0],
+            
+            init() {
+                this.resize();
+                window.onresize = () => this.resize();
+                this.loop();
+            },
+            
+            resize() {
+                this.cvs.width = window.innerWidth;
+                this.cvs.height = window.innerHeight;
+            },
+
+            flashChord(txt) {
+                const el = document.getElementById('chord-display');
+                el.innerText = txt;
+                el.classList.remove('flash');
+                void el.offsetWidth; // trigger reflow
+                el.classList.add('flash');
+            },
+
+            pluck(s, v) {
+                this.strings[s] = v * 20;
+            },
+
+            loop() {
+                const w = this.cvs.width;
+                const h = this.cvs.height;
+                this.ctx.clearRect(0,0,w,h);
+
+                const spacing = h / 8;
+                const top = spacing * 1.5;
+
+                for(let i=0; i<6; i++) {
+                    const y = top + (i * spacing);
+                    const amp = this.strings[i];
+                    
+                    this.ctx.beginPath();
+                    
+                    // Color Logic
+                    if(amp > 1) {
+                        this.ctx.strokeStyle = '#00f3ff';
+                        this.ctx.lineWidth = 3;
+                        this.ctx.shadowBlur = 15;
+                        this.ctx.shadowColor = '#00f3ff';
+                    } else {
+                        this.ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                        this.ctx.lineWidth = 1 + (i*0.5); // Thicker low strings
+                        this.ctx.shadowBlur = 0;
+                    }
+
+                    this.ctx.moveTo(0, y);
+                    
+                    // Vibration Physics
+                    for(let x=0; x<w; x+=20) {
+                        const dy = Math.sin(x*0.05 + Date.now()*0.1) * amp * Math.sin(x/w * Math.PI);
+                        this.ctx.lineTo(x, y + dy);
+                    }
+                    
+                    this.ctx.stroke();
+                    this.strings[i] *= 0.9; // Decay
+                }
+                
+                requestAnimationFrame(() => this.loop());
+            }
+        };
+        Visuals.init();
+
+    </script>
+</body>
+</html>
