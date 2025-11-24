@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>THE IRON PSALM // GENERATIVE ENGINE</title>
+<style>
+    :root { --p: #ffaa00; --bg: #08080a; --dim: #332200; }
+    body {
+        margin: 0; background: var(--bg); overflow: hidden;
+        font-family: 'Courier New', monospace; color: var(--p);
+        display: flex; justify-content: center; align-items: center; height: 100vh;
+    }
+    canvas { position: absolute; top: 0; left: 0; z-index: 1; mix-blend-mode: screen; }
+
+    #ui-layer {
+        position: absolute; z-index: 10; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: radial-gradient(circle, transparent 0%, #000 120%);
+    }
+
+    #panel {
+        border: 2px solid var(--p); padding: 40px; background: rgba(8,8,10, 0.9);
+        text-align: center; box-shadow: 0 0 50px rgba(255, 170, 0, 0.2);
+        transition: opacity 0.5s;
+    }
+
+    h1 { font-size: 2.5rem; letter-spacing: 5px; margin: 0 0 10px 0; text-shadow: 0 0 10px var(--p); }
+    .sub { font-size: 0.9rem; color: #886622; margin-bottom: 30px; letter-spacing: 2px; }
+
+    button {
+        background: var(--p); color: #000; font-weight: bold; border: none;
+        padding: 15px 40px; font-size: 1.1rem; cursor: pointer;
+        clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+        transition: 0.2s; letter-spacing: 2px;
+    }
+    button:hover { background: #fff; transform: scale(1.05); box-shadow: 0 0 30px var(--p); }
+
+    #hud {
+        position: absolute; top: 20px; left: 20px; font-size: 12px; z-index: 5; opacity: 0;
+        pointer-events: none; text-shadow: 0 0 5px var(--p);
+    }
+    .hud-row { margin-bottom: 5px; }
+    .val { color: #fff; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="hud-row">SEQUENCE: <span class="val" id="h-seq">INIT</span></div>
+    <div class="hud-row">BPM: <span class="val">138</span></div>
+    <div class="hud-row">TIME: <span class="val" id="h-time">00:00</span></div>
+</div>
+
+<div id="ui-layer">
+    <div id="panel">
+        <h1>THE IRON PSALM</h1>
+        <div class="sub">DAVIDIC HARP // ORPHIC BASS // 138 BPM</div>
+        <button id="btn">EXECUTE PROTOCOL</button>
+    </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: THE IRON PSALM
+ * ENGINE: High-Tempo Generative Step Sequencer
+ * KEY: C Double Harmonic Minor (C, Db, E, F, G, Ab, B) - The "Misheberak" Mode
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+// AUDIO GRAPH
+let ac, master, limiter, delayL, delayR, delayGain;
+let isPlaying = false;
+let startTime = 0;
+
+// CONFIG
+const BPM = 138;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+const STEPS_PER_BAR = 16;
+const TOTAL_BARS = 64; 
+
+// SCALE FREQUENCIES (C Double Harmonic Minor)
+// Low C2 = 65.41 Hz
+const SCALE = [
+    65.41, 69.30, 82.41, 87.31, 98.00, 103.83, 123.47, // Octave 2
+    130.81, 138.59, 164.81, 174.61, 196.00, 207.65, 246.94, // Octave 3
+    261.63, 277.18, 329.63, 349.23, 392.00, 415.30, 493.88, // Octave 4
+    523.25, 554.37, 659.25, 698.46, 783.99, 830.61, 987.77  // Octave 5
+];
+
+// VISUALS STATE
+let kickPulse = 0;
+let particles = [];
+
+// ==================== 1. AUDIO ENGINE ==================== //
+
+async function init() {
+    ac = new AC();
+    await ac.resume();
+
+    // MASTER BUS
+    master = ac.createGain();
+    master.gain.value = 0.5;
+
+    // LIMITER (Safety)
+    limiter = ac.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+
+    // STEREO DELAY (The "Canyon" Effect)
+    const delayIn = ac.createGain(); delayIn.gain.value = 0.3;
+    delayL = ac.createDelay(); delayL.delayTime.value = BEAT * 0.75; // Dotted 8th
+    delayR = ac.createDelay(); delayR.delayTime.value = BEAT * 0.5;  // 8th
+    const delayFb = ac.createGain(); delayFb.gain.value = 0.4;
+    const merger = ac.createChannelMerger(2);
+
+    master.connect(limiter).connect(ac.destination);
+    
+    // Send to Delay
+    master.connect(delayIn);
+    delayIn.connect(delayL); delayIn.connect(delayR);
+    delayL.connect(merger, 0, 0); delayR.connect(merger, 0, 1);
+    delayL.connect(delayFb); delayR.connect(delayFb); delayFb.connect(delayL); delayFb.connect(delayR); // Cross feedback
+    merger.connect(ac.destination);
+}
+
+// INSTRUMENT: SYNTH KICK
+function playKick(t) {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+    
+    g.gain.setValueAtTime(1.2, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    
+    osc.connect(g).connect(limiter); // Direct to limiter to punch through
+    osc.start(t); osc.stop(t + 0.5);
+    
+    // Vis
+    setTimeout(() => { kickPulse = 1.0; }, (t - ac.currentTime)*1000);
+}
+
+// INSTRUMENT: SYNTH SNARE
+function playSnare(t) {
+    const bufSize = ac.sampleRate * 0.2;
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0; i<bufSize; i++) data[i] = (Math.random() * 2 - 1);
+    
+    const noise = ac.createBufferSource();
+    noise.buffer = buf;
+    
+    const filt = ac.createBiquadFilter();
+    filt.type = 'highpass'; filt.frequency.value = 1000;
+    
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.8, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    
+    // Body tone
+    const osc = ac.createOscillator();
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(100, t+0.1);
+    const oscG = ac.createGain();
+    oscG.gain.setValueAtTime(0.5, t);
+    oscG.gain.exponentialRampToValueAtTime(0.001, t+0.1);
+
+    noise.connect(filt).connect(g).connect(master);
+    osc.connect(oscG).connect(master);
+    noise.start(t); osc.start(t); osc.stop(t+0.1);
+}
+
+// INSTRUMENT: HI-HAT
+function playHat(t, open) {
+    const bufSize = ac.sampleRate * (open ? 0.3 : 0.05);
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0; i<bufSize; i++) data[i] = (Math.random() * 2 - 1);
+    
+    const noise = ac.createBufferSource();
+    noise.buffer = buf;
+    
+    const filt = ac.createBiquadFilter();
+    filt.type = 'highpass'; filt.frequency.value = 8000;
+    
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.3 : 0.05));
+    
+    noise.connect(filt).connect(g).connect(master);
+    noise.start(t);
+}
+
+// INSTRUMENT: FM HARP (David)
+// Bright, plucked, metallic
+function playHarp(t, freq, panVal) {
+    const osc = ac.createOscillator(); osc.type = 'triangle';
+    const mod = ac.createOscillator(); mod.type = 'sine';
+    
+    osc.frequency.setValueAtTime(freq, t);
+    mod.frequency.setValueAtTime(freq * 2, t);
+    
+    const modG = ac.createGain();
+    modG.gain.setValueAtTime(freq, t);
+    modG.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+    
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.4, t + 0.01);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+    
+    const pan = ac.createStereoPanner();
+    pan.pan.value = panVal;
+
+    mod.connect(modG).connect(osc.frequency);
+    osc.connect(env).connect(pan).connect(master);
+    
+    osc.start(t); osc.stop(t + 1.5);
+    mod.start(t); mod.stop(t + 1.5);
+    
+    // Vis
+    setTimeout(() => spawnParticle(freq), (t - ac.currentTime)*1000);
+}
+
+// INSTRUMENT: REESE BASS (Orpheus)
+// Deep, detuned saws
+function playBass(t, freq, dur) {
+    const o1 = ac.createOscillator(); o1.type = 'sawtooth';
+    const o2 = ac.createOscillator(); o2.type = 'sawtooth';
+    
+    o1.frequency.value = freq;
+    o2.frequency.value = freq; 
+    o2.detune.value = 15; // The "Reese" Detune
+    
+    const filt = ac.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(300, t);
+    filt.frequency.linearRampToValueAtTime(2000, t + dur); // Filter sweep
+    
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.3, t+0.05);
+    g.gain.linearRampToValueAtTime(0, t+dur);
+
+    o1.connect(filt); o2.connect(filt);
+    filt.connect(g).connect(master);
+    
+    o1.start(t); o1.stop(t+dur);
+    o2.start(t); o2.stop(t+dur);
+}
+
+// ==================== 2. SEQUENCER ==================== //
+
+// Patterns (16 steps)
+const PTN_KICK_A = [1,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0];
+const PTN_KICK_B = [1,0,0,1, 0,0,1,0, 0,0,1,0, 0,1,0,0]; // Drum & Bass feel
+const PTN_SNARE  = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+
+let nextTime = 0;
+let step = 0;
+
+function scheduler() {
+    if(!isPlaying) return;
+    const lookahead = 0.1;
+    while (nextTime < ac.currentTime + lookahead) {
+        runStep(step, nextTime);
+        nextTime += SIXTEENTH;
+        step++;
+    }
+    
+    // UI Update
+    const elapsed = Math.floor(ac.currentTime - startTime);
+    const m = Math.floor(elapsed/60);
+    const s = (elapsed%60).toString().padStart(2,'0');
+    document.getElementById('h-time').innerText = `${m}:${s}`;
+    
+    setTimeout(scheduler, 25);
+}
+
+function runStep(s, t) {
+    const bar = Math.floor(s / 16);
+    const bStep = s % 16;
+    
+    // SECTIONS
+    let section = "INTRO";
+    let intensity = 0; // 0 to 3
+    
+    if (bar >= 4) { section = "BUILD"; intensity = 1; }
+    if (bar >= 12) { section = "ASSAULT"; intensity = 3; } // Full speed
+    if (bar >= 28) { section = "BRIDGE"; intensity = 1; }
+    if (bar >= 36) { section = "CLIMAX"; intensity = 3; }
+    if (bar >= 52) { section = "OUTRO"; intensity = 0; }
+    
+    if(bStep === 0) document.getElementById('h-seq').innerText = `${section} [${bar+1}]`;
+
+    // --- DRUMS ---
+    if (intensity >= 1) {
+        const kPtn = (intensity === 3 && bar % 2 === 1) ? PTN_KICK_B : PTN_KICK_A;
+        if(kPtn[bStep]) playKick(t);
+        if(bar >= 8 && PTN_SNARE[bStep]) playSnare(t);
+        if(bStep % 2 === 0) playHat(t, false); // Closed hats
+        if(intensity === 3 && bStep % 4 === 2) playHat(t, true); // Open hats
+    }
+
+    // --- BASS ---
+    // Root notes following the Double Harmonic Scale
+    // Progression: I (C) -> bII (Db) -> I (C) -> VII (B)
+    let root = SCALE[0]; // C2
+    if(bar % 4 === 1) root = SCALE[1]; // Db2
+    if(bar % 4 === 3) root = SCALE[6] / 2; // B1
+    
+    if (intensity >= 1 && bStep === 0) {
+        // Long bass drone
+        playBass(t, root, BEAT * 2);
+    }
+    if (intensity === 3 && bStep === 8) {
+        // Bass stab mid-measure
+        playBass(t, root * 1.5, BEAT);
+    }
+
+    // --- HARP (ARPEGGIOS) ---
+    // Generative arpeggios based on intensity
+    let noteChance = 0;
+    if(section === "INTRO") noteChance = 0.2;
+    if(intensity === 1) noteChance = 0.5;
+    if(intensity === 3) noteChance = 0.9;
+
+    if (Math.random() < noteChance) {
+        // Which octave?
+        let octOffset = 14; // Start at C4 (Index 14)
+        if (Math.random() > 0.7) octOffset = 21; // C5
+        
+        // Complex Arp Logic
+        // We want to ascend during the first half of bar, descend second half
+        let interval = 0;
+        if (bStep < 8) interval = Math.floor(Math.random() * 5); 
+        else interval = 7 - Math.floor(Math.random() * 5);
+        
+        // Map to scale
+        let noteIdx = octOffset + interval;
+        // Shift depending on chord (Simple shift)
+        if(bar % 4 === 1) noteIdx += 1; // Shift up for Db
+        if(bar % 4 === 3) noteIdx -= 1; // Shift down for B
+        
+        if (SCALE[noteIdx]) {
+            let pan = (bStep / 16) * 2 - 1; // Pan across stereo field left to right over the bar
+            playHarp(t, SCALE[noteIdx], pan);
+        }
+    }
+}
+
+// ==================== 3. VISUAL ENGINE ==================== //
+
+class Particle {
+    constructor(freq) {
+        this.angle = Math.random() * Math.PI * 2;
+        this.dist = 50;
+        this.speed = 2 + Math.random() * 3;
+        // Color based on freq (Low = Red, High = Gold)
+        const hue = freq < 200 ? 0 : 45; 
+        this.color = `hsl(${hue}, 100%, 50%)`;
+        this.size = Math.random() * 3 + 1;
+        this.life = 1.0;
+    }
+    update() {
+        this.dist += this.speed;
+        this.life -= 0.02;
+    }
+    draw(ctx, cx, cy) {
+        const x = cx + Math.cos(this.angle) * this.dist;
+        const y = cy + Math.sin(this.angle) * this.dist;
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.life;
+        ctx.beginPath();
+        ctx.arc(x, y, this.size, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+function spawnParticle(freq) {
+    for(let i=0; i<5; i++) particles.push(new Particle(freq));
+}
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.onresize = initVis;
+
+function draw() {
+    requestAnimationFrame(draw);
+    
+    // Background fade (fast for frantic feel)
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(0,0,w,h);
+    
+    const cx = w/2;
+    const cy = h/2;
+
+    // Kick Pulse (The Void Center)
+    if(kickPulse > 0.01) kickPulse *= 0.9;
+    
+    const r = 50 + (kickPulse * 100);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(255, 170, 0, ${kickPulse})`;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    // Orphic Ring (Rotating)
+    const time = Date.now() * 0.001;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(time);
+    ctx.beginPath();
+    for(let i=0; i<6; i++) {
+        const a = (i/6) * Math.PI*2;
+        ctx.moveTo(Math.cos(a)*150, Math.sin(a)*150);
+        ctx.lineTo(Math.cos(a)*200, Math.sin(a)*200);
+    }
+    ctx.strokeStyle = '#332200';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Particles
+    ctx.globalCompositeOperation = 'lighter';
+    for(let i=particles.length-1; i>=0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw(ctx, cx, cy);
+        if(p.life <= 0) particles.splice(i, 1);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+// ==================== CONTROL ==================== //
+
+initVis();
+draw();
+
+document.getElementById('btn').addEventListener('click', async () => {
+    document.getElementById('panel').style.opacity = 0;
+    document.getElementById('hud').style.opacity = 1;
+    await init();
+    
+    startTime = ac.currentTime;
+    nextTime = ac.currentTime + 0.1;
+    isPlaying = true;
+    
+    scheduler();
+});
+
+</script>
+</body>
+</html>
