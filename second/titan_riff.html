@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TITAN // PERPETUAL MOTION</title>
+<style>
+    :root { --c: #00f0ff; --bg: #050505; --grid: #1a1a2e; --alert: #ff0055; }
+    body {
+        margin: 0; background: var(--bg); overflow: hidden;
+        font-family: 'Consolas', 'Monaco', monospace; color: var(--c);
+        display: flex; justify-content: center; align-items: center; height: 100vh;
+        user-select: none;
+    }
+    canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+
+    /* UI OVERLAY */
+    #ui {
+        position: absolute; z-index: 10; width: 100%; height: 100%;
+        background: radial-gradient(circle, transparent 20%, #000 120%);
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        pointer-events: none;
+    }
+    
+    #terminal {
+        background: rgba(0, 10, 15, 0.95); border: 1px solid var(--c);
+        padding: 40px; width: 400px; pointer-events: auto;
+        box-shadow: 0 0 50px rgba(0, 240, 255, 0.1);
+        text-align: center;
+        transition: opacity 0.5s;
+    }
+
+    h1 { margin: 0; font-size: 32px; letter-spacing: 6px; text-shadow: 0 0 15px var(--c); margin-bottom: 10px; }
+    .status { font-size: 11px; color: #556; margin-bottom: 30px; letter-spacing: 3px; }
+
+    button {
+        width: 100%; background: var(--c); border: none; padding: 20px;
+        color: #000; font-weight: 900; font-size: 16px; letter-spacing: 4px;
+        cursor: pointer; clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+        transition: 0.2s; text-transform: uppercase;
+    }
+    button:hover { background: #fff; box-shadow: 0 0 30px var(--c); transform: scale(1.02); }
+
+    /* HUD ELEMENTS */
+    #hud-top, #hud-btm { position: absolute; width: 90%; display: flex; justify-content: space-between; font-size: 10px; opacity: 0; z-index: 5; transition: opacity 1s; }
+    #hud-top { top: 30px; border-bottom: 1px solid #222; padding-bottom: 10px; }
+    #hud-btm { bottom: 30px; border-top: 1px solid #222; padding-top: 10px; }
+    .bar-container { width: 200px; height: 4px; background: #111; display: inline-block; vertical-align: middle; }
+    .bar-fill { width: 0%; height: 100%; background: var(--alert); transition: width 0.05s; box-shadow: 0 0 10px var(--alert); }
+</style>
+</head>
+<body>
+
+<div id="hud-top">
+    <span>SYS: TITAN_AUDIO_CORE_V2</span>
+    <span>CLOCK: 174.00 BPM</span>
+    <span>STATUS: OPERATIONAL</span>
+</div>
+
+<div id="ui">
+    <div id="terminal">
+        <h1>TITAN</h1>
+        <div class="status">NEUROFUNK SEQUENCE ENGINE</div>
+        <button id="btn">INITIALIZE</button>
+    </div>
+</div>
+
+<div id="hud-btm">
+    <div>GAIN STAGE <div class="bar-container"><div class="bar-fill" id="vol-bar"></div></div></div>
+    <span id="seq-state">AWAITING INPUT</span>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * TITAN // PATCHED
+ * Fixed: Missing note definitions causing crash at Bar 2.
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+// AUDIO GRAPH
+let ac, master, limiter, analyser, distCurve;
+let isPlaying = false;
+let startTime = 0;
+
+// CONSTANTS
+const BPM = 174;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+
+// FREQUENCIES (Expanded to prevent crash)
+const NOTES = {
+    C1: 32.70, Db1: 34.65, D1: 36.71, Eb1: 38.89, E1: 41.20, F1: 43.65, G1: 49.00, A1: 55.00, Bb1: 58.27,
+    C2: 65.41, Db2: 69.30, D2: 73.42, Eb2: 77.78, E2: 82.41, F2: 87.31, G2: 98.00, A2: 110.00, Bb2: 116.54
+};
+
+// ================= AUDIO ENGINE ================= //
+
+async function init() {
+    ac = new AC();
+    await ac.resume();
+
+    // 1. MASTER BUS
+    master = ac.createGain();
+    master.gain.value = 0.5;
+
+    // 2. LIMITER
+    limiter = ac.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+
+    // 3. ANALYSER
+    analyser = ac.createAnalyser();
+    analyser.fftSize = 256; 
+    analyser.smoothingTimeConstant = 0.8;
+
+    // 4. DISTORTION CURVE
+    distCurve = makeDistortionCurve(400); 
+
+    master.connect(limiter).connect(analyser).connect(ac.destination);
+}
+
+// --- INSTRUMENTS ---
+
+function playReese(t, freq, dur, wubSpeed) {
+    // Safety check for frequency
+    if (!freq) freq = NOTES.D1;
+
+    const o1 = ac.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = freq;
+    const o2 = ac.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = freq; o2.detune.value = 15;
+
+    const sub = ac.createOscillator(); sub.type = 'sine'; sub.frequency.value = freq / 2;
+
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 8;
+    
+    // LFO
+    const lfo = ac.createOscillator(); lfo.frequency.value = wubSpeed;
+    const lfoG = ac.createGain(); lfoG.gain.value = 1200;
+    
+    lfo.connect(lfoG).connect(f.frequency);
+    f.frequency.setValueAtTime(300, t); 
+
+    const shaper = ac.createWaveShaper(); shaper.curve = distCurve;
+
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t+0.05);
+    g.gain.linearRampToValueAtTime(0.4, t+dur-0.1);
+    g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+
+    const subG = ac.createGain(); subG.gain.value = 0.5; 
+
+    o1.connect(f); o2.connect(f);
+    f.connect(shaper).connect(g).connect(master);
+    sub.connect(subG).connect(master);
+
+    o1.start(t); o1.stop(t+dur);
+    o2.start(t); o2.stop(t+dur);
+    sub.start(t); sub.stop(t+dur);
+    lfo.start(t); lfo.stop(t+dur);
+}
+
+function playKick(t) {
+    const o = ac.createOscillator();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(40, t+0.1);
+    
+    const g = ac.createGain();
+    g.gain.setValueAtTime(1.0, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.2);
+    
+    const c = ac.createOscillator(); c.type='square';
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(0.3, t);
+    cg.gain.exponentialRampToValueAtTime(0.001, t+0.02);
+
+    o.connect(g).connect(master);
+    c.connect(cg).connect(master);
+    
+    o.start(t); o.stop(t+0.2);
+    c.start(t); c.stop(t+0.02);
+    
+    visKick = 1.0; 
+}
+
+function playSnare(t) {
+    const len = 0.15;
+    const buf = ac.createBuffer(1, ac.sampleRate*len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0; i<d.length; i++) d[i] = Math.random()*2-1;
+    const n = ac.createBufferSource(); n.buffer=buf;
+    
+    const nf = ac.createBiquadFilter(); nf.type='highpass'; nf.frequency.value = 1000;
+    const ng = ac.createGain();
+    ng.gain.setValueAtTime(0.7, t); ng.gain.exponentialRampToValueAtTime(0.001, t+len);
+    
+    const o = ac.createOscillator(); o.frequency.setValueAtTime(250, t); 
+    o.frequency.exponentialRampToValueAtTime(150, t+0.1);
+    const og = ac.createGain(); og.gain.setValueAtTime(0.5, t); og.gain.exponentialRampToValueAtTime(0.001, t+0.1);
+
+    n.connect(nf).connect(ng).connect(master);
+    o.connect(og).connect(master);
+    n.start(t); o.start(t); o.stop(t+0.1);
+    
+    visSnare = 1.0;
+}
+
+function playHat(t) {
+    const len = 0.05;
+    const buf = ac.createBuffer(1, ac.sampleRate*len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0; i<d.length; i++) d[i] = Math.random()*2-1;
+    const n = ac.createBufferSource(); n.buffer=buf;
+    
+    const f = ac.createBiquadFilter(); f.type='highpass'; f.frequency.value = 7000;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t+len);
+    
+    n.connect(f).connect(g).connect(master);
+    n.start(t);
+}
+
+function makeDistortionCurve(amount) {
+    const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+    for (let i = 0; i < n_samples; ++i) {
+        const x = i * 2 / n_samples - 1;
+        curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+
+// ================= SEQUENCER ================= //
+
+let nextTime = 0;
+let step = 0;
+
+function scheduler() {
+    if(!isPlaying) return;
+    const lookahead = 0.1;
+    while(nextTime < ac.currentTime + lookahead) {
+        runStep(step, nextTime);
+        nextTime += SIXTEENTH;
+        step++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function runStep(s, t) {
+    const bar = Math.floor(s / 16);
+    const bStep = s % 16;
+    
+    // Arrangement Logic (Loops every 32 bars)
+    const loopBar = bar % 32;
+    
+    let section = "INTRO";
+    let intensity = 0; // 0=Atmosphere, 1=Build, 2=Drop
+    
+    if (loopBar >= 4) { section = "SEQUENCE START"; intensity = 1; }
+    if (loopBar >= 8) { section = "DROP PHASE A"; intensity = 2; }
+    if (loopBar >= 24) { section = "BRIDGE"; intensity = 0; }
+    
+    // UI Updates
+    if (bStep === 0) {
+        document.getElementById('seq-state').innerText = `${section} // BAR ${bar+1}`;
+        const rootC = intensity === 2 ? '#ff0055' : '#00f0ff';
+        document.documentElement.style.setProperty('--c', rootC);
+        document.documentElement.style.setProperty('--alert', rootC);
+    }
+
+    // --- DRUMS ---
+    if (intensity === 2) {
+        if (bStep === 0) playKick(t);
+        if (bStep === 4) playSnare(t);
+        if (loopBar % 2 === 0) { if(bStep === 10) playKick(t); }
+        else { if(bStep === 11) playKick(t); }
+        if (bStep === 12) playSnare(t);
+        if (bStep % 2 === 0) playHat(t);
+    } 
+    else if (intensity === 1) {
+        if (bStep % 2 === 0) playSnare(t);
+        if (loopBar === 7 && bStep % 1 === 0) playSnare(t);
+    }
+
+    // --- BASS ---
+    if (intensity === 2) {
+        // Pattern: D -> F -> C -> D
+        
+        // Bar 1 & 3 of the 4-bar phrase
+        if (loopBar % 4 === 0 && bStep === 0) playReese(t, NOTES.D2, BEAT*2.5, 3);
+        if (loopBar % 4 === 0 && bStep === 10) playReese(t, NOTES.F2, BEAT, 12);
+        
+        // Bar 2 & 4
+        if (loopBar % 4 === 1 && bStep === 0) playReese(t, NOTES.C2, BEAT*2, 6); // NOW DEFINED
+        if (loopBar % 4 === 1 && bStep === 8) playReese(t, NOTES.D1, BEAT, 2);
+
+        // Fills
+        if (bStep === 14 && Math.random() > 0.5) playReese(t, NOTES.G2, SIXTEENTH*2, 20);
+    } else {
+        // Atmosphere
+        if (bStep === 0 && loopBar % 4 === 0) {
+             playReese(t, NOTES.D1, BEAT*8, 0.5);
+        }
+    }
+}
+
+// ================= VISUALS ================= //
+
+let visKick = 0;
+let visSnare = 0;
+let gridSpeed = 0;
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.onresize = initVis;
+
+function draw() {
+    requestAnimationFrame(draw);
+    ctx.fillStyle = '#020202';
+    ctx.fillRect(0,0,w,h);
+    
+    let bassVal = 0;
+    if(analyser) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        bassVal = data[2]; 
+        document.getElementById('vol-bar').style.width = Math.min(100, (bassVal/255)*100) + "%";
+    }
+
+    visKick *= 0.9;
+    visSnare *= 0.9;
+    gridSpeed += (0.5 + (bassVal / 100)); 
+    const offset = gridSpeed % 200;
+
+    const cx = w/2;
+    const cy = h/2;
+    const shake = visKick * 10;
+    
+    ctx.save();
+    ctx.translate(cx + (Math.random()-0.5)*shake, cy + (Math.random()-0.5)*shake);
+
+    const horizon = -50;
+    const hue = bassVal > 200 ? 340 : 190;
+    
+    // Vertical Grid
+    for(let i=-15; i<=15; i++) {
+        const x = i * 60;
+        ctx.strokeStyle = `hsla(${hue}, 100%, 50%, 0.3)`;
+        ctx.beginPath();
+        ctx.moveTo(x*0.1, horizon);
+        ctx.lineTo(x*6, h);
+        ctx.stroke();
+    }
+    
+    // Horizontal Grid
+    for(let i=0; i<15; i++) {
+        let z = 1000 - ((i * 100 + offset) % 1000);
+        if(z < 10) continue;
+        const scale = 300 / z;
+        const y = horizon + (100 * scale);
+        const lw = 1 + (bassVal/255) * 3;
+        
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = `hsla(${hue}, 100%, ${50 + (visSnare*50)}%, ${0.2 + (1000-z)/2000})`;
+        
+        if(y < h) {
+            ctx.beginPath();
+            ctx.moveTo(-w, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+        }
+    }
+
+    // Sun
+    const sunR = 60 + (bassVal * 0.4);
+    const grad = ctx.createRadialGradient(0, horizon, sunR*0.2, 0, horizon, sunR*2);
+    grad.addColorStop(0, `hsla(${hue}, 100%, 90%, 1)`);
+    grad.addColorStop(0.5, `hsla(${hue}, 100%, 50%, 0.5)`);
+    grad.addColorStop(1, `hsla(${hue}, 100%, 0%, 0)`);
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, horizon, sunR*2, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(0, horizon, sunR * 0.8, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = '#020202';
+    ctx.fillRect(-w, horizon-5, w*2, 10);
+    
+    ctx.restore();
+}
+
+initVis();
+draw();
+
+document.getElementById('btn').addEventListener('click', async () => {
+    document.getElementById('terminal').style.opacity = 0;
+    document.getElementById('terminal').style.pointerEvents = 'none';
+    document.getElementById('hud-top').style.opacity = 1;
+    document.getElementById('hud-btm').style.opacity = 1;
+    
+    await init();
+    
+    isPlaying = true;
+    startTime = ac.currentTime + 0.1;
+    nextTime = startTime;
+    scheduler();
+});
+
+</script>
+</body>
+</html>
