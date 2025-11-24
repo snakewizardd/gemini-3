@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TERMINUS // FULL ARRANGEMENT ENGINE</title>
+<style>
+    :root { --p: #ff3300; --s: #fff; --bg: #050505; }
+    body { 
+        margin: 0; background: var(--bg); overflow: hidden; 
+        font-family: 'Courier New', monospace; color: var(--s);
+        display: flex; justify-content: center; align-items: center; height: 100vh;
+        user-select: none;
+    }
+    canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+    
+    #ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        pointer-events: none;
+    }
+
+    #panel {
+        background: rgba(0,0,0,0.9); padding: 40px; border: 1px solid var(--p);
+        text-align: center; pointer-events: auto; box-shadow: 0 0 100px rgba(255, 51, 0, 0.2);
+        transition: opacity 0.5s;
+    }
+
+    h1 { font-size: 3rem; margin: 0 0 20px 0; letter-spacing: 8px; color: var(--p); text-shadow: 0 0 10px var(--p); }
+    
+    button {
+        background: var(--p); color: #000; border: none; padding: 15px 40px;
+        font-size: 1.2rem; font-weight: 900; letter-spacing: 2px; cursor: pointer;
+        transition: 0.2s; clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+    }
+    button:hover { background: #fff; }
+
+    /* HUD */
+    #hud {
+        position: absolute; top: 20px; left: 20px; z-index: 5;
+        font-size: 12px; opacity: 0; transition: opacity 1s;
+    }
+    .row { display: flex; gap: 20px; margin-bottom: 5px; }
+    .label { color: #666; }
+    .val { color: var(--p); font-weight: bold; }
+
+    /* TIMELINE */
+    #timeline-container {
+        position: absolute; bottom: 40px; left: 10%; width: 80%; height: 2px; background: #333; z-index: 5;
+        opacity: 0; transition: opacity 1s;
+    }
+    #timeline-fill {
+        height: 100%; width: 0%; background: var(--p);
+        box-shadow: 0 0 10px var(--p); position: relative;
+    }
+    #timeline-marker {
+        position: absolute; right: 0; top: -4px; width: 10px; height: 10px; background: #fff; border-radius: 50%;
+    }
+    .marker-label {
+        position: absolute; top: -20px; font-size: 10px; color: #666; transform: translateX(-50%);
+    }
+</style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="row"><span class="label">SECTION:</span><span class="val" id="hud-section">STANDBY</span></div>
+    <div class="row"><span class="label">BAR:</span><span class="val" id="hud-bar">0</span></div>
+    <div class="row"><span class="label">TIME:</span><span class="val" id="hud-time">00:00</span></div>
+</div>
+
+<div id="timeline-container">
+    <div id="timeline-fill"><div id="timeline-marker"></div></div>
+    <!-- Structure Markers -->
+    <div class="marker-label" style="left: 0%">INTRO</div>
+    <div class="marker-label" style="left: 25%">BUILD</div>
+    <div class="marker-label" style="left: 37.5%">DROP</div>
+    <div class="marker-label" style="left: 75%">BRIDGE</div>
+    <div class="marker-label" style="left: 87.5%">OUT</div>
+</div>
+
+<div id="ui-layer">
+    <div id="panel">
+        <h1>TERMINUS</h1>
+        <button id="btn">EXECUTE SEQUENCE</button>
+    </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: TERMINUS
+ * ENGINE: Linear Arrangement Sequencer
+ * BPM: 435 (Previously 174)
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+// AUDIO GRAPH
+let actx, master, limiter, distortion, reverb, analyser;
+let isPlaying = false;
+let startTime = 0;
+
+// CONFIG
+const BPM = 435;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+const TOTAL_BARS = 160; // Full song length
+
+// FREQUENCIES (F Minor)
+const N = { F1: 43.65, Ab1: 51.91, C2: 65.41, F2: 87.31, G2: 98.00, Ab2: 103.83, C3: 130.81, F3: 174.61 };
+
+// === 1. AUDIO ENGINE ===
+
+async function init() {
+    actx = new AC();
+    await actx.resume();
+
+    master = actx.createGain();
+    master.gain.value = 0.6;
+
+    limiter = actx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.ratio.value = 20;
+    
+    distortion = actx.createWaveShaper();
+    distortion.curve = makeDistortionCurve(80);
+    
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 1024;
+
+    master.connect(limiter);
+    limiter.connect(analyser);
+    analyser.connect(actx.destination);
+
+    reverb = await createReverb();
+    reverb.output.connect(master);
+}
+
+function makeDistortionCurve(amount) {
+    const k = amount, n = 44100, curve = new Float32Array(n);
+    for (let i = 0; i < n; ++i) {
+        const x = i * 2 / n - 1;
+        curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+}
+
+async function createReverb() {
+    const len = actx.sampleRate * 3;
+    const b = actx.createBuffer(2, len, actx.sampleRate);
+    for(let c=0;c<2;c++) for(let i=0;i<len;i++) b.getChannelData(c)[i] = (Math.random()*2-1)*Math.pow(1-i/len,3);
+    const c = actx.createConvolver(); c.buffer = b;
+    const i = actx.createGain(); const o = actx.createGain(); o.gain.value = 0.3;
+    i.connect(c); c.connect(o);
+    return {input:i, output:o};
+}
+
+// INSTRUMENTS
+
+// 1. THE NEURO BASS (Reese)
+// Two detuned saws + Modulation + Distortion
+function playReese(t, freq, dur, modSpeed) {
+    const o1 = actx.createOscillator(); o1.type='sawtooth'; o1.frequency.value=freq; o1.detune.value = -12;
+    const o2 = actx.createOscillator(); o2.type='sawtooth'; o2.frequency.value=freq; o2.detune.value = 12;
+    const sub = actx.createOscillator(); sub.type='sine'; sub.frequency.value=freq/2;
+
+    const f = actx.createBiquadFilter(); f.type='lowpass'; f.Q.value = 6;
+    
+    // Filter Modulation (The "Wub")
+    const lfo = actx.createOscillator(); 
+    lfo.frequency.value = modSpeed; // Speed of the wobble
+    const lfoG = actx.createGain(); lfoG.gain.value = 1500; // Depth of wobble
+    lfo.connect(lfoG); lfoG.connect(f.frequency);
+    f.frequency.setValueAtTime(500, t);
+
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.6, t+0.05);
+    g.gain.linearRampToValueAtTime(0, t+dur);
+
+    const subG = actx.createGain(); subG.gain.value=0.6;
+
+    o1.connect(f); o2.connect(f); f.connect(distortion);
+    sub.connect(subG); subG.connect(g); // Sub clean
+    distortion.connect(g); g.connect(master);
+
+    o1.start(t); o1.stop(t+dur);
+    o2.start(t); o2.stop(t+dur);
+    sub.start(t); sub.stop(t+dur);
+    lfo.start(t); lfo.stop(t+dur);
+}
+
+// 2. PUNCH KICK
+function playKick(t) {
+    const o = actx.createOscillator();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(40, t+0.1);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(1, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.2);
+    
+    const c = actx.createOscillator(); c.type='square'; 
+    const cg = actx.createGain(); cg.gain.setValueAtTime(0.2, t); cg.gain.exponentialRampToValueAtTime(0.001, t+0.02);
+
+    o.connect(g); g.connect(master); c.connect(cg); cg.connect(master);
+    o.start(t); o.stop(t+0.2); c.start(t); c.stop(t+0.02);
+    
+    visPulse = 1;
+}
+
+// 3. SNAP SNARE
+function playSnare(t) {
+    const n = actx.createBufferSource();
+    const b = actx.createBuffer(1, actx.sampleRate*0.2, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    n.buffer=b;
+    const f = actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=500;
+    const g = actx.createGain(); g.gain.setValueAtTime(0.8, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.15);
+    
+    const o = actx.createOscillator(); o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(100, t+0.1);
+    const og = actx.createGain(); og.gain.setValueAtTime(0.5, t); og.gain.exponentialRampToValueAtTime(0.001, t+0.1);
+
+    n.connect(f); f.connect(g); g.connect(master); g.connect(reverb.input);
+    o.connect(og); og.connect(master);
+    n.start(t); o.start(t); o.stop(t+0.15);
+}
+
+// 4. HI HATS
+function playHat(t) {
+    const n = actx.createBufferSource();
+    const b = actx.createBuffer(1, actx.sampleRate*0.05, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    n.buffer=b;
+    const f = actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=8000;
+    const g = actx.createGain(); g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.05);
+    n.connect(f); f.connect(g); g.connect(master);
+    n.start(t);
+}
+
+// 5. PADS
+function playPad(t, freq, dur) {
+    const o = actx.createOscillator(); o.type='sawtooth'; o.frequency.value=freq;
+    const f = actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=600;
+    const g = actx.createGain(); 
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.15, t+1); g.gain.linearRampToValueAtTime(0, t+dur);
+    o.connect(f); f.connect(g); g.connect(master); g.connect(reverb.input);
+    o.start(t); o.stop(t+dur);
+}
+
+// === 2. LINEAR SEQUENCER ===
+
+let nextNoteTime = 0.0;
+let currentStep = 0;
+
+function scheduler() {
+    // Sync check: if we are lagging, jump to now
+    if (nextNoteTime < actx.currentTime - 0.2) nextNoteTime = actx.currentTime + 0.1;
+
+    while (nextNoteTime < actx.currentTime + 0.1) {
+        scheduleStep(currentStep, nextNoteTime);
+        nextNoteTime += SIXTEENTH;
+        currentStep++;
+    }
+    
+    // Update UI Time
+    if (isPlaying) {
+        const elapsed = actx.currentTime - startTime;
+        const mins = Math.floor(elapsed/60);
+        const secs = Math.floor(elapsed%60).toString().padStart(2,'0');
+        document.getElementById('hud-time').innerText = `${mins}:${secs}`;
+        setTimeout(scheduler, 25);
+    }
+}
+
+function scheduleStep(step, t) {
+    const bar = Math.floor(step / 16);
+    const stepInBar = step % 16;
+    
+    // --- ARRANGEMENT STRUCTURE ---
+    // 0-32: INTRO (Dark)
+    // 32-48: BUILD (Riser)
+    // 48-80: DROP A (Heavy)
+    // 80-96: BRIDGE (Break)
+    // 96-128: DROP B (Complex)
+    // 128-160: OUTRO
+
+    if (bar >= TOTAL_BARS) {
+        stopSong();
+        return;
+    }
+
+    let section = "INTRO";
+    if(bar >= 32) section = "BUILD UP";
+    if(bar >= 48) section = "DROP A";
+    if(bar >= 80) section = "BRIDGE";
+    if(bar >= 96) section = "DROP B";
+    if(bar >= 128) section = "OUTRO";
+
+    // UI Updates
+    if(stepInBar === 0) {
+        document.getElementById('hud-bar').innerText = bar + 1;
+        document.getElementById('hud-section').innerText = section;
+        const pct = (bar / TOTAL_BARS) * 100;
+        document.getElementById('timeline-fill').style.width = pct + "%";
+    }
+
+    // --- DRUMS ---
+    
+    const isDrop = (section === "DROP A" || section === "DROP B");
+    const isBuild = (section === "BUILD UP");
+    
+    if (isDrop || (isBuild && bar > 40)) {
+        // Neuro Pattern: Kick on 0, Snare on 4 and 12
+        if (stepInBar === 0) playKick(t);
+        if (stepInBar === 4) playSnare(t);
+        // Ghost kick
+        if (stepInBar === 10) playKick(t);
+        if (stepInBar === 12) playSnare(t);
+        
+        // Build Snare Roll
+        if (isBuild && bar >= 46) {
+            if (stepInBar % 2 === 0) playSnare(t);
+        }
+    }
+    
+    // Hi Hats
+    if (section !== "INTRO" && section !== "OUTRO") {
+        if (stepInBar % 2 === 0) playHat(t);
+        if (isDrop && Math.random() > 0.7) playHat(t); // Shuffles
+    }
+
+    // --- BASS ---
+    
+    if (isDrop) {
+        // Call
+        if (stepInBar === 0) playReese(t, N.F1, BEAT * 1.5, 6); // Wobble
+        // Response
+        if (stepInBar === 6) playReese(t, N.F1, BEAT, 12); // Fast wobble
+        // Fill
+        if (stepInBar === 11) playReese(t, N.Ab1, BEAT, 2);
+    } else if (section === "INTRO" || section === "BRIDGE") {
+        // Drone Bass
+        if (stepInBar === 0 && bar % 4 === 0) playReese(t, N.F1, BEAT*16, 0.5); // Slow filter move
+    } else if (isBuild) {
+        // Rising Bass
+        if (stepInBar === 0) playReese(t, N.F1, BEAT, 8);
+    }
+
+    // --- ATMOSPHERE / PADS ---
+    if (section === "INTRO" || section === "BRIDGE" || section === "OUTRO") {
+        if (stepInBar === 0 && bar % 8 === 0) {
+            playPad(t, N.F3, BEAT*32); // Long pad
+            playPad(t, N.C3, BEAT*32);
+        }
+    }
+}
+
+function stopSong() {
+    isPlaying = false;
+    document.getElementById('hud-section').innerText = "COMPLETE";
+    document.getElementById('panel').style.opacity = 1;
+    document.querySelector('h1').innerText = "TERMINATED";
+    document.getElementById('btn').innerText = "RELOAD SYSTEM";
+    document.getElementById('btn').onclick = () => location.reload();
+}
+
+// === 3. VISUALS ===
+
+let visPulse = 0;
+let time = 0;
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+
+function draw() {
+    requestAnimationFrame(draw);
+    
+    // Trails
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.3)';
+    ctx.fillRect(0,0,w,h);
+    
+    visPulse *= 0.9;
+    time += 0.01;
+    
+    const cx = w/2;
+    const cy = h/2;
+    
+    const section = document.getElementById('hud-section').innerText;
+    const isDrop = section.includes("DROP");
+    
+    // Get Frequency Data
+    const freq = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freq);
+    
+    // Draw Tunnel / Spectrum
+    ctx.lineWidth = 2;
+    
+    // Number of shapes
+    const shapes = isDrop ? 20 : 10;
+    
+    for(let i=0; i<shapes; i++) {
+        const z = (time * 2 + i) % shapes; // Movement
+        const size = Math.pow(z, 3) * 5;
+        const alpha = z / shapes;
+        
+        if (size > w * 1.5) continue;
+        
+        ctx.beginPath();
+        
+        // Deform shape based on audio
+        const audioVal = freq[i * 2] / 255;
+        const r = size + (audioVal * 100 * visPulse);
+        
+        // Draw Hexagon
+        for(let j=0; j<6; j++) {
+            const angle = (Math.PI*2/6) * j + (time * 0.5 * (i%2?-1:1));
+            const x = cx + Math.cos(angle) * r;
+            const y = cy + Math.sin(angle) * r;
+            if(j===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        
+        const hue = isDrop ? 0 : 180; // Red vs Cyan
+        ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${alpha})`;
+        ctx.stroke();
+    }
+    
+    // Impact Flash
+    if (visPulse > 0.8) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${visPulse * 0.1})`;
+        ctx.fillRect(0,0,w,h);
+    }
+}
+
+window.onresize = initVis;
+initVis();
+
+document.getElementById('btn').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.innerText = "RUNNING...";
+    document.getElementById('panel').style.opacity = 0;
+    document.getElementById('hud').style.opacity = 1;
+    document.getElementById('timeline-container').style.opacity = 1;
+    
+    await init();
+    startTime = actx.currentTime + 0.1;
+    nextNoteTime = startTime;
+    isPlaying = true;
+    
+    scheduler();
+    draw();
+});
+
+</script>
+</body>
+</html>

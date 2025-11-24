@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>VELOCITY // LIQUID AUDIO ENGINE</title>
+    <style>
+        body { 
+            margin: 0; background: #000; overflow: hidden; 
+            font-family: 'Segoe UI', sans-serif; color: #fff;
+            display: flex; justify-content: center; align-items: center; height: 100vh;
+        }
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+        #overlay {
+            z-index: 10; text-align: center; background: rgba(0,0,0,0.8);
+            padding: 60px; border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(20px); box-shadow: 0 0 50px rgba(0,200,255,0.2);
+            transition: all 0.5s ease;
+        }
+        h1 { 
+            font-weight: 900; letter-spacing: 10px; font-size: 3rem; margin: 0;
+            background: linear-gradient(90deg, #fff, #00f2ff); -webkit-background-clip: text; color: transparent;
+        }
+        p { font-size: 0.9rem; letter-spacing: 3px; color: #aaa; margin-top: 10px; text-transform: uppercase; }
+        button {
+            margin-top: 30px; background: #fff; color: #000; border: none; padding: 15px 40px;
+            font-size: 1rem; font-weight: bold; letter-spacing: 2px; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover { transform: scale(1.05); box-shadow: 0 0 30px #00f2ff; }
+        #status-bar {
+            position: absolute; bottom: 0; left: 0; width: 0%; height: 4px; 
+            background: #00f2ff; z-index: 20; transition: width 0.2s linear;
+        }
+        .hidden { opacity: 0; pointer-events: none; transform: scale(0.9); }
+    </style>
+</head>
+<body>
+
+<div id="status-bar"></div>
+<div id="overlay">
+    <h1>VELOCITY</h1>
+    <p>174 BPM Liquid DnB Engine</p>
+    <button id="btn">INITIATE LAUNCH</button>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: VELOCITY
+ * GENRE: Liquid Drum & Bass
+ * BPM: 174
+ * KEY: F Minor
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+let actx, master, bus, limiter, analyser, reverb;
+let isPlaying = false;
+let startTime = 0;
+
+// CONFIG
+const BPM = 174;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+const TOTAL_BARS = 64;
+
+// FREQUENCIES (F Minor)
+// F, G, Ab, Bb, C, Db, Eb
+const N = {
+    F1: 43.65, Ab1: 51.91, Bb1: 58.27, C1: 65.41, Db1: 69.30, Eb1: 77.78,
+    F2: 87.31, G2: 98.00, Ab2: 103.83, Bb2: 116.54, C2: 130.81, Db2: 138.59, Eb2: 155.56,
+    F3: 174.61, G3: 196.00, Ab3: 207.65, Bb3: 233.08, C3: 261.63, Db3: 277.18, Eb3: 311.13,
+    F4: 349.23, G4: 392.00, Ab4: 415.30, Bb4: 466.16, C4: 523.25, Db4: 554.37, Eb4: 622.25,
+    F5: 698.46, Ab5: 830.61, C5: 1046.50
+};
+
+// PROGRESSION (i - VI - III - VII) -> F minor, Db Major, Ab Major, Eb Major
+const CHORDS = [
+    [N.F3, N.Ab3, N.C4, N.Eb4], // Fm7
+    [N.Db3, N.F3, N.Ab3, N.C4], // DbMaj7
+    [N.Ab3, N.C4, N.Eb4, N.G4], // AbMaj7
+    [N.Eb3, N.G3, N.Bb3, N.Eb4] // Eb
+];
+const BASS_ROOTS = [N.F1, N.Db1, N.Ab1, N.Eb1];
+
+// MELODY
+const MELODY = [
+    {s:0, n:N.C5}, {s:3, n:N.Bb4}, {s:6, n:N.Ab4}, {s:8, n:N.F4}, {s:12, n:N.C5},
+    {s:16, n:N.Db5}, {s:19, n:N.C5}, {s:22, n:N.Ab4}, {s:26, n:N.F4},
+    {s:32, n:N.Eb5}, {s:35, n:N.C5}, {s:38, n:N.Bb4}, {s:42, n:N.Ab4},
+    {s:48, n:N.G4}, {s:51, n:N.Ab4}, {s:54, n:N.Bb4}, {s:58, n:N.C5}
+];
+
+// --- AUDIO ENGINE ---
+
+async function init() {
+    actx = new AC();
+    await actx.resume();
+
+    // Master Bus
+    master = actx.createGain();
+    master.gain.value = 0.55;
+
+    // Dynamics
+    limiter = actx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.1;
+
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.8;
+
+    // Routing
+    master.connect(limiter);
+    limiter.connect(analyser);
+    analyser.connect(actx.destination);
+
+    // FX
+    reverb = await createReverb();
+    reverb.output.connect(master);
+}
+
+async function createReverb() {
+    const len = actx.sampleRate * 2.5;
+    const b = actx.createBuffer(2, len, actx.sampleRate);
+    for(let c=0; c<2; c++){
+        const d = b.getChannelData(c);
+        for(let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3);
+    }
+    const c = actx.createConvolver();
+    c.buffer = b;
+    const i = actx.createGain();
+    const o = actx.createGain();
+    o.gain.value = 0.35;
+    i.connect(c); c.connect(o);
+    return {input:i, output:o};
+}
+
+// INSTRUMENT 1: LIQUID PIANO
+// Bright, compressed, delay-heavy
+function playPiano(t, freq, vel=1) {
+    const o1 = actx.createOscillator(); o1.type = 'triangle'; o1.frequency.value = freq;
+    const o2 = actx.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq;
+    
+    // Attack Noise (Hammer)
+    const n = actx.createBufferSource();
+    const b = actx.createBuffer(1, actx.sampleRate*0.01, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    n.buffer = b;
+
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.4 * vel, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+
+    const f = actx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(800, t);
+    f.frequency.linearRampToValueAtTime(2000, t + 0.05);
+    f.frequency.exponentialRampToValueAtTime(500, t + 1.0);
+
+    o1.connect(f); o2.connect(f); 
+    const ng = actx.createGain(); ng.gain.value=0.1; n.connect(ng); ng.connect(f);
+    f.connect(g);
+    g.connect(master);
+    g.connect(reverb.input);
+
+    // Delay send
+    const del = actx.createDelay(); del.delayTime.value = 3/8 * BEAT; // Dotted 8th
+    const delG = actx.createGain(); delG.gain.value = 0.2;
+    g.connect(del); del.connect(delG); delG.connect(master);
+
+    o1.start(t); o1.stop(t+2);
+    o2.start(t); o2.stop(t+2);
+    n.start(t);
+}
+
+// INSTRUMENT 2: REESE BASS (The Soul of DnB)
+// Two detuned saws + lowpass filter movement
+function playReese(t, freq, dur) {
+    const o1 = actx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = freq; o1.detune.value = -15;
+    const o2 = actx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = freq; o2.detune.value = 15;
+    const sub = actx.createOscillator(); sub.type = 'sine'; sub.frequency.value = freq / 2;
+
+    const f = actx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(100, t);
+    // The "Wobble" movement
+    f.frequency.linearRampToValueAtTime(800, t + dur*0.3); 
+    f.frequency.linearRampToValueAtTime(100, t + dur);
+
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.6, t + 0.1);
+    g.gain.setValueAtTime(0.6, t + dur - 0.1);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+
+    o1.connect(f); o2.connect(f);
+    f.connect(g);
+    
+    // Sub bypasses filter for clean low end
+    const subG = actx.createGain(); subG.gain.value = 0.5;
+    subG.gain.setValueAtTime(0.5, t); subG.gain.linearRampToValueAtTime(0, t+dur);
+    sub.connect(subG); subG.connect(g);
+
+    g.connect(master);
+
+    o1.start(t); o1.stop(t+dur);
+    o2.start(t); o2.stop(t+dur);
+    sub.start(t); sub.stop(t+dur);
+}
+
+// INSTRUMENT 3: DRUMS (Synthesized Breakbeat)
+// Kick
+function playKick(t) {
+    const o = actx.createOscillator();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(50, t+0.1);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(1.0, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.2);
+    
+    // Click
+    const c = actx.createOscillator(); c.type='square';
+    const cg = actx.createGain(); cg.gain.setValueAtTime(0.1, t); cg.gain.exponentialRampToValueAtTime(0.001, t+0.02);
+    
+    o.connect(g); g.connect(master);
+    c.connect(cg); cg.connect(master);
+    o.start(t); o.stop(t+0.2); c.start(t); c.stop(t+0.02);
+    
+    pulseVisuals(1);
+}
+
+// Snare (Tight & snappy)
+function playSnare(t) {
+    const n = actx.createBufferSource();
+    const b = actx.createBuffer(1, actx.sampleRate*0.15, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    n.buffer = b;
+    
+    const f = actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=400;
+    const g = actx.createGain(); g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.15);
+    
+    // Tonal body
+    const o = actx.createOscillator(); o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(100, t+0.1);
+    const og = actx.createGain(); og.gain.setValueAtTime(0.3, t); og.gain.exponentialRampToValueAtTime(0.001, t+0.1);
+
+    n.connect(f); f.connect(g); g.connect(master); g.connect(reverb.input);
+    o.connect(og); og.connect(master);
+    n.start(t); o.start(t); o.stop(t+0.15);
+}
+
+// Hats (Fast shaker)
+function playHat(t, open=false) {
+    const n = actx.createBufferSource();
+    const b = actx.createBuffer(1, actx.sampleRate*0.1, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    n.buffer = b;
+    const f = actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=6000;
+    const g = actx.createGain(); 
+    g.gain.setValueAtTime(open ? 0.2 : 0.08, t); 
+    g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.1 : 0.03));
+    n.connect(f); f.connect(g); g.connect(master);
+    n.start(t);
+}
+
+// INSTRUMENT 4: ATMOSPHERIC PAD
+function playPad(t, chord) {
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.15, t+2);
+    g.gain.setValueAtTime(0.15, t+SIXTEENTH*60);
+    g.gain.linearRampToValueAtTime(0, t+SIXTEENTH*64);
+    
+    const f = actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=600;
+
+    chord.forEach((n, i) => {
+        const o = actx.createOscillator(); o.type='sawtooth'; o.frequency.value=n;
+        o.detune.value = i%2===0 ? 10 : -10;
+        o.connect(f); o.start(t); o.stop(t+SIXTEENTH*64);
+    });
+    f.connect(g); g.connect(master); g.connect(reverb.input);
+}
+
+// --- SEQUENCER ---
+
+let nextTime = 0;
+let step = 0;
+let bar = 0;
+
+function scheduler() {
+    while(nextTime < actx.currentTime + 0.1) {
+        runStep(step, nextTime);
+        nextTime += SIXTEENTH;
+        step++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function runStep(s, t) {
+    const stepInBar = s % 16;
+    if(stepInBar === 0) bar++;
+    
+    const chordIdx = Math.floor((bar % 16) / 4); // Change chord every 4 bars
+    const currentChord = CHORDS[chordIdx];
+    const currentBass = BASS_ROOTS[chordIdx];
+
+    // PHASES
+    const intro = bar <= 8;
+    const build = bar > 8 && bar <= 16;
+    const drop = bar > 16 && bar <= 48;
+    const outro = bar > 48;
+
+    // 1. DRUMS (Amen Break Pattern)
+    // K . . . S . . . . . K . S . . . (Basic skeleton)
+    // Liquid DnB adds shuffles
+    if (drop || (build && bar > 12)) {
+        if(stepInBar === 0) playKick(t);
+        if(stepInBar === 4) playSnare(t); // Beat 2
+        if(stepInBar === 10) playKick(t); // Ghost kick
+        if(stepInBar === 12) playSnare(t); // Beat 4
+        
+        // Shuffles
+        if (Math.random() > 0.7 && stepInBar !== 4 && stepInBar !== 12) playHat(t, false);
+    }
+    // High-speed HiHats
+    if ((drop || build) && s % 2 === 0) playHat(t, false);
+
+    // 2. BASS (The Reese)
+    // Plays long sustained notes in Intro, rhythmic in Drop
+    if (intro || build) {
+        if (stepInBar === 0 && bar % 4 === 1) playReese(t, currentBass, SIXTEENTH*60);
+    }
+    if (drop) {
+        // Rhythmic pulsing bass
+        if (stepInBar === 0) playReese(t, currentBass, SIXTEENTH*6);
+        if (stepInBar === 7) playReese(t, currentBass, SIXTEENTH*4);
+        if (stepInBar === 11) playReese(t, currentBass * 1.5, SIXTEENTH*4); // Fifth up
+    }
+
+    // 3. PIANO MELODY
+    if (intro || drop) {
+        const melNote = MELODY.find(m => m.s === stepInBar);
+        if (melNote && (bar % 4 !== 3)) { // Rest on 4th bar of phrase
+            playPiano(t, melNote.n, 0.8 + Math.random()*0.2);
+        }
+        // Random chord stabs
+        if (stepInBar === 0 && bar % 2 === 0) {
+            playPiano(t, currentChord[0], 0.4);
+            playPiano(t, currentChord[2], 0.4);
+        }
+    }
+
+    // 4. PADS
+    if (intro || (drop && bar > 32)) {
+        if (stepInBar === 0 && bar % 4 === 1) playPad(t, currentChord);
+    }
+
+    // UPDATE UI
+    const pct = (bar / TOTAL_BARS) * 100;
+    document.getElementById('status-bar').style.width = `${pct}%`;
+
+    if (bar > 64) {
+        // Loop
+        step = 16 * 16; // Go back to drop
+        bar = 16;
+    }
+}
+
+// --- VISUALS (HYPERSPACE) ---
+
+let pulse = 0;
+let speed = 2;
+let stars = [];
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+    stars = Array(500).fill().map(() => ({
+        x: Math.random() * w - w/2,
+        y: Math.random() * h - h/2,
+        z: Math.random() * 2000,
+        sz: Math.random() * 2
+    }));
+}
+
+function pulseVisuals(val) { pulse = val; }
+
+function draw() {
+    requestAnimationFrame(draw);
+    
+    // Clear with trail
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(0,0,w,h);
+    
+    pulse *= 0.9;
+    
+    const cx = w/2;
+    const cy = h/2;
+    
+    // Speed up visuals during drop
+    const currentSpeed = (isPlaying && bar > 16) ? 40 : 5;
+    
+    ctx.fillStyle = '#fff';
+    
+    stars.forEach(s => {
+        // Move star towards camera
+        s.z -= currentSpeed + (pulse * 50);
+        
+        if (s.z <= 1) {
+            s.z = 2000;
+            s.x = Math.random() * w - w/2;
+            s.y = Math.random() * h - h/2;
+        }
+        
+        const scale = 300 / s.z;
+        const x2d = cx + s.x * scale;
+        const y2d = cy + s.y * scale;
+        
+        // Draw Star
+        const alpha = Math.min(1, (2000 - s.z) / 1000);
+        const size = s.sz * scale;
+        
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(x2d, y2d, size, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Draw line trails during drop
+        if (isPlaying && bar > 16) {
+            ctx.strokeStyle = `rgba(0, 242, 255, ${alpha * 0.5})`;
+            ctx.lineWidth = size;
+            ctx.beginPath();
+            ctx.moveTo(x2d, y2d);
+            // Previous position approximation
+            const scalePrev = 300 / (s.z + 50);
+            const xPrev = cx + s.x * scalePrev;
+            const yPrev = cy + s.y * scalePrev;
+            ctx.lineTo(xPrev, yPrev);
+            ctx.stroke();
+        }
+    });
+    ctx.globalAlpha = 1;
+
+    // Analyzer Ring
+    if(analyser) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        const bass = data[10];
+        
+        ctx.strokeStyle = `hsl(185, 100%, ${50 + pulse*50}%)`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const r = 100 + (bass * 0.5);
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.stroke();
+        
+        // Glitch text
+        if (pulse > 0.8) {
+            ctx.font = "bold 20px monospace";
+            ctx.fillStyle = "#00f2ff";
+            ctx.fillText("VELOCITY :: " + Math.floor(actx.currentTime), cx - 60, cy + r + 30);
+        }
+    }
+}
+
+window.onresize = initVis;
+initVis();
+
+document.getElementById('btn').addEventListener('click', async (e) => {
+    e.target.innerText = "SEQUENCE RUNNING";
+    document.getElementById('overlay').classList.add('hidden');
+    
+    await init();
+    startTime = actx.currentTime + 0.1;
+    nextTime = startTime;
+    isPlaying = true;
+    scheduler();
+    draw();
+});
+
+</script>
+</body>
+</html>
