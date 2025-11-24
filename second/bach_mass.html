@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BACH // SINGULARITY</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Playfair+Display:ital@1&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Cinzel Decorative', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #d4af37; /* Baroque Gold */
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: contrast(1.3) brightness(1.2) drop-shadow(0 0 15px rgba(212, 175, 55, 0.3));
+        }
+
+        #ui {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.95) 0%, #000 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s ease-out;
+        }
+
+        h1 {
+            font-size: 4rem;
+            letter-spacing: 10px;
+            margin-bottom: 10px;
+            background: linear-gradient(to bottom, #fff, #d4af37);
+            -webkit-background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 50px #d4af37;
+        }
+
+        p {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            color: #886622;
+            font-size: 1.2rem;
+            margin-bottom: 50px;
+            letter-spacing: 2px;
+        }
+
+        button {
+            pointer-events: auto;
+            background: transparent;
+            color: #d4af37;
+            border: 2px solid #d4af37;
+            padding: 25px 80px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: 0.5s;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
+        }
+
+        button:hover {
+            background: #d4af37;
+            color: #000;
+            box-shadow: 0 0 100px #d4af37;
+            transform: scale(1.05);
+        }
+
+        #status {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            font-family: monospace;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+            z-index: 5;
+            letter-spacing: 3px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="cathedral"></canvas>
+
+    <div id="ui">
+        <h1>SYMPHONY NO. Ω</h1>
+        <p>GENERATIVE BAROQUE ENGINE</p>
+        <button id="btn-start">COMMENCE MASS</button>
+    </div>
+
+    <div id="status">WAITING FOR CONDUCTOR</div>
+
+    <script>
+        // --- VISUALS ---
+        const canvas = document.getElementById('cathedral');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        let width, height, cx, cy;
+        let time = 0;
+        let isRunning = false;
+        let organIntensity = 0;
+
+        // PIPES
+        let pipes = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            initPipes();
+        }
+        window.addEventListener('resize', resize);
+
+        class Pipe {
+            constructor(x, w) {
+                this.x = x;
+                this.w = w;
+                this.h = 0;
+                this.targetH = Math.random() * height * 0.5;
+                this.hue = 40 + Math.random() * 10; // Gold range
+            }
+            update(energy) {
+                // React to audio energy
+                const target = (this.targetH * 0.5) + (energy * height * 0.8);
+                this.h += (target - this.h) * 0.1;
+            }
+            draw() {
+                const grad = ctx.createLinearGradient(0, height, 0, height - this.h);
+                grad.addColorStop(0, '#000');
+                grad.addColorStop(0.5, `hsla(${this.hue}, 80%, 30%, 0.8)`);
+                grad.addColorStop(1, `hsla(${this.hue}, 100%, 80%, 0.9)`);
+                
+                ctx.fillStyle = grad;
+                ctx.fillRect(this.x, height - this.h, this.w, this.h);
+                
+                // Shine
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillRect(this.x + this.w*0.2, height - this.h, this.w*0.1, this.h);
+            }
+        }
+
+        function initPipes() {
+            pipes = [];
+            const count = 30;
+            const w = width / count;
+            for(let i=0; i<count; i++) {
+                pipes.push(new Pipe(i*w, w*0.8));
+            }
+        }
+
+        function render() {
+            if (!isRunning) return;
+            requestAnimationFrame(render);
+            time += 0.01;
+
+            // Clear
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Pipes (React to Organ Intensity)
+            organIntensity *= 0.95; // Decay
+            
+            // Mirror effect
+            ctx.save();
+            
+            pipes.forEach((p, i) => {
+                // Calculate "Energy" based on sine waves simulating audio spectrum
+                const wave = Math.abs(Math.sin(time * 5 + i * 0.5));
+                const energy = (organIntensity * 0.8) + (wave * 0.1);
+                p.update(energy);
+                p.draw();
+            });
+
+            // Draw Golden Spiral Overlay
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.1);
+            ctx.strokeStyle = `rgba(255, 215, 0, ${0.1 + organIntensity*0.2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for(let i=0; i<100; i++) {
+                const angle = 0.1 * i;
+                const x = (10 + 5*angle) * Math.cos(angle);
+                const y = (10 + 5*angle) * Math.sin(angle);
+                if(i==0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        /* ------------------------------------------------
+           AUDIO ENGINE: THE BACH PROTOCOL
+           ------------------------------------------------ */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master;
+        
+        // SCALE: D Minor Harmonic (D, E, F, G, A, Bb, C#)
+        // The Key of Toccata and Fugue
+        const SCALE = [
+            146.83, 164.81, 174.61, 196.00, 220.00, 233.08, 277.18, // Octave 3
+            293.66, 329.63, 349.23, 392.00, 440.00, 466.16, 554.37, // Octave 4
+            587.33, 659.25, 698.46, 783.99, 880.00, 932.33, 1108.73 // Octave 5
+        ];
+
+        let nextNoteTime = 0;
+        let beatCount = 0;
+
+        // VOICES
+        const bassLine = [];
+        const melodyLine = [];
+
+        function initAudio() {
+            actx = new AC();
+            master = actx.createGain();
+            master.gain.value = 0.4;
+
+            // CATHEDRAL REVERB
+            const conv = actx.createConvolver();
+            const len = actx.sampleRate * 6; // 6s massive tail
+            const buf = actx.createBuffer(2, len, actx.sampleRate);
+            for(let c=0; c<2; c++) {
+                for(let i=0; i<len; i++) {
+                    buf.getChannelData(c)[i] = (Math.random()*2-1) * Math.pow(1-i/len, 4);
+                }
+            }
+            conv.buffer = buf;
+            
+            master.connect(conv);
+            conv.connect(actx.destination);
+            master.connect(actx.destination);
+
+            // OPENING TOCCATA (The Massive Chord)
+            playOrganChord([146.83/2, 146.83, 220.00, 293.66, 440.00, 554.37]); // Dm Maj7 ish
+            organIntensity = 1.0;
+
+            // START SEQUENCER
+            nextNoteTime = actx.currentTime + 2.0; // Wait for chord to decay slightly
+            
+            // Using setInterval for BULLETPROOF TIMING
+            // 120 BPM = 125ms per 16th note
+            setInterval(tick, 125);
+        }
+
+        function tick() {
+            if(!isRunning) return;
+            
+            // Time check to keep sync
+            const t = actx.currentTime;
+            
+            // Schedule Audio slightly ahead
+            const playTime = t + 0.05;
+
+            // 1. BASS (Walking Bass - Cello/Pedals)
+            // Plays 8th notes
+            if (beatCount % 2 === 0) {
+                playBass(playTime);
+            }
+
+            // 2. MELODY (Harpsichord/Flute - Counterpoint)
+            // Plays 16th notes
+            playMelody(playTime);
+
+            // 3. ORGAN SWELLS (Every 16 beats)
+            if (beatCount % 32 === 0) {
+                // D Minor Chord
+                playOrganChord([146.83/2, 146.83, 174.61, 220.00]);
+                organIntensity = 1.0;
+            }
+
+            beatCount++;
+        }
+
+        /* --- GENERATIVE LOGIC --- */
+        let bassIdx = 0;
+        let melIdx = 7;
+
+        function playBass(t) {
+            // Stepwise motion (Bach Style)
+            const r = Math.random();
+            let move = 0;
+            if (r < 0.4) move = 1;
+            else if (r < 0.8) move = -1;
+            else move = -3; // Drop a fourth (Cadence feel)
+
+            bassIdx += move;
+            if (bassIdx < 0) bassIdx = 2;
+            if (bassIdx > 6) bassIdx = 4;
+
+            // Lower octave for bass
+            const freq = SCALE[bassIdx] / 2; 
+            
+            // Instrument: Sawtooth (Cello/Bassoon)
+            const osc = actx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.4, t + 0.05);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            
+            const f = actx.createBiquadFilter();
+            f.type = 'lowpass';
+            f.frequency.value = 300;
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.6);
+        }
+
+        function playMelody(t) {
+            // Fast Arpeggios (The Harpsichord)
+            const r = Math.random();
+            let move = 0;
+            
+            // Baroque ornamentation logic
+            if (r < 0.3) move = 1;
+            else if (r < 0.6) move = -1;
+            else if (r < 0.8) move = 2; // Skip a third
+            else move = -2;
+
+            melIdx += move;
+            if (melIdx < 7) melIdx = 10;
+            if (melIdx > 18) melIdx = 12;
+
+            const freq = SCALE[melIdx];
+            
+            // Instrument: Square Wave (Harpsichord-ish)
+            const osc = actx.createOscillator();
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.15, t + 0.01); // Pluck
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3); // Short decay
+
+            // Highpass for "Ting"
+            const f = actx.createBiquadFilter();
+            f.type = 'highpass'; f.frequency.value = 500;
+
+            osc.connect(f); f.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.4);
+        }
+
+        function playOrganChord(notes) {
+            const t = actx.currentTime;
+            const g = actx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.3, t + 0.5); // Slow swell
+            g.gain.exponentialRampToValueAtTime(0.001, t + 6.0); // Long hold
+            g.connect(master);
+
+            notes.forEach(freq => {
+                // Stack oscillators for massive sound
+                const osc = actx.createOscillator();
+                osc.type = 'sawtooth'; // Pipes are rich
+                osc.frequency.value = freq;
+                
+                // Detune for realism
+                osc.detune.value = (Math.random()-0.5)*10;
+
+                const f = actx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.value = 1000;
+
+                osc.connect(f); f.connect(g);
+                osc.start(t); osc.stop(t + 6.0);
+            });
+        }
+
+        // BOOT
+        document.getElementById('btn-start').addEventListener('click', () => {
+            const ui = document.getElementById('ui');
+            ui.style.opacity = 0;
+            setTimeout(() => ui.style.display = 'none', 1500);
+            document.getElementById('status').innerText = "FUGUE STATE: ACTIVE";
+            
+            resize();
+            initAudio();
+            if(actx.state === 'suspended') actx.resume();
+            
+            isRunning = true;
+            render();
+        });
+
+        resize();
+
+    </script>
+</body>
+</html>

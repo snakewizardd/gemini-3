@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZIKR // AUDIO PHYSICS</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #110b0b;
+            color: #c9a959;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #console {
+            width: 80%;
+            max-width: 600px;
+            height: 300px;
+            border: 1px solid #332222;
+            background: #000;
+            padding: 20px;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+            font-size: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .log-line { margin-top: 5px; opacity: 0.8; }
+        .log-highlight { color: #ffdd99; font-weight: bold; }
+
+        #btn-init {
+            background: transparent;
+            color: #c9a959;
+            border: 2px solid #c9a959;
+            padding: 20px 50px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        #btn-init:hover {
+            background: #c9a959;
+            color: #110b0b;
+        }
+
+        #bpm-display {
+            margin-top: 20px;
+            font-size: 3rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="console">
+        <div class="log-line">SYSTEM: READY</div>
+        <div class="log-line">AUDIO ENGINE: WAITING FOR INPUT</div>
+    </div>
+
+    <button id="btn-init" onclick="startZikr()">BEGIN CEREMONY</button>
+    <div id="bpm-display">0 BPM</div>
+
+    <script>
+        /* 
+           ================================================================
+           CORE AUDIO ENGINE
+           ================================================================
+        */
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let ctx;
+        let master, reverb;
+        let isRunning = false;
+
+        // STATE VARIABLES
+        let currentTempo = 60; // Starting BPM (Largo)
+        let maxTempo = 900;    // Terminal Velocity (Fana)
+        let nextEventTime = 0;
+        let beatCounter = 0;
+        let intensity = 0;     // 0.0 to 1.0
+
+        // MAKAM HICAZ (Microtonal Scale)
+        // Root: A (110Hz)
+        // Intervals: 1, b2, 3, 4, 5, b6, b7
+        // Ratios approximation for Just Intonation in this mode
+        const ROOT = 110.00;
+        const HICAZ_RATIOS = [1, 1.066, 1.25, 1.333, 1.5, 1.6, 1.875, 2.0];
+        
+        function getFreq(degree, octave) {
+            const ratio = HICAZ_RATIOS[degree % HICAZ_RATIOS.length];
+            const octMult = Math.pow(2, Math.floor(degree / HICAZ_RATIOS.length) + octave);
+            return ROOT * ratio * octMult;
+        }
+
+        // LOGGING UTILITY
+        const consoleEl = document.getElementById('console');
+        function log(msg, type='') {
+            const line = document.createElement('div');
+            line.className = 'log-line ' + type;
+            line.innerText = `[${ctx.currentTime.toFixed(2)}] ${msg}`;
+            consoleEl.prepend(line);
+            if (consoleEl.children.length > 15) consoleEl.lastChild.remove();
+        }
+
+        /* 
+           ================================================================
+           AUDIO GRAPH SETUP
+           ================================================================
+        */
+        async function initAudio() {
+            ctx = new AC();
+            await ctx.resume();
+
+            // MASTER CHAIN
+            master = ctx.createGain();
+            master.gain.value = 0.5;
+
+            // LIMITER (Essential for the crescendo)
+            const limiter = ctx.createDynamicsCompressor();
+            limiter.threshold.value = -5;
+            limiter.ratio.value = 20;
+            limiter.attack.value = 0.001;
+
+            // TEKKE REVERB (Wooden Room Simulation)
+            reverb = ctx.createConvolver();
+            reverb.buffer = createImpulse(2.5, 3.0); // 2.5s duration, fast decay
+
+            master.connect(limiter);
+            limiter.connect(ctx.destination);
+            
+            // Reverb routing
+            const wet = ctx.createGain();
+            wet.gain.value = 0.4;
+            master.connect(wet);
+            wet.connect(reverb);
+            reverb.connect(ctx.destination);
+
+            log("AUDIO GRAPH CONSTRUCTED", "log-highlight");
+        }
+
+        function createImpulse(duration, decay) {
+            const rate = ctx.sampleRate;
+            const len = rate * duration;
+            const buffer = ctx.createBuffer(2, len, rate);
+            for (let c = 0; c < 2; c++) {
+                const d = buffer.getChannelData(c);
+                for (let i = 0; i < len; i++) {
+                    // Pink noise decay
+                    const white = Math.random() * 2 - 1;
+                    d[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = d[i];
+                    d[i] *= Math.pow(1 - i / len, decay);
+                }
+            }
+            return buffer;
+        }
+        let lastOut = 0;
+
+        /* 
+           ================================================================
+           INSTRUMENTS (PROCEDURAL)
+           ================================================================
+        */
+
+        // 1. THE BREATH ("HU")
+        // Uses filtered noise to simulate human exhalation/chanting
+        function playBreath(t, velocity) {
+            const noise = ctx.createBufferSource();
+            const bSize = ctx.sampleRate * 0.5; // 500ms breath
+            const bBuf = ctx.createBuffer(1, bSize, ctx.sampleRate);
+            const data = bBuf.getChannelData(0);
+            for(let i=0; i<bSize; i++) data[i] = Math.random() * 2 - 1;
+            noise.buffer = bBuf;
+
+            // Formant Filters (Vocal Tract)
+            // F1: ~500Hz, F2: ~1000Hz for "Uh/Oh" sound
+            const f1 = ctx.createBiquadFilter();
+            f1.type = 'bandpass'; f1.frequency.value = 400; f1.Q.value = 4;
+            
+            const f2 = ctx.createBiquadFilter();
+            f2.type = 'bandpass'; f2.frequency.value = 900; f2.Q.value = 6;
+
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.4 * velocity, t + 0.1);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+            // Wide stereo spread
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (Math.random() * 2) - 1;
+
+            noise.connect(f1); f1.connect(g);
+            noise.connect(f2); f2.connect(g);
+            g.connect(pan); pan.connect(master);
+
+            noise.start(t);
+        }
+
+        // 2. THE NEY (Reed Flute)
+        // Complex FM synthesis to simulate breath pressure and harmonics
+        function playNeyNote(t, freq, dur) {
+            const osc = ctx.createOscillator();
+            const mod = ctx.createOscillator(); // Vibrato/Breath modulation
+            const modG = ctx.createGain();
+            const g = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+
+            osc.type = 'sawtooth'; // Rich harmonics
+            osc.frequency.value = freq;
+
+            mod.type = 'sine';
+            mod.frequency.value = 6; // Fast vibrato
+            modG.gain.value = 5; // Depth
+
+            mod.connect(modG);
+            modG.connect(osc.frequency);
+
+            // Lowpass to soften the saw into a flute
+            filter.type = 'lowpass';
+            filter.frequency.value = freq * 2;
+            filter.Q.value = 2;
+
+            // Breath attack envelope
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(0.2, t + 0.1); // Breath in
+            g.gain.setValueAtTime(0.15, t + dur - 0.1);
+            g.gain.linearRampToValueAtTime(0, t + dur);
+
+            // Portamento/Glide (The soul of the Ney)
+            // If intensity is high, glide pitch up slightly
+            if (intensity > 0.5) {
+                osc.frequency.exponentialRampToValueAtTime(freq * 1.02, t + dur);
+            }
+
+            osc.connect(filter);
+            filter.connect(g);
+            g.connect(master);
+            g.connect(reverb); // Ney needs lots of space
+
+            osc.start(t); mod.start(t);
+            osc.stop(t + dur); mod.stop(t + dur);
+        }
+
+        // 3. THE KUDÜM (Small Drum)
+        function playDrum(t, type) {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            
+            if (type === 'DUM') { // Bass tone
+                osc.frequency.setValueAtTime(80, t);
+                osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+                g.gain.setValueAtTime(0.6, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            } else { // TEK (High snap)
+                osc.frequency.setValueAtTime(250, t);
+                osc.frequency.exponentialRampToValueAtTime(150, t + 0.05);
+                g.gain.setValueAtTime(0.3, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            }
+
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.2);
+        }
+
+        /* 
+           ================================================================
+           THE ALGORITHMIC CONDUCTOR (THE SHEIKH)
+           ================================================================
+        */
+        
+        function schedule() {
+            // Recursive loop
+            // Instead of fixed setInterval, we calculate the next beat time based on CURRENT tempo
+            // This allows smooth acceleration.
+            
+            const secondsPerBeat = 60.0 / currentTempo;
+            const lookahead = 0.1;
+
+            while (nextEventTime < ctx.currentTime + lookahead) {
+                processBeat(nextEventTime, beatCounter);
+                
+                // ACCELERATION LOGIC
+                // Tempo increases by 0.2% every beat
+                if (currentTempo < maxTempo) {
+                    currentTempo *= 1.002;
+                    intensity = (currentTempo - 60) / (maxTempo - 60);
+                }
+
+                // Advance time
+                nextEventTime += secondsPerBeat;
+                beatCounter++;
+                
+                // Update UI
+                if (beatCounter % 4 === 0) {
+                    document.getElementById('bpm-display').innerText = Math.floor(currentTempo) + " BPM";
+                }
+            }
+            
+            if (isRunning) requestAnimationFrame(schedule);
+        }
+
+        function processBeat(t, beat) {
+            // RHYTHM STRUCTURE (4/4 for simplicity, accelerating)
+            // 1. THE ZIKR (CHANT)
+            // On every beat: "HU"
+            playBreath(t, 0.5 + (intensity * 0.5));
+
+            // 2. THE DRUMS (USUL)
+            // DUM - TEK - - TEK
+            const step = beat % 4;
+            if (step === 0) playDrum(t, 'DUM');
+            if (step === 2) playDrum(t, 'TEK');
+            if (step === 3) playDrum(t, 'TEK');
+
+            // 3. THE NEY (MELODY)
+            // Procedural Improvisation
+            // Only plays sparse phrases at first, becomes frantic later
+            const density = 0.2 + (intensity * 0.6);
+            
+            if (Math.random() < density && step === 0) {
+                const dur = (60/currentTempo) * (Math.floor(Math.random()*3)+1);
+                
+                // Select note from Hicaz scale based on intensity
+                // Low intensity = Lower register. High = Higher register.
+                const baseOctave = 2 + Math.floor(intensity * 2);
+                const degree = Math.floor(Math.random() * 8); 
+                const freq = getFreq(degree, baseOctave);
+                
+                playNeyNote(t, freq, dur);
+                
+                log(`NEY IMPROVISATION: ${freq.toFixed(1)}Hz`, "log-highlight");
+            }
+
+            // 4. THE COLLAPSE (Termination)
+            if (currentTempo >= maxTempo) {
+                isRunning = false;
+                finishCeremony(t);
+            }
+        }
+
+        function finishCeremony(t) {
+            log("MAXIMUM VELOCITY REACHED. SILENCE.", "log-highlight");
+            document.getElementById('bpm-display').innerText = "∞";
+            document.getElementById('bpm-display').style.color = "#fff";
+            
+            // Final massive reverb wash
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.value = ROOT;
+            g.gain.setValueAtTime(0.5, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 10);
+            
+            osc.connect(g); g.connect(reverb); // Pure wet signal
+            osc.start(t); osc.stop(t + 10);
+            
+            setTimeout(() => {
+                document.getElementById('btn-init').style.display = 'block';
+                document.getElementById('btn-init').innerText = "RESET";
+            }, 5000);
+        }
+
+        /* 
+           ================================================================
+           INITIALIZATION
+           ================================================================
+        */
+        async function startZikr() {
+            const btn = document.getElementById('btn-init');
+            btn.style.display = 'none';
+            
+            if (!ctx) await initAudio();
+            if (ctx.state === 'suspended') await ctx.resume();
+
+            // Reset State
+            currentTempo = 60;
+            nextEventTime = ctx.currentTime + 0.1;
+            beatCounter = 0;
+            intensity = 0;
+            isRunning = true;
+
+            log("INTENTION SET. BEGINNING ROTATION.");
+            schedule();
+        }
+
+    </script>
+</body>
+</html>
