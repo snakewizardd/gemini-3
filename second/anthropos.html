@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ANTHROPOS // THE CURE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@300&display=swap');
+code
+Code
+:root {
+        --bg: #050404;
+        --gold: #eeb;
+        --rose: #c77;
+        --glass: rgba(255, 255, 255, 0.05);
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Lato', sans-serif;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    canvas {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #ui {
+        position: absolute;
+        z-index: 10;
+        width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: radial-gradient(circle, transparent 0%, var(--bg) 90%);
+        transition: opacity 3s ease-in-out;
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif;
+        font-size: 3rem;
+        letter-spacing: 1rem;
+        color: var(--gold);
+        text-shadow: 0 0 30px rgba(238, 200, 150, 0.2);
+        margin-bottom: 10px;
+        font-weight: 400;
+    }
+
+    p {
+        letter-spacing: 0.3rem;
+        color: #866;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+    }
+
+    .hidden { opacity: 0 !important; pointer-events: none; }
+
+</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+
+<div id="ui">
+    <h1>ANTHROPOS</h1>
+    <p>Click to weave the network</p>
+</div>
+
+<script>
+    /**
+     * PROJECT: ANTHROPOS
+     * GOAL: A Symphony to Cure Misanthropy
+     * MECHANISM: Consonant Harmony & Visual Connection Algorithms (Indra's Net)
+     * SCALE: Eb Lydian (The Heroic/Hopeful Mode)
+     */
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+
+    // --- AUDIO CONTEXT ---
+    const AC = window.AudioContext || window.webkitAudioContext;
+    let actx, master, reverb, limiter;
+    let isRunning = false;
+    let startTime = 0;
+
+    // --- HARMONIC THEORY ---
+    // Just Intonation approximate for Eb Lydian
+    // Eb, F, G, A, Bb, C, D
+    const BASE_FREQ = 155.56; // Eb3
+    const RATIOS = [1, 9/8, 5/4, 45/32, 3/2, 5/3, 15/8, 2];
+    
+    // Generate Scale across octaves
+    const SCALE = [];
+    [0.5, 1, 2, 4].forEach(mult => {
+        RATIOS.forEach(r => SCALE.push(BASE_FREQ * r * mult));
+    });
+
+    // Progression: I -> V -> vi -> IV (The "Connection" progression)
+    // Eb Maj -> Bb Maj -> C min -> Ab Maj
+    const CHORDS = [
+        [0, 2, 4],    // I (Eb, G, Bb)
+        [4, 6, 1],    // V (Bb, D, F)
+        [5, 0, 2],    // vi (C, Eb, G)
+        [3, 5, 0]     // IV (Ab, C, Eb) -- Using Lydian A natural usually, but here sticking to major feel
+    ];
+    // Adjusting index mapping for Scale array:
+    // Root starts at index 8 (Eb3)
+    const CHORD_INDICES = [
+        [8, 10, 12, 15], // Eb Maj7
+        [12, 14, 16, 19],// Bb Maj
+        [13, 15, 17, 20],// C min7
+        [11, 13, 15, 18] // F/Ab Lydian feel
+    ];
+
+    // --- AUDIO ENGINE ---
+
+    async function initAudio() {
+        actx = new AC();
+        
+        master = actx.createGain();
+        master.gain.value = 0.4;
+
+        // 1. Limiter (Soft knee for warmth)
+        limiter = actx.createDynamicsCompressor();
+        limiter.threshold.value = -10;
+        limiter.knee.value = 10;
+        limiter.ratio.value = 12;
+        
+        // 2. The Great Hall (Reverb)
+        reverb = actx.createConvolver();
+        reverb.buffer = await createImpulse(5.0); // 5 seconds tail
+
+        master.connect(limiter).connect(actx.destination);
+        
+        // Wet/Dry Mix implicit in wiring instruments
+    }
+
+    // Procedural Impulse Response (The "Space")
+    async function createImpulse(seconds) {
+        const rate = actx.sampleRate;
+        const len = rate * seconds;
+        const buf = actx.createBuffer(2, len, rate);
+        for(let c=0; c<2; c++){
+            const d = buf.getChannelData(c);
+            for(let i=0; i<len; i++){
+                // Pink noise decay
+                const t = i/len;
+                d[i] = (Math.random()*2-1) * Math.pow(1-t, 2.5) * 0.5;
+            }
+        }
+        return buf;
+    }
+
+    // INSTRUMENT: THE HUMAN CHOIR (Formant Synthesis)
+    // Simulates "Ooo" transitioning to "Aaa"
+    function playVoice(freq, dur, vel, panVal) {
+        const t = actx.currentTime;
+        
+        // Source
+        const osc = actx.createOscillator();
+        osc.type = 'sawtooth'; // Rich harmonics
+        osc.frequency.value = freq;
+
+        // Humanizing Vibrato
+        const vib = actx.createOscillator();
+        vib.frequency.value = 4.5 + Math.random(); 
+        const vibG = actx.createGain();
+        vibG.gain.value = freq * 0.015;
+        vib.connect(vibG).connect(osc.frequency);
+        vib.start(t);
+
+        // Formant Filters (The Throat)
+        // Parallel bandpass filters at specific frequencies
+        const f1 = actx.createBiquadFilter(); f1.type = 'bandpass'; f1.Q.value = 1;
+        const f2 = actx.createBiquadFilter(); f2.type = 'bandpass'; f2.Q.value = 1;
+        
+        // Glide from 'O' (low formants) to 'A' (higher)
+        f1.frequency.setValueAtTime(400, t);
+        f1.frequency.linearRampToValueAtTime(700, t + dur*0.6);
+        
+        f2.frequency.setValueAtTime(800, t);
+        f2.frequency.linearRampToValueAtTime(1200, t + dur*0.6);
+
+        // Envelopes
+        const env = actx.createGain();
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vel * 0.2, t + dur*0.2); // Slow breathe in
+        env.gain.linearRampToValueAtTime(vel * 0.15, t + dur*0.8); // Sustain
+        env.gain.exponentialRampToValueAtTime(0.001, t + dur + 2.0); // Release
+
+        // Panning
+        const panner = actx.createStereoPanner();
+        panner.pan.value = panVal;
+
+        // Routing
+        osc.connect(f1); f1.connect(env);
+        osc.connect(f2); f2.connect(env);
+        env.connect(panner);
+        panner.connect(master);
+        panner.connect(reverb); // Send to hall
+
+        osc.start(t);
+        osc.stop(t + dur + 2.0);
+        vib.stop(t + dur + 2.0);
+    }
+
+    // INSTRUMENT: STRING SECTION (Warm Saw)
+    function playStrings(freq, dur, vel) {
+        const t = actx.currentTime;
+        const osc = actx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        
+        // Slight Detune for Ensemble effect
+        const osc2 = actx.createOscillator();
+        osc2.type = 'sawtooth';
+        osc2.frequency.value = freq;
+        osc2.detune.value = 8; 
+
+        const filter = actx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800; 
+
+        const env = actx.createGain();
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vel * 0.1, t + 1.0); // Very slow attack
+        env.gain.exponentialRampToValueAtTime(0.001, t + dur + 3.0);
+
+        osc.connect(filter); osc2.connect(filter);
+        filter.connect(env);
+        env.connect(reverb); // Only wet
+        env.connect(master);
+
+        osc.start(t); osc2.start(t);
+        osc.stop(t + dur + 3.0); osc2.stop(t + dur + 3.0);
+    }
+
+    // --- VISUAL ENGINE: INDRA'S NET ---
+    // Nodes representing individuals, lines representing connection
+    
+    let nodes = [];
+    const CONNECTION_DIST = 200;
+    let globalIntensity = 0;
+
+    class Node {
+        constructor() {
+            this.x = Math.random() * w;
+            this.y = Math.random() * h;
+            this.vx = (Math.random() - 0.5) * 0.5;
+            this.vy = (Math.random() - 0.5) * 0.5;
+            this.hue = Math.random() * 40 + 30; // Gold/Amber
+            this.size = Math.random() * 2 + 1;
+            this.active = 0; // Reaction to sound
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+
+            if(this.x < 0 || this.x > w) this.vx *= -1;
+            if(this.y < 0 || this.y > h) this.vy *= -1;
+            
+            if(this.active > 0) this.active *= 0.95;
+        }
+
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size + this.active*5, 0, Math.PI*2);
+            ctx.fillStyle = `hsla(${this.hue}, 80%, 60%, ${0.5 + this.active})`;
+            ctx.fill();
+        }
+    }
+
+    function initVis() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+        
+        // Create the "People"
+        for(let i=0; i<80; i++) nodes.push(new Node());
+    }
+
+    function animate() {
+        if(!isRunning) return;
+        requestAnimationFrame(animate);
+
+        // Fade background (Trails)
+        ctx.fillStyle = 'rgba(5, 4, 4, 0.1)';
+        ctx.fillRect(0, 0, w, h);
+
+        globalIntensity *= 0.99;
+
+        // Update & Draw Nodes
+        nodes.forEach(node => node.update());
+
+        // Draw Connections (The Cure)
+        ctx.lineWidth = 0.5;
+        for(let i=0; i<nodes.length; i++) {
+            const n1 = nodes[i];
+            
+            for(let j=i+1; j<nodes.length; j++) {
+                const n2 = nodes[j];
+                const dx = n1.x - n2.x;
+                const dy = n1.y - n2.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                // The closer they are, or higher the music intensity, the stronger the link
+                const reach = CONNECTION_DIST + (globalIntensity * 200);
+
+                if(dist < reach) {
+                    const alpha = 1 - (dist / reach);
+                    ctx.strokeStyle = `rgba(238, 187, 85, ${alpha * 0.4})`;
+                    ctx.beginPath();
+                    ctx.moveTo(n1.x, n1.y);
+                    ctx.lineTo(n2.x, n2.y);
+                    ctx.stroke();
+                }
+            }
+            n1.draw();
+        }
+    }
+
+    function pulseVisuals() {
+        globalIntensity = 1.0;
+        // Randomly excite nodes
+        nodes.forEach(n => {
+            if(Math.random() > 0.7) n.active = 1.0;
+        });
+    }
+
+    // --- THE CONDUCTOR ---
+
+    function conduct() {
+        const now = actx.currentTime;
+        const elapsed = now - startTime;
+        
+        // Tempo: 60 BPM (Largo) -> building to 90 BPM
+        const phraseLen = 8; 
+        
+        // Structure based on time
+        const chordIdx = Math.floor(elapsed / phraseLen) % CHORDS.length;
+        const notes = CHORD_INDICES[chordIdx];
+
+        // 1. The Foundation (Cellos/Bass) - Every phrase
+        // Play root notes
+        playStrings(SCALE[notes[0]-7], phraseLen, 0.8); // Root octave down
+        
+        // 2. The Choir (Mid range) - Staggered
+        notes.forEach((idx, i) => {
+            // Delay entry of voices for Arpeggiated Chord feel
+            const delay = Math.random() * 2;
+            setTimeout(() => {
+                // Scale pan based on interval
+                const pan = (i / notes.length) * 2 - 1;
+                playVoice(SCALE[idx], phraseLen * 0.8, 0.6, pan);
+            }, delay * 1000);
+        });
+
+        // 3. The Melody (High Strings/Soprano)
+        // Procedural melody walking up the scale
+        const melodyCount = 4;
+        for(let i=0; i<melodyCount; i++) {
+            setTimeout(() => {
+                const note = SCALE[notes[Math.floor(Math.random()*notes.length)] + 7]; // High octave
+                playVoice(note, 2.0, 0.4, Math.random()*2-1);
+            }, (i * (phraseLen/melodyCount) * 1000));
+        }
+
+        pulseVisuals();
+
+        // Next Measure
+        setTimeout(conduct, phraseLen * 1000);
+    }
+
+    // --- INITIALIZATION ---
+
+    document.body.addEventListener('click', async () => {
+        const ui = document.getElementById('ui');
+        if(ui.classList.contains('hidden')) return;
+        ui.classList.add('hidden');
+
+        await initAudio();
+        initVis();
+        window.addEventListener('resize', initVis);
+
+        if(actx.state === 'suspended') await actx.resume();
+        
+        isRunning = true;
+        startTime = actx.currentTime;
+        
+        // Start Loop
+        conduct();
+        animate();
+    });
+
+</script>
+</body>
+</html>
