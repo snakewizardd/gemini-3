@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PROJECT: SINGULARITY // GENERATIVE AGI AUDIO</title>
+    <style>
+        body { 
+            margin: 0; background: #000; overflow: hidden; 
+            font-family: 'Consolas', 'Monaco', monospace; color: #0f0;
+            cursor: crosshair;
+        }
+        canvas { display: block; }
+        #terminal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92); z-index: 10;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 1s ease-in-out;
+        }
+        .glitch {
+            font-size: 4rem; font-weight: bold; position: relative;
+            text-shadow: 2px 2px 0px #f00, -2px -2px 0px #00f;
+            animation: glitch 1s infinite alternate;
+        }
+        @keyframes glitch {
+            0% { transform: skew(0deg); }
+            20% { transform: skew(-10deg); filter: hue-rotate(90deg); }
+            40% { transform: skew(10deg); }
+            100% { transform: skew(0deg); }
+        }
+        button {
+            margin-top: 30px; background: transparent; color: #0f0;
+            border: 2px solid #0f0; padding: 15px 40px; font-family: inherit;
+            font-size: 1.2rem; cursor: pointer; text-transform: uppercase;
+            box-shadow: 0 0 15px #0f0; transition: all 0.2s;
+        }
+        button:hover { background: #0f0; color: #000; box-shadow: 0 0 50px #0f0; }
+        #console {
+            position: absolute; bottom: 20px; left: 20px; 
+            font-size: 0.8rem; pointer-events: none; opacity: 0.8;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+<div id="terminal">
+    <div class="glitch">SINGULARITY</div>
+    <div style="margin-top: 10px; letter-spacing: 5px; font-size: 0.8rem;">EUCLIDEAN ALGORITHMS DETECTED</div>
+    <button id="boot">INITIATE NEURAL LINK</button>
+</div>
+
+<div id="console">SYSTEM STANDBY...</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: SINGULARITY
+ * CONCEPTS: Euclidean Rhythms, Shepard Tones, Spiking Neural Vis
+ * AUTHOR: THE SILICON ALCHEMIST
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+const log = document.getElementById('console');
+let w, h;
+
+let actx, master, reverb, delay, limiter, analyser;
+let isPlaying = false;
+let startTime = 0;
+
+// CONFIG
+const BPM = 138;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+
+// --- GENERATIVE MUSIC THEORY ---
+
+// The "Hero" Scale (D Lydian)
+const SCALE = [
+    146.83, 185.00, 220.00, 246.94, // D3, F#3, A3, B3
+    293.66, 369.99, 440.00, 493.88, // D4, F#4, A4, B4
+    587.33, 739.99, 880.00          // D5...
+];
+
+// Euclidean Rhythm Generator (Bjorklund)
+// Distributes 'k' pulses over 'n' steps as evenly as possible
+function generateEuclidean(k, n) {
+    let pattern = new Array(n).fill(0);
+    // Simplified Bresenham line algorithm for rhythm
+    let bucket = 0;
+    for (let i = 0; i < n; i++) {
+        bucket += k;
+        if (bucket >= n) {
+            bucket -= n;
+            pattern[i] = 1;
+        }
+    }
+    return pattern; // e.g. [1, 0, 1, 1, 0]
+}
+
+// PATTERNS (Generated on fly)
+const KICK_PATT = generateEuclidean(4, 16); // 4/4 Basic
+const RIM_PATT = generateEuclidean(7, 16);  // Complex polyrhythm
+const BASS_PATT = generateEuclidean(12, 16); // Rolling
+
+// --- AUDIO ENGINE ---
+
+async function init() {
+    actx = new AC();
+    await actx.resume();
+
+    master = actx.createGain();
+    master.gain.value = 0.5;
+
+    // Hard Limiter to allow "loudness" without clipping
+    limiter = actx.createDynamicsCompressor();
+    limiter.threshold.value = -10;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 256;
+
+    master.connect(limiter);
+    limiter.connect(analyser);
+    analyser.connect(actx.destination);
+
+    // FX
+    reverb = await createImpulse();
+    delay = createPingPong();
+    reverb.output.connect(master);
+    delay.output.connect(master);
+    
+    logMsg("DSP CHAIN: OPTIMIZED");
+}
+
+async function createImpulse() {
+    const len = actx.sampleRate * 3;
+    const b = actx.createBuffer(2, len, actx.sampleRate);
+    for(let c=0; c<2; c++) {
+        const d = b.getChannelData(c);
+        for(let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 4);
+    }
+    const conv = actx.createConvolver();
+    conv.buffer = b;
+    const inp = actx.createGain();
+    const out = actx.createGain();
+    out.gain.value = 0.4;
+    inp.connect(conv); conv.connect(out);
+    return {input:inp, output:out};
+}
+
+function createPingPong() {
+    const inp = actx.createGain();
+    const out = actx.createGain();
+    const d1 = actx.createDelay(); d1.delayTime.value = BEAT * 0.75;
+    const d2 = actx.createDelay(); d2.delayTime.value = BEAT * 0.5;
+    const fb = actx.createGain(); fb.gain.value = 0.4;
+    
+    inp.connect(d1); inp.connect(d2);
+    d1.connect(fb); d2.connect(fb);
+    fb.connect(d1); fb.connect(d2);
+    d1.connect(out); d2.connect(out);
+    
+    return {input:inp, output:out};
+}
+
+// --- INSTRUMENTS ---
+
+// 1. NEURAL PLUCK (Physical Modeling approximation)
+function playNeuroPluck(t, freq, pan=0) {
+    const osc = actx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(100, t);
+    filter.frequency.exponentialRampToValueAtTime(8000, t + 0.02); // Sharp attack
+    filter.frequency.exponentialRampToValueAtTime(100, t + 0.3);   // Pluck decay
+    filter.Q.value = 5;
+
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.2, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+    const panner = actx.createStereoPanner();
+    panner.pan.value = pan;
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(panner);
+    panner.connect(master);
+    panner.connect(delay.input);
+    panner.connect(reverb.input);
+
+    osc.start(t); osc.stop(t+0.5);
+    
+    spawnNode(freq, pan); // Visual trigger
+}
+
+// 2. SHEPARD TONE RISER (The Infinite Pitch)
+// Creates multiple oscillators separated by octaves that rise continuously
+let shepardOscs = [];
+function startShepard(t) {
+    if(shepardOscs.length > 0) return; // Already running
+    logMsg("INITIATING SHEPARD RISER...");
+    
+    // Create 4 oscillators separated by octaves
+    const baseFreqs = [110, 220, 440, 880];
+    
+    baseFreqs.forEach((f, i) => {
+        const osc = actx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        
+        // Rise pitch over 16 bars (approx 27 seconds)
+        osc.frequency.exponentialRampToValueAtTime(f * 4, t + 27);
+        
+        const g = actx.createGain();
+        // Bell curve amplitude to hide the loop (fade in/out edges)
+        // Since we are just rising once for the build, we just fade in
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.15, t + 10);
+        g.gain.linearRampToValueAtTime(0, t + 27); // Fade out at drop
+        
+        osc.connect(g);
+        g.connect(master);
+        g.connect(reverb.input);
+        
+        osc.start(t);
+        osc.stop(t + 28);
+        shepardOscs.push(osc);
+    });
+}
+
+// 3. KICK (Tight)
+function playKick(t) {
+    const o = actx.createOscillator();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(40, t+0.3);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(1, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+    
+    // Click
+    const c = actx.createOscillator(); c.type='square';
+    const cg = actx.createGain(); cg.gain.setValueAtTime(0.1, t); cg.gain.exponentialRampToValueAtTime(0.001, t+0.02);
+    
+    o.connect(g); c.connect(cg);
+    g.connect(master); cg.connect(master);
+    o.start(t); o.stop(t+0.3); c.start(t); c.stop(t+0.02);
+    
+    triggerPulse();
+}
+
+// 4. BASS (Gallop)
+function playBass(t, f) {
+    const o = actx.createOscillator(); o.type='sawtooth'; o.frequency.value=f;
+    const fl = actx.createBiquadFilter(); fl.type='lowpass'; fl.frequency.setValueAtTime(100, t);
+    fl.frequency.exponentialRampToValueAtTime(1200, t+0.02); fl.frequency.exponentialRampToValueAtTime(100, t+0.25);
+    const g = actx.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+    o.connect(fl); fl.connect(g); g.connect(master);
+    o.start(t); o.stop(t+0.3);
+}
+
+// --- INTELLIGENT SEQUENCER ---
+
+let nextTime = 0;
+let step = 0;
+
+function scheduler() {
+    while(nextTime < actx.currentTime + 0.1) {
+        runStep(step, nextTime);
+        nextTime += SIXTEENTH;
+        step++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function runStep(s, t) {
+    const bar = Math.floor(s / 16);
+    const stepInBar = s % 16;
+    
+    // Progression State
+    const phase = bar < 8 ? 'BUILD' : (bar < 16 ? 'DROP' : 'OUTRO');
+    
+    // 1. SHEPARD TONE (Starts at Bar 0, peaks at Bar 8)
+    if (s === 0) startShepard(t);
+
+    // 2. KICK (Euclidean)
+    // In build, we highpass the kick or skip it
+    if (phase === 'DROP' || (phase === 'BUILD' && bar > 4)) {
+        if (KICK_PATT[stepInBar]) playKick(t);
+    }
+
+    // 3. BASS (Euclidean Rolling)
+    if (phase !== 'BUILD') {
+        // Don't play bass on kick steps (Sidechain emulation)
+        if (BASS_PATT[stepInBar] && !KICK_PATT[stepInBar]) {
+            playBass(t, SCALE[0]/2); // Root note bass
+        }
+    }
+
+    // 4. NEURO PLUCKS (Stochastic Melody)
+    // The AI "improvises" notes from the scale based on density probability
+    let density = 0.2; // Low density intro
+    if (phase === 'BUILD') density = 0.5 + (bar/16); // Rising density
+    if (phase === 'DROP') density = 0.8; // High density
+
+    if (RIM_PATT[stepInBar]) { // Use the polyrhythm pattern for leads
+        if (Math.random() < density) {
+            // Pick random note from scale, biased towards harmony
+            const noteIdx = Math.floor(Math.random() * SCALE.length);
+            const note = SCALE[noteIdx];
+            
+            // Pan based on pitch (Low = Left, High = Right)
+            const pan = ((noteIdx / SCALE.length) * 2) - 1;
+            
+            playNeuroPluck(t, note, pan);
+        }
+    }
+    
+    // UI LOGGING
+    if (stepInBar === 0) {
+        let msg = `TICK: ${s} | BAR: ${bar} | PHASE: ${phase}`;
+        if (phase === 'BUILD') msg += ` | TENSION: ${(bar/8*100).toFixed(0)}%`;
+        logMsg(msg);
+    }
+    
+    if (bar >= 24) step = 128; // Loop drop
+}
+
+function logMsg(txt) {
+    log.innerText += "\n> " + txt;
+    if(log.innerText.length > 500) log.innerText = log.innerText.substring(log.innerText.length - 500);
+    log.scrollTop = log.scrollHeight;
+}
+
+// --- VISUAL NEURAL NETWORK ---
+
+let nodes = [];
+let pulse = 0;
+
+function triggerPulse() { pulse = 1; }
+
+function spawnNode(freq, pan) {
+    // Map freq to color
+    const hue = (freq / 800) * 360;
+    nodes.push({
+        x: w/2 + (pan * w * 0.4),
+        y: h/2 + (Math.random() * 200 - 100),
+        z: 0,
+        vx: (Math.random()-0.5)*2,
+        vy: (Math.random()-0.5)*2,
+        vz: 2 + Math.random()*2, // Moving towards camera
+        hue: hue,
+        life: 1.0
+    });
+}
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+
+function draw() {
+    requestAnimationFrame(draw);
+    
+    // Trailing effect
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(0,0,w,h);
+    
+    pulse *= 0.9;
+    
+    const cx = w/2;
+    const cy = h/2;
+
+    // Draw Neural Links
+    ctx.lineWidth = 1;
+    
+    for(let i=nodes.length-1; i>=0; i--) {
+        let n = nodes[i];
+        
+        // Move
+        n.x += n.vx;
+        n.y += n.vy;
+        n.z += n.vz + (pulse * 2); // Accelerate on kick
+        n.life -= 0.01;
+        
+        // 3D Projection
+        const scale = 200 / (200 - n.z); // Perspective hack
+        if (scale < 0 || n.life <= 0) {
+            nodes.splice(i, 1);
+            continue;
+        }
+        
+        const sx = (n.x - cx) * scale + cx;
+        const sy = (n.y - cy) * scale + cy;
+        const size = 5 * scale;
+        
+        // Draw Node
+        ctx.fillStyle = `hsla(${n.hue}, 100%, 50%, ${n.life})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, size, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Connect Logic (Synapses)
+        // Connect to last few nodes
+        for(let j=Math.max(0, i-3); j<i; j++) {
+            let n2 = nodes[j];
+            const sx2 = (n2.x - cx) * scale + cx;
+            const sy2 = (n2.y - cy) * scale + cy;
+            
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx2, sy2);
+            ctx.strokeStyle = `hsla(${n.hue}, 100%, 50%, ${n.life * 0.5})`;
+            ctx.stroke();
+        }
+    }
+    
+    // Central AI Core (Reacts to Audio)
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    const avg = data.reduce((a,b)=>a+b)/data.length;
+    
+    ctx.beginPath();
+    ctx.arc(cx, cy, 20 + avg, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(0, 255, 0, ${0.2 + pulse})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Grid Rings
+    ctx.beginPath();
+    ctx.arc(cx, cy, 20 + avg + (pulse*50), 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(0, 255, 0, ${pulse * 0.5})`;
+    ctx.stroke();
+}
+
+window.onresize = initVis;
+initVis();
+
+document.getElementById('boot').addEventListener('click', async (e) => {
+    e.target.innerText = "ESTABLISHING CONNECTION...";
+    e.target.style.background = "#0f0";
+    e.target.style.color = "#000";
+    
+    document.getElementById('terminal').style.opacity = 0;
+    setTimeout(() => document.getElementById('terminal').style.display = 'none', 1000);
+    
+    await init();
+    startTime = actx.currentTime + 0.1;
+    nextTime = startTime;
+    isPlaying = true;
+    scheduler();
+    draw();
+});
+
+</script>
+</body>
+</html>

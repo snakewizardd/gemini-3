@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GOLDEN HOUR // AURAL TAPESTRY</title>
+    <style>
+        body { 
+            margin: 0; background: #000; overflow: hidden; 
+            font-family: 'Georgia', serif; color: #d4af37;
+            display: flex; justify-content: center; align-items: center; height: 100vh;
+            cursor: pointer;
+        }
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; transition: opacity 2s; }
+        #ui {
+            z-index: 10; text-align: center; opacity: 0.8; transition: opacity 1.5s;
+            mix-blend-mode: screen;
+        }
+        h1 { 
+            font-size: 2rem; letter-spacing: 0.5rem; font-weight: normal; 
+            margin-bottom: 1rem; color: #f3e5ab; 
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+        }
+        p { font-style: italic; font-size: 0.9rem; color: #8b7d6b; letter-spacing: 0.1rem; }
+        .fade-out { opacity: 0 !important; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>GOLDEN HOUR</h1>
+    <p>Click to breathe.</p>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: GOLDEN HOUR
+ * COMPOSITION: Db Major (Romantic/Cinematic)
+ * ENGINE: Physical Modeling Piano + Orchestral Swells
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+let actx, master, reverb, compressor;
+let isPlaying = false;
+let startTime = 0;
+
+// --- HARMONY & THEORY (Db Major) ---
+// Db, Eb, F, Gb, Ab, Bb, C
+const N = {
+    Db2: 69.30, F2: 87.31, Gb2: 92.50, Ab2: 103.83, Bb2: 116.54,
+    Db3: 138.59, Eb3: 155.56, F3: 174.61, Gb3: 185.00, Ab3: 207.65, Bb3: 233.08, C3: 261.63,
+    Db4: 277.18, Eb4: 311.13, F4: 349.23, Gb4: 369.99, Ab4: 415.30, Bb4: 466.16, C4: 523.25,
+    Db5: 554.37, F5: 698.46, Ab5: 830.61
+};
+
+// COMPOSITION TIMELINE (Not a loop, a narrative)
+// Each event: { t: time_in_seconds, type: 'piano'|'pad', note: freq, dur: duration }
+const SCORE = [
+    // --- INTRO (The Solitary Piano) ---
+    {t:0.0, type:'piano', n:[N.Db3, N.F3, N.Ab3], d:4}, // I
+    {t:0.0, type:'bass', n:N.Db2, d:8},
+    
+    {t:4.0, type:'piano', n:[N.Bb3, N.Db4, N.F4], d:4}, // vi
+    {t:4.0, type:'bass', n:N.Bb2, d:8},
+
+    {t:8.0, type:'piano', n:[N.Gb3, N.Bb3, N.Db4], d:4}, // IV
+    {t:8.0, type:'bass', n:N.Gb2, d:8},
+
+    {t:12.0, type:'piano', n:[N.Ab3, N.C4, N.Eb4], d:4}, // V
+    {t:12.0, type:'bass', n:N.Ab2, d:8},
+
+    // --- SECTION A (The Melody Enters) ---
+    {t:16.0, type:'pad', n:[N.Db3, N.F3, N.Ab3, N.C4], d:16}, // Pad swells in
+    {t:16.0, type:'piano', n:N.Db2, d:2}, // Root
+    {t:16.5, type:'piano', n:N.Ab3, d:2}, 
+    {t:17.0, type:'piano', n:N.Db4, d:1},
+    {t:18.0, type:'piano', n:N.F4, d:2}, // Melody starts
+
+    {t:20.0, type:'piano', n:N.Eb4, d:1},
+    {t:21.0, type:'piano', n:N.Db4, d:1},
+    {t:22.0, type:'piano', n:N.Ab3, d:2},
+    {t:23.0, type:'piano', n:N.F3, d:2},
+
+    // --- SECTION B (The Swell) ---
+    {t:32.0, type:'pad', n:[N.Gb3, N.Bb3, N.Db4, N.F4], d:8}, // Change chord
+    {t:32.0, type:'bass', n:N.Gb2, d:8},
+    
+    // Arpeggios (Raindrops)
+    {t:32.0, type:'arp', n:N.F4, d:0.5}, {t:32.25, type:'arp', n:N.Ab4, d:0.5}, {t:32.5, type:'arp', n:N.Db5, d:0.5},
+    {t:33.0, type:'arp', n:N.F4, d:0.5}, {t:33.25, type:'arp', n:N.Ab4, d:0.5}, {t:33.5, type:'arp', n:N.Db5, d:0.5},
+    
+    {t:36.0, type:'piano', n:[N.Ab2, N.Eb3], d:4}, // Low movement
+    
+    // --- SECTION C (Resolution) ---
+    {t:48.0, type:'pad', n:[N.Db3, N.F3, N.Ab3], d:12}, // Home
+    {t:48.0, type:'piano', n:N.Db2, d:8},
+    {t:50.0, type:'piano', n:N.Ab4, d:4}, // High lingering note
+    {t:54.0, type:'piano', n:N.F4, d:4},
+    {t:58.0, type:'piano', n:N.Db4, d:6},
+];
+
+// --- AUDIO ENGINE ---
+
+async function initAudio() {
+    actx = new AC();
+    await actx.resume();
+
+    master = actx.createGain();
+    master.gain.value = 0.6;
+
+    // Soft Limiter for smoothness
+    compressor = actx.createDynamicsCompressor();
+    compressor.threshold.value = -20;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.05;
+    compressor.release.value = 1.0;
+
+    // The "Cathedral" Reverb
+    reverb = await createReverb();
+
+    master.connect(compressor);
+    compressor.connect(actx.destination);
+    reverb.output.connect(master);
+}
+
+async function createReverb() {
+    // Generate a very smooth, long impulse response
+    const seconds = 5;
+    const len = actx.sampleRate * seconds;
+    const buff = actx.createBuffer(2, len, actx.sampleRate);
+    
+    for(let c=0; c<2; c++) {
+        const d = buff.getChannelData(c);
+        for(let i=0; i<len; i++) {
+            // Exponential decay noise
+            const t = i / len;
+            const noise = (Math.random() * 2 - 1);
+            // Smooth fade out curve
+            d[i] = noise * Math.pow(1 - t, 4) * 0.8;
+        }
+    }
+    
+    const conv = actx.createConvolver();
+    conv.buffer = buff;
+    
+    const inp = actx.createGain();
+    const out = actx.createGain();
+    out.gain.value = 0.5; // Very wet mix
+    
+    inp.connect(conv);
+    conv.connect(out);
+    
+    return { input: inp, output: out };
+}
+
+// 1. PHYSICAL PIANO MODEL
+// Combines Sine (Fundamental), Triangle (Body), and Noise (Hammer Attack)
+function playPiano(note, start, duration) {
+    const t = start;
+    const freq = Array.isArray(note) ? note : [note]; // Handle chords
+    
+    freq.forEach((f, i) => {
+        const stagger = i * 0.02; // Strum chords slightly
+        const noteTime = t + stagger;
+
+        // A. FUNDAMENTAL
+        const osc = actx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        
+        // B. HARMONICS (The Wire)
+        const harm = actx.createOscillator();
+        harm.type = 'triangle';
+        harm.frequency.value = f;
+        
+        // C. HAMMER (The Click)
+        const hammer = actx.createBufferSource();
+        const hBuf = actx.createBuffer(1, actx.sampleRate*0.01, actx.sampleRate);
+        const hData = hBuf.getChannelData(0);
+        for(let j=0; j<hData.length; j++) hData[j] = Math.random()*2-1;
+        hammer.buffer = hBuf;
+        
+        // FILTER (Damping simulation)
+        const filter = actx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(0, noteTime);
+        filter.frequency.linearRampToValueAtTime(f * 8, noteTime + 0.05); // Attack
+        filter.frequency.exponentialRampToValueAtTime(f, noteTime + duration); // Decay
+        
+        // GAIN ENVELOPE
+        const gain = actx.createGain();
+        gain.gain.setValueAtTime(0, noteTime);
+        gain.gain.linearRampToValueAtTime(0.4, noteTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteTime + duration + 1);
+
+        // HAMMER GAIN
+        const hGain = actx.createGain();
+        hGain.gain.value = 0.05;
+        
+        // Routing
+        osc.connect(filter);
+        harm.connect(filter);
+        hammer.connect(hGain); hGain.connect(master); // Hammer bypasses filter/reverb for clarity
+        
+        filter.connect(gain);
+        gain.connect(master);
+        gain.connect(reverb.input);
+        
+        osc.start(noteTime); osc.stop(noteTime + duration + 1);
+        harm.start(noteTime); harm.stop(noteTime + duration + 1);
+        hammer.start(noteTime);
+
+        // Trigger Visual
+        setTimeout(() => spawnRipple(f), (noteTime - actx.currentTime) * 1000);
+    });
+}
+
+// 2. ORCHESTRAL SWELL (Pads)
+function playPad(notes, start, duration) {
+    const t = start;
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.15, t + duration * 0.3); // Slow swell
+    gain.gain.linearRampToValueAtTime(0, t + duration);
+
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400; // Warm and dark
+
+    // LFO for movement
+    const lfo = actx.createOscillator();
+    lfo.frequency.value = 0.2;
+    const lfoG = actx.createGain();
+    lfoG.gain.value = 100;
+    lfo.connect(lfoG);
+    lfoG.connect(filter.frequency);
+    lfo.start(t);
+
+    notes.forEach((f, i) => {
+        // Use multiple oscillators for "Ensemble" effect
+        const o1 = actx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f; o1.detune.value = -10;
+        const o2 = actx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f; o2.detune.value = 10;
+        
+        o1.connect(filter);
+        o2.connect(filter);
+        o1.start(t); o1.stop(t + duration);
+        o2.start(t); o2.stop(t + duration);
+    });
+
+    filter.connect(gain);
+    gain.connect(master);
+    gain.connect(reverb.input);
+}
+
+// 3. SUB BASS (Grounding)
+function playBass(note, start, duration) {
+    const osc = actx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = note;
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.4, start + 1);
+    gain.gain.linearRampToValueAtTime(0, start + duration);
+    
+    osc.connect(gain);
+    gain.connect(master);
+    
+    osc.start(start);
+    osc.stop(start + duration);
+}
+
+// 4. ARPEGGIOS (Sparkles)
+function playArp(note, start, duration) {
+    const osc = actx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = note;
+    
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.1, start + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+    
+    const pan = actx.createStereoPanner();
+    pan.pan.value = Math.sin(start); // Pan back and forth
+
+    osc.connect(gain);
+    gain.connect(pan);
+    pan.connect(master);
+    pan.connect(reverb.input);
+    
+    osc.start(start); osc.stop(start + duration);
+}
+
+// --- SEQUENCER ---
+function startSequence() {
+    const now = actx.currentTime + 0.5; // Slight buffer
+    
+    SCORE.forEach(evt => {
+        if(evt.type === 'piano') playPiano(evt.n, now + evt.t, evt.d);
+        if(evt.type === 'pad') playPad(evt.n, now + evt.t, evt.d);
+        if(evt.type === 'bass') playBass(evt.n, now + evt.t, evt.d);
+        if(evt.type === 'arp') playArp(evt.n, now + evt.t, evt.d);
+    });
+
+    // Auto-loop / End handling
+    setTimeout(() => {
+        document.getElementById('ui').style.opacity = 1;
+        document.querySelector('h1').innerText = "FIN";
+        isPlaying = false;
+    }, 65000);
+}
+
+// --- VISUALS ---
+
+let ripples = [];
+let time = 0;
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+
+function spawnRipple(freq) {
+    // Map frequency to position
+    // Low notes = Bottom, High notes = Top
+    // But create some random jitter
+    const y = h - ((freq / 800) * h); 
+    const x = Math.random() * w;
+    
+    ripples.push({
+        x: x,
+        y: y,
+        r: 0,
+        maxR: 100 + (Math.random() * 200),
+        alpha: 1,
+        hue: 45 + (Math.random() * 10) // Gold spectrum
+    });
+}
+
+function draw() {
+    requestAnimationFrame(draw);
+    time += 0.005;
+
+    // Background: Deep Sunset Gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#0f0c29');
+    grad.addColorStop(0.5, '#302b63');
+    grad.addColorStop(1, '#24243e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    // Dust motes
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+    for(let i=0; i<50; i++) {
+        const mx = (Math.sin(time + i) * w/2) + w/2;
+        const my = (Math.cos(time + (i*0.5)) * h/2) + h/2;
+        ctx.beginPath();
+        ctx.arc(mx, my, Math.random()*2, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // Ripples (Piano interactions)
+    for(let i=ripples.length-1; i>=0; i--) {
+        let r = ripples[i];
+        r.r += 0.5; // Slow expansion
+        r.alpha -= 0.005; // Slow fade
+        
+        if(r.alpha <= 0) {
+            ripples.splice(i, 1);
+            continue;
+        }
+
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+        ctx.strokeStyle = `hsla(${r.hue}, 80%, 60%, ${r.alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Reflection
+        ctx.beginPath();
+        ctx.arc(r.x, r.y + 10, r.r * 0.5, 0, Math.PI*2);
+        ctx.strokeStyle = `hsla(${r.hue}, 80%, 80%, ${r.alpha * 0.3})`;
+        ctx.stroke();
+    }
+
+    // Horizon Line
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.8);
+    ctx.lineTo(w, h * 0.8);
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+}
+
+window.onresize = initVis;
+initVis();
+draw(); // Start visual loop immediately
+
+document.body.addEventListener('click', async () => {
+    if(isPlaying) return;
+    
+    document.getElementById('ui').classList.add('fade-out');
+    
+    await initAudio();
+    isPlaying = true;
+    startSequence();
+});
+
+</script>
+</body>
+</html>
