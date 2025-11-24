@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EUPHORIA // THE FINAL ANTHEM</title>
+    <style>
+        body { 
+            margin: 0; background: #000; overflow: hidden; 
+            font-family: 'Montserrat', sans-serif; color: #fff;
+            display: flex; justify-content: center; align-items: center; height: 100vh;
+        }
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui {
+            z-index: 10; text-align: center; background: rgba(0,0,0,0.7);
+            padding: 60px; border-radius: 30px; backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 0 100px rgba(0, 150, 255, 0.3);
+            transition: all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        h1 { font-weight: 800; letter-spacing: 15px; margin: 0 0 10px 0; font-size: 3rem; 
+             background: linear-gradient(to right, #fff, #00d2ff); -webkit-background-clip: text; color: transparent; }
+        h3 { font-weight: 300; letter-spacing: 5px; margin-bottom: 40px; font-size: 0.9rem; color: #ccc; }
+        button {
+            background: #fff; color: #000; border: none; padding: 20px 60px;
+            font-size: 1.2rem; letter-spacing: 3px; cursor: pointer; border-radius: 50px; font-weight: bold;
+            box-shadow: 0 10px 30px rgba(255,255,255,0.2); transition: all 0.3s;
+        }
+        button:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 20px 50px rgba(255,255,255,0.4); }
+        #status { margin-top: 25px; font-size: 0.8rem; opacity: 0.6; font-family: monospace; letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>EUPHORIA</h1>
+    <h3>THE FINAL ANTHEM</h3>
+    <button id="playBtn">INITIATE SEQUENCE</button>
+    <div id="status">Audio Core: STANDBY</div>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: EUPHORIA [FINAL ANTHEM]
+ * UPGRADES: Formant Vocal Synthesis ("Cyber-Vox"), CO2 FX, 3D Visuals
+ * BPM: 128
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+let actx, master, reverb, delay, comp, analyser;
+let isPlaying = false;
+let startTime = 0;
+
+// CONFIG
+const BPM = 128;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+
+// NOTES (D Major)
+const N = {
+    D2: 73.42, G2: 98.00, A2: 110.00, B2: 123.47,
+    D3: 146.83, E3: 164.81, Fs3: 185.00, A3: 220.00, B3: 246.94, Cs4: 277.18,
+    D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.00, A4: 440.00, B4: 493.88, Cs5: 554.37, D5: 587.33
+};
+
+// PROGRESSION: D -> A -> Bm -> G
+const CHORDS = [
+    [N.D3, N.Fs3, N.A3, N.D4], 
+    [N.A3, N.Cs4, N.E4, N.A4], 
+    [N.B3, N.D4, N.Fs4, N.B4], 
+    [N.G2*2, N.B3, N.D4, N.G4] 
+];
+const BASS = [N.D2, N.A2, N.B2, N.G2];
+
+// THE VOCAL CHOP MELODY (Anthemic)
+const VOCAL_MELODY = [
+    {t:0, n:N.Fs4}, {t:1.5, n:N.A4}, {t:3, n:N.D5}, {t:3.5, n:N.Cs5}, {t:4, n:N.A4},
+    {t:7, n:N.E4}, {t:8, n:N.Fs4}, {t:11, n:N.A4}, {t:12, n:N.B4}, {t:14, n:N.A4}
+];
+
+// --- AUDIO CORE ---
+
+async function init() {
+    actx = new AC();
+    await actx.resume();
+
+    // 1. Master Chain
+    master = actx.createGain();
+    master.gain.value = 0.5;
+
+    // "Glue" Compressor
+    comp = actx.createDynamicsCompressor();
+    comp.threshold.value = -12;
+    comp.ratio.value = 8;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.25;
+
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 256;
+
+    master.connect(comp);
+    comp.connect(analyser);
+    analyser.connect(actx.destination);
+
+    // 2. Sends
+    reverb = await createReverb();
+    delay = createDelay();
+
+    reverb.output.connect(master);
+    delay.output.connect(master);
+}
+
+// Stadium Reverb (Convolution)
+async function createReverb() {
+    const len = actx.sampleRate * 3.0; // 3 seconds tail
+    const buff = actx.createBuffer(2, len, actx.sampleRate);
+    for(let c=0; c<2; c++){
+        const d = buff.getChannelData(c);
+        for(let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3);
+    }
+    const conv = actx.createConvolver();
+    conv.buffer = buff;
+    const inp = actx.createGain();
+    const out = actx.createGain();
+    out.gain.value = 0.5; 
+    inp.connect(conv); conv.connect(out);
+    return {input: inp, output: out};
+}
+
+function createDelay() {
+    const inp = actx.createGain();
+    const out = actx.createGain();
+    const dl = actx.createDelay();
+    const dr = actx.createDelay();
+    const fb = actx.createGain();
+    dl.delayTime.value = BEAT * 0.75; 
+    dr.delayTime.value = BEAT * 0.5;  
+    fb.gain.value = 0.4;
+    out.gain.value = 0.3;
+    inp.connect(dl); inp.connect(dr);
+    dl.connect(fb); dr.connect(fb);
+    fb.connect(dl); fb.connect(dr);
+    dl.connect(out); dr.connect(out);
+    return {input: inp, output: out};
+}
+
+// --- INSTRUMENTS ---
+
+// 1. THE "CYBER-VOX" (Formant Synthesis)
+// This mimics a human vocal tract
+function playVox(t, freq) {
+    const osc = actx.createOscillator();
+    osc.type = 'sawtooth'; // Saw provides harmonics
+    osc.frequency.value = freq;
+
+    // Formant Filters (Ah sound: ~700Hz, ~1200Hz, ~2500Hz)
+    const f1 = actx.createBiquadFilter(); f1.type='bandpass'; f1.frequency.value=700; f1.Q.value=3;
+    const f2 = actx.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value=1200; f2.Q.value=3;
+    const f3 = actx.createBiquadFilter(); f3.type='bandpass'; f3.frequency.value=2800; f3.Q.value=3;
+
+    // Parallel Routing
+    osc.connect(f1); osc.connect(f2); osc.connect(f3);
+
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.3, t + 0.05); // "Ah" attack
+    gain.gain.setValueAtTime(0.3, t + 0.3); 
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5); // Release
+
+    // Merge
+    f1.connect(gain); f2.connect(gain); f3.connect(gain);
+
+    // FX
+    gain.connect(master);
+    gain.connect(reverb.input); // Vocals need huge reverb
+    gain.connect(delay.input);
+
+    osc.start(t); osc.stop(t+0.6);
+    
+    // Slight vibrato
+    const vib = actx.createOscillator();
+    vib.frequency.value = 5;
+    const vibGain = actx.createGain();
+    vibGain.gain.value = 5;
+    vib.connect(vibGain);
+    vibGain.connect(osc.frequency);
+    vib.start(t); vib.stop(t+0.6);
+}
+
+// 2. FLAMENCO GUITAR
+function playGuitar(t, freq, index) {
+    const time = t + (index * 0.035);
+    const osc = actx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = freq;
+    const f = actx.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(0, time);
+    f.frequency.linearRampToValueAtTime(3500, time+0.01); f.frequency.exponentialRampToValueAtTime(freq, time+0.3);
+    const g = actx.createGain(); g.gain.setValueAtTime(0, time); g.gain.linearRampToValueAtTime(0.2, time+0.01); g.gain.exponentialRampToValueAtTime(0.001, time+0.4);
+    
+    // Pluck Noise
+    const n = actx.createBufferSource();
+    const b = actx.createBuffer(1, actx.sampleRate*0.02, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    n.buffer=b; const ng=actx.createGain(); ng.gain.value=0.05; n.connect(ng); ng.connect(master);
+    
+    osc.connect(f); f.connect(g); g.connect(master); g.connect(reverb.input);
+    osc.start(time); osc.stop(time+0.5); n.start(time);
+}
+
+// 3. PIANO
+function playPiano(t, freq, vel) {
+    const o1=actx.createOscillator(); o1.type='triangle'; o1.frequency.value=freq;
+    const o2=actx.createOscillator(); o2.type='square'; o2.frequency.value=freq; o2.detune.value=5;
+    const f=actx.createBiquadFilter(); f.frequency.setValueAtTime(0,t); f.frequency.linearRampToValueAtTime(freq*6, t+0.01); f.frequency.exponentialRampToValueAtTime(freq, t+1.5);
+    const g=actx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.2*vel, t+0.02); g.gain.exponentialRampToValueAtTime(0.001, t+1.5);
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(master); g.connect(reverb.input);
+    o1.start(t); o2.start(t); o1.stop(t+2); o2.stop(t+2);
+}
+
+// 4. FX: CO2 CANNON (White Noise Burst)
+function playCO2(t) {
+    const bSize = actx.sampleRate * 1.0;
+    const b = actx.createBuffer(1, bSize, actx.sampleRate);
+    const d = b.getChannelData(0); for(let i=0;i<bSize;i++) d[i]=Math.random()*2-1;
+    const src = actx.createBufferSource(); src.buffer = b;
+    const f = actx.createBiquadFilter(); f.type='highpass'; f.frequency.setValueAtTime(1000, t);
+    const g = actx.createGain(); g.gain.setValueAtTime(0.4, t); g.gain.exponentialRampToValueAtTime(0.001, t+1.0);
+    src.connect(f); f.connect(g); g.connect(master); g.connect(reverb.input);
+    src.start(t);
+}
+
+// 5. FX: SUB DROP
+function playSubDrop(t) {
+    const o = actx.createOscillator(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(1, t+2);
+    const g = actx.createGain(); g.gain.setValueAtTime(0.8, t); g.gain.linearRampToValueAtTime(0, t+2);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t+2);
+}
+
+// 6. PERCUSSION
+function playKick(t) {
+    const o = actx.createOscillator(); o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(40, t+0.3);
+    const g = actx.createGain(); g.gain.setValueAtTime(0.8, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+    const c = actx.createOscillator(); c.type='square'; 
+    const cg = actx.createGain(); cg.gain.setValueAtTime(0.1, t); cg.gain.exponentialRampToValueAtTime(0.001, t+0.02);
+    o.connect(g); g.connect(master); c.connect(cg); cg.connect(master);
+    o.start(t); o.stop(t+0.3); c.start(t); c.stop(t+0.05);
+    pulse=1; // Visual trigger
+}
+
+function playRatamba(t, p) {
+    const o = actx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(p, t); o.frequency.exponentialRampToValueAtTime(p*0.8, t+0.1);
+    const g = actx.createGain(); g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.15);
+    o.connect(g); g.connect(master); g.connect(reverb.input);
+    o.start(t); o.stop(t+0.2);
+}
+
+function playMarimba(t, f) {
+    const o = actx.createOscillator(); o.type='sine'; o.frequency.value=f; 
+    const g = actx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.2,t+0.01); g.gain.exponentialRampToValueAtTime(0.001,t+0.3);
+    o.connect(g); g.connect(master); g.connect(delay.input);
+    o.start(t); o.stop(t+0.4);
+}
+
+function playPad(t, chord) {
+    const g = actx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.1, t+1); g.gain.setValueAtTime(0.1, t+BEAT*4-0.5); g.gain.linearRampToValueAtTime(0, t+BEAT*4);
+    const f = actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=800;
+    chord.forEach((fr, i) => {
+        const o = actx.createOscillator(); o.type='sawtooth'; o.frequency.value=fr; o.detune.value=(i%2==0?10:-10);
+        o.connect(f); o.start(t); o.stop(t+BEAT*4);
+    });
+    f.connect(g); g.connect(master); g.connect(reverb.input);
+}
+
+// --- SEQUENCER ---
+
+let nextNoteTime = 0;
+let currentStep = 0;
+
+function scheduler() {
+    while(nextNoteTime < actx.currentTime + 0.1) {
+        runStep(currentStep, nextNoteTime);
+        nextNoteTime += SIXTEENTH;
+        currentStep++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function runStep(step, t) {
+    const bar = Math.floor(step / 16);
+    const stepInBar = step % 16;
+    const chord = CHORDS[bar % 4];
+    const bass = BASS[bar % 4];
+
+    // PHASES
+    const intro = bar < 4;
+    const breakdown = bar >= 4 && bar < 8; // Piano + Vocal
+    const build = bar >= 8 && bar < 12; // Snare roll + Vocal
+    const drop = bar >= 12; // Full mayhem
+
+    // 1. PIANO (Always running except build silence)
+    if (stepInBar % 2 === 0) {
+        if (!build || stepInBar < 8) { // Cut piano half way thru build
+            playPiano(t, chord[(stepInBar/2)%chord.length], 0.6+Math.random()*0.4);
+        }
+    }
+
+    // 2. VOCAL CHOP (Breakdown, Build, Drop)
+    if (breakdown || build || drop) {
+        const note = VOCAL_MELODY.find(m => m.t === stepInBar);
+        if (note) {
+            // Randomly octave shift for "chopped" feel
+            const octave = (Math.random() > 0.7) ? 2 : 1;
+            playVox(t, note.n * octave);
+        }
+    }
+
+    // 3. FLAMENCO (Intro & Drop)
+    if ((intro || drop) && stepInBar % 4 === 2) {
+        chord.forEach((n, i) => playGuitar(t, n * 2, i));
+    }
+    if ((intro || drop) && stepInBar > 13) {
+        playGuitar(t, chord[0]*2, 0);
+    }
+
+    // 4. PADS (All except intro)
+    if (!intro && stepInBar === 0) playPad(t, chord);
+
+    // 5. PERCUSSION (Drop Only)
+    if (drop) {
+        // Kick
+        if (stepInBar % 4 === 0) playKick(t);
+        // Offbeat Bass
+        setTimeout(() => playMarimba(t + SIXTEENTH*2, bass), 0);
+        
+        // Ratambas Fills
+        if (stepInBar === 3 || stepInBar === 6 || stepInBar === 14) playRatamba(t, 500);
+        // Marimba Arps
+        if (stepInBar % 2 === 0) playMarimba(t, chord[Math.floor(Math.random()*3)]*2);
+        
+        // CO2 Blast on Bar 1 of Drop
+        if (stepInBar === 0 && bar === 12) {
+            playCO2(t);
+            playSubDrop(t);
+        }
+    }
+
+    // 6. BUILD UP (Snare Roll)
+    if (build) {
+        // Accelerating snare
+        let interval = 4;
+        if (stepInBar > 8) interval = 2;
+        if (stepInBar > 12) interval = 1;
+        
+        if (step % interval === 0) {
+             const s = actx.createOscillator(); s.type='white'; // Noise snare sim
+             // (Using simple kick function with high pitch for snare-ish sound)
+             playRatamba(t, 200 + (stepInBar*20)); // Rising pitch
+        }
+        if (stepInBar === 0) playCO2(t); // Riser start
+    }
+
+    // Loop at 20 bars
+    if (bar >= 20) currentStep = 192; // Loop back to drop (bar 12)
+    
+    // UI
+    if (stepInBar === 0) {
+        let txt = "INTRO";
+        if(breakdown) txt = "BREAKDOWN (Vocals)";
+        if(build) txt = "BUILD UP";
+        if(drop) txt = ">>> THE DROP <<<";
+        document.getElementById('status').innerText = `${txt} | BAR ${bar+1}`;
+    }
+}
+
+// --- 3D VISUAL ENGINE ---
+let pulse = 0;
+let flySpeed = 0;
+let gridOffset = 0;
+
+function initVisuals() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+
+function draw() {
+    requestAnimationFrame(draw);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,w,h);
+
+    pulse *= 0.92;
+    if(pulse < 0.01) pulse = 0;
+    
+    // Grid Speed varies by song intensity
+    flySpeed = 2 + (pulse * 20);
+    gridOffset = (gridOffset + flySpeed) % 100;
+
+    const cx = w/2;
+    const cy = h/2;
+    
+    // RETRO 3D GRID
+    ctx.save();
+    ctx.beginPath();
+    
+    // Horizon
+    const horizon = cy - 50;
+    
+    // Gradient Floor
+    const grad = ctx.createLinearGradient(0, horizon, 0, h);
+    grad.addColorStop(0, '#000');
+    grad.addColorStop(0.3, '#100020');
+    grad.addColorStop(1, '#001030');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, horizon, w, h-horizon);
+
+    // Vertical Lines (Perspective)
+    ctx.strokeStyle = `rgba(0, 200, 255, ${0.3 + pulse * 0.4})`;
+    ctx.lineWidth = 1;
+    
+    for (let i = -1000; i <= 1000; i += 100) {
+        // 3D projection math
+        // x_screen = (x_world / z) + center
+        const x1 = cx + (i * 100) / 100; // Far
+        const x2 = cx + (i * 300) / 10;  // Near
+        ctx.moveTo(cx, horizon); 
+        ctx.lineTo(x2, h);
+    }
+
+    // Horizontal Lines (Moving)
+    for (let z = 0; z < 500; z += 50) {
+        const zDepth = z + (100 - gridOffset); // Move towards camera
+        const scale = 200 / zDepth;
+        const y = horizon + (zDepth * 0.5); // Fake perspective height
+        if (y > h) continue;
+
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+    }
+    ctx.stroke();
+
+    // ANALYZER SUN
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    
+    const radius = 80 + (data[4] / 2); // Reacts to bass
+    
+    ctx.beginPath();
+    ctx.arc(cx, horizon - 80, radius, 0, Math.PI*2);
+    
+    // Sun Gradient
+    const sunGrad = ctx.createRadialGradient(cx, horizon-80, 0, cx, horizon-80, radius);
+    sunGrad.addColorStop(0, '#fff');
+    sunGrad.addColorStop(0.5, '#00d2ff');
+    sunGrad.addColorStop(1, 'rgba(0,0,255,0)');
+    ctx.fillStyle = sunGrad;
+    ctx.fill();
+
+    // FREQUENCY BARS (Mirrored)
+    const barWidth = w / 60;
+    for(let i=0; i<30; i++) {
+        const val = data[i + 5]; // Skip ultra low freq
+        const barH = val * 1.5;
+        const hue = 180 + (i * 2);
+        
+        ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.8)`;
+        
+        // Right side
+        ctx.fillRect(cx + (i * barWidth) + radius + 10, horizon, barWidth - 2, -barH);
+        // Left side
+        ctx.fillRect(cx - (i * barWidth) - radius - 10 - barWidth, horizon, barWidth - 2, -barH);
+        
+        // Reflection
+        ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.2)`;
+        ctx.fillRect(cx + (i * barWidth) + radius + 10, horizon, barWidth - 2, barH * 0.5);
+        ctx.fillRect(cx - (i * barWidth) - radius - 10 - barWidth, horizon, barWidth - 2, barH * 0.5);
+    }
+
+    ctx.restore();
+}
+
+window.onresize = initVisuals;
+initVisuals();
+
+document.getElementById('playBtn').addEventListener('click', async (e) => {
+    e.target.innerText = "SEQUENCE RUNNING...";
+    e.target.style.background = "#00d2ff";
+    e.target.disabled = true;
+    
+    document.getElementById('ui').style.transform = "scale(0.9) translateY(50px)";
+    document.getElementById('ui').style.opacity = 0;
+    setTimeout(() => document.getElementById('ui').style.display='none', 800);
+
+    await init();
+    startTime = actx.currentTime + 0.1;
+    nextNoteTime = startTime;
+    isPlaying = true;
+    scheduler();
+    draw();
+});
+
+</script>
+</body>
+</html>
