@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AMADEUS // ALGORITHMIC COMPOSER</title>
+<style>
+    :root { --paper: #f0e6d2; --ink: #2c241b; --gold: #c5a059; }
+    body {
+        margin: 0; background: var(--paper); overflow: hidden;
+        font-family: 'Times New Roman', serif; color: var(--ink);
+        display: flex; justify-content: center; align-items: center; height: 100vh;
+        user-select: none;
+    }
+    
+    /* VINTAGE PAPER TEXTURE */
+    body::before {
+        content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.1'/%3E%3C/svg%3E");
+        pointer-events: none; z-index: 0;
+    }
+
+    #score-container {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 10; pointer-events: none;
+    }
+
+    #plaque {
+        background: rgba(240, 230, 210, 0.95); padding: 50px; 
+        border: 4px double var(--ink); box-shadow: 10px 10px 30px rgba(44, 36, 27, 0.2);
+        text-align: center; pointer-events: auto; transition: opacity 1s;
+    }
+
+    h1 { font-size: 3rem; margin: 0 0 10px 0; letter-spacing: 2px; font-weight: normal; }
+    h2 { font-style: italic; font-size: 1rem; color: #5a4a3a; margin-bottom: 30px; }
+    
+    button {
+        background: transparent; border: 2px solid var(--ink); color: var(--ink);
+        padding: 15px 40px; font-family: 'Times New Roman', serif; font-size: 1.2rem;
+        cursor: pointer; transition: 0.3s; font-weight: bold; letter-spacing: 1px;
+    }
+    button:hover { background: var(--ink); color: var(--paper); }
+
+    /* DYNAMIC SCORE */
+    #hud {
+        position: absolute; top: 30px; width: 100%; text-align: center; opacity: 0; transition: opacity 1s;
+    }
+    .hud-text { font-size: 14px; letter-spacing: 2px; font-style: italic; }
+    #current-chord { font-size: 24px; font-weight: bold; margin-top: 10px; }
+
+    canvas { position: absolute; top: 0; left: 0; z-index: 1; opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="hud-text">MOVEMENT I: ALLEGRO</div>
+    <div id="current-chord">I</div>
+</div>
+
+<div id="score-container">
+    <div id="plaque">
+        <h1>AMADEUS</h1>
+        <h2>Wolfgang Amadeus Mozart // Generative Engine</h2>
+        <button id="btn">CONDUCT</button>
+    </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PROJECT: AMADEUS
+ * ENGINE: Classical Harmonics & Voice Leading
+ * KEY: G Major (Classic Mozart Key)
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+// AUDIO
+let ac, master, reverb, compressor;
+let isPlaying = false;
+let startTime = 0;
+
+// THEORY: G MAJOR
+// G, A, B, C, D, E, F#
+const SCALE = {
+    G2: 98.00, B2: 123.47, D3: 146.83, 
+    G3: 196.00, A3: 220.00, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, Fs4: 369.99,
+    G4: 392.00, A4: 440.00, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, Fs5: 739.99, G5: 783.99
+};
+
+// CHORD DEFINITIONS (Roman Numerals)
+const CHORDS = {
+    'I':   [SCALE.G2, SCALE.B2, SCALE.D3], // G Maj
+    'IV':  [SCALE.C4/2, SCALE.E4/2, SCALE.G2], // C Maj (inversions)
+    'V':   [SCALE.D3, SCALE.Fs4/2, SCALE.A3], // D Maj
+    'vi':  [SCALE.E4/2, SCALE.G2, SCALE.B2], // E min
+    'ii':  [SCALE.A3/2, SCALE.C4/2, SCALE.E4/2], // A min
+    'V7':  [SCALE.D3, SCALE.Fs4/2, SCALE.A3, SCALE.C4/2] // D7
+};
+
+// PROGRESSION STATE MACHINE
+const PROGRESSION = ['I', 'V', 'V', 'I', 'IV', 'I', 'V7', 'I', 'vi', 'ii', 'V7', 'I'];
+
+// ================= AUDIO ENGINE ================= //
+
+async function init() {
+    ac = new AC();
+    await ac.resume();
+
+    master = ac.createGain();
+    master.gain.value = 0.5;
+
+    // CONCERT HALL REVERB
+    reverb = await createConvolver();
+    compressor = ac.createDynamicsCompressor();
+
+    master.connect(compressor).connect(ac.destination);
+    master.connect(reverb).connect(ac.destination);
+}
+
+async function createConvolver() {
+    const len = ac.sampleRate * 2.5; // 2.5s tail
+    const buf = ac.createBuffer(2, len, ac.sampleRate);
+    for(let c=0;c<2;c++){
+        const d = buf.getChannelData(c);
+        for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 3);
+    }
+    const c = ac.createConvolver();
+    c.buffer = buf;
+    const g = ac.createGain(); g.gain.value = 0.3; // Wet Mix
+    c.connect(g);
+    return g;
+}
+
+// INSTRUMENT 1: FORTEPIANO (The "Hammer" Sound)
+function playPiano(t, freq, velocity) {
+    const osc = ac.createOscillator();
+    const osc2 = ac.createOscillator();
+    
+    // Mix Triangle (Body) and Square (Hammer strike)
+    osc.type = 'triangle';
+    osc2.type = 'square';
+    
+    osc.frequency.value = freq;
+    osc2.frequency.value = freq;
+    
+    // Envelope
+    const gain = ac.createGain();
+    const vel = velocity || 0.5;
+    
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vel, t + 0.02); // Attack
+    gain.gain.exponentialRampToValueAtTime(vel * 0.1, t + 0.5); // Decay
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 2.0); // Release
+
+    // Filter (Damps high freq as note decays)
+    const filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2000, t);
+    filter.frequency.exponentialRampToValueAtTime(500, t + 1.0);
+
+    const osc2Gain = ac.createGain(); osc2Gain.gain.value = 0.2; // Lower square vol
+
+    osc.connect(filter);
+    osc2.connect(osc2Gain).connect(filter);
+    filter.connect(gain).connect(master);
+
+    osc.start(t); osc.stop(t+2.5);
+    osc2.start(t); osc2.stop(t+2.5);
+    
+    visualizeNote(freq, t, 'piano');
+}
+
+// INSTRUMENT 2: VIOLIN SECTION (Background)
+function playString(t, freq, dur) {
+    const osc = ac.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+
+    // Vibrato
+    const vib = ac.createOscillator();
+    vib.frequency.value = 5; // Hz
+    const vibG = ac.createGain();
+    vibG.gain.value = 3; 
+    vib.connect(vibG).connect(osc.frequency);
+
+    const filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1500;
+
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.1, t + 0.5); // Slow attack
+    gain.gain.linearRampToValueAtTime(0.1, t + dur - 0.5);
+    gain.gain.linearRampToValueAtTime(0, t + dur); // Slow release
+
+    osc.connect(filter).connect(gain).connect(master);
+    
+    osc.start(t); osc.stop(t+dur);
+    vib.start(t); vib.stop(t+dur);
+}
+
+// ================= THE MOZART ENGINE ================= //
+
+const BPM = 130; // Allegro
+const BEAT = 60 / BPM;
+const MEASURE = BEAT * 3; // 3/4 Time (Minuet) or 4/4. Let's do 4/4 Common Time.
+const BAR_LEN = BEAT * 4;
+
+let nextTime = 0;
+let barCount = 0;
+
+function scheduler() {
+    if(!isPlaying) return;
+    const lookahead = 0.1;
+    while(nextTime < ac.currentTime + lookahead) {
+        composeMeasure(nextTime);
+        nextTime += BAR_LEN;
+        barCount++;
+    }
+    setTimeout(scheduler, 50);
+}
+
+// THE "MUSICAL DICE" LOGIC
+function composeMeasure(t) {
+    // 1. Determine Harmony
+    const chordName = PROGRESSION[barCount % PROGRESSION.length];
+    const notes = CHORDS[chordName];
+    const root = notes[0];
+    const third = notes[1];
+    const fifth = notes[2];
+
+    // UI Update
+    document.getElementById('current-chord').innerText = chordName + (barCount%2===0 ? "" : " (Var)");
+
+    // 2. LEFT HAND: ALBERTI BASS
+    // Pattern: Root - 5 - 3 - 5
+    const lh = [root, fifth, third, fifth]; // 8th notes
+    for(let i=0; i<8; i++) {
+        // Play the 4 note pattern twice to fill 8 eighth notes
+        let note = lh[i % 4];
+        playPiano(t + (i * (BEAT/2)), note, 0.35); // Softer volume
+    }
+
+    // 3. RIGHT HAND: PROCEDURAL MELODY
+    // Mozart often used scales, turns, and leaps on beat 1.
+    
+    // Type A: The Arpeggio Rise
+    if (barCount % 3 === 0) {
+        playPiano(t, root * 4, 0.6);
+        playPiano(t + BEAT, third * 4, 0.6);
+        playPiano(t + BEAT*2, fifth * 4, 0.6);
+        // Trill at end
+        playTrill(t + BEAT*3, fifth * 4, BEAT);
+    }
+    // Type B: The Scalar Run (16th notes)
+    else if (barCount % 3 === 1) {
+        // Scale starting from high root down
+        const scale = [SCALE.G5, SCALE.Fs5, SCALE.E5, SCALE.D5, SCALE.C5, SCALE.B4, SCALE.A4, SCALE.G4];
+        for(let i=0; i<8; i++) {
+            playPiano(t + (i * (BEAT/4)), scale[i], 0.5);
+        }
+        playPiano(t + BEAT*2, SCALE.D5, 0.6); // Landing
+        playPiano(t + BEAT*3, SCALE.G4, 0.6);
+    }
+    // Type C: The Lyrical Turn
+    else {
+        playPiano(t, third * 4, 0.7); // Long note
+        playPiano(t + BEAT*2, fifth * 4, 0.6);
+        playPiano(t + BEAT*2.5, third * 4, 0.5);
+        playPiano(t + BEAT*3, root * 4, 0.6);
+    }
+
+    // 4. STRINGS (Pad)
+    // Only change every measure
+    if (barCount % 2 === 0) {
+        playString(t, root, BAR_LEN * 2); // Root
+        playString(t, third, BAR_LEN * 2); // Harmony
+    }
+}
+
+function playTrill(t, baseFreq, dur) {
+    // Rapid alternation between note and note+1 tone
+    const count = 8;
+    const step = dur / count;
+    // Calculate Whole Tone approx (freq * 1.12)
+    const upper = baseFreq * 1.122; 
+    
+    for(let i=0; i<count; i++) {
+        const note = (i % 2 === 0) ? baseFreq : upper;
+        playPiano(t + (i*step), note, 0.4);
+    }
+}
+
+// ================= VISUALS (THE QUILL) ================= //
+
+const notesOnScreen = [];
+
+function visualizeNote(freq, time, type) {
+    // Map freq to Y position (Score)
+    // Normalize rough range 100hz - 800hz
+    const yVal = 1 - Math.min(1, Math.max(0, (freq - 100) / 700));
+    
+    notesOnScreen.push({
+        y: yVal * (h * 0.6) + (h*0.2), // Keep central
+        x: w + 50, // Start off screen
+        born: Date.now(),
+        type: type
+    });
+}
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.onresize = initVis;
+
+function draw() {
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,w,h);
+    
+    // Draw Staff Lines
+    ctx.strokeStyle = '#d0c0a0';
+    ctx.lineWidth = 1;
+    const staffTop = h * 0.3;
+    const staffGap = 20;
+    
+    for(let i=0; i<5; i++) {
+        // Treble Clef Lines
+        ctx.beginPath();
+        ctx.moveTo(0, staffTop + (i*staffGap));
+        ctx.lineTo(w, staffTop + (i*staffGap));
+        ctx.stroke();
+        
+        // Bass Clef Lines
+        ctx.beginPath();
+        ctx.moveTo(0, staffTop + 150 + (i*staffGap));
+        ctx.lineTo(w, staffTop + 150 + (i*staffGap));
+        ctx.stroke();
+    }
+
+    // Draw Notes (Ink Blots)
+    ctx.fillStyle = '#2c241b';
+    
+    for(let i=notesOnScreen.length-1; i>=0; i--) {
+        const n = notesOnScreen[i];
+        
+        // Move Left (Scroll)
+        n.x -= 2; // Speed
+        
+        // Draw Head
+        ctx.beginPath();
+        ctx.ellipse(n.x, n.y, 6, 5, -0.5, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Draw Stem
+        ctx.beginPath();
+        ctx.moveTo(n.x + 5, n.y);
+        ctx.lineTo(n.x + 5, n.y - 35);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#2c241b';
+        ctx.stroke();
+        
+        // Remove if off screen
+        if(n.x < -20) notesOnScreen.splice(i, 1);
+    }
+}
+
+initVis();
+draw();
+
+document.getElementById('btn').addEventListener('click', async () => {
+    const btn = document.getElementById('btn');
+    const plaque = document.getElementById('plaque');
+    
+    plaque.style.opacity = 0;
+    plaque.style.pointerEvents = 'none';
+    
+    document.getElementById('hud').style.opacity = 1;
+    
+    await init();
+    isPlaying = true;
+    startTime = ac.currentTime + 0.5;
+    nextTime = startTime;
+    
+    scheduler();
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>THE LOFT // FOR A DEAR FRIEND</title>
+<style>
+    :root { --bg: #111; --act: #70ff80; --dim: #222; --txt: #eee; }
+    body {
+        margin: 0; background: var(--bg); overflow: hidden;
+        font-family: 'Helvetica Neue', Arial, sans-serif; color: var(--txt);
+        display: flex; justify-content: center; align-items: center; height: 100vh;
+    }
+    canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+    
+    #ui {
+        position: absolute; z-index: 10; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: radial-gradient(circle, transparent 0%, #000 120%);
+        pointer-events: none;
+    }
+
+    #card {
+        background: rgba(20, 20, 20, 0.9); padding: 40px; border: 1px solid #333;
+        text-align: center; pointer-events: auto; border-radius: 4px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5); transition: opacity 0.5s;
+    }
+
+    h1 { margin: 0; font-weight: 300; letter-spacing: 4px; font-size: 2rem; margin-bottom: 10px; }
+    p { color: #888; font-size: 0.8rem; margin-bottom: 30px; letter-spacing: 1px; }
+
+    button {
+        background: transparent; border: 1px solid var(--act); color: var(--act);
+        padding: 15px 40px; font-size: 0.9rem; cursor: pointer; border-radius: 50px;
+        transition: 0.2s; font-weight: bold; letter-spacing: 1px;
+    }
+    button:hover { background: var(--act); color: #000; box-shadow: 0 0 20px rgba(112, 255, 128, 0.4); }
+
+    /* STAGE INDICATORS */
+    #stages {
+        position: absolute; bottom: 30px; display: flex; gap: 20px; opacity: 0; transition: opacity 1s; z-index: 5;
+    }
+    .stage {
+        font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 2px;
+        padding-bottom: 5px; border-bottom: 2px solid #222; transition: 0.3s;
+    }
+    .active-stage { color: var(--act); border-bottom: 2px solid var(--act); }
+
+</style>
+</head>
+<body>
+
+<div id="stages">
+    <div id="s1" class="stage">1. RHYTHM</div>
+    <div id="s2" class="stage">2. GROOVE</div>
+    <div id="s3" class="stage">3. HARMONY</div>
+    <div id="s4" class="stage">4. SOUL</div>
+</div>
+
+<div id="ui">
+    <div id="card">
+        <h1>THE LOFT</h1>
+        <p>PROGRESSIVE HOUSE ENGINE // FOR A FRIEND</p>
+        <button id="btn">OPEN THE DOORS</button>
+    </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * THE LOFT
+ * Genre: Deep House (124 BPM)
+ * Logic: 4-Stage Progressive Layering
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let w, h;
+
+// AUDIO
+let ac, master, limiter, compressor, sidechain;
+let isPlaying = false;
+let startTime = 0;
+
+const BPM = 124;
+const BEAT = 60 / BPM;
+const SIXTEENTH = BEAT / 4;
+
+// SCALES (C Minor 9)
+// C3, Eb3, G3, Bb3, D4
+const CHORD_NOTES = [130.81, 155.56, 196.00, 233.08, 293.66]; 
+const BASS_NOTES = { C: 65.41, Eb: 77.78, F: 87.31, G: 98.00, Bb: 116.54 };
+
+// ================= AUDIO ENGINE ================= //
+
+async function init() {
+    ac = new AC();
+    await ac.resume();
+
+    master = ac.createGain();
+    master.gain.value = 0.6;
+
+    // Dynamics
+    limiter = ac.createDynamicsCompressor();
+    limiter.threshold.value = -2;
+    limiter.ratio.value = 20;
+
+    // Master Sidechain Bus (Things connected here duck when kick hits)
+    sidechain = ac.createGain();
+    sidechain.gain.value = 1.0;
+
+    master.connect(limiter).connect(ac.destination);
+    sidechain.connect(master);
+}
+
+// --- 1. DRUMS (The Foundation) ---
+function playKick(t) {
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.1);
+    
+    g.gain.setValueAtTime(1, t);
+    g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+    o.connect(g).connect(master); // Kick goes direct (no sidechain)
+    o.start(t); o.stop(t + 0.3);
+
+    // Trigger Sidechain Ducking
+    sidechain.gain.cancelScheduledValues(t);
+    sidechain.gain.setValueAtTime(0.2, t);
+    sidechain.gain.linearRampToValueAtTime(1.0, t + 0.15); // "Pump" effect
+
+    vis.kick = 1;
+}
+
+function playHat(t, open) {
+    // White Noise
+    const bufSize = ac.sampleRate * (open ? 0.3 : 0.05);
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0; i<bufSize; i++) data[i] = Math.random()*2-1;
+    
+    const noise = ac.createBufferSource();
+    noise.buffer = buf;
+    
+    const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(open ? 0.2 : 0.1, t);
+    g.gain.exponentialRampToValueAtTime(0.01, t + (open ? 0.3 : 0.05));
+
+    noise.connect(f).connect(g).connect(master);
+    noise.start(t);
+    vis.hat = 1;
+}
+
+function playClap(t) {
+    const bufSize = ac.sampleRate * 0.15;
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0; i<bufSize; i++) data[i] = Math.random()*2-1;
+    const noise = ac.createBufferSource(); noise.buffer = buf;
+
+    const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = 1;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.01, t+0.15);
+
+    noise.connect(f).connect(g).connect(master);
+    noise.start(t);
+    vis.clap = 1;
+}
+
+// --- 2. BASS (The Groove) ---
+function playBass(t, freq, len) {
+    const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
+    
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; 
+    f.frequency.setValueAtTime(200, t);
+    f.frequency.linearRampToValueAtTime(1000, t+0.05); // Filter envelope
+    f.frequency.exponentialRampToValueAtTime(200, t+len);
+
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t+0.02);
+    g.gain.linearRampToValueAtTime(0, t+len);
+
+    o.connect(f).connect(g).connect(sidechain); // Ducked
+    o.start(t); o.stop(t+len);
+    vis.bass = 1;
+}
+
+// --- 3. CHORDS (The Atmosphere) ---
+function playChord(t) {
+    // Play full C Minor 9 chord
+    CHORD_NOTES.forEach((freq, i) => {
+        const o = ac.createOscillator();
+        o.type = i % 2 === 0 ? 'sawtooth' : 'triangle'; // Mix waveforms
+        o.frequency.value = freq;
+        
+        const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value = 1500;
+        
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.08, t+0.05); // Soft stab
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+
+        // Pan spread
+        const p = ac.createStereoPanner();
+        p.pan.value = (i / 4) * 2 - 1; // Spread -1 to 1
+
+        o.connect(f).connect(g).connect(p).connect(sidechain);
+        o.start(t); o.stop(t+0.6);
+    });
+    vis.chord = 1;
+}
+
+// --- 4. LEAD (The Soul) ---
+function playLead(t, freq, dur) {
+    const o = ac.createOscillator(); o.type = 'triangle'; 
+    o.frequency.setValueAtTime(freq, t);
+    
+    // Slight vibrato
+    const vib = ac.createOscillator(); vib.frequency.value = 4;
+    const vibG = ac.createGain(); vibG.gain.value = 5;
+    vib.connect(vibG).connect(o.frequency);
+
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.15, t+0.1);
+    g.gain.linearRampToValueAtTime(0, t+dur);
+    
+    // Delay effect
+    const delay = ac.createDelay(); delay.delayTime.value = BEAT * 0.75;
+    const dG = ac.createGain(); dG.gain.value = 0.4;
+    
+    g.connect(delay).connect(dG).connect(delay);
+    g.connect(master);
+    dG.connect(master);
+
+    o.start(t); o.stop(t+dur);
+    vib.start(t); vib.stop(t+dur);
+    vis.lead = { x: Math.random()*w, y: Math.random()*h };
+}
+
+// ================= SEQUENCER ================= //
+
+let step = 0;
+let nextTime = 0;
+
+function scheduler() {
+    if(!isPlaying) return;
+    const lookahead = 0.1;
+    while(nextTime < ac.currentTime + lookahead) {
+        runStep(step, nextTime);
+        nextTime += SIXTEENTH;
+        step++;
+    }
+    setTimeout(scheduler, 25);
+}
+
+function runStep(s, t) {
+    const bar = Math.floor(s / 16);
+    const bStep = s % 16;
+    
+    // PROGRESSION LOGIC (The 4 Stages)
+    // 0-16 Bars: Stage 1 (Rhythm)
+    // 16-32 Bars: Stage 2 (Bass)
+    // 32-48 Bars: Stage 3 (Chords)
+    // 48+ Bars: Stage 4 (Full)
+    
+    let stage = 1;
+    if(bar >= 8) stage = 2; // Shortened for demo (8 bars per stage)
+    if(bar >= 16) stage = 3;
+    if(bar >= 24) stage = 4;
+    
+    // Loop song logic after 40 bars to keep it going
+    if(bar >= 40) { 
+        stage = 4; 
+        if(bar >= 48) { step = 16 * 24; } // Loop back to Stage 4 drop
+    }
+
+    updateStageUI(stage);
+
+    // --- COMPONENT 1: RHYTHM ---
+    if(stage >= 1) {
+        // Kick (4 on floor)
+        if(bStep % 4 === 0) playKick(t);
+        // Hats (Off beat)
+        if(bStep % 2 === 0) playHat(t, false); // Closed
+        if(bStep % 4 === 2) playHat(t, true);  // Open
+        // Clap
+        if(bStep === 4 || bStep === 12) playClap(t);
+    }
+
+    // --- COMPONENT 2: BASS ---
+    if(stage >= 2) {
+        // Syncopated House Bass
+        // 1 . . 1 . . 1 .
+        const note = (bar % 4 === 3) ? BASS_NOTES.F : BASS_NOTES.C; // Change root every 4th bar
+        
+        if(bStep === 0) playBass(t, note, SIXTEENTH * 3);
+        if(bStep === 3) playBass(t, note, SIXTEENTH * 3);
+        if(bStep === 6) playBass(t, (bar%2===0)?BASS_NOTES.Eb:BASS_NOTES.G, SIXTEENTH * 2);
+        if(bStep === 11) playBass(t, note, SIXTEENTH);
+        if(bStep === 14) playBass(t, BASS_NOTES.Bb, SIXTEENTH);
+    }
+
+    // --- COMPONENT 3: CHORDS ---
+    if(stage >= 3) {
+        // Deep House Stabs
+        if(bStep === 2) playChord(t); // Off-beat stab
+        if(bStep === 11) playChord(t); // Syncopated stab
+    }
+
+    // --- COMPONENT 4: LEAD ---
+    if(stage >= 4) {
+        // Simple repeating motif
+        if(bStep === 0) playLead(t, CHORD_NOTES[4]*2, BEAT); // High D
+        if(bStep === 6) playLead(t, CHORD_NOTES[3]*2, BEAT); // Bb
+        if(bStep === 10) playLead(t, CHORD_NOTES[2]*2, BEAT); // G
+    }
+}
+
+function updateStageUI(s) {
+    for(let i=1; i<=4; i++) {
+        const el = document.getElementById('s'+i);
+        if(i <= s) el.classList.add('active-stage');
+        else el.classList.remove('active-stage');
+    }
+}
+
+// ================= VISUALS ================= //
+
+let vis = { kick: 0, hat: 0, clap: 0, bass: 0, chord: 0, lead: null };
+
+function initVis() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.onresize = initVis;
+
+function draw() {
+    requestAnimationFrame(draw);
+    
+    // Dark Trails
+    ctx.fillStyle = 'rgba(17, 17, 17, 0.2)';
+    ctx.fillRect(0,0,w,h);
+    
+    const cx = w/2;
+    const cy = h/2;
+    
+    // Draw 4 Quadrants
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+    ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+    ctx.stroke();
+
+    // 1. TOP LEFT: DRUMS (Pulse)
+    if(vis.kick > 0.01) {
+        vis.kick *= 0.85;
+        const r = 20 + vis.kick * 50;
+        ctx.beginPath();
+        ctx.arc(cx/2, cy/2, r, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${vis.kick})`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    }
+    if(vis.hat > 0.01) { vis.hat *= 0.8; ctx.fillStyle='#fff'; ctx.fillRect(cx/2-2, cy/2-60, 4, 4); }
+    if(vis.clap > 0.01) { vis.clap *= 0.8; ctx.strokeStyle='#fff'; ctx.strokeRect(cx/2-30, cy/2-30, 60, 60); }
+
+    // 2. BOTTOM LEFT: BASS (Wave)
+    if(vis.bass > 0.01) {
+        vis.bass *= 0.9;
+        ctx.beginPath();
+        ctx.moveTo(0, cy * 1.5);
+        for(let i=0; i<cx; i+=10) {
+            ctx.lineTo(i, (cy*1.5) + Math.sin(i*0.1 + Date.now()*0.01) * vis.bass * 30);
+        }
+        ctx.strokeStyle = `rgba(112, 255, 128, ${vis.bass})`; // Green
+        ctx.stroke();
+    }
+
+    // 3. TOP RIGHT: CHORDS (Blocks)
+    if(vis.chord > 0.01) {
+        vis.chord *= 0.9;
+        ctx.fillStyle = `rgba(100, 150, 255, ${vis.chord * 0.5})`;
+        const size = vis.chord * 100;
+        ctx.fillRect((cx*1.5) - size/2, (cy*0.5) - size/2, size, size);
+    }
+
+    // 4. BOTTOM RIGHT: LEAD (Particles)
+    if(vis.lead) {
+        ctx.fillStyle = '#ff70a0';
+        ctx.beginPath();
+        // Constrain to bottom right quadrant
+        const lx = cx + (vis.lead.x % cx);
+        const ly = cy + (vis.lead.y % cy);
+        ctx.arc(lx, ly, 4, 0, Math.PI*2);
+        ctx.fill();
+        vis.lead = null; // One frame flash
+    }
+    
+    // Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '10px Arial';
+    ctx.fillText("RHYTHM", 20, 20);
+    ctx.fillText("ATMOSPHERE", cx+20, 20);
+    ctx.fillText("GROOVE", 20, cy+20);
+    ctx.fillText("SOUL", cx+20, cy+20);
+}
+
+initVis();
+draw();
+
+document.getElementById('btn').addEventListener('click', async () => {
+    document.getElementById('card').style.opacity = 0;
+    document.getElementById('card').style.pointerEvents = 'none';
+    document.getElementById('stages').style.opacity = 1;
+    
+    await init();
+    isPlaying = true;
+    startTime = ac.currentTime + 0.1;
+    nextTime = startTime;
+    scheduler();
+});
+
+</script>
+</body>
+</html>

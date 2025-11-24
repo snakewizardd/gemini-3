@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PRISM // PHASE ENGINE</title>
+<style>
+    body {
+        margin: 0; background: #050505; overflow: hidden;
+        display: flex; justify-content: center; align-items: center; height: 100vh;
+        font-family: 'Courier New', monospace; color: #fff;
+    }
+    canvas { position: absolute; z-index: 1; }
+    #ui {
+        position: absolute; z-index: 10; text-align: center;
+        background: rgba(0,0,0,0.8); padding: 40px; border: 1px solid #fff;
+        transition: opacity 0.5s;
+    }
+    h1 { font-weight: normal; letter-spacing: 5px; margin-bottom: 20px; font-size: 24px; }
+    button {
+        background: #fff; color: #000; border: none; padding: 15px 40px;
+        font-family: inherit; font-weight: bold; cursor: pointer; letter-spacing: 2px;
+    }
+    button:hover { background: #ccc; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>PRISM // PHASE</h1>
+    <button id="btn">INITIALIZE</button>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * PRISM
+ * Concept: Polyrhythmic Phasing (Steve Reich Style)
+ * Audio: FM Synthesis (Glass/Bell tones)
+ */
+
+const ctx = document.getElementById('c').getContext('2d');
+let w, h;
+let ac, master, reverb;
+let isRunning = false;
+
+// SCALE: C Lydian (Dreamy, Bright)
+// C4, D4, E4, F#4, G4, A4, B4, C5
+const NOTES = [261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25];
+
+// PHYSICS CONFIG
+// Each orbiter has a slightly different speed, creating the phase effect.
+const ORBITERS = [
+    { r: 50,  speed: 2.00, note: 7, color: '#fff' },
+    { r: 90,  speed: 2.02, note: 6, color: '#eee' }, // Slightly slower
+    { r: 130, speed: 2.04, note: 4, color: '#ddd' },
+    { r: 170, speed: 2.06, note: 2, color: '#ccc' },
+    { r: 210, speed: 2.08, note: 1, color: '#bbb' },
+    { r: 250, speed: 2.10, note: 0, color: '#aaa' }  // Slowest
+];
+
+// STATE
+let orbitersState = ORBITERS.map(o => ({ ...o, angle: -Math.PI/2 })); // Start at top
+let lastTime = 0;
+
+// ================= AUDIO ENGINE ================= //
+
+async function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ac = new AC();
+    await ac.resume();
+
+    master = ac.createGain();
+    master.gain.value = 0.4;
+
+    // Simple Stereo Delay (Fake Reverb)
+    const delay = ac.createDelay();
+    delay.delayTime.value = 0.25;
+    const feedback = ac.createGain();
+    feedback.gain.value = 0.3;
+    
+    delay.connect(feedback).connect(delay);
+    master.connect(ac.destination);
+    master.connect(delay).connect(ac.destination);
+}
+
+function playBell(freq, vel) {
+    const t = ac.currentTime;
+    
+    // FM Synthesis for Glassy Tone
+    // Carrier (The Tone)
+    const car = ac.createOscillator();
+    car.type = 'sine';
+    car.frequency.value = freq;
+
+    // Modulator (The "Ding" texture)
+    const mod = ac.createOscillator();
+    mod.type = 'sine';
+    mod.frequency.value = freq * 2.0; // 2:1 Ratio = Harmonic
+    
+    const modGain = ac.createGain();
+    modGain.gain.setValueAtTime(freq * 2, t);
+    modGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2); // Sharp attack
+
+    // Envelope
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vel, t + 0.01);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 3.0); // Long tail
+
+    mod.connect(modGain).connect(car.frequency);
+    car.connect(env).connect(master);
+
+    car.start(t);
+    car.stop(t + 3.0);
+    mod.start(t);
+    mod.stop(t + 3.0);
+}
+
+// ================= LOGIC & VISUALS ================= //
+
+function initVis() {
+    w = document.getElementById('c').width = window.innerWidth;
+    h = document.getElementById('c').height = window.innerHeight;
+}
+window.onresize = initVis;
+
+function loop(timestamp) {
+    if (!isRunning) return;
+    requestAnimationFrame(loop);
+
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    
+    // Clear
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // Trail effect
+    ctx.fillRect(0, 0, w, h);
+    
+    const cx = w/2;
+    const cy = h/2;
+
+    // Trigger Line
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy - 300);
+    ctx.strokeStyle = '#333';
+    ctx.stroke();
+
+    // Update & Draw Orbiters
+    orbitersState.forEach(o => {
+        // Update Angle
+        const prevAngle = o.angle;
+        // Speed is radians per second
+        o.angle += o.speed * dt;
+
+        // Check Trigger (Crossing -PI/2, which is top vertical)
+        // We normalize angles to 0-2PI for logic usually, but here simple crossing check:
+        // If we crossed the "top" (modulo 2PI)
+        const crossed = Math.floor((prevAngle + Math.PI/2) / (Math.PI*2)) !== Math.floor((o.angle + Math.PI/2) / (Math.PI*2));
+
+        if (crossed) {
+            playBell(NOTES[o.note], 0.6);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, w, h); // Flash screen slightly
+        }
+
+        // Draw Orbit Path
+        ctx.beginPath();
+        ctx.arc(cx, cy, o.r, 0, Math.PI*2);
+        ctx.strokeStyle = '#222';
+        ctx.stroke();
+
+        // Draw Planet
+        const x = cx + Math.cos(o.angle) * o.r;
+        const y = cy + Math.sin(o.angle) * o.r;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI*2);
+        ctx.fillStyle = crossed ? '#fff' : o.color;
+        ctx.fill();
+        
+        // Draw Connection to center
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.stroke();
+    });
+}
+
+document.getElementById('btn').addEventListener('click', async () => {
+    document.getElementById('ui').style.opacity = 0;
+    document.getElementById('ui').style.pointerEvents = 'none';
+    
+    initVis();
+    await initAudio();
+    isRunning = true;
+    lastTime = performance.now();
+    loop(lastTime);
+});
+
+</script>
+</body>
+</html>
