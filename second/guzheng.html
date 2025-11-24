@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PROJECT: JADE EMPIRE</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;700&display=swap');
+
+        body {
+            margin: 0;
+            background: #0d0d0d;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #e6d5b8; /* Parchment color */
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            z-index: 100;
+            text-align: center;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, rgba(13,13,13,0.4) 0%, #0d0d0d 100%);
+            transition: opacity 1s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0;
+            letter-spacing: 10px;
+            color: #c4a77d;
+            text-shadow: 0 0 20px rgba(196, 167, 125, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            margin-bottom: 40px;
+            opacity: 0.8;
+            font-style: italic;
+        }
+
+        button {
+            background: transparent;
+            color: #c4a77d;
+            border: 2px solid #c4a77d;
+            padding: 15px 50px;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #c4a77d;
+            color: #0d0d0d;
+            box-shadow: 0 0 30px #c4a77d;
+        }
+
+        /* Ink drops */
+        .ink {
+            position: absolute;
+            background: #000;
+            border-radius: 50%;
+            filter: blur(8px);
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="c"></canvas>
+    
+    <div id="ui-layer">
+        <h1>JADE EMPIRE</h1>
+        <div class="subtitle">Guzheng Simulation</div>
+        <button onclick="startGuzheng()">PLUCK THE STRINGS</button>
+    </div>
+
+    <script>
+        // =================================================================
+        // VISUAL ENGINE: VIBRATING STRINGS & INK
+        // =================================================================
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+        let w, h;
+        let strings = [];
+        
+        // Pentatonic Scale (D Major)
+        // D3, E3, F#3, A3, B3, D4...
+        const FREQS = [
+            146.83, 164.81, 185.00, 220.00, 246.94, // Octave 3
+            293.66, 329.63, 369.99, 440.00, 493.88, // Octave 4
+            587.33, 659.25, 739.99, 880.00, 987.77, // Octave 5
+            1174.66 // D6
+        ];
+
+        function resize() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+            initStrings();
+        }
+        window.onresize = resize;
+
+        class GuzhengString {
+            constructor(y, index) {
+                this.y = y;
+                this.baseY = y;
+                this.index = index;
+                this.amplitude = 0;
+                this.freq = 0; // Vibration speed
+            }
+            pluck(intensity) {
+                this.amplitude = 20 * intensity;
+                this.freq = 0.5;
+            }
+            update() {
+                // Damped harmonic oscillator visual
+                this.amplitude *= 0.92;
+                this.freq += 0.1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.strokeStyle = '#5c5c5c';
+                ctx.lineWidth = 1;
+                
+                // Draw straight line if amplitude low
+                if (this.amplitude < 0.5) {
+                    ctx.moveTo(0, this.baseY);
+                    ctx.lineTo(w, this.baseY);
+                } else {
+                    // Draw sine wave
+                    ctx.moveTo(0, this.baseY);
+                    for(let x=0; x<w; x+=20) {
+                        const offset = Math.sin(x * 0.01 + this.freq) * this.amplitude;
+                        ctx.lineTo(x, this.baseY + offset);
+                    }
+                }
+                ctx.stroke();
+
+                // Highlight the bridge
+                ctx.fillStyle = '#8b5a2b';
+                ctx.fillRect(w * 0.8, this.baseY - 2, 10, 4);
+            }
+        }
+
+        function initStrings() {
+            strings = [];
+            const spacing = h / (FREQS.length + 4);
+            for(let i=0; i<FREQS.length; i++) {
+                strings.push(new GuzhengString((i + 2) * spacing, i));
+            }
+        }
+        resize();
+
+        function visualLoop() {
+            requestAnimationFrame(visualLoop);
+            // Parchment background effect
+            ctx.fillStyle = '#1a1a1a'; 
+            ctx.fillRect(0, 0, w, h);
+            
+            strings.forEach(s => {
+                s.update();
+                s.draw();
+            });
+        }
+        visualLoop();
+
+        // =================================================================
+        // AUDIO ENGINE: THE GUZHENG SYNTH
+        // =================================================================
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let actx, master, reverb;
+        let isRunning = false;
+        let nextTime = 0;
+        let noteCount = 0;
+
+        async function startGuzheng() {
+            document.getElementById('ui-layer').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui-layer').style.display = 'none', 1000);
+
+            actx = new AC();
+            if(actx.state === 'suspended') await actx.resume();
+
+            master = actx.createGain();
+            master.gain.value = 0.6;
+
+            // Large Hall Reverb for "Palace" sound
+            reverb = actx.createConvolver();
+            await createImpulse(3.5); 
+            
+            master.connect(reverb);
+            reverb.connect(actx.destination);
+            // Direct signal mix
+            master.connect(actx.destination);
+
+            nextTime = actx.currentTime + 0.5;
+            isRunning = true;
+            scheduler();
+        }
+
+        async function createImpulse(dur) {
+            const rate = actx.sampleRate;
+            const len = rate * dur;
+            const buf = actx.createBuffer(2, len, rate);
+            for(let c=0; c<2; c++) {
+                const d = buf.getChannelData(c);
+                for(let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2);
+            }
+            reverb.buffer = buf;
+        }
+
+        // --- GUZHENG NOTE SYNTHESIS ---
+        function playGuzheng(t, freqIdx, type='pluck') {
+            if (freqIdx < 0 || freqIdx >= FREQS.length) return;
+            
+            const freq = FREQS[freqIdx];
+            const stringObj = strings[freqIdx];
+            
+            // Visual Trigger
+            setTimeout(() => {
+                if(stringObj) stringObj.pluck(1);
+            }, (t - actx.currentTime) * 1000);
+
+            // Audio Synth
+            const osc = actx.createOscillator();
+            const osc2 = actx.createOscillator(); // Overtone
+            
+            // Triangle = Body, Sawtooth = Pluck zing
+            osc.type = 'triangle';
+            osc2.type = 'sawtooth';
+            
+            osc.frequency.value = freq;
+            osc2.frequency.value = freq;
+            osc2.detune.value = 5; // Chorus effect
+
+            // Pitch Bending (The "Nian" technique)
+            if (type === 'bend') {
+                osc.frequency.setValueAtTime(freq, t);
+                // Bend up a whole tone then back
+                osc.frequency.linearRampToValueAtTime(freq * 1.12, t + 0.3);
+                osc.frequency.linearRampToValueAtTime(freq, t + 0.6);
+                
+                osc2.frequency.setValueAtTime(freq, t);
+                osc2.frequency.linearRampToValueAtTime(freq * 1.12, t + 0.3);
+                osc2.frequency.linearRampToValueAtTime(freq, t + 0.6);
+            }
+
+            // Filter Envelope (The "Twang")
+            const filter = actx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.Q.value = 3;
+            filter.frequency.setValueAtTime(200, t);
+            filter.frequency.exponentialRampToValueAtTime(4000, t + 0.05); // Attack
+            filter.frequency.exponentialRampToValueAtTime(500, t + 1.0);   // Decay
+
+            const gain = actx.createGain();
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.4, t + 0.02);
+            // Long decay for harp-like sustain
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
+
+            osc.connect(filter);
+            osc2.connect(filter);
+            // Mix overtone lower volume
+            const overtoneGain = actx.createGain();
+            overtoneGain.gain.value = 0.3;
+            osc2.disconnect();
+            osc2.connect(overtoneGain);
+            overtoneGain.connect(filter);
+
+            filter.connect(gain);
+            gain.connect(master);
+
+            osc.start(t); osc.stop(t+3.0);
+            osc2.start(t); osc2.stop(t+3.0);
+        }
+
+        // =================================================================
+        // THE COMPOSER
+        // =================================================================
+        
+        // Pentatonic Scale Map
+        // 0-4: Low, 5-9: Mid, 10-14: High
+        
+        function scheduler() {
+            if(!isRunning) return;
+            
+            // Safety break to prevent infinite loops
+            const lookahead = 0.1;
+            while (nextTime < actx.currentTime + lookahead) {
+                playSection(nextTime, noteCount);
+                // Variable tempo (Rubato)
+                let tempo = 0.15; // Default fast 16th note
+                
+                // Slow down for intro
+                if (noteCount < 32) tempo = 0.3;
+                
+                nextTime += tempo;
+                noteCount++;
+            }
+            setTimeout(scheduler, 25);
+        }
+
+        function playSection(t, n) {
+            const bar = Math.floor(n / 16);
+            const pos = n % 16;
+
+            // --- SECTION 1: ATMOSPHERE (Intro) ---
+            if (bar < 4) {
+                // Slow, single bent notes (Bass)
+                if (pos === 0) playGuzheng(t, 0, 'bend'); // Low D
+                if (pos === 8) playGuzheng(t, 2, 'bend'); // Low F#
+                // High sparkle
+                if (pos === 12) playGlissando(t, 10, 14, 0.05); 
+            }
+
+            // --- SECTION 2: THE RIVER FLOWS (Melody) ---
+            else if (bar < 12) {
+                // Main Melody Pattern (Tremolo style)
+                // Mid range (5-9)
+                const melody = [5, 7, 8, 9, 8, 7, 5, 2]; 
+                const note = melody[Math.floor(pos/2) % 8];
+                
+                if (n % 2 === 0) playGuzheng(t, note); // Main note
+                
+                // Bass accompaniment on beat 1
+                if (pos === 0) playGuzheng(t, 0);
+                if (pos === 8) playGuzheng(t, 1);
+            }
+
+            // --- SECTION 3: THE STORM (Glissandos) ---
+            else if (bar < 20) {
+                // Rapid Glissandos (The Waterfall)
+                if (pos === 0) playGlissando(t, 0, 15, 0.03); // Up
+                if (pos === 8) playGlissando(t, 15, 5, 0.03); // Down
+                
+                // Heavy Bass punctuations
+                if (pos === 0 || pos === 8) {
+                    playGuzheng(t, 0, 'bend');
+                    playGuzheng(t, 1, 'bend');
+                }
+            }
+
+            // --- SECTION 4: FINALE ---
+            else if (bar < 24) {
+                // Tremolo on high D
+                if (n % 2 === 0) playGuzheng(t, 15); 
+                if (pos === 0) playGuzheng(t, 5);
+            }
+            
+            else {
+                isRunning = false;
+                document.getElementById('ui-layer').style.display = 'flex';
+                document.getElementById('ui-layer').style.opacity = 1;
+                document.querySelector('h1').innerText = "SILENCE";
+            }
+        }
+
+        // Helper for that signature strum sound
+        function playGlissando(startTime, startStr, endStr, speed) {
+            const direction = startStr < endStr ? 1 : -1;
+            const count = Math.abs(endStr - startStr);
+            
+            for(let i=0; i<=count; i++) {
+                const strIdx = startStr + (i * direction);
+                playGuzheng(startTime + (i * speed), strIdx);
+            }
+        }
+
+    </script>
+</body>
+</html>
