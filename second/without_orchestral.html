@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WITHOUT</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0608;height:100vh;overflow:hidden;cursor:pointer;font-family:Georgia,serif}
+canvas{position:fixed;top:0;left:0}
+#t{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);color:rgba(255,200,200,0.8);font-size:0.85rem;letter-spacing:0.4em;z-index:10;text-transform:uppercase}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="t">click anywhere</div>
+<script>
+/**
+ * ════════════════════════════════════════════════════════════════════
+ * W I T H O U T
+ * ════════════════════════════════════════════════════════════════════
+ * 
+ * An orchestral meditation on the progression:
+ * Bm7 → Dsus2 → A → G (→ Em7)
+ * 
+ * With capo 4, actual sounding pitches:
+ * D#m7 → F#sus2 → C# → B (→ G#m7)
+ * 
+ * But we'll work in the written key feel: B minor
+ * 
+ * Structure:
+ *   INTRO - Picking pattern on piano (8 bars)
+ *   VERSE - Strings enter softly (8 bars)  
+ *   PRE-CHORUS - Building tension (8 bars)
+ *   CHORUS - Full orchestra, soaring (16 bars)
+ *   VERSE 2 - Stripped back (8 bars)
+ *   PRE-CHORUS - Building again (8 bars)
+ *   CHORUS - Even bigger (16 bars)
+ *   BRIDGE - Breakdown, raw emotion (8 bars)
+ *   FINAL CHORUS - Everything, maximum intensity (16 bars)
+ *   OUTRO - Fade to single piano (4 bars)
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, comp, verb, verbGain;
+let started = false;
+
+// ════════════════════════════════════════════════════════════════════
+// FREQUENCIES - B minor / D major
+// ════════════════════════════════════════════════════════════════════
+
+const F = {
+    // Sub
+    B0: 30.87, D1: 36.71, E1: 41.20, F1: 43.65, G1: 49.00, A1: 55.00,
+    // Bass
+    B1: 61.74, C2: 65.41, D2: 73.42, E2: 82.41, Fs2: 92.50, G2: 98.00, A2: 110.00,
+    // Low
+    B2: 123.47, Cs3: 138.59, D3: 146.83, E3: 164.81, Fs3: 185.00, G3: 196.00, A3: 220.00,
+    // Mid
+    B3: 246.94, Cs4: 277.18, D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.00, A4: 440.00,
+    // High
+    B4: 493.88, Cs5: 554.37, D5: 587.33, E5: 659.25, Fs5: 739.99, G5: 783.99, A5: 880.00,
+    // Soprano
+    B5: 987.77, D6: 1174.66, Fs6: 1479.98
+};
+
+// THE CHORDS (Bm7 - Dsus2 - A - G - Em7)
+const CHORDS = {
+    Bm7:   { bass: F.B1, notes: [F.B2, F.D3, F.Fs3, F.A3], color: 'minor' },
+    Dsus2: { bass: F.D2, notes: [F.D3, F.E3, F.A3, F.D4], color: 'sus' },
+    A:     { bass: F.A1, notes: [F.A2, F.Cs3, F.E3, F.A3], color: 'major' },
+    G:     { bass: F.G1, notes: [F.G2, F.B2, F.D3, F.G3], color: 'major' },
+    Em7:   { bass: F.E1, notes: [F.E2, F.G2, F.B2, F.D3], color: 'minor' }
+};
+
+// Progression patterns
+const PROG_A = ['Bm7', 'Dsus2', 'A', 'G'];      // Bars 1-2
+const PROG_B = ['Bm7', 'Dsus2', 'A', 'Em7'];    // Bars 3-4 (variation)
+
+// ════════════════════════════════════════════════════════════════════
+// AUDIO INIT
+// ════════════════════════════════════════════════════════════════════
+
+async function init() {
+    ctx = new AC();
+    
+    master = ctx.createGain();
+    master.gain.value = 1.8;
+    
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -6;
+    comp.knee.value = 4;
+    comp.ratio.value = 8;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.15;
+    
+    verb = ctx.createConvolver();
+    verb.buffer = impulse(4.5, 2.2);
+    
+    verbGain = ctx.createGain();
+    verbGain.gain.value = 0.4;
+    
+    master.connect(comp);
+    comp.connect(ctx.destination);
+    master.connect(verbGain);
+    verbGain.connect(verb);
+    verb.connect(comp);
+    
+    await ctx.resume();
+}
+
+function impulse(sec, decay) {
+    const len = ctx.sampleRate * sec;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+        }
+    }
+    return buf;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// INSTRUMENTS
+// ════════════════════════════════════════════════════════════════════
+
+function piano(freq, t, dur, vel = 0.5) {
+    for (let v = 0; v < 3; v++) {
+        const osc = ctx.createOscillator();
+        osc.type = v === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = freq * (v === 2 ? 2.003 : 1);
+        osc.detune.value = (v - 1) * 2;
+        
+        const flt = ctx.createBiquadFilter();
+        flt.type = 'lowpass';
+        flt.frequency.setValueAtTime(freq * 12, t);
+        flt.frequency.exponentialRampToValueAtTime(freq * 2.5, t + dur * 0.4);
+        
+        const env = ctx.createGain();
+        const vol = vel * (v === 0 ? 0.18 : 0.05);
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vol, t + 0.005);
+        env.gain.exponentialRampToValueAtTime(vol * 0.4, t + 0.08);
+        env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        
+        osc.connect(flt);
+        flt.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + dur + 0.1);
+    }
+}
+
+function strings(freqs, t, dur, vel = 0.4, att = 0.3) {
+    freqs.forEach((freq, fi) => {
+        for (let v = 0; v < 6; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 2.5) * 6 + (Math.random() - 0.5) * 4;
+            
+            const vib = ctx.createOscillator();
+            const vG = ctx.createGain();
+            vib.frequency.value = 4.8 + Math.random() * 0.5;
+            vG.gain.value = freq * 0.006;
+            vib.connect(vG);
+            vG.connect(osc.frequency);
+            
+            const flt = ctx.createBiquadFilter();
+            flt.type = 'lowpass';
+            flt.frequency.value = 2200 + Math.random() * 600;
+            flt.Q.value = 0.6;
+            
+            const env = ctx.createGain();
+            const vol = vel * 0.055;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + att);
+            env.gain.setValueAtTime(vol * 0.9, t + dur - att * 0.5);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (fi / freqs.length - 0.5) * 0.6 + (Math.random() - 0.5) * 0.15;
+            
+            osc.connect(flt);
+            flt.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            vib.start(t);
+            osc.start(t);
+            vib.stop(t + dur + 0.1);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+function brass(freqs, t, dur, vel = 0.5) {
+    freqs.forEach((freq, fi) => {
+        for (let v = 0; v < 4; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 1.5) * 10;
+            
+            const form = ctx.createBiquadFilter();
+            form.type = 'peaking';
+            form.frequency.value = 750;
+            form.Q.value = 2;
+            form.gain.value = 5;
+            
+            const bright = ctx.createBiquadFilter();
+            bright.type = 'lowpass';
+            bright.frequency.setValueAtTime(350, t);
+            bright.frequency.linearRampToValueAtTime(2200, t + 0.1);
+            bright.frequency.setValueAtTime(1600, t + dur * 0.75);
+            bright.frequency.linearRampToValueAtTime(500, t + dur);
+            
+            const env = ctx.createGain();
+            const vol = vel * 0.1;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + 0.08);
+            env.gain.setValueAtTime(vol * 0.85, t + dur * 0.8);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (fi / freqs.length - 0.5) * 0.5;
+            
+            osc.connect(form);
+            form.connect(bright);
+            bright.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+function choir(freqs, t, dur, vel = 0.3) {
+    freqs.forEach((freq) => {
+        for (let v = 0; v < 5; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = v % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 2) * 7;
+            
+            const f1 = ctx.createBiquadFilter();
+            f1.type = 'bandpass';
+            f1.frequency.value = 750 + Math.random() * 100;
+            f1.Q.value = 4;
+            
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vel * 0.045, t + 0.6);
+            env.gain.setValueAtTime(vel * 0.04, t + dur - 0.4);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            osc.connect(f1);
+            f1.connect(env);
+            env.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+function bass(freq, t, dur, vel = 0.5) {
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = freq / 2;
+    
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.value = 280;
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vel * 0.3, t + 0.04);
+    env.gain.setValueAtTime(vel * 0.25, t + dur - 0.1);
+    env.gain.linearRampToValueAtTime(0, t + dur);
+    
+    osc.connect(flt);
+    sub.connect(flt);
+    flt.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    sub.start(t);
+    osc.stop(t + dur + 0.1);
+    sub.stop(t + dur + 0.1);
+}
+
+function kick(t, vel = 0.7) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(100, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.6, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    
+    osc.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 0.6);
+    
+    pulseVis = Math.max(pulseVis, vel * 0.8);
+}
+
+function snare(t, vel = 0.5) {
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
+    
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'bandpass';
+    flt.frequency.value = 1800;
+    flt.Q.value = 1;
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.35, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    
+    noise.connect(flt);
+    flt.connect(env);
+    env.connect(master);
+    
+    noise.start(t);
+}
+
+function timpani(freq, t, vel = 0.6) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 1.3, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.07);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.55, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    
+    osc.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 1.5);
+}
+
+// Arpeggiated picking pattern
+function pickPattern(chord, t, beatDur, vel = 0.5) {
+    const ch = CHORDS[chord];
+    const pattern = [ch.bass, ch.notes[0], ch.notes[1], ch.notes[2], ch.notes[3] || ch.notes[2], ch.notes[1]];
+    const eighth = beatDur / 2;
+    
+    pattern.forEach((note, i) => {
+        if (note) piano(note, t + i * eighth * 0.9, beatDur * 1.5, vel * (i === 0 ? 1 : 0.7));
+    });
+}
+
+// Block chord
+function blockChord(chord, t, dur, vel, instruments = ['strings']) {
+    const ch = CHORDS[chord];
+    
+    if (instruments.includes('bass')) bass(ch.bass, t, dur, vel);
+    if (instruments.includes('strings')) strings(ch.notes, t, dur, vel * 0.8, dur * 0.15);
+    if (instruments.includes('brass')) brass(ch.notes, t, dur, vel * 0.7);
+    if (instruments.includes('choir')) choir(ch.notes.map(n => n * 2), t, dur, vel * 0.5);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// THE COMPOSITION
+// ════════════════════════════════════════════════════════════════════
+
+function compose() {
+    const t0 = ctx.currentTime + 0.1;
+    let t = t0;
+    
+    const BPM = 68;
+    const BEAT = 60 / BPM;
+    const BAR = BEAT * 4;
+    
+    // ════════════════════════════════════════════════════════════════
+    // INTRO - Piano picking pattern (8 bars)
+    // ════════════════════════════════════════════════════════════════
+    setText('INTRO');
+    
+    // Bars 1-2: Bm7 - Dsus2
+    pickPattern('Bm7', t, BEAT, 0.55);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    // Bars 3-4: A - G
+    pickPattern('A', t, BEAT, 0.55);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.5);
+    t += BAR;
+    
+    // Bars 5-6: Bm7 - Dsus2 (with gentle bass entering)
+    pickPattern('Bm7', t, BEAT, 0.55);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.2);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    // Bars 7-8: A - Em7
+    pickPattern('A', t, BEAT, 0.55);
+    bass(CHORDS.A.bass, t, BAR, 0.2);
+    t += BAR;
+    pickPattern('Em7', t, BEAT, 0.5);
+    bass(CHORDS.Em7.bass, t, BAR, 0.2);
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // VERSE 1 - Strings enter softly (8 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('VERSE'), (t - t0) * 1000);
+    
+    // Bars 9-10
+    pickPattern('Bm7', t, BEAT, 0.5);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.25, 0.8);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.3);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Bars 11-12
+    pickPattern('A', t, BEAT, 0.5);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.25, 0.6);
+    bass(CHORDS.A.bass, t, BAR * 2, 0.3);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Bars 13-14
+    pickPattern('Bm7', t, BEAT, 0.5);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.3, 0.6);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.35);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Bars 15-16
+    pickPattern('A', t, BEAT, 0.5);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.3, 0.5);
+    bass(CHORDS.A.bass, t, BAR, 0.35);
+    t += BAR;
+    pickPattern('Em7', t, BEAT, 0.5);
+    bass(CHORDS.Em7.bass, t, BAR, 0.35);
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // PRE-CHORUS - Building (8 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('PRE-CHORUS'), (t - t0) * 1000);
+    
+    // Bars 17-18 - Strings fuller, timpani enters
+    blockChord('Bm7', t, BAR * 2, 0.45, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.4);
+    pickPattern('Bm7', t, BEAT, 0.45);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Bars 19-20
+    blockChord('A', t, BAR * 2, 0.5, ['strings', 'bass']);
+    timpani(CHORDS.A.bass, t, 0.45);
+    pickPattern('A', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.5);
+    t += BAR;
+    
+    // Bars 21-22 - More intensity
+    blockChord('Bm7', t, BAR * 2, 0.55, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.5);
+    kick(t, 0.5);
+    pickPattern('Bm7', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    kick(t + BEAT * 2, 0.4);
+    t += BAR;
+    
+    // Bars 23-24 - Peak of pre-chorus
+    blockChord('A', t, BAR, 0.6, ['strings', 'bass']);
+    timpani(CHORDS.A.bass, t, 0.55);
+    kick(t, 0.55);
+    pickPattern('A', t, BEAT, 0.55);
+    t += BAR;
+    
+    blockChord('Em7', t, BAR, 0.6, ['strings', 'bass']);
+    timpani(CHORDS.Em7.bass, t, 0.5);
+    kick(t, 0.5);
+    snare(t + BEAT * 2, 0.4);
+    snare(t + BEAT * 2.5, 0.35);
+    snare(t + BEAT * 3, 0.4);
+    snare(t + BEAT * 3.5, 0.45);
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // CHORUS 1 - Full orchestra, SOARING (16 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('CHORUS'), (t - t0) * 1000);
+    
+    // FIRST HALF (8 bars)
+    // Bars 25-26
+    blockChord('Bm7', t, BAR * 2, 0.7, ['strings', 'bass', 'brass']);
+    choir(CHORDS.Bm7.notes.map(n => n * 2), t, BAR * 2, 0.35);
+    timpani(CHORDS.Bm7.bass, t, 0.7);
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.D5, t, BEAT * 1.5, 0.6);
+    piano(F.Fs5, t + BEAT * 1.5, BEAT, 0.55);
+    t += BAR;
+    kick(t, 0.6);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.B5, t, BEAT * 2, 0.65);
+    t += BAR;
+    
+    // Bars 27-28
+    blockChord('A', t, BAR * 2, 0.7, ['strings', 'bass', 'brass']);
+    choir(CHORDS.A.notes.map(n => n * 2), t, BAR * 2, 0.35);
+    timpani(CHORDS.A.bass, t, 0.65);
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.A5, t, BEAT, 0.6);
+    piano(F.Fs5, t + BEAT, BEAT, 0.55);
+    t += BAR;
+    kick(t, 0.6);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.E5, t, BEAT * 2, 0.6);
+    t += BAR;
+    
+    // Bars 29-30
+    blockChord('Bm7', t, BAR * 2, 0.75, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Bm7.bass, t, 0.7);
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.D5, t, BEAT, 0.6);
+    piano(F.E5, t + BEAT, BEAT, 0.55);
+    t += BAR;
+    kick(t, 0.65);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.Fs5, t, BEAT * 2, 0.65);
+    t += BAR;
+    
+    // Bars 31-32
+    blockChord('Em7', t, BAR * 2, 0.7, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Em7.bass, t, 0.65);
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.5);
+    piano(F.E5, t, BEAT, 0.55);
+    piano(F.D5, t + BEAT, BEAT * 2, 0.6);
+    t += BAR;
+    kick(t, 0.6);
+    snare(t + BEAT * 2, 0.5);
+    t += BAR;
+    
+    // SECOND HALF (8 bars) - Even bigger
+    // Bars 33-34
+    blockChord('Bm7', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+    timpani(CHORDS.Bm7.bass, t, 0.75);
+    kick(t, 0.75);
+    snare(t + BEAT * 2, 0.55);
+    brass([F.Fs5, F.B5], t, BAR, 0.5);
+    t += BAR;
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.55);
+    brass([F.D5, F.Fs5], t, BAR, 0.45);
+    t += BAR;
+    
+    // Bars 35-36
+    blockChord('A', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+    timpani(CHORDS.A.bass, t, 0.7);
+    kick(t, 0.75);
+    snare(t + BEAT * 2, 0.55);
+    brass([F.E5, F.A5], t, BAR, 0.5);
+    t += BAR;
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.55);
+    brass([F.Cs5, F.E5], t, BAR, 0.45);
+    t += BAR;
+    
+    // Bars 37-38
+    blockChord('Bm7', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+    timpani(CHORDS.Bm7.bass, t, 0.75);
+    kick(t, 0.75);
+    snare(t + BEAT * 2, 0.55);
+    brass([F.D5, F.Fs5, F.B5], t, BAR * 2, 0.55);
+    t += BAR;
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.55);
+    t += BAR;
+    
+    // Bars 39-40
+    blockChord('Em7', t, BAR * 2, 0.75, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Em7.bass, t, 0.7);
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.5);
+    brass([F.B4, F.E5], t, BAR * 2, 0.5);
+    t += BAR;
+    kick(t, 0.6);
+    snare(t + BEAT * 2, 0.5);
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // VERSE 2 - Stripped back (8 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('VERSE 2'), (t - t0) * 1000);
+    
+    // Bars 41-44
+    pickPattern('Bm7', t, BEAT, 0.5);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.3, 0.6);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.3);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.45);
+    t += BAR;
+    
+    pickPattern('A', t, BEAT, 0.5);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.3, 0.5);
+    bass(CHORDS.A.bass, t, BAR * 2, 0.3);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Bars 45-48
+    pickPattern('Bm7', t, BEAT, 0.55);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.35, 0.5);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.35);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    pickPattern('A', t, BEAT, 0.55);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.35, 0.4);
+    bass(CHORDS.A.bass, t, BAR, 0.35);
+    t += BAR;
+    pickPattern('Em7', t, BEAT, 0.5);
+    bass(CHORDS.Em7.bass, t, BAR, 0.35);
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // PRE-CHORUS 2 - Building again (8 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('PRE-CHORUS'), (t - t0) * 1000);
+    
+    // Bars 49-52
+    blockChord('Bm7', t, BAR * 2, 0.5, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.45);
+    pickPattern('Bm7', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    blockChord('A', t, BAR * 2, 0.55, ['strings', 'bass']);
+    timpani(CHORDS.A.bass, t, 0.5);
+    pickPattern('A', t, BEAT, 0.55);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.55);
+    kick(t + BEAT * 2, 0.4);
+    t += BAR;
+    
+    // Bars 53-56 - More intensity
+    blockChord('Bm7', t, BAR * 2, 0.6, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Bm7.bass, t, 0.55);
+    kick(t, 0.55);
+    pickPattern('Bm7', t, BEAT, 0.55);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.55);
+    kick(t + BEAT * 2, 0.5);
+    t += BAR;
+    
+    blockChord('A', t, BAR, 0.65, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.A.bass, t, 0.6);
+    kick(t, 0.6);
+    pickPattern('A', t, BEAT, 0.6);
+    t += BAR;
+    
+    blockChord('Em7', t, BAR, 0.65, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Em7.bass, t, 0.55);
+    kick(t, 0.55);
+    // Snare build
+    for (let i = 0; i < 8; i++) {
+        snare(t + BEAT * 2 + (i * BEAT / 4), 0.3 + i * 0.03);
+    }
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // CHORUS 2 - Even BIGGER (16 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('CHORUS'), (t - t0) * 1000);
+    
+    // Bars 57-64 (First half)
+    for (let rep = 0; rep < 2; rep++) {
+        blockChord('Bm7', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+        timpani(CHORDS.Bm7.bass, t, 0.75);
+        kick(t, 0.75);
+        snare(t + BEAT * 2, 0.55);
+        if (rep === 0) brass([F.D5, F.Fs5, F.B5], t, BAR, 0.55);
+        t += BAR;
+        kick(t, 0.7);
+        snare(t + BEAT * 2, 0.55);
+        t += BAR;
+        
+        const endChord = rep === 0 ? 'G' : 'Em7';
+        blockChord('A', t, BAR, 0.8, ['strings', 'bass', 'brass', 'choir']);
+        timpani(CHORDS.A.bass, t, 0.7);
+        kick(t, 0.75);
+        snare(t + BEAT * 2, 0.55);
+        t += BAR;
+        
+        blockChord(endChord, t, BAR, 0.75, ['strings', 'bass', 'brass']);
+        timpani(CHORDS[endChord].bass, t, 0.65);
+        kick(t, 0.7);
+        snare(t + BEAT * 2, 0.55);
+        t += BAR;
+    }
+    
+    // Bars 65-72 (Second half - maximum)
+    for (let rep = 0; rep < 2; rep++) {
+        blockChord('Bm7', t, BAR * 2, 0.85, ['strings', 'bass', 'brass', 'choir']);
+        timpani(CHORDS.Bm7.bass, t, 0.8);
+        kick(t, 0.8);
+        snare(t + BEAT * 2, 0.6);
+        brass([F.Fs5, F.B5, F.D6], t, BAR, 0.6);
+        t += BAR;
+        kick(t, 0.75);
+        snare(t + BEAT * 2, 0.6);
+        t += BAR;
+        
+        const endChord = rep === 0 ? 'G' : 'Em7';
+        blockChord('A', t, BAR, 0.85, ['strings', 'bass', 'brass', 'choir']);
+        timpani(CHORDS.A.bass, t, 0.75);
+        kick(t, 0.8);
+        snare(t + BEAT * 2, 0.6);
+        brass([F.E5, F.A5, F.Cs6 || F.Cs5 * 2], t, BAR, 0.55);
+        t += BAR;
+        
+        blockChord(endChord, t, BAR, 0.8, ['strings', 'bass', 'brass']);
+        timpani(CHORDS[endChord].bass, t, 0.7);
+        kick(t, 0.75);
+        snare(t + BEAT * 2, 0.55);
+        t += BAR;
+    }
+    
+    // ════════════════════════════════════════════════════════════════
+    // BRIDGE - Raw, emotional (8 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('BRIDGE'), (t - t0) * 1000);
+    
+    // Stripped to piano and strings
+    // Bars 73-76
+    pickPattern('Bm7', t, BEAT, 0.6);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.4, 0.8);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.35);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.55);
+    t += BAR;
+    
+    pickPattern('A', t, BEAT, 0.6);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.45, 0.6);
+    bass(CHORDS.A.bass, t, BAR * 2, 0.35);
+    timpani(CHORDS.A.bass, t, 0.4);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.55);
+    t += BAR;
+    
+    // Bars 77-80 - Building back
+    blockChord('Bm7', t, BAR * 2, 0.55, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.5);
+    pickPattern('Bm7', t, BEAT, 0.6);
+    kick(t + BEAT * 2, 0.4);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.6);
+    kick(t + BEAT * 2, 0.45);
+    t += BAR;
+    
+    blockChord('A', t, BAR, 0.6, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.A.bass, t, 0.55);
+    kick(t, 0.55);
+    t += BAR;
+    
+    blockChord('Em7', t, BAR, 0.65, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Em7.bass, t, 0.5);
+    kick(t, 0.5);
+    // Big snare build
+    for (let i = 0; i < 12; i++) {
+        snare(t + BEAT + (i * BEAT / 4), 0.25 + i * 0.04);
+    }
+    t += BAR;
+    
+    // ════════════════════════════════════════════════════════════════
+    // FINAL CHORUS - EVERYTHING (16 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('FINAL CHORUS'), (t - t0) * 1000);
+    
+    // THE BIGGEST - All instruments, maximum velocity
+    for (let section = 0; section < 4; section++) {
+        const vel = 0.85 + section * 0.03;
+        
+        blockChord('Bm7', t, BAR * 2, vel, ['strings', 'bass', 'brass', 'choir']);
+        timpani(CHORDS.Bm7.bass, t, 0.85);
+        kick(t, 0.85);
+        snare(t + BEAT * 2, 0.65);
+        
+        if (section < 2) {
+            brass([F.D5, F.Fs5, F.B5], t, BAR, 0.6);
+        } else {
+            brass([F.Fs5, F.B5, F.D6], t, BAR, 0.65);
+            choir([F.B5, F.D6, F.Fs6], t, BAR * 2, 0.4);
+        }
+        t += BAR;
+        
+        kick(t, 0.8);
+        snare(t + BEAT * 2, 0.6);
+        t += BAR;
+        
+        const endChord = section % 2 === 0 ? 'G' : 'Em7';
+        blockChord('A', t, BAR, vel, ['strings', 'bass', 'brass', 'choir']);
+        timpani(CHORDS.A.bass, t, 0.8);
+        kick(t, 0.85);
+        snare(t + BEAT * 2, 0.65);
+        
+        if (section >= 2) {
+            brass([F.E5, F.A5, F.Cs5 * 2], t, BAR, 0.6);
+        }
+        t += BAR;
+        
+        blockChord(endChord, t, BAR, vel * 0.95, ['strings', 'bass', 'brass']);
+        timpani(CHORDS[endChord].bass, t, 0.75);
+        kick(t, 0.8);
+        snare(t + BEAT * 2, 0.6);
+        t += BAR;
+    }
+    
+    // ════════════════════════════════════════════════════════════════
+    // OUTRO - Fade to piano (4 bars)
+    // ════════════════════════════════════════════════════════════════
+    setTimeout(() => setText('OUTRO'), (t - t0) * 1000);
+    
+    // Final sustained chord
+    blockChord('Bm7', t, BAR * 4, 0.6, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.6);
+    
+    pickPattern('Bm7', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Final two bars - just piano
+    piano(F.B3, t, BAR * 2, 0.5);
+    piano(F.D4, t, BAR * 2, 0.45);
+    piano(F.Fs4, t, BAR * 2, 0.45);
+    piano(F.A4, t, BAR * 2, 0.4);
+    piano(F.D5, t + BEAT, BAR, 0.5);
+    piano(F.B4, t + BEAT * 2, BAR, 0.45);
+    
+    t += BAR * 2;
+    
+    // Very last note
+    piano(F.B4, t, BAR * 2, 0.4);
+    piano(F.Fs4, t + 0.1, BAR * 2, 0.35);
+    piano(F.D4, t + 0.2, BAR * 2, 0.35);
+    piano(F.B3, t + 0.3, BAR * 3, 0.4);
+    
+    setTimeout(() => setText('— FINE —'), (t - t0 + BAR * 2) * 1000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// VISUALS
+// ════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h;
+let pulseVis = 0;
+let time = 0;
+
+function setText(txt) {
+    document.getElementById('t').textContent = txt;
+}
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+
+function render() {
+    requestAnimationFrame(render);
+    time += 0.008;
+    
+    c.fillStyle = 'rgba(10, 6, 8, 0.12)';
+    c.fillRect(0, 0, w, h);
+    
+    if (pulseVis > 0.03) {
+        const grad = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h) * pulseVis * 0.6);
+        grad.addColorStop(0, `rgba(200, 150, 180, ${pulseVis * 0.35})`);
+        grad.addColorStop(0.5, `rgba(120, 80, 100, ${pulseVis * 0.2})`);
+        grad.addColorStop(1, 'transparent');
+        c.fillStyle = grad;
+        c.fillRect(0, 0, w, h);
+    }
+    
+    if (started) {
+        c.fillStyle = `rgba(255, 220, 230, ${0.08 + pulseVis * 0.25})`;
+        for (let i = 0; i < 15; i++) {
+            const x = (Math.sin(time * 0.4 + i * 0.6) * 0.35 + 0.5) * w;
+            const y = (Math.cos(time * 0.25 + i * 0.8) * 0.35 + 0.5) * h;
+            const r = 1.5 + pulseVis * 4;
+            c.beginPath();
+            c.arc(x, y, r, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+    
+    pulseVis *= 0.93;
+}
+
+window.addEventListener('resize', resize);
+resize();
+render();
+
+// ════════════════════════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════════════════════════
+
+document.addEventListener('click', async () => {
+    if (started) return;
+    started = true;
+    
+    await init();
+    compose();
+}, { once: true });
+</script>
+</body>
+</html>

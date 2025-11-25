@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPUS</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0c;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: Georgia, serif;
+    color: #d4c4a8;
+    overflow: hidden;
+}
+canvas {
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 1;
+}
+#start {
+    position: fixed;
+    z-index: 100;
+    text-align: center;
+    cursor: pointer;
+    transition: opacity 2s;
+}
+#start.hidden { opacity: 0; pointer-events: none; }
+#start h1 {
+    font-size: 4rem;
+    font-weight: normal;
+    letter-spacing: 0.5em;
+    margin-bottom: 1rem;
+}
+#start p {
+    font-style: italic;
+    opacity: 0.5;
+    font-size: 0.9rem;
+}
+#info {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    text-align: center;
+    font-size: 0.8rem;
+    opacity: 0;
+    transition: opacity 1s;
+    letter-spacing: 0.2em;
+}
+#info.visible { opacity: 0.6; }
+</style>
+</head>
+<body>
+
+<div id="start">
+    <h1>OPUS</h1>
+    <p>click to begin</p>
+</div>
+
+<div id="info">
+    <span id="section">—</span>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * OPUS
+ * ════════════════════════════════════════════════════════════════════════════
+ * 
+ * A composition in Ab Major
+ * 
+ * Structure:
+ *   I. Invocation (8 bars) - Piano states the theme
+ *  II. Elevation (16 bars) - Strings join, counterpoint develops  
+ * III. Apotheosis (16 bars) - Full orchestra, brass chorale
+ *  IV. Transcendence (8 bars) - Resolution and coda
+ *
+ * Duration: ~2 minutes at 72 BPM
+ */
+
+// ════════════════════════════════════════════════════════════════════════════
+// HARMONIC FOUNDATION
+// ════════════════════════════════════════════════════════════════════════════
+
+const NOTE = {
+    // Ab Major scale across octaves
+    Ab1: 51.91, Bb1: 58.27, C2: 65.41, Db2: 69.30, Eb2: 77.78, F2: 87.31, G2: 98.00,
+    Ab2: 103.83, Bb2: 116.54, C3: 130.81, Db3: 138.59, Eb3: 155.56, F3: 174.61, G3: 196.00,
+    Ab3: 207.65, Bb3: 233.08, C4: 261.63, Db4: 277.18, Eb4: 311.13, F4: 349.23, G4: 392.00,
+    Ab4: 415.30, Bb4: 466.16, C5: 523.25, Db5: 554.37, Eb5: 622.25, F5: 698.46, G5: 783.99,
+    Ab5: 830.61, Bb5: 932.33, C6: 1046.50
+};
+
+// The harmonic progression - rich romantic voicings
+const HARMONY = {
+    // I - Ab Major (tonic)
+    I: { bass: NOTE.Ab2, chord: [NOTE.Ab3, NOTE.C4, NOTE.Eb4, NOTE.Ab4] },
+    // IV - Db Major 
+    IV: { bass: NOTE.Db2, chord: [NOTE.Db3, NOTE.F3, NOTE.Ab3, NOTE.Db4] },
+    // V - Eb Major
+    V: { bass: NOTE.Eb2, chord: [NOTE.Eb3, NOTE.G3, NOTE.Bb3, NOTE.Eb4] },
+    // vi - F minor
+    vi: { bass: NOTE.F2, chord: [NOTE.F3, NOTE.Ab3, NOTE.C4, NOTE.F4] },
+    // ii - Bb minor
+    ii: { bass: NOTE.Bb1, chord: [NOTE.Bb2, NOTE.Db3, NOTE.F3, NOTE.Bb3] },
+    // V7 - Eb dominant 7
+    V7: { bass: NOTE.Eb2, chord: [NOTE.Eb3, NOTE.G3, NOTE.Bb3, NOTE.Db4] },
+    // bVI - Fb/E Major (borrowed, for color)
+    bVI: { bass: NOTE.E2 || 82.41, chord: [NOTE.Ab3, NOTE.C4, NOTE.Eb4] },
+    // Isus4
+    Isus: { bass: NOTE.Ab2, chord: [NOTE.Ab3, NOTE.Db4, NOTE.Eb4, NOTE.Ab4] }
+};
+
+// The main melodic theme (in scale degrees, will be transposed)
+const THEME = [
+    { deg: 5, dur: 1 },    // Eb - upbeat
+    { deg: 1, dur: 2 },    // Ab - strong
+    { deg: 2, dur: 1 },    // Bb - passing
+    { deg: 3, dur: 2 },    // C - arrival
+    { deg: 2, dur: 1 },    // Bb - turn
+    { deg: 1, dur: 1 },    // Ab - resolution
+    { deg: 7, dur: 1 },    // G - leading tone feel
+    { deg: 1, dur: 3 },    // Ab - home
+];
+
+// Scale for melodic transposition
+const SCALE = [NOTE.Ab4, NOTE.Bb4, NOTE.C5, NOTE.Db5, NOTE.Eb5, NOTE.F5, NOTE.G5, NOTE.Ab5];
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ════════════════════════════════════════════════════════════════════════════
+
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb, reverbGain, compressor;
+
+const BPM = 72;
+const BEAT = 60 / BPM;
+const EIGHTH = BEAT / 2;
+
+async function initAudio() {
+    ctx = new AC();
+    
+    // Master output
+    master = ctx.createGain();
+    master.gain.value = 1.8;
+    
+    // Gentle compression for glue
+    compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -12;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.01;
+    compressor.release.value = 0.2;
+    
+    // Concert hall reverb
+    reverb = ctx.createConvolver();
+    reverb.buffer = createHallReverb(3.5, 2.2);
+    
+    reverbGain = ctx.createGain();
+    reverbGain.gain.value = 0.35;
+    
+    // Routing
+    master.connect(compressor);
+    compressor.connect(ctx.destination);
+    
+    master.connect(reverbGain);
+    reverbGain.connect(reverb);
+    reverb.connect(compressor);
+    
+    await ctx.resume();
+}
+
+function createHallReverb(seconds, decay) {
+    const len = ctx.sampleRate * seconds;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    
+    for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            // Early reflections
+            const early = i < ctx.sampleRate * 0.08 ? 
+                Math.random() * 0.3 * Math.pow(1 - i / (ctx.sampleRate * 0.08), 1.5) : 0;
+            // Diffuse tail
+            const tail = Math.pow(1 - t, decay) * (Math.random() * 2 - 1) * 0.7;
+            data[i] = early + tail;
+        }
+    }
+    return buf;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INSTRUMENTS
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PIANO - Hammer attack, string resonance, damper simulation
+ */
+function piano(freq, time, duration, velocity = 0.5) {
+    const t = time;
+    const voices = 3;
+    
+    for (let v = 0; v < voices; v++) {
+        const osc = ctx.createOscillator();
+        // Mix of harmonics for piano timbre
+        osc.type = v === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = freq * (v === 2 ? 2.01 : 1); // Slight octave shimmer
+        osc.detune.value = (v - 1) * 3; // Subtle chorus
+        
+        // Hammer attack filter
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(freq * 8, t);
+        filter.frequency.exponentialRampToValueAtTime(freq * 3, t + 0.1);
+        filter.frequency.exponentialRampToValueAtTime(freq * 1.5, t + duration);
+        filter.Q.value = 1;
+        
+        // Piano envelope - quick attack, long decay
+        const env = ctx.createGain();
+        const vol = velocity * (v === 0 ? 0.15 : 0.05);
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vol, t + 0.008);
+        env.gain.exponentialRampToValueAtTime(vol * 0.6, t + 0.1);
+        env.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        
+        osc.connect(filter);
+        filter.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + duration + 0.1);
+    }
+}
+
+/**
+ * STRINGS - Lush ensemble with natural movement
+ */
+function strings(freqs, time, duration, velocity = 0.4, attack = 0.3) {
+    const t = time;
+    const voicesPerNote = 4;
+    
+    freqs.forEach((freq, idx) => {
+        for (let v = 0; v < voicesPerNote; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - voicesPerNote/2) * 6 + (Math.random() - 0.5) * 4;
+            
+            // Vibrato
+            const vib = ctx.createOscillator();
+            const vibGain = ctx.createGain();
+            vib.frequency.value = 4.5 + Math.random() * 0.5;
+            vibGain.gain.value = freq * 0.006;
+            vib.connect(vibGain);
+            vibGain.connect(osc.frequency);
+            
+            // String formant
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 2500 + Math.random() * 500;
+            filter.Q.value = 0.7;
+            
+            // Envelope
+            const env = ctx.createGain();
+            const vol = velocity * 0.08 / voicesPerNote;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + attack);
+            env.gain.setValueAtTime(vol, t + duration - attack * 0.5);
+            env.gain.linearRampToValueAtTime(0, t + duration);
+            
+            // Subtle panning
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (idx / freqs.length - 0.5) * 0.6 + (Math.random() - 0.5) * 0.2;
+            
+            osc.connect(filter);
+            filter.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            vib.start(t);
+            osc.start(t);
+            vib.stop(t + duration + 0.1);
+            osc.stop(t + duration + 0.1);
+        }
+    });
+}
+
+/**
+ * BRASS - Noble chorale sound
+ */
+function brass(freqs, time, duration, velocity = 0.5) {
+    const t = time;
+    
+    freqs.forEach((freq, idx) => {
+        for (let v = 0; v < 3; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 1) * 10;
+            
+            // Brass formant - the "golden" tone
+            const formant = ctx.createBiquadFilter();
+            formant.type = 'peaking';
+            formant.frequency.value = 700;
+            formant.Q.value = 2;
+            formant.gain.value = 4;
+            
+            // Brightness envelope
+            const bright = ctx.createBiquadFilter();
+            bright.type = 'lowpass';
+            bright.frequency.setValueAtTime(400, t);
+            bright.frequency.linearRampToValueAtTime(2000, t + 0.15);
+            bright.frequency.setValueAtTime(1500, t + duration * 0.7);
+            bright.frequency.linearRampToValueAtTime(600, t + duration);
+            
+            const env = ctx.createGain();
+            const vol = velocity * 0.1 / 3;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + 0.12);
+            env.gain.setValueAtTime(vol * 0.8, t + duration * 0.8);
+            env.gain.linearRampToValueAtTime(0, t + duration);
+            
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (idx / freqs.length - 0.5) * 0.5;
+            
+            osc.connect(formant);
+            formant.connect(bright);
+            bright.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + duration + 0.1);
+        }
+    });
+}
+
+/**
+ * BASS - Deep foundation
+ */
+function bass(freq, time, duration, velocity = 0.5) {
+    const t = time;
+    
+    // Fundamental
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    
+    // Sub octave
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = freq / 2;
+    
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 300;
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(velocity * 0.25, t + 0.05);
+    env.gain.setValueAtTime(velocity * 0.2, t + duration * 0.8);
+    env.gain.linearRampToValueAtTime(0, t + duration);
+    
+    osc.connect(filter);
+    sub.connect(filter);
+    filter.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    sub.start(t);
+    osc.stop(t + duration + 0.1);
+    sub.stop(t + duration + 0.1);
+}
+
+/**
+ * TIMPANI - Orchestral punctuation
+ */
+function timpani(freq, time, velocity = 0.6) {
+    const t = time;
+    
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 1.3, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(velocity * 0.5, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(500, t);
+    filter.frequency.exponentialRampToValueAtTime(150, t + 0.3);
+    
+    osc.connect(filter);
+    filter.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 1.5);
+}
+
+/**
+ * CHOIR - Ethereal pad
+ */
+function choir(freqs, time, duration, velocity = 0.3) {
+    const t = time;
+    
+    freqs.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        
+        // Vowel formant "Ah"
+        const f1 = ctx.createBiquadFilter();
+        f1.type = 'bandpass';
+        f1.frequency.value = 800;
+        f1.Q.value = 5;
+        
+        const f2 = ctx.createBiquadFilter();
+        f2.type = 'bandpass';
+        f2.frequency.value = 1200;
+        f2.Q.value = 5;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(velocity * 0.06, t + 1);
+        env.gain.setValueAtTime(velocity * 0.05, t + duration - 1);
+        env.gain.linearRampToValueAtTime(0, t + duration);
+        
+        osc.connect(f1);
+        osc.connect(f2);
+        f1.connect(env);
+        f2.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + duration + 0.1);
+    });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE SCORE
+// ════════════════════════════════════════════════════════════════════════════
+
+function compose() {
+    const t0 = ctx.currentTime + 0.3;
+    let t = t0;
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // I. INVOCATION - Piano alone states the theme
+    // ────────────────────────────────────────────────────────────────────────
+    updateSection('I. INVOCATION');
+    
+    // Bar 1-2: I chord, theme begins
+    bass(HARMONY.I.bass, t, BEAT * 4, 0.3);
+    piano(NOTE.Ab3, t, BEAT * 2, 0.5);
+    piano(NOTE.C4, t, BEAT * 2, 0.4);
+    piano(NOTE.Eb4, t, BEAT * 2, 0.4);
+    
+    // Melody
+    piano(NOTE.Eb5, t, BEAT, 0.6);
+    piano(NOTE.Ab5, t + BEAT, BEAT * 1.5, 0.65);
+    piano(NOTE.Bb5, t + BEAT * 2.5, BEAT * 0.5, 0.5);
+    piano(NOTE.C6, t + BEAT * 3, BEAT, 0.6);
+    
+    t += BEAT * 4;
+    
+    // Bar 3-4: IV chord
+    bass(HARMONY.IV.bass, t, BEAT * 4, 0.3);
+    piano(NOTE.Db3, t, BEAT * 2, 0.45);
+    piano(NOTE.F3, t, BEAT * 2, 0.4);
+    piano(NOTE.Ab3, t, BEAT * 2, 0.4);
+    
+    piano(NOTE.Bb5, t, BEAT * 0.5, 0.55);
+    piano(NOTE.Ab5, t + BEAT * 0.5, BEAT * 0.5, 0.5);
+    piano(NOTE.G5, t + BEAT, BEAT * 0.5, 0.5);
+    piano(NOTE.Ab5, t + BEAT * 1.5, BEAT * 2.5, 0.6);
+    
+    t += BEAT * 4;
+    
+    // Bar 5-6: V - I cadence
+    bass(HARMONY.V.bass, t, BEAT * 2, 0.35);
+    piano(NOTE.Eb3, t, BEAT * 2, 0.5);
+    piano(NOTE.G3, t, BEAT * 2, 0.45);
+    piano(NOTE.Bb3, t, BEAT * 2, 0.45);
+    
+    piano(NOTE.Eb5, t, BEAT, 0.55);
+    piano(NOTE.F5, t + BEAT, BEAT, 0.5);
+    
+    t += BEAT * 2;
+    
+    bass(HARMONY.I.bass, t, BEAT * 2, 0.35);
+    piano(NOTE.Ab3, t, BEAT * 2, 0.5);
+    piano(NOTE.C4, t, BEAT * 2, 0.45);
+    piano(NOTE.Eb4, t, BEAT * 2, 0.45);
+    
+    piano(NOTE.Eb5, t, BEAT * 2, 0.6);
+    
+    t += BEAT * 2;
+    
+    // Bar 7-8: vi - V7 (tension)
+    bass(HARMONY.vi.bass, t, BEAT * 2, 0.35);
+    piano(NOTE.F3, t, BEAT * 2, 0.5);
+    piano(NOTE.Ab3, t, BEAT * 2, 0.45);
+    piano(NOTE.C4, t, BEAT * 2, 0.45);
+    
+    piano(NOTE.C5, t, BEAT, 0.55);
+    piano(NOTE.Db5, t + BEAT, BEAT, 0.55);
+    
+    t += BEAT * 2;
+    
+    bass(HARMONY.V7.bass, t, BEAT * 2, 0.35);
+    piano(NOTE.Eb3, t, BEAT * 2, 0.5);
+    piano(NOTE.G3, t, BEAT * 2, 0.45);
+    piano(NOTE.Db4, t, BEAT * 2, 0.5); // The 7th
+    
+    piano(NOTE.Eb5, t, BEAT, 0.5);
+    piano(NOTE.Db5, t + BEAT, BEAT, 0.55);
+    
+    t += BEAT * 2;
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // II. ELEVATION - Strings enter, texture expands
+    // ────────────────────────────────────────────────────────────────────────
+    setTimeout(() => updateSection('II. ELEVATION'), (t - t0) * 1000);
+    
+    // Bar 9-12: Theme restated with strings
+    bass(HARMONY.I.bass, t, BEAT * 4, 0.4);
+    strings([NOTE.Ab3, NOTE.C4, NOTE.Eb4], t, BEAT * 4, 0.35, 0.5);
+    
+    piano(NOTE.Eb5, t, BEAT, 0.5);
+    piano(NOTE.Ab5, t + BEAT, BEAT * 1.5, 0.55);
+    piano(NOTE.Bb5, t + BEAT * 2.5, BEAT * 0.5, 0.45);
+    piano(NOTE.C6, t + BEAT * 3, BEAT, 0.55);
+    
+    t += BEAT * 4;
+    
+    bass(HARMONY.IV.bass, t, BEAT * 4, 0.4);
+    strings([NOTE.Db3, NOTE.F3, NOTE.Ab3, NOTE.Db4], t, BEAT * 4, 0.4, 0.4);
+    
+    piano(NOTE.Bb5, t, BEAT * 0.5, 0.5);
+    piano(NOTE.Ab5, t + BEAT * 0.5, BEAT * 0.5, 0.45);
+    piano(NOTE.G5, t + BEAT, BEAT * 0.5, 0.45);
+    piano(NOTE.Ab5, t + BEAT * 1.5, BEAT * 2.5, 0.55);
+    
+    t += BEAT * 4;
+    
+    // Bar 13-16: Development, new harmonic color
+    bass(HARMONY.ii.bass, t, BEAT * 2, 0.4);
+    strings([NOTE.Bb2, NOTE.Db3, NOTE.F3], t, BEAT * 2, 0.4, 0.3);
+    piano(NOTE.F5, t, BEAT, 0.5);
+    piano(NOTE.Eb5, t + BEAT, BEAT, 0.5);
+    
+    t += BEAT * 2;
+    
+    bass(HARMONY.V.bass, t, BEAT * 2, 0.4);
+    strings([NOTE.Eb3, NOTE.G3, NOTE.Bb3], t, BEAT * 2, 0.45, 0.25);
+    timpani(NOTE.Eb2, t, 0.4);
+    piano(NOTE.Db5, t, BEAT, 0.55);
+    piano(NOTE.C5, t + BEAT, BEAT, 0.5);
+    
+    t += BEAT * 2;
+    
+    // Bar 15-16: Build
+    bass(HARMONY.vi.bass, t, BEAT * 2, 0.45);
+    strings([NOTE.F3, NOTE.Ab3, NOTE.C4, NOTE.F4], t, BEAT * 2, 0.5, 0.2);
+    piano(NOTE.C5, t, BEAT * 0.5, 0.5);
+    piano(NOTE.Db5, t + BEAT * 0.5, BEAT * 0.5, 0.5);
+    piano(NOTE.Eb5, t + BEAT, BEAT, 0.55);
+    
+    t += BEAT * 2;
+    
+    bass(HARMONY.V7.bass, t, BEAT * 2, 0.45);
+    strings([NOTE.Eb3, NOTE.G3, NOTE.Bb3, NOTE.Db4], t, BEAT * 2, 0.5, 0.15);
+    timpani(NOTE.Eb2, t, 0.5);
+    piano(NOTE.F5, t, BEAT, 0.6);
+    piano(NOTE.Eb5, t + BEAT, BEAT, 0.55);
+    
+    t += BEAT * 2;
+    
+    // Bar 17-20: Strings take melody
+    bass(HARMONY.I.bass, t, BEAT * 4, 0.5);
+    strings([NOTE.Ab3, NOTE.C4, NOTE.Eb4, NOTE.Ab4], t, BEAT * 4, 0.55, 0.3);
+    strings([NOTE.Eb5, NOTE.Ab5], t, BEAT, 0.4, 0.1);
+    strings([NOTE.Ab5, NOTE.C6], t + BEAT, BEAT * 1.5, 0.45, 0.15);
+    
+    piano(NOTE.Ab2, t, BEAT * 2, 0.4);
+    piano(NOTE.Eb3, t, BEAT * 2, 0.35);
+    
+    t += BEAT * 4;
+    
+    bass(HARMONY.IV.bass, t, BEAT * 4, 0.5);
+    strings([NOTE.Db3, NOTE.F3, NOTE.Ab3, NOTE.Db4], t, BEAT * 4, 0.55, 0.25);
+    strings([NOTE.Bb5], t, BEAT, 0.4, 0.1);
+    strings([NOTE.Ab5], t + BEAT, BEAT * 2, 0.45, 0.15);
+    
+    t += BEAT * 4;
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // III. APOTHEOSIS - Full orchestra, brass chorale
+    // ────────────────────────────────────────────────────────────────────────
+    setTimeout(() => updateSection('III. APOTHEOSIS'), (t - t0) * 1000);
+    
+    // Bar 21-24: Brass enters
+    bass(HARMONY.I.bass, t, BEAT * 4, 0.6);
+    timpani(NOTE.Ab1, t, 0.7);
+    strings([NOTE.Ab3, NOTE.C4, NOTE.Eb4, NOTE.Ab4], t, BEAT * 4, 0.5, 0.2);
+    brass([NOTE.Ab4, NOTE.C5, NOTE.Eb5], t, BEAT * 4, 0.5);
+    choir([NOTE.Ab4, NOTE.C5, NOTE.Eb5], t, BEAT * 4, 0.25);
+    
+    // Counter melody in piano
+    piano(NOTE.Eb5, t, BEAT * 0.5, 0.45);
+    piano(NOTE.F5, t + BEAT * 0.5, BEAT * 0.5, 0.4);
+    piano(NOTE.G5, t + BEAT, BEAT * 0.5, 0.4);
+    piano(NOTE.Ab5, t + BEAT * 1.5, BEAT * 2.5, 0.5);
+    
+    t += BEAT * 4;
+    
+    bass(HARMONY.vi.bass, t, BEAT * 2, 0.55);
+    strings([NOTE.F3, NOTE.Ab3, NOTE.C4, NOTE.F4], t, BEAT * 2, 0.55, 0.15);
+    brass([NOTE.F4, NOTE.Ab4, NOTE.C5], t, BEAT * 2, 0.45);
+    
+    piano(NOTE.C5, t, BEAT, 0.5);
+    piano(NOTE.Db5, t + BEAT, BEAT, 0.5);
+    
+    t += BEAT * 2;
+    
+    bass(HARMONY.IV.bass, t, BEAT * 2, 0.55);
+    timpani(NOTE.Db2, t, 0.5);
+    strings([NOTE.Db3, NOTE.F3, NOTE.Ab3, NOTE.Db4], t, BEAT * 2, 0.55, 0.15);
+    brass([NOTE.Db4, NOTE.F4, NOTE.Ab4], t, BEAT * 2, 0.45);
+    
+    piano(NOTE.Eb5, t, BEAT, 0.5);
+    piano(NOTE.F5, t + BEAT, BEAT, 0.55);
+    
+    t += BEAT * 2;
+    
+    // Bar 25-28: Climax builds
+    bass(HARMONY.V.bass, t, BEAT * 4, 0.6);
+    timpani(NOTE.Eb2, t, 0.65);
+    strings([NOTE.Eb3, NOTE.G3, NOTE.Bb3, NOTE.Eb4], t, BEAT * 4, 0.6, 0.15);
+    brass([NOTE.Eb4, NOTE.G4, NOTE.Bb4, NOTE.Eb5], t, BEAT * 4, 0.55);
+    choir([NOTE.Bb4, NOTE.Eb5], t, BEAT * 4, 0.3);
+    
+    piano(NOTE.G5, t, BEAT, 0.55);
+    piano(NOTE.Ab5, t + BEAT, BEAT, 0.6);
+    piano(NOTE.Bb5, t + BEAT * 2, BEAT * 2, 0.65);
+    
+    t += BEAT * 4;
+    
+    // THE CLIMAX - Bar 29-32
+    bass(HARMONY.I.bass, t, BEAT * 8, 0.7);
+    timpani(NOTE.Ab1, t, 0.85);
+    strings([NOTE.Ab2, NOTE.Ab3, NOTE.C4, NOTE.Eb4, NOTE.Ab4, NOTE.C5], t, BEAT * 8, 0.65, 0.2);
+    brass([NOTE.Ab4, NOTE.C5, NOTE.Eb5, NOTE.Ab5], t, BEAT * 4, 0.65);
+    choir([NOTE.Ab4, NOTE.C5, NOTE.Eb5, NOTE.Ab5], t, BEAT * 8, 0.4);
+    
+    // Triumphant melody
+    piano(NOTE.Ab5, t, BEAT, 0.7);
+    piano(NOTE.C6, t + BEAT, BEAT, 0.7);
+    piano(NOTE.Eb5, t + BEAT * 2, BEAT, 0.65);
+    piano(NOTE.Ab5, t + BEAT * 3, BEAT, 0.7);
+    
+    t += BEAT * 4;
+    
+    bass(HARMONY.IV.bass, t, BEAT * 4, 0.65);
+    timpani(NOTE.Db2, t, 0.7);
+    brass([NOTE.Db4, NOTE.F4, NOTE.Ab4, NOTE.Db5], t, BEAT * 4, 0.6);
+    
+    piano(NOTE.Db6 || NOTE.Db5 * 2, t, BEAT, 0.65);
+    piano(NOTE.C6, t + BEAT, BEAT, 0.6);
+    piano(NOTE.Bb5, t + BEAT * 2, BEAT * 2, 0.6);
+    
+    t += BEAT * 4;
+    
+    // Bar 33-36: Sustained power
+    bass(HARMONY.V.bass, t, BEAT * 2, 0.6);
+    timpani(NOTE.Eb2, t, 0.7);
+    strings([NOTE.Eb3, NOTE.G3, NOTE.Bb3, NOTE.Db4], t, BEAT * 2, 0.6, 0.1);
+    brass([NOTE.Eb4, NOTE.G4, NOTE.Bb4, NOTE.Db5], t, BEAT * 2, 0.55);
+    
+    t += BEAT * 2;
+    
+    bass(HARMONY.I.bass, t, BEAT * 2, 0.65);
+    timpani(NOTE.Ab1, t, 0.75);
+    strings([NOTE.Ab3, NOTE.C4, NOTE.Eb4, NOTE.Ab4], t, BEAT * 2, 0.6, 0.1);
+    brass([NOTE.Ab4, NOTE.C5, NOTE.Eb5], t, BEAT * 2, 0.6);
+    
+    piano(NOTE.Ab5, t, BEAT * 2, 0.65);
+    
+    t += BEAT * 2;
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // IV. TRANSCENDENCE - Resolution and coda
+    // ────────────────────────────────────────────────────────────────────────
+    setTimeout(() => updateSection('IV. TRANSCENDENCE'), (t - t0) * 1000);
+    
+    // Bar 37-40: Texture thins
+    bass(HARMONY.IV.bass, t, BEAT * 4, 0.5);
+    strings([NOTE.Db3, NOTE.F3, NOTE.Ab3], t, BEAT * 4, 0.45, 0.5);
+    choir([NOTE.Ab4, NOTE.Db5], t, BEAT * 4, 0.25);
+    
+    piano(NOTE.F5, t, BEAT, 0.5);
+    piano(NOTE.Eb5, t + BEAT, BEAT, 0.45);
+    piano(NOTE.Db5, t + BEAT * 2, BEAT * 2, 0.5);
+    
+    t += BEAT * 4;
+    
+    bass(HARMONY.V.bass, t, BEAT * 2, 0.45);
+    strings([NOTE.Eb3, NOTE.G3, NOTE.Bb3], t, BEAT * 2, 0.4, 0.4);
+    
+    piano(NOTE.Eb5, t, BEAT, 0.45);
+    piano(NOTE.Db5, t + BEAT, BEAT, 0.45);
+    
+    t += BEAT * 2;
+    
+    // Final cadence
+    bass(HARMONY.I.bass, t, BEAT * 6, 0.5);
+    timpani(NOTE.Ab1, t, 0.5);
+    strings([NOTE.Ab3, NOTE.C4, NOTE.Eb4, NOTE.Ab4], t, BEAT * 6, 0.45, 0.8);
+    choir([NOTE.Ab4, NOTE.C5, NOTE.Eb5], t, BEAT * 6, 0.3);
+    
+    piano(NOTE.C5, t, BEAT, 0.5);
+    piano(NOTE.Ab4, t + BEAT, BEAT * 4, 0.55);
+    
+    // Final chord
+    piano(NOTE.Ab2, t + BEAT * 2, BEAT * 4, 0.4);
+    piano(NOTE.Eb3, t + BEAT * 2, BEAT * 4, 0.35);
+    piano(NOTE.Ab3, t + BEAT * 2, BEAT * 4, 0.35);
+    piano(NOTE.C4, t + BEAT * 2, BEAT * 4, 0.35);
+    piano(NOTE.Eb4, t + BEAT * 2, BEAT * 4, 0.35);
+    piano(NOTE.Ab4, t + BEAT * 2, BEAT * 4, 0.4);
+    
+    // End
+    setTimeout(() => updateSection('— FINE —'), (t - t0 + BEAT * 6) * 1000);
+}
+
+function updateSection(text) {
+    document.getElementById('section').textContent = text;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// VISUALS - Simple, elegant
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h;
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+
+let phase = 0;
+function render() {
+    requestAnimationFrame(render);
+    phase += 0.005;
+    
+    // Soft gradient background
+    c.fillStyle = '#0a0a0c';
+    c.fillRect(0, 0, w, h);
+    
+    // Subtle moving gradient
+    const grd = c.createRadialGradient(
+        w/2 + Math.sin(phase) * 100, 
+        h/2 + Math.cos(phase * 0.7) * 50, 
+        0,
+        w/2, h/2, Math.max(w, h) * 0.6
+    );
+    grd.addColorStop(0, 'rgba(70, 50, 30, 0.15)');
+    grd.addColorStop(1, 'transparent');
+    c.fillStyle = grd;
+    c.fillRect(0, 0, w, h);
+}
+
+window.addEventListener('resize', resize);
+resize();
+render();
+
+// ════════════════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ════════════════════════════════════════════════════════════════════════════
+
+let started = false;
+document.addEventListener('click', async () => {
+    if (started) return;
+    started = true;
+    document.getElementById('start').style.display = 'none';
+    document.getElementById('info').classList.add('visible');
+    
+    await initAudio();
+    compose();
+}, { once: true });
+
+// Visual cue to click anywhere
+document.getElementById('start').innerHTML = '<h1>OPUS</h1><p>click anywhere</p>';
+</script>
+</body>
+</html>

@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIME FRACTURE // HANS ZIMMER ENGINE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@300;500;700&display=swap');
+
+:root {
+    --void: #000000;
+    --ember: #ff4400;
+    --gold: #ffaa00;
+    --ice: #00aaff;
+    --white-hot: #ffffff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--void);
+    overflow: hidden;
+    height: 100vh;
+    font-family: 'Rajdhani', sans-serif;
+    color: var(--white-hot);
+    cursor: crosshair;
+}
+
+canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+}
+
+#ui {
+    position: fixed;
+    z-index: 100;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(ellipse at center, rgba(20,5,0,0.95) 0%, var(--void) 100%);
+    transition: opacity 1.5s ease-out, transform 1s ease-out;
+}
+
+#ui.hidden {
+    opacity: 0;
+    transform: scale(1.1);
+    pointer-events: none;
+}
+
+h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(4rem, 15vw, 12rem);
+    letter-spacing: 0.3em;
+    background: linear-gradient(180deg, var(--white-hot) 0%, var(--gold) 50%, var(--ember) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 100px rgba(255, 170, 0, 0.5);
+    margin-bottom: 0;
+    line-height: 0.9;
+}
+
+.subtitle {
+    font-size: clamp(0.8rem, 2vw, 1.2rem);
+    letter-spacing: 1em;
+    color: var(--ember);
+    opacity: 0.7;
+    margin-bottom: 4rem;
+    text-transform: uppercase;
+}
+
+button {
+    background: transparent;
+    border: 2px solid var(--ember);
+    color: var(--ember);
+    padding: 1.5rem 4rem;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 0.5em;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+button::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, var(--ember), transparent);
+    transition: left 0.5s ease;
+}
+
+button:hover::before { left: 100%; }
+
+button:hover {
+    background: var(--ember);
+    color: var(--void);
+    box-shadow: 0 0 60px var(--ember), 0 0 120px rgba(255, 68, 0, 0.5);
+    transform: scale(1.05);
+}
+
+#hud {
+    position: fixed;
+    z-index: 50;
+    width: 100%;
+    padding: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1s;
+}
+
+#hud.visible { opacity: 1; }
+
+.hud-panel {
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255, 68, 0, 0.3);
+    padding: 1rem 1.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+#movement-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+}
+
+#intensity-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: rgba(255,68,0,0.2);
+    z-index: 50;
+}
+
+#intensity-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--ember), var(--gold), var(--white-hot));
+    transition: width 0.1s;
+    box-shadow: 0 0 20px var(--ember);
+}
+
+.warning {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 8rem;
+    color: var(--ember);
+    opacity: 0;
+    z-index: 200;
+    pointer-events: none;
+    text-shadow: 0 0 100px var(--ember);
+}
+
+@keyframes warningFlash {
+    0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.warning.active {
+    animation: warningFlash 0.5s ease-out;
+}
+
+/* Screen shake */
+@keyframes shake {
+    0%, 100% { transform: translate(0, 0); }
+    10% { transform: translate(-5px, -5px); }
+    20% { transform: translate(5px, -5px); }
+    30% { transform: translate(-5px, 5px); }
+    40% { transform: translate(5px, 5px); }
+    50% { transform: translate(-5px, -5px); }
+    60% { transform: translate(5px, -5px); }
+    70% { transform: translate(-5px, 5px); }
+    80% { transform: translate(5px, 5px); }
+    90% { transform: translate(-5px, -5px); }
+}
+
+body.shake { animation: shake 0.3s ease-in-out; }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+    <h1>TIME<br>FRACTURE</h1>
+    <div class="subtitle">Procedural Cinematic Engine</div>
+    <button id="ignite">IGNITE</button>
+</div>
+
+<div id="hud">
+    <div class="hud-panel">
+        <div id="movement-title">AWAITING</div>
+        <div id="section-name" style="color: #666; margin-top: 0.5rem;">--</div>
+    </div>
+    <div class="hud-panel" style="text-align: right;">
+        <div>BAR: <span id="bar-count">0</span></div>
+        <div>BPM: <span id="bpm-display">80</span></div>
+        <div>VOICES: <span id="voice-count">0</span></div>
+    </div>
+</div>
+
+<div id="intensity-bar"><div id="intensity-fill"></div></div>
+<div class="warning" id="warning"></div>
+
+<script>
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * TIME FRACTURE
+ * A Hans Zimmer-Style Procedural Cinematic Audio Engine
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * SYNTHESIS ARCHITECTURE:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 1. BRASS SECTION - Massive layered sawtooths with formant filtering
+ * 2. STRING SECTION - 60+ voice ensemble with natural detune spread
+ * 3. PERCUSSION - Taiko drums, anvils, timpani with sub-bass layering
+ * 4. SYNTH BEDS - Evolving pads with filter automation
+ * 5. SUB ARCHITECTURE - Octave-stacked sine waves for chest-rattling bass
+ * 
+ * COMPOSITIONAL STRUCTURE:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * I.   GENESIS (0:00-0:45) - The void awakens
+ * II.  ASCENSION (0:45-1:30) - Strings enter, harmonic foundation
+ * III. CONVERGENCE (1:30-2:30) - Full orchestra, building tension
+ * IV.  FRACTURE (2:30-3:30) - The climax, maximum intensity
+ * V.   RESOLUTION (3:30-4:00) - Catharsis and release
+ * 
+ * HARMONIC LANGUAGE:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Key: D Minor (The saddest of all keys)
+ * Mode: Dorian with chromatic alterations
+ * Progression: i → VI → III → VII (Epic Zimmer progression)
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+    BPM: 80,
+    REVERB_TIME: 6.0,
+    REVERB_DECAY: 2.5,
+    MASTER_GAIN: 0.5,
+    STRING_VOICES: 24,
+    BRASS_VOICES: 12,
+    SUB_OCTAVES: 3
+};
+
+// D Minor frequencies across 5 octaves
+const FREQ = {
+    // Octave 1 (Sub bass)
+    D1: 36.71, E1: 41.20, F1: 43.65, G1: 49.00, A1: 55.00, Bb1: 58.27, C2: 65.41,
+    // Octave 2 (Bass)
+    D2: 73.42, E2: 82.41, F2: 87.31, G2: 98.00, A2: 110.00, Bb2: 116.54, C3: 130.81,
+    // Octave 3 (Cello/Viola)
+    D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, Bb3: 233.08, C4: 261.63,
+    // Octave 4 (Violin/Brass)
+    D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, Bb4: 466.16, C5: 523.25,
+    // Octave 5 (High strings/Choir)
+    D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, Bb5: 932.33, C6: 1046.50,
+    // Chromatic additions
+    Cs3: 138.59, Cs4: 277.18, Cs5: 554.37
+};
+
+// The Epic Progression
+const PROGRESSION = [
+    { root: 'D', chord: [FREQ.D3, FREQ.F3, FREQ.A3, FREQ.D4], bass: FREQ.D2 },           // i - D minor
+    { root: 'Bb', chord: [FREQ.Bb3, FREQ.D4, FREQ.F4, FREQ.Bb4], bass: FREQ.Bb2 },       // VI - Bb major  
+    { root: 'F', chord: [FREQ.F3, FREQ.A3, FREQ.C4, FREQ.F4], bass: FREQ.F2 },           // III - F major
+    { root: 'C', chord: [FREQ.C3, FREQ.E3, FREQ.G3, FREQ.C4], bass: FREQ.C2 }            // VII - C major
+];
+
+// Movement definitions
+const MOVEMENTS = [
+    { name: 'I. GENESIS', section: 'THE VOID AWAKENS', startBar: 0, intensity: 0.1 },
+    { name: 'II. ASCENSION', section: 'STRINGS ENTER', startBar: 12, intensity: 0.3 },
+    { name: 'III. CONVERGENCE', section: 'THE GATHERING STORM', startBar: 24, intensity: 0.6 },
+    { name: 'IV. FRACTURE', section: 'MAXIMUM INTENSITY', startBar: 40, intensity: 1.0 },
+    { name: 'V. RESOLUTION', section: 'CATHARSIS', startBar: 56, intensity: 0.4 }
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, limiter, reverb, reverbGain, delay, delayFeedback;
+let analyser, analyserData;
+let isPlaying = false;
+let activeVoices = 0;
+
+async function initAudio() {
+    ctx = new AC();
+    
+    // Master chain
+    master = ctx.createGain();
+    master.gain.value = CONFIG.MASTER_GAIN;
+    
+    // Brick wall limiter
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.1;
+    
+    // Cathedral reverb
+    reverb = ctx.createConvolver();
+    reverb.buffer = createCathedralImpulse(CONFIG.REVERB_TIME, CONFIG.REVERB_DECAY);
+    
+    reverbGain = ctx.createGain();
+    reverbGain.gain.value = 0.4;
+    
+    // Epic delay (dotted eighth)
+    delay = ctx.createDelay(2);
+    delay.delayTime.value = (60 / CONFIG.BPM) * 0.75;
+    
+    delayFeedback = ctx.createGain();
+    delayFeedback.gain.value = 0.35;
+    
+    const delayFilter = ctx.createBiquadFilter();
+    delayFilter.type = 'lowpass';
+    delayFilter.frequency.value = 2000;
+    
+    // Analyser for visuals
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyserData = new Uint8Array(analyser.frequencyBinCount);
+    
+    // Signal routing
+    master.connect(limiter);
+    limiter.connect(analyser);
+    analyser.connect(ctx.destination);
+    
+    // Reverb send
+    master.connect(reverbGain);
+    reverbGain.connect(reverb);
+    reverb.connect(limiter);
+    
+    // Delay send
+    master.connect(delay);
+    delay.connect(delayFilter);
+    delayFilter.connect(delayFeedback);
+    delayFeedback.connect(delay);
+    delayFeedback.connect(master);
+    
+    await ctx.resume();
+}
+
+function createCathedralImpulse(seconds, decay) {
+    const rate = ctx.sampleRate;
+    const len = rate * seconds;
+    const buffer = ctx.createBuffer(2, len, rate);
+    
+    for (let c = 0; c < 2; c++) {
+        const data = buffer.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            // Early reflections (first 100ms)
+            const early = i < rate * 0.1 ? Math.random() * 0.5 * Math.pow(1 - (i / (rate * 0.1)), 2) : 0;
+            // Late diffuse field
+            const late = Math.pow(1 - t, decay) * (Math.random() * 2 - 1);
+            // Combine with stereo decorrelation
+            data[i] = (early + late) * (c === 0 ? 1 : 0.95);
+        }
+    }
+    return buffer;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INSTRUMENT: STRINGS (60+ voice ensemble)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function playStrings(freqs, time, duration, velocity = 0.5, attack = 1.0) {
+    const t = time;
+    const voicesPerNote = Math.ceil(CONFIG.STRING_VOICES / freqs.length);
+    
+    freqs.forEach((freq, noteIdx) => {
+        for (let v = 0; v < voicesPerNote; v++) {
+            const osc = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            
+            // Sawtooth for richness, slight detune for ensemble
+            osc.type = 'sawtooth';
+            osc2.type = 'sawtooth';
+            
+            const detune = (v - voicesPerNote/2) * 8 + (Math.random() - 0.5) * 6;
+            osc.frequency.value = freq;
+            osc.detune.value = detune;
+            osc2.frequency.value = freq;
+            osc2.detune.value = -detune + Math.random() * 3;
+            
+            // Vibrato
+            const vib = ctx.createOscillator();
+            const vibGain = ctx.createGain();
+            vib.frequency.value = 4.5 + Math.random() * 1;
+            vibGain.gain.value = freq * 0.008;
+            vib.connect(vibGain);
+            vibGain.connect(osc.frequency);
+            vibGain.connect(osc2.frequency);
+            
+            // Formant filter (string body)
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 2000 + Math.random() * 1000;
+            filter.Q.value = 0.5;
+            
+            // Envelope
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(velocity * 0.15 / voicesPerNote, t + attack);
+            env.gain.setValueAtTime(velocity * 0.12 / voicesPerNote, t + duration - attack * 0.5);
+            env.gain.exponentialRampToValueAtTime(0.001, t + duration);
+            
+            // Panning
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (noteIdx / freqs.length) * 1.2 - 0.6 + (Math.random() - 0.5) * 0.3;
+            
+            // Connect
+            osc.connect(filter);
+            osc2.connect(filter);
+            filter.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            // Start
+            vib.start(t);
+            osc.start(t);
+            osc2.start(t);
+            vib.stop(t + duration + 0.5);
+            osc.stop(t + duration + 0.5);
+            osc2.stop(t + duration + 0.5);
+            
+            activeVoices += 2;
+            setTimeout(() => activeVoices -= 2, (duration + 0.5) * 1000);
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INSTRUMENT: BRASS (Massive horn section)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function playBrass(freqs, time, duration, velocity = 0.6) {
+    const t = time;
+    const voicesPerNote = Math.ceil(CONFIG.BRASS_VOICES / freqs.length);
+    
+    freqs.forEach((freq, noteIdx) => {
+        for (let v = 0; v < voicesPerNote; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - voicesPerNote/2) * 15 + (Math.random() - 0.5) * 10;
+            
+            // Brass formant (the "blat")
+            const formant = ctx.createBiquadFilter();
+            formant.type = 'peaking';
+            formant.frequency.value = 800;
+            formant.Q.value = 2;
+            formant.gain.value = 6;
+            
+            // Brightness filter that opens during attack
+            const brightness = ctx.createBiquadFilter();
+            brightness.type = 'lowpass';
+            brightness.frequency.setValueAtTime(300, t);
+            brightness.frequency.linearRampToValueAtTime(3000, t + 0.15);
+            brightness.frequency.setValueAtTime(2000, t + duration * 0.8);
+            brightness.frequency.linearRampToValueAtTime(500, t + duration);
+            
+            // Envelope
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(velocity * 0.2 / voicesPerNote, t + 0.1);
+            env.gain.setValueAtTime(velocity * 0.15 / voicesPerNote, t + duration * 0.8);
+            env.gain.exponentialRampToValueAtTime(0.001, t + duration);
+            
+            // Pan
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (noteIdx / freqs.length - 0.5) * 0.8;
+            
+            osc.connect(formant);
+            formant.connect(brightness);
+            brightness.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + duration + 0.1);
+            
+            activeVoices++;
+            setTimeout(() => activeVoices--, (duration + 0.1) * 1000);
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INSTRUMENT: PERCUSSION (Taiko, Timpani, Anvil)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function playTaiko(time, velocity = 1.0) {
+    const t = time;
+    
+    // Body (pitched component)
+    const body = ctx.createOscillator();
+    body.frequency.setValueAtTime(80, t);
+    body.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+    
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(velocity * 1.2, t);
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+    
+    // Sub (chest impact)
+    const sub = ctx.createOscillator();
+    sub.frequency.setValueAtTime(50, t);
+    sub.frequency.exponentialRampToValueAtTime(25, t + 0.5);
+    
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(velocity * 0.8, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+    
+    // Attack transient (stick hit)
+    const attack = ctx.createOscillator();
+    attack.type = 'square';
+    attack.frequency.value = 200;
+    
+    const attackGain = ctx.createGain();
+    attackGain.gain.setValueAtTime(velocity * 0.3, t);
+    attackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+    
+    // Noise layer (skin texture)
+    const noise = ctx.createBufferSource();
+    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) {
+        noiseData[i] = Math.random() * 2 - 1;
+    }
+    noise.buffer = noiseBuffer;
+    
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.value = 400;
+    noiseFilter.Q.value = 1;
+    
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(velocity * 0.15, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    
+    // Connect
+    body.connect(bodyGain);
+    sub.connect(subGain);
+    attack.connect(attackGain);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    
+    bodyGain.connect(master);
+    subGain.connect(master);
+    attackGain.connect(master);
+    noiseGain.connect(master);
+    
+    body.start(t);
+    sub.start(t);
+    attack.start(t);
+    noise.start(t);
+    
+    body.stop(t + 1);
+    sub.stop(t + 1.2);
+    attack.stop(t + 0.1);
+    
+    // Visual feedback
+    screenShake();
+    visualPulse = 1.0;
+}
+
+function playTimpani(time, freq = FREQ.D2, velocity = 0.8) {
+    const t = time;
+    
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 1.5, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.1);
+    
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(velocity * 0.6, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+    
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(800, t);
+    filter.frequency.exponentialRampToValueAtTime(200, t + 0.5);
+    
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    gain.connect(reverb);
+    
+    osc.start(t);
+    osc.stop(t + 2);
+}
+
+function playAnvil(time, velocity = 0.5) {
+    const t = time;
+    
+    // Multiple detuned oscillators for metallic ring
+    [800, 1200, 1600, 2400, 3200].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq + Math.random() * 50;
+        
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(velocity * 0.1 / (i + 1), t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5 + Math.random() * 0.3);
+        
+        osc.connect(gain);
+        gain.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + 1);
+    });
+    
+    // Impact noise
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
+    
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(velocity * 0.3, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    
+    noise.connect(ng);
+    ng.connect(master);
+    noise.start(t);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INSTRUMENT: SUB BASS ARCHITECTURE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function playSub(freq, time, duration, velocity = 0.7) {
+    const t = time;
+    
+    for (let oct = 0; oct < CONFIG.SUB_OCTAVES; oct++) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq / Math.pow(2, oct);
+        
+        const gain = ctx.createGain();
+        const vol = velocity * (0.4 / (oct + 1));
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.2);
+        gain.gain.setValueAtTime(vol, t + duration - 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        
+        osc.connect(gain);
+        gain.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + duration + 0.1);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INSTRUMENT: SYNTH PADS (Evolving textures)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function playPad(freqs, time, duration, velocity = 0.3) {
+    const t = time;
+    
+    freqs.forEach((freq, i) => {
+        // Multiple detuned oscillators
+        for (let v = 0; v < 4; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = v % 2 === 0 ? 'sawtooth' : 'triangle';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 1.5) * 20;
+            
+            // LFO for movement
+            const lfo = ctx.createOscillator();
+            const lfoGain = ctx.createGain();
+            lfo.frequency.value = 0.1 + Math.random() * 0.2;
+            lfoGain.gain.value = 10;
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc.detune);
+            
+            // Filter with sweep
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(200, t);
+            filter.frequency.linearRampToValueAtTime(800 + Math.random() * 400, t + duration * 0.3);
+            filter.frequency.linearRampToValueAtTime(300, t + duration);
+            filter.Q.value = 2;
+            
+            // Envelope
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(velocity * 0.08, t + duration * 0.3);
+            env.gain.linearRampToValueAtTime(0, t + duration);
+            
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (i / freqs.length - 0.5) + (Math.random() - 0.5) * 0.5;
+            
+            osc.connect(filter);
+            filter.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            lfo.start(t);
+            osc.start(t);
+            lfo.stop(t + duration);
+            osc.stop(t + duration);
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPOSITION ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let currentBar = 0;
+let nextNoteTime = 0;
+let currentMovement = 0;
+let globalIntensity = 0;
+
+function getMovement(bar) {
+    for (let i = MOVEMENTS.length - 1; i >= 0; i--) {
+        if (bar >= MOVEMENTS[i].startBar) return i;
+    }
+    return 0;
+}
+
+function scheduleBar(bar, time) {
+    const movement = getMovement(bar);
+    const mov = MOVEMENTS[movement];
+    const beatDuration = 60 / CONFIG.BPM;
+    const barDuration = beatDuration * 4;
+    
+    const chordIdx = bar % PROGRESSION.length;
+    const chord = PROGRESSION[chordIdx];
+    
+    globalIntensity = mov.intensity;
+    
+    // Update UI
+    if (movement !== currentMovement) {
+        currentMovement = movement;
+        document.getElementById('movement-title').textContent = mov.name;
+        document.getElementById('section-name').textContent = mov.section;
+        showWarning(mov.name);
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOVEMENT I: GENESIS - Sparse drones, sub bass, single timpani hits
+    // ─────────────────────────────────────────────────────────────────────────
+    if (movement === 0) {
+        // Deep sub drone
+        if (bar % 4 === 0) {
+            playSub(chord.bass, time, barDuration * 4, 0.3);
+            playPad([chord.chord[0], chord.chord[2]], time, barDuration * 4, 0.1);
+        }
+        // Sparse timpani
+        if (bar % 2 === 0) {
+            playTimpani(time, chord.bass, 0.3);
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOVEMENT II: ASCENSION - Strings enter, building harmony
+    // ─────────────────────────────────────────────────────────────────────────
+    else if (movement === 1) {
+        // Sustained strings
+        playStrings(chord.chord, time, barDuration * 2, 0.3, 1.5);
+        
+        // Sub bass
+        playSub(chord.bass, time, barDuration, 0.4);
+        
+        // Timpani pattern
+        if (bar % 2 === 0) {
+            playTimpani(time, chord.bass, 0.5);
+            playTimpani(time + beatDuration * 2, chord.bass * 1.5, 0.3);
+        }
+        
+        // Pad texture
+        if (bar % 4 === 0) {
+            playPad(chord.chord, time, barDuration * 4, 0.2);
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOVEMENT III: CONVERGENCE - Full orchestra building
+    // ─────────────────────────────────────────────────────────────────────────
+    else if (movement === 2) {
+        // Full strings
+        playStrings(chord.chord, time, barDuration, 0.5, 0.5);
+        
+        // Brass enters
+        if (bar % 2 === 0) {
+            playBrass([chord.chord[0], chord.chord[2]], time, barDuration * 2, 0.4);
+        }
+        
+        // Driving timpani
+        playTimpani(time, chord.bass, 0.6);
+        playTimpani(time + beatDuration * 2, chord.bass, 0.4);
+        
+        // Sub architecture
+        playSub(chord.bass, time, barDuration, 0.5);
+        
+        // Building taiko
+        if (bar % 4 === 2) {
+            playTaiko(time + beatDuration * 3, 0.5);
+        }
+        
+        // Anvil accents
+        if (bar % 4 === 0) {
+            playAnvil(time, 0.3);
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOVEMENT IV: FRACTURE - Maximum intensity, all voices
+    // ─────────────────────────────────────────────────────────────────────────
+    else if (movement === 3) {
+        // Massive strings
+        playStrings(chord.chord.concat(chord.chord.map(f => f * 2)), time, barDuration, 0.7, 0.2);
+        
+        // Full brass
+        playBrass(chord.chord, time, barDuration, 0.6);
+        
+        // Taiko on every beat
+        for (let beat = 0; beat < 4; beat++) {
+            if (beat === 0 || beat === 2) {
+                playTaiko(time + beat * beatDuration, 0.8);
+            }
+            playTimpani(time + beat * beatDuration, chord.bass, beat === 0 ? 0.8 : 0.4);
+        }
+        
+        // Maximum sub
+        playSub(chord.bass, time, barDuration, 0.8);
+        
+        // Anvil pattern
+        playAnvil(time, 0.5);
+        playAnvil(time + beatDuration * 2, 0.3);
+        
+        // Synth bed
+        playPad(chord.chord, time, barDuration * 2, 0.4);
+        
+        // Ostinato strings
+        for (let i = 0; i < 8; i++) {
+            const noteTime = time + (i * beatDuration / 2);
+            const note = chord.chord[i % chord.chord.length];
+            playStrings([note * 2], noteTime, beatDuration / 2, 0.2, 0.05);
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOVEMENT V: RESOLUTION - Catharsis, thinning texture
+    // ─────────────────────────────────────────────────────────────────────────
+    else if (movement === 4) {
+        // Gentle strings
+        playStrings(chord.chord, time, barDuration * 2, 0.3, 2.0);
+        
+        // Soft sub
+        playSub(chord.bass, time, barDuration * 2, 0.3);
+        
+        // Sparse timpani
+        if (bar % 4 === 0) {
+            playTimpani(time, chord.bass, 0.3);
+        }
+        
+        // Final chord
+        if (bar === 62) {
+            // THE FINAL CHORD
+            setTimeout(() => {
+                const finalTime = ctx.currentTime;
+                playStrings(chord.chord.concat(chord.chord.map(f => f * 2)), finalTime, 8, 0.8, 3);
+                playBrass(chord.chord, finalTime + 0.5, 6, 0.5);
+                playSub(FREQ.D1, finalTime, 10, 0.6);
+                playTaiko(finalTime, 1.0);
+                playTimpani(finalTime + 0.1, FREQ.D2, 1.0);
+                showWarning('FINE');
+            }, barDuration * 1000);
+        }
+    }
+}
+
+function scheduler() {
+    const lookahead = 0.2;
+    const beatDuration = 60 / CONFIG.BPM;
+    const barDuration = beatDuration * 4;
+    
+    while (nextNoteTime < ctx.currentTime + lookahead) {
+        scheduleBar(currentBar, nextNoteTime);
+        nextNoteTime += barDuration;
+        currentBar++;
+        
+        // Loop after resolution
+        if (currentBar > 64) {
+            currentBar = 0;
+        }
+        
+        // Update HUD
+        document.getElementById('bar-count').textContent = currentBar;
+        document.getElementById('voice-count').textContent = activeVoices;
+    }
+    
+    if (isPlaying) {
+        setTimeout(scheduler, 50);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VISUAL ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h, cx, cy;
+let visualPulse = 0;
+let time = 0;
+let particles = [];
+
+class Particle {
+    constructor() {
+        this.reset();
+    }
+    
+    reset() {
+        this.x = cx + (Math.random() - 0.5) * w * 0.5;
+        this.y = cy + (Math.random() - 0.5) * h * 0.5;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.life = 1;
+        this.decay = 0.005 + Math.random() * 0.01;
+        this.size = 1 + Math.random() * 3;
+        this.hue = 20 + Math.random() * 30;
+    }
+    
+    update() {
+        this.x += this.vx + Math.sin(time * 0.5 + this.y * 0.01) * globalIntensity;
+        this.y += this.vy + Math.cos(time * 0.5 + this.x * 0.01) * globalIntensity;
+        this.life -= this.decay;
+        
+        if (this.life <= 0) this.reset();
+    }
+    
+    draw() {
+        c.beginPath();
+        c.arc(this.x, this.y, this.size * (1 + visualPulse), 0, Math.PI * 2);
+        c.fillStyle = `hsla(${this.hue}, 100%, 60%, ${this.life * 0.5})`;
+        c.fill();
+    }
+}
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    
+    // Init particles
+    particles = [];
+    for (let i = 0; i < 200; i++) {
+        particles.push(new Particle());
+    }
+}
+
+function render() {
+    requestAnimationFrame(render);
+    time += 0.016;
+    
+    // Get audio data
+    if (analyser) {
+        analyser.getByteFrequencyData(analyserData);
+    }
+    
+    // Clear with trail
+    c.fillStyle = `rgba(0, 0, 0, ${0.1 + (1 - globalIntensity) * 0.1})`;
+    c.fillRect(0, 0, w, h);
+    
+    // Background pulse
+    const bgIntensity = visualPulse * globalIntensity;
+    if (bgIntensity > 0.1) {
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.8);
+        grad.addColorStop(0, `rgba(255, ${Math.floor(68 + bgIntensity * 100)}, 0, ${bgIntensity * 0.3})`);
+        grad.addColorStop(1, 'transparent');
+        c.fillStyle = grad;
+        c.fillRect(0, 0, w, h);
+    }
+    
+    // Frequency bars (circular)
+    if (analyser && globalIntensity > 0.1) {
+        const bars = 64;
+        const barWidth = (Math.PI * 2) / bars;
+        
+        c.save();
+        c.translate(cx, cy);
+        
+        for (let i = 0; i < bars; i++) {
+            const freq = analyserData[i * 4] || 0;
+            const barHeight = (freq / 255) * 200 * globalIntensity;
+            const angle = i * barWidth - Math.PI / 2;
+            
+            const innerRadius = 100 + visualPulse * 50;
+            const outerRadius = innerRadius + barHeight;
+            
+            c.beginPath();
+            c.moveTo(
+                Math.cos(angle) * innerRadius,
+                Math.sin(angle) * innerRadius
+            );
+            c.lineTo(
+                Math.cos(angle) * outerRadius,
+                Math.sin(angle) * outerRadius
+            );
+            
+            const hue = 20 + (freq / 255) * 30;
+            c.strokeStyle = `hsla(${hue}, 100%, 50%, ${0.5 + (freq / 255) * 0.5})`;
+            c.lineWidth = 3;
+            c.stroke();
+        }
+        
+        c.restore();
+    }
+    
+    // Particles
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+    
+    // Central orb
+    const orbSize = 50 + visualPulse * 100 + globalIntensity * 50;
+    const orbGrad = c.createRadialGradient(cx, cy, 0, cx, cy, orbSize);
+    orbGrad.addColorStop(0, `rgba(255, 200, 100, ${0.3 + visualPulse * 0.5})`);
+    orbGrad.addColorStop(0.5, `rgba(255, 68, 0, ${0.2 + visualPulse * 0.3})`);
+    orbGrad.addColorStop(1, 'transparent');
+    c.fillStyle = orbGrad;
+    c.fillRect(cx - orbSize, cy - orbSize, orbSize * 2, orbSize * 2);
+    
+    // Decay
+    visualPulse *= 0.95;
+    
+    // Update intensity bar
+    document.getElementById('intensity-fill').style.width = `${globalIntensity * 100}%`;
+}
+
+function screenShake() {
+    document.body.classList.add('shake');
+    setTimeout(() => document.body.classList.remove('shake'), 300);
+}
+
+function showWarning(text) {
+    const warning = document.getElementById('warning');
+    warning.textContent = text;
+    warning.classList.add('active');
+    setTimeout(() => warning.classList.remove('active'), 500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+window.addEventListener('resize', resize);
+resize();
+render();
+
+document.getElementById('ignite').addEventListener('click', async () => {
+    const ui = document.getElementById('ui');
+    ui.classList.add('hidden');
+    
+    await initAudio();
+    
+    document.getElementById('hud').classList.add('visible');
+    
+    isPlaying = true;
+    currentBar = 0;
+    nextNoteTime = ctx.currentTime + 0.5;
+    
+    scheduler();
+});
+</script>
+</body>
+</html>

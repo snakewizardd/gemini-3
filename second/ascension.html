@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCENSION</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;height:100vh;overflow:hidden;cursor:pointer}
+canvas{position:fixed;top:0;left:0}
+#t{position:fixed;bottom:3rem;left:50%;transform:translateX(-50%);color:#fff;font:300 1rem/1.5 Georgia,serif;letter-spacing:0.3em;opacity:0.7;z-index:10;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="t">click to begin</div>
+<script>
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * A S C E N S I O N
+ * ═══════════════════════════════════════════════════════════════
+ * 
+ * For when you need your soul to leave your body.
+ * 
+ * Key: Db Major → Eb Minor → Gb Major → Ab (The "Liebestod" progression)
+ * Tempo: Builds from 60 to 90 BPM
+ * Duration: ~100 seconds of relentless escalation
+ * 
+ * This is not background music. This is a siege.
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, comp, verb, verbGain;
+let started = false;
+
+// ═══════════════════════════════════════════════════════════════
+// FREQUENCIES - The Harmonic Universe
+// ═══════════════════════════════════════════════════════════════
+
+const F = {
+    // Sub bass
+    Db1: 34.65, Eb1: 38.89, Gb1: 46.25, Ab1: 51.91,
+    // Bass
+    Db2: 69.30, Eb2: 77.78, F2: 87.31, Gb2: 92.50, Ab2: 103.83, Bb2: 116.54,
+    // Tenor
+    Db3: 138.59, Eb3: 155.56, F3: 174.61, Gb3: 185.00, Ab3: 207.65, Bb3: 233.08, C4: 261.63,
+    // Alto
+    Db4: 277.18, Eb4: 311.13, F4: 349.23, Gb4: 369.99, Ab4: 415.30, Bb4: 466.16,
+    // Soprano
+    Db5: 554.37, Eb5: 622.25, F5: 698.46, Gb5: 783.99, Ab5: 830.61, Bb5: 932.33,
+    // Stratosphere
+    Db6: 1108.73, Eb6: 1244.51, Ab6: 1661.22
+};
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+
+async function init() {
+    ctx = new AC();
+    
+    master = ctx.createGain();
+    master.gain.value = 2.0; // LOUD
+    
+    // Limiter - keeps it from clipping but preserves punch
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -6;
+    comp.knee.value = 3;
+    comp.ratio.value = 12;
+    comp.attack.value = 0.002;
+    comp.release.value = 0.15;
+    
+    // Cathedral reverb
+    verb = ctx.createConvolver();
+    verb.buffer = impulse(5, 2.5);
+    
+    verbGain = ctx.createGain();
+    verbGain.gain.value = 0.5;
+    
+    master.connect(comp);
+    comp.connect(ctx.destination);
+    master.connect(verbGain);
+    verbGain.connect(verb);
+    verb.connect(comp);
+    
+    await ctx.resume();
+}
+
+function impulse(sec, decay) {
+    const len = ctx.sampleRate * sec;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+        }
+    }
+    return buf;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INSTRUMENTS
+// ═══════════════════════════════════════════════════════════════
+
+// STRINGS - 8 voices per note, massive spread
+function strings(freqs, t, dur, vel = 0.5, att = 0.3) {
+    freqs.forEach((freq, fi) => {
+        for (let v = 0; v < 8; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 3.5) * 7 + (Math.random() - 0.5) * 5;
+            
+            // Vibrato
+            const vib = ctx.createOscillator();
+            const vG = ctx.createGain();
+            vib.frequency.value = 4.5 + Math.random();
+            vG.gain.value = freq * 0.007;
+            vib.connect(vG);
+            vG.connect(osc.frequency);
+            
+            const flt = ctx.createBiquadFilter();
+            flt.type = 'lowpass';
+            flt.frequency.value = 2000 + Math.random() * 800;
+            flt.Q.value = 0.7;
+            
+            const env = ctx.createGain();
+            const vol = vel * 0.06;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + att);
+            env.gain.setValueAtTime(vol * 0.9, t + dur - att);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (fi / freqs.length - 0.5) * 0.7 + (Math.random() - 0.5) * 0.2;
+            
+            osc.connect(flt);
+            flt.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            vib.start(t);
+            osc.start(t);
+            vib.stop(t + dur + 0.1);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+// BRASS - Noble and burning
+function brass(freqs, t, dur, vel = 0.5) {
+    freqs.forEach((freq, fi) => {
+        for (let v = 0; v < 4; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 1.5) * 12;
+            
+            const form = ctx.createBiquadFilter();
+            form.type = 'peaking';
+            form.frequency.value = 800;
+            form.Q.value = 2;
+            form.gain.value = 5;
+            
+            const bright = ctx.createBiquadFilter();
+            bright.type = 'lowpass';
+            bright.frequency.setValueAtTime(300, t);
+            bright.frequency.linearRampToValueAtTime(2500, t + 0.12);
+            bright.frequency.setValueAtTime(1800, t + dur * 0.7);
+            bright.frequency.linearRampToValueAtTime(500, t + dur);
+            
+            const env = ctx.createGain();
+            const vol = vel * 0.12;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + 0.1);
+            env.gain.setValueAtTime(vol * 0.85, t + dur * 0.8);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            const pan = ctx.createStereoPanner();
+            pan.pan.value = (fi / freqs.length - 0.5) * 0.6;
+            
+            osc.connect(form);
+            form.connect(bright);
+            bright.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+// CHOIR - Ethereal voices
+function choir(freqs, t, dur, vel = 0.3) {
+    freqs.forEach((freq) => {
+        for (let v = 0; v < 6; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = v % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 2.5) * 8;
+            
+            // "Ah" vowel
+            const f1 = ctx.createBiquadFilter();
+            f1.type = 'bandpass';
+            f1.frequency.value = 700 + Math.random() * 100;
+            f1.Q.value = 4;
+            
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vel * 0.05, t + 0.8);
+            env.gain.setValueAtTime(vel * 0.04, t + dur - 0.5);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            osc.connect(f1);
+            f1.connect(env);
+            env.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+// TIMPANI - Thunder
+function timpani(freq, t, vel = 0.7) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 1.4, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.7, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+    
+    osc.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 2);
+}
+
+// SUB - Chest pressure
+function sub(freq, t, dur, vel = 0.6) {
+    for (let oct = 0; oct < 3; oct++) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq / Math.pow(2, oct);
+        
+        const env = ctx.createGain();
+        const vol = vel * (0.35 / (oct + 1));
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vol, t + 0.15);
+        env.gain.setValueAtTime(vol, t + dur - 0.2);
+        env.gain.linearRampToValueAtTime(0, t + dur);
+        
+        osc.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + dur + 0.1);
+    }
+}
+
+// IMPACT - The blow
+function impact(t, vel = 1) {
+    // Body
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(80, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.4);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 1.2, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+    
+    // Sub
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.value = 30;
+    
+    const env2 = ctx.createGain();
+    env2.gain.setValueAtTime(vel * 0.8, t);
+    env2.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    
+    // Transient
+    const noise = ctx.createBufferSource();
+    const nbuf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+    const nd = nbuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    noise.buffer = nbuf;
+    
+    const nenv = ctx.createGain();
+    nenv.gain.setValueAtTime(vel * 0.4, t);
+    nenv.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    
+    osc.connect(env); env.connect(master);
+    osc2.connect(env2); env2.connect(master);
+    noise.connect(nenv); nenv.connect(master);
+    
+    osc.start(t); osc.stop(t + 1);
+    osc2.start(t); osc2.stop(t + 1.5);
+    noise.start(t);
+    
+    pulseVis = 1;
+}
+
+// PIANO - For the theme
+function piano(freq, t, dur, vel = 0.5) {
+    for (let v = 0; v < 3; v++) {
+        const osc = ctx.createOscillator();
+        osc.type = v === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = freq * (v === 2 ? 2.005 : 1);
+        osc.detune.value = (v - 1) * 2;
+        
+        const flt = ctx.createBiquadFilter();
+        flt.type = 'lowpass';
+        flt.frequency.setValueAtTime(freq * 10, t);
+        flt.frequency.exponentialRampToValueAtTime(freq * 2, t + dur * 0.5);
+        
+        const env = ctx.createGain();
+        const vol = vel * (v === 0 ? 0.15 : 0.04);
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vol, t + 0.006);
+        env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        
+        osc.connect(flt);
+        flt.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + dur + 0.1);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THE COMPOSITION - A journey of relentless escalation
+// ═══════════════════════════════════════════════════════════════
+
+function compose() {
+    const t0 = ctx.currentTime + 0.1;
+    let t = t0;
+    const B = 0.9; // Base beat duration (~67 BPM)
+    
+    setText('I. AWAKENING');
+    
+    // ═══════════════════════════════════════════════════════════
+    // SECTION 1: THE THEME (0-16 beats) - Piano states the melody
+    // ═══════════════════════════════════════════════════════════
+    
+    // The Theme: Db - F - Ab - Db (octave) - Bb - Ab - Gb - F - Eb - Db
+    // This is the melodic DNA that will return at the climax
+    
+    sub(F.Db2, t, B * 8, 0.3);
+    
+    piano(F.Db4, t, B * 1.5, 0.6);
+    piano(F.F4, t + B * 1.5, B, 0.55);
+    piano(F.Ab4, t + B * 2.5, B * 1.5, 0.6);
+    piano(F.Db5, t + B * 4, B * 2, 0.65);
+    
+    t += B * 6;
+    
+    piano(F.Bb4, t, B, 0.55);
+    piano(F.Ab4, t + B, B, 0.5);
+    piano(F.Gb4, t + B * 2, B, 0.5);
+    piano(F.F4, t + B * 3, B, 0.5);
+    piano(F.Eb4, t + B * 4, B, 0.5);
+    piano(F.Db4, t + B * 5, B * 3, 0.6);
+    
+    t += B * 8;
+    
+    setTimeout(() => setText('II. ELEVATION'), (t - t0) * 1000);
+    
+    // ═══════════════════════════════════════════════════════════
+    // SECTION 2: STRINGS ENTER (16-32 beats)
+    // ═══════════════════════════════════════════════════════════
+    
+    // Restate theme with strings underneath
+    strings([F.Db3, F.F3, F.Ab3], t, B * 8, 0.4, 0.5);
+    sub(F.Db2, t, B * 8, 0.4);
+    timpani(F.Db2, t, 0.5);
+    
+    piano(F.Db5, t, B * 1.5, 0.55);
+    piano(F.F5, t + B * 1.5, B, 0.5);
+    piano(F.Ab5, t + B * 2.5, B * 1.5, 0.55);
+    piano(F.Db6, t + B * 4, B * 2, 0.6);
+    
+    t += B * 6;
+    
+    strings([F.Eb3, F.Gb3, F.Bb3], t, B * 6, 0.45, 0.3);
+    timpani(F.Eb2, t, 0.4);
+    
+    piano(F.Bb5, t, B, 0.5);
+    piano(F.Ab5, t + B, B, 0.5);
+    piano(F.Gb5, t + B * 2, B * 2, 0.55);
+    piano(F.F5, t + B * 4, B * 2, 0.5);
+    
+    t += B * 6;
+    
+    // Bridge - new harmony
+    strings([F.Gb3, F.Bb3, F.Db4], t, B * 4, 0.5, 0.25);
+    sub(F.Gb2, t, B * 4, 0.45);
+    timpani(F.Gb2, t, 0.5);
+    
+    piano(F.Db5, t + B, B * 2, 0.6);
+    
+    t += B * 4;
+    
+    setTimeout(() => setText('III. CRESCENDO'), (t - t0) * 1000);
+    
+    // ═══════════════════════════════════════════════════════════
+    // SECTION 3: THE BUILD (32-56 beats) - Brass enters, tempo feels faster
+    // ═══════════════════════════════════════════════════════════
+    
+    const B2 = B * 0.85; // Slightly faster
+    
+    // Ab major - dominant preparation
+    strings([F.Ab3, F.C4, F.Eb4, F.Ab4], t, B2 * 4, 0.55, 0.2);
+    brass([F.Ab3, F.Eb4], t, B2 * 4, 0.4);
+    sub(F.Ab2, t, B2 * 4, 0.5);
+    timpani(F.Ab2, t, 0.6);
+    impact(t, 0.6);
+    
+    // Melody in brass now
+    brass([F.Eb5], t + B2, B2 * 2, 0.35);
+    brass([F.Ab5], t + B2 * 3, B2, 0.4);
+    
+    t += B2 * 4;
+    
+    // Db major - home but pushing forward
+    strings([F.Db3, F.F3, F.Ab3, F.Db4], t, B2 * 4, 0.6, 0.15);
+    brass([F.Db4, F.F4, F.Ab4], t, B2 * 4, 0.45);
+    choir([F.Db5, F.Ab5], t, B2 * 4, 0.25);
+    sub(F.Db2, t, B2 * 4, 0.55);
+    timpani(F.Db2, t, 0.65);
+    
+    brass([F.Db5], t, B2 * 1.5, 0.45);
+    brass([F.F5], t + B2 * 1.5, B2, 0.4);
+    brass([F.Ab5], t + B2 * 2.5, B2 * 1.5, 0.5);
+    
+    t += B2 * 4;
+    
+    // Eb minor - the shadow
+    strings([F.Eb3, F.Gb3, F.Bb3, F.Eb4], t, B2 * 4, 0.6, 0.15);
+    brass([F.Eb4, F.Bb4], t, B2 * 4, 0.5);
+    sub(F.Eb2, t, B2 * 4, 0.55);
+    timpani(F.Eb2, t, 0.65);
+    timpani(F.Bb2, t + B2 * 2, 0.5);
+    
+    t += B2 * 4;
+    
+    // Gb major - light breaking through
+    strings([F.Gb3, F.Bb3, F.Db4, F.Gb4], t, B2 * 4, 0.65, 0.12);
+    brass([F.Gb4, F.Db5], t, B2 * 4, 0.55);
+    choir([F.Db5, F.Gb5], t, B2 * 4, 0.3);
+    sub(F.Gb2, t, B2 * 4, 0.6);
+    timpani(F.Gb2, t, 0.7);
+    impact(t, 0.7);
+    
+    // Rising line
+    brass([F.Gb5], t, B2, 0.5);
+    brass([F.Ab5], t + B2, B2, 0.5);
+    brass([F.Bb5], t + B2 * 2, B2, 0.55);
+    brass([F.Db6], t + B2 * 3, B2, 0.6);
+    
+    t += B2 * 4;
+    
+    // Pre-climax tension - Ab dominant
+    strings([F.Ab3, F.C4, F.Eb4, F.Gb4], t, B2 * 4, 0.65, 0.1); // Ab7
+    brass([F.Ab4, F.C5, F.Eb5, F.Gb5], t, B2 * 4, 0.55);
+    choir([F.Eb5, F.Gb5, F.Ab5], t, B2 * 4, 0.35);
+    sub(F.Ab1, t, B2 * 4, 0.65);
+    timpani(F.Ab1, t, 0.75);
+    timpani(F.Ab2, t + B2 * 2, 0.6);
+    
+    // Sustain into climax
+    t += B2 * 4;
+    
+    setTimeout(() => setText('IV. APOTHEOSIS'), (t - t0) * 1000);
+    
+    // ═══════════════════════════════════════════════════════════
+    // SECTION 4: THE CLIMAX (56-80 beats) - EVERYTHING
+    // ═══════════════════════════════════════════════════════════
+    
+    const B3 = B * 0.75; // Even faster, more urgent
+    
+    // THE ARRIVAL - Db major in full glory
+    impact(t, 1.0);
+    timpani(F.Db1, t, 1.0);
+    sub(F.Db1, t, B3 * 8, 0.8);
+    strings([F.Db2, F.Db3, F.F3, F.Ab3, F.Db4, F.F4, F.Ab4], t, B3 * 8, 0.75, 0.15);
+    brass([F.Db4, F.F4, F.Ab4, F.Db5], t, B3 * 8, 0.7);
+    choir([F.Db5, F.F5, F.Ab5, F.Db6], t, B3 * 8, 0.5);
+    
+    // Theme in highest register - TRIUMPHANT
+    strings([F.Db6], t, B3 * 1.5, 0.5, 0.08);
+    strings([F.F5], t + B3 * 1.5, B3, 0.45, 0.05);
+    strings([F.Ab5], t + B3 * 2.5, B3 * 1.5, 0.5, 0.08);
+    strings([F.Db6], t + B3 * 4, B3 * 2, 0.55, 0.1);
+    
+    t += B3 * 6;
+    
+    timpani(F.Ab1, t, 0.8);
+    timpani(F.Db2, t + B3 * 2, 0.7);
+    
+    strings([F.Bb5], t, B3, 0.5, 0.05);
+    strings([F.Ab5], t + B3, B3, 0.5, 0.05);
+    strings([F.Gb5], t + B3 * 2, B3, 0.5, 0.05);
+    strings([F.F5], t + B3 * 3, B3, 0.5, 0.05);
+    
+    t += B3 * 4;
+    
+    // Second wave - even bigger
+    impact(t, 1.0);
+    timpani(F.Gb1, t, 0.9);
+    sub(F.Gb1, t, B3 * 4, 0.8);
+    strings([F.Gb2, F.Gb3, F.Bb3, F.Db4, F.Gb4, F.Bb4, F.Db5], t, B3 * 4, 0.8, 0.1);
+    brass([F.Gb4, F.Bb4, F.Db5, F.Gb5], t, B3 * 4, 0.75);
+    choir([F.Db5, F.Gb5, F.Bb5], t, B3 * 4, 0.55);
+    
+    // Soaring melody
+    brass([F.Gb5], t, B3 * 2, 0.6);
+    brass([F.Ab5], t + B3 * 2, B3 * 2, 0.65);
+    
+    t += B3 * 4;
+    
+    // The PEAK - Ab into final Db
+    impact(t, 1.0);
+    timpani(F.Ab1, t, 1.0);
+    sub(F.Ab1, t, B3 * 4, 0.85);
+    strings([F.Ab2, F.Ab3, F.C4, F.Eb4, F.Ab4, F.C5, F.Eb5], t, B3 * 4, 0.85, 0.08);
+    brass([F.Ab4, F.C5, F.Eb5, F.Ab5], t, B3 * 4, 0.8);
+    choir([F.Eb5, F.Ab5, F.C6], t, B3 * 4, 0.6);
+    
+    brass([F.Bb5], t, B3, 0.7);
+    brass([F.C6], t + B3, B3, 0.75);
+    brass([F.Db6], t + B3 * 2, B3 * 2, 0.8);
+    
+    t += B3 * 4;
+    
+    setTimeout(() => setText('V. TRANSCENDENCE'), (t - t0) * 1000);
+    
+    // ═══════════════════════════════════════════════════════════
+    // SECTION 5: RESOLUTION (80-96 beats) - The release
+    // ═══════════════════════════════════════════════════════════
+    
+    // FINAL CHORD - Db major, all voices, sustained
+    impact(t, 1.0);
+    timpani(F.Db1, t, 1.0);
+    
+    // Sub bass - the foundation
+    sub(F.Db1, t, B * 12, 0.9);
+    
+    // Strings - full range
+    strings([F.Db2, F.Ab2, F.Db3, F.F3, F.Ab3, F.Db4, F.F4, F.Ab4, F.Db5], t, B * 10, 0.8, 0.3);
+    
+    // Brass - the crown
+    brass([F.Db4, F.F4, F.Ab4, F.Db5, F.F5], t, B * 8, 0.7);
+    
+    // Choir - the angels
+    choir([F.Ab4, F.Db5, F.F5, F.Ab5, F.Db6], t, B * 10, 0.5);
+    
+    // Final timpani rolls
+    timpani(F.Ab1, t + B * 2, 0.6);
+    timpani(F.Db2, t + B * 4, 0.5);
+    
+    // The very last sound - a single high Db, alone
+    t += B * 8;
+    
+    piano(F.Db6, t, B * 6, 0.5);
+    
+    setTimeout(() => setText('— FINE —'), (t - t0 + B * 4) * 1000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VISUALS - Simple, powerful
+// ═══════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h;
+let pulseVis = 0;
+let time = 0;
+
+function setText(txt) {
+    document.getElementById('t').textContent = txt;
+}
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+
+function render() {
+    requestAnimationFrame(render);
+    time += 0.01;
+    
+    // Dark background with subtle fade
+    c.fillStyle = `rgba(0, 0, 0, 0.15)`;
+    c.fillRect(0, 0, w, h);
+    
+    // Central glow responding to music
+    if (pulseVis > 0.05) {
+        const grad = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h) * pulseVis * 0.7);
+        grad.addColorStop(0, `rgba(255, 220, 180, ${pulseVis * 0.4})`);
+        grad.addColorStop(0.5, `rgba(180, 140, 100, ${pulseVis * 0.2})`);
+        grad.addColorStop(1, 'transparent');
+        c.fillStyle = grad;
+        c.fillRect(0, 0, w, h);
+    }
+    
+    // Gentle particles
+    if (started) {
+        c.fillStyle = `rgba(255, 240, 220, ${0.1 + pulseVis * 0.3})`;
+        for (let i = 0; i < 20; i++) {
+            const x = (Math.sin(time * 0.5 + i * 0.5) * 0.3 + 0.5) * w;
+            const y = (Math.cos(time * 0.3 + i * 0.7) * 0.3 + 0.5) * h;
+            const r = 1 + pulseVis * 3;
+            c.beginPath();
+            c.arc(x, y, r, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+    
+    pulseVis *= 0.92;
+}
+
+window.addEventListener('resize', resize);
+resize();
+render();
+
+// ═══════════════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('click', async () => {
+    if (started) return;
+    started = true;
+    
+    await init();
+    compose();
+}, { once: true });
+</script>
+</body>
+</html>

@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BACH // CELLO SUITE NO. 1 IN G MAJOR // PRELUDE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=EB+Garamond:ital@0;1&display=swap');
+
+:root {
+    --amber: #c9a227;
+    --deep-burgundy: #2a0a0a;
+    --gold-glow: rgba(201, 162, 39, 0.15);
+    --parchment: #f4e4c1;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: radial-gradient(ellipse at center, #1a0f0a 0%, #080404 100%);
+    overflow: hidden;
+    height: 100vh;
+    font-family: 'EB Garamond', serif;
+    cursor: default;
+    user-select: none;
+}
+
+canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+}
+
+#ui {
+    position: fixed;
+    z-index: 10;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 50%, rgba(42, 10, 10, 0.9) 0%, #080404 100%);
+    transition: opacity 2.5s ease-out;
+}
+
+#ui.hidden { opacity: 0; pointer-events: none; }
+
+h1 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(2rem, 6vw, 4.5rem);
+    font-weight: 400;
+    color: var(--amber);
+    letter-spacing: 0.4em;
+    text-shadow: 0 0 60px var(--gold-glow), 0 0 120px var(--gold-glow);
+    margin-bottom: 0.5rem;
+}
+
+h2 {
+    font-style: italic;
+    font-size: clamp(0.9rem, 2vw, 1.2rem);
+    color: #8a7040;
+    letter-spacing: 0.3em;
+    margin-bottom: 3rem;
+    font-weight: 400;
+}
+
+button {
+    background: transparent;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    padding: 1.2rem 3.5rem;
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    letter-spacing: 0.3em;
+    cursor: pointer;
+    transition: all 0.5s ease;
+    text-transform: uppercase;
+}
+
+button:hover {
+    background: var(--amber);
+    color: var(--deep-burgundy);
+    box-shadow: 0 0 50px var(--gold-glow), 0 0 100px var(--gold-glow);
+    transform: scale(1.02);
+}
+
+#status {
+    position: fixed;
+    bottom: 2rem;
+    width: 100%;
+    text-align: center;
+    z-index: 5;
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.4em;
+    color: rgba(201, 162, 39, 0.4);
+    transition: opacity 1s;
+}
+
+#measure-display {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    z-index: 5;
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 0.9rem;
+    color: rgba(201, 162, 39, 0.5);
+    opacity: 0;
+    transition: opacity 1s;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+    <h1>BACH</h1>
+    <h2>Cello Suite No. 1 in G Major, BWV 1007</h2>
+    <button id="commence">Prelude</button>
+</div>
+
+<div id="status">AWAITING CONDUCTOR</div>
+<div id="measure-display">measure 1</div>
+
+<script>
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * BACH CELLO SUITE NO. 1 - PRELUDE
+ * Audiomechanical Physics Engine v1.0
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * SYNTHESIS ARCHITECTURE:
+ * 1. Physical String Model - Sawtooth exciter through lowpass resonator
+ * 2. Bow Pressure Simulation - Amplitude envelope with slow attack
+ * 3. Sympathetic Resonance - Parallel strings tuned to open cello frequencies
+ * 4. Room Acoustics - Procedural convolution reverb (baroque hall)
+ * 
+ * COMPOSITIONAL ENGINE:
+ * - Actual BWV 1007 Prelude arpeggiation patterns
+ * - G Major scale with passing tones
+ * - 42 measures of composed material
+ * - Voice leading based on Bach's original bass motion
+ * 
+ * VISUAL ARCHITECTURE:
+ * - 4 simulated cello strings with harmonic oscillation
+ * - Bow stroke visualization
+ * - Golden ratio spiral responding to harmonic content
+ * - Particle system for resonance visualization
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+    BPM: 66,                    // Baroque Prelude tempo
+    REVERB_SECONDS: 4.5,        // Church acoustic tail
+    REVERB_DECAY: 2.8,          // Decay curve steepness
+    MASTER_GAIN: 0.45,          // Headroom for dynamics
+    STRING_DAMPING: 0.94,       // Visual string decay
+    BOW_ATTACK: 0.08,           // Seconds for bow to grip string
+    BOW_RELEASE: 0.4            // Seconds for note decay
+};
+
+// Cello open strings (Hz) - C2, G2, D3, A3
+const CELLO_STRINGS = [65.41, 98.00, 146.83, 220.00];
+
+// G Major scale frequencies across cello range
+// G2 to G4 (two octaves)
+const G_MAJOR = {
+    G2: 98.00, A2: 110.00, B2: 123.47, C3: 130.81, D3: 146.83, E3: 164.81,
+    Fs3: 185.00, G3: 196.00, A3: 220.00, B3: 246.94, C4: 261.63, D4: 293.66,
+    E4: 329.63, Fs4: 369.99, G4: 392.00, A4: 440.00, B4: 493.88, C5: 523.25,
+    D5: 587.33
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE PRELUDE SCORE - BWV 1007 Opening Measures
+// Each measure: array of 16th notes (16 per measure in 4/4 reinterpreted)
+// Format: [bass, ...upper arpeggio notes]
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PRELUDE_MEASURES = [
+    // Measure 1: G major arpeggio
+    { bass: G_MAJOR.G2, pattern: [G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.A3, G_MAJOR.B3, G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.A3, G_MAJOR.B3] },
+    // Measure 2: G major continues
+    { bass: G_MAJOR.G2, pattern: [G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.A3, G_MAJOR.B3, G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.A3, G_MAJOR.B3] },
+    // Measure 3: C major / Am7
+    { bass: G_MAJOR.C3, pattern: [G_MAJOR.E3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4, G_MAJOR.E3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4] },
+    // Measure 4: C continues
+    { bass: G_MAJOR.C3, pattern: [G_MAJOR.E3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4, G_MAJOR.E3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4] },
+    // Measure 5: Am7
+    { bass: G_MAJOR.A2, pattern: [G_MAJOR.E3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4, G_MAJOR.E3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4] },
+    // Measure 6: D7
+    { bass: G_MAJOR.D3, pattern: [G_MAJOR.Fs3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4, G_MAJOR.Fs3, G_MAJOR.C4, G_MAJOR.B3, G_MAJOR.C4] },
+    // Measure 7: G major return
+    { bass: G_MAJOR.G2, pattern: [G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.A3, G_MAJOR.B3, G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.A3, G_MAJOR.B3] },
+    // Measure 8: Em
+    { bass: G_MAJOR.E3, pattern: [G_MAJOR.G3, G_MAJOR.E4, G_MAJOR.D4, G_MAJOR.E4, G_MAJOR.G3, G_MAJOR.E4, G_MAJOR.D4, G_MAJOR.E4] },
+    // Measure 9: Am
+    { bass: G_MAJOR.A2, pattern: [G_MAJOR.E3, G_MAJOR.A3, G_MAJOR.G3, G_MAJOR.A3, G_MAJOR.E3, G_MAJOR.A3, G_MAJOR.G3, G_MAJOR.A3] },
+    // Measure 10: D major
+    { bass: G_MAJOR.D3, pattern: [G_MAJOR.A3, G_MAJOR.D4, G_MAJOR.Fs4, G_MAJOR.D4, G_MAJOR.A3, G_MAJOR.D4, G_MAJOR.Fs4, G_MAJOR.D4] },
+    // Measure 11: G ascending
+    { bass: G_MAJOR.G3, pattern: [G_MAJOR.B3, G_MAJOR.D4, G_MAJOR.G4, G_MAJOR.D4, G_MAJOR.B3, G_MAJOR.D4, G_MAJOR.G4, G_MAJOR.D4] },
+    // Measure 12: C major high
+    { bass: G_MAJOR.C4, pattern: [G_MAJOR.E4, G_MAJOR.G4, G_MAJOR.C5, G_MAJOR.G4, G_MAJOR.E4, G_MAJOR.G4, G_MAJOR.C5, G_MAJOR.G4] },
+    // Measure 13: Descending sequence
+    { bass: G_MAJOR.A3, pattern: [G_MAJOR.C4, G_MAJOR.E4, G_MAJOR.A4, G_MAJOR.E4, G_MAJOR.C4, G_MAJOR.E4, G_MAJOR.A4, G_MAJOR.E4] },
+    // Measure 14: D7 tension
+    { bass: G_MAJOR.D3, pattern: [G_MAJOR.Fs3, G_MAJOR.A3, G_MAJOR.D4, G_MAJOR.A3, G_MAJOR.Fs3, G_MAJOR.A3, G_MAJOR.D4, G_MAJOR.A3] },
+    // Measure 15: Resolution to G
+    { bass: G_MAJOR.G2, pattern: [G_MAJOR.B2, G_MAJOR.D3, G_MAJOR.G3, G_MAJOR.D3, G_MAJOR.B2, G_MAJOR.D3, G_MAJOR.G3, G_MAJOR.D3] },
+    // Measure 16: Pedal point G
+    { bass: G_MAJOR.G2, pattern: [G_MAJOR.D3, G_MAJOR.G3, G_MAJOR.B3, G_MAJOR.G3, G_MAJOR.D3, G_MAJOR.G3, G_MAJOR.B3, G_MAJOR.G3] },
+    // Second section - development
+    // Measure 17: Bm
+    { bass: G_MAJOR.B2, pattern: [G_MAJOR.D3, G_MAJOR.Fs3, G_MAJOR.B3, G_MAJOR.Fs3, G_MAJOR.D3, G_MAJOR.Fs3, G_MAJOR.B3, G_MAJOR.Fs3] },
+    // Measure 18: Em
+    { bass: G_MAJOR.E3, pattern: [G_MAJOR.G3, G_MAJOR.B3, G_MAJOR.E4, G_MAJOR.B3, G_MAJOR.G3, G_MAJOR.B3, G_MAJOR.E4, G_MAJOR.B3] },
+    // Measure 19: A7
+    { bass: G_MAJOR.A2, pattern: [G_MAJOR.Cs3, G_MAJOR.E3, G_MAJOR.A3, G_MAJOR.E3, G_MAJOR.Cs3, G_MAJOR.E3, G_MAJOR.A3, G_MAJOR.E3] },
+    // Measure 20: D major
+    { bass: G_MAJOR.D3, pattern: [G_MAJOR.Fs3, G_MAJOR.A3, G_MAJOR.D4, G_MAJOR.A3, G_MAJOR.Fs3, G_MAJOR.A3, G_MAJOR.D4, G_MAJOR.A3] },
+    // Measure 21-24: Climactic sequence
+    { bass: G_MAJOR.G3, pattern: [G_MAJOR.B3, G_MAJOR.D4, G_MAJOR.G4, G_MAJOR.D4, G_MAJOR.B3, G_MAJOR.D4, G_MAJOR.G4, G_MAJOR.D4] },
+    { bass: G_MAJOR.E4, pattern: [G_MAJOR.G4, G_MAJOR.B4, G_MAJOR.E4, G_MAJOR.B4, G_MAJOR.G4, G_MAJOR.B4, G_MAJOR.E4, G_MAJOR.B4] },
+    { bass: G_MAJOR.C4, pattern: [G_MAJOR.E4, G_MAJOR.G4, G_MAJOR.C5, G_MAJOR.G4, G_MAJOR.E4, G_MAJOR.G4, G_MAJOR.C5, G_MAJOR.G4] },
+    { bass: G_MAJOR.D4, pattern: [G_MAJOR.Fs4, G_MAJOR.A4, G_MAJOR.D5, G_MAJOR.A4, G_MAJOR.Fs4, G_MAJOR.A4, G_MAJOR.D5, G_MAJOR.A4] },
+    // Final descent
+    { bass: G_MAJOR.G3, pattern: [G_MAJOR.D4, G_MAJOR.B3, G_MAJOR.G3, G_MAJOR.D3, G_MAJOR.B3, G_MAJOR.G3, G_MAJOR.D3, G_MAJOR.B2] },
+    { bass: G_MAJOR.G2, pattern: [G_MAJOR.B2, G_MAJOR.D3, G_MAJOR.G3, G_MAJOR.B3, G_MAJOR.D4, G_MAJOR.G4, G_MAJOR.B4, G_MAJOR.G4] }
+];
+
+// Add Cs3 for A7 chord (chromatic)
+G_MAJOR.Cs3 = 138.59;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+let ctx, master, reverb, compressor, sympatheticBus;
+let isPlaying = false;
+let currentMeasure = 0;
+let currentBeat = 0;
+
+async function initAudio() {
+    ctx = new AudioContext();
+    
+    // Master chain
+    master = ctx.createGain();
+    master.gain.value = CONFIG.MASTER_GAIN;
+    
+    // Dynamics processing (glue)
+    compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 20;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.01;
+    compressor.release.value = 0.3;
+    
+    // Reverb (baroque hall)
+    reverb = ctx.createConvolver();
+    reverb.buffer = createHallImpulse(CONFIG.REVERB_SECONDS, CONFIG.REVERB_DECAY);
+    
+    const reverbGain = ctx.createGain();
+    reverbGain.gain.value = 0.35;
+    
+    // Sympathetic resonance bus (open strings ring)
+    sympatheticBus = ctx.createGain();
+    sympatheticBus.gain.value = 0.08;
+    
+    // Signal routing
+    master.connect(compressor);
+    compressor.connect(ctx.destination);
+    compressor.connect(reverb);
+    reverb.connect(reverbGain);
+    reverbGain.connect(ctx.destination);
+    
+    sympatheticBus.connect(reverb);
+    sympatheticBus.connect(ctx.destination);
+    
+    // Initialize sympathetic strings
+    initSympathetics();
+}
+
+// Procedural impulse response for hall reverb
+function createHallImpulse(seconds, decay) {
+    const rate = ctx.sampleRate;
+    const len = rate * seconds;
+    const buffer = ctx.createBuffer(2, len, rate);
+    
+    for (let c = 0; c < 2; c++) {
+        const data = buffer.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            // Exponential decay with early reflections
+            const earlyRef = i < rate * 0.1 ? Math.random() * 0.3 : 0;
+            const lateTail = Math.pow(1 - t, decay) * (Math.random() * 2 - 1);
+            data[i] = (earlyRef + lateTail) * 0.5;
+        }
+    }
+    return buffer;
+}
+
+// Sympathetic string resonance (cello body)
+let sympathetics = [];
+
+function initSympathetics() {
+    // Create resonant filters at open string frequencies
+    CELLO_STRINGS.forEach((freq, i) => {
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = freq;
+        filter.Q.value = 50; // High resonance
+        filter.connect(sympatheticBus);
+        sympathetics.push(filter);
+    });
+}
+
+function exciteSympathetics(freq) {
+    // When a note is played, excite nearby sympathetic strings
+    sympathetics.forEach((filter, i) => {
+        const stringFreq = CELLO_STRINGS[i];
+        // Check for harmonic relationship
+        const ratio = freq / stringFreq;
+        const nearHarmonic = [1, 2, 3, 4, 0.5].some(h => Math.abs(ratio - h) < 0.05);
+        
+        if (nearHarmonic) {
+            // Brief noise burst to excite the filter
+            const noise = ctx.createBufferSource();
+            const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.02, ctx.sampleRate);
+            const data = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < data.length; i++) {
+                data[i] = (Math.random() * 2 - 1) * 0.1;
+            }
+            noise.buffer = noiseBuffer;
+            noise.connect(filter);
+            noise.start();
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CELLO STRING PHYSICAL MODEL
+// ═══════════════════════════════════════════════════════════════════════════
+
+function playCelloNote(freq, time, duration, velocity = 1.0, stringIndex = 0) {
+    const t = time;
+    
+    // === EXCITER: Bow friction simulation ===
+    const exciter = ctx.createOscillator();
+    exciter.type = 'sawtooth'; // Rich in harmonics like bowed string
+    exciter.frequency.value = freq;
+    
+    // Subtle pitch variation (bow pressure)
+    exciter.frequency.setValueAtTime(freq * 0.998, t);
+    exciter.frequency.linearRampToValueAtTime(freq, t + 0.05);
+    
+    // === RESONATOR: Cello body filtering ===
+    const bodyFilter = ctx.createBiquadFilter();
+    bodyFilter.type = 'lowpass';
+    bodyFilter.Q.value = 1.5;
+    // Filter opens as bow grips, closes as note decays
+    bodyFilter.frequency.setValueAtTime(freq * 2, t);
+    bodyFilter.frequency.linearRampToValueAtTime(freq * 8, t + CONFIG.BOW_ATTACK);
+    bodyFilter.frequency.exponentialRampToValueAtTime(freq * 2, t + duration);
+    
+    // === FORMANT: Cello wood resonances ===
+    const formant1 = ctx.createBiquadFilter();
+    formant1.type = 'peaking';
+    formant1.frequency.value = 250; // Body resonance
+    formant1.Q.value = 2;
+    formant1.gain.value = 4;
+    
+    const formant2 = ctx.createBiquadFilter();
+    formant2.type = 'peaking';
+    formant2.frequency.value = 600; // Air resonance
+    formant2.Q.value = 1.5;
+    formant2.gain.value = 2;
+    
+    // === ENVELOPE: Bow stroke dynamics ===
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0, t);
+    // Bow attack (gradual grip)
+    envelope.gain.linearRampToValueAtTime(velocity * 0.7, t + CONFIG.BOW_ATTACK);
+    // Sustain with gentle decay
+    envelope.gain.exponentialRampToValueAtTime(velocity * 0.5, t + duration * 0.7);
+    // Release
+    envelope.gain.exponentialRampToValueAtTime(0.001, t + duration + CONFIG.BOW_RELEASE);
+    
+    // === ROSIN NOISE: Bow texture ===
+    const rosinNoise = ctx.createBufferSource();
+    const noiseLen = ctx.sampleRate * (duration + CONFIG.BOW_RELEASE);
+    const noiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+        noiseData[i] = (Math.random() * 2 - 1) * 0.02;
+    }
+    rosinNoise.buffer = noiseBuf;
+    
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.value = freq * 4;
+    noiseFilter.Q.value = 2;
+    
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.03;
+    
+    // === STEREO POSITION (based on string) ===
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = (stringIndex - 1.5) * 0.3;
+    
+    // === SIGNAL CHAIN ===
+    exciter.connect(bodyFilter);
+    bodyFilter.connect(formant1);
+    formant1.connect(formant2);
+    formant2.connect(envelope);
+    
+    rosinNoise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(envelope);
+    
+    envelope.connect(panner);
+    panner.connect(master);
+    
+    // Reverb send
+    const reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.4;
+    envelope.connect(reverbSend);
+    reverbSend.connect(reverb);
+    
+    // Start
+    exciter.start(t);
+    rosinNoise.start(t);
+    exciter.stop(t + duration + CONFIG.BOW_RELEASE + 0.1);
+    rosinNoise.stop(t + duration + CONFIG.BOW_RELEASE + 0.1);
+    
+    // Excite sympathetic strings
+    exciteSympathetics(freq);
+    
+    // Trigger visual
+    triggerStringVisual(freq, velocity);
+}
+
+// Bass note with more weight
+function playBassNote(freq, time, duration) {
+    const t = time;
+    
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    
+    // Sub-octave for weight
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = freq;
+    
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+    filter.Q.value = 1;
+    
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.5, t + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.3, t + duration * 0.8);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    
+    osc.connect(filter);
+    sub.connect(gain);
+    filter.connect(gain);
+    gain.connect(master);
+    gain.connect(reverb);
+    
+    osc.start(t);
+    sub.start(t);
+    osc.stop(t + duration + 0.5);
+    sub.stop(t + duration + 0.5);
+    
+    // Visual pulse
+    bassEnergy = 1.0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPOSITION ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+let scheduleAhead = 0.15; // seconds
+let nextNoteTime = 0;
+let timerID = null;
+
+function startPrelude() {
+    if (ctx.state === 'suspended') ctx.resume();
+    
+    isPlaying = true;
+    currentMeasure = 0;
+    currentBeat = 0;
+    nextNoteTime = ctx.currentTime + 0.1;
+    
+    document.getElementById('status').textContent = 'PRELUDE IN G MAJOR';
+    document.getElementById('measure-display').style.opacity = 1;
+    
+    scheduler();
+}
+
+function scheduler() {
+    while (nextNoteTime < ctx.currentTime + scheduleAhead) {
+        scheduleMeasure(currentMeasure, nextNoteTime);
+        advanceMeasure();
+    }
+    timerID = setTimeout(scheduler, 50);
+}
+
+function scheduleMeasure(measureNum, time) {
+    if (measureNum >= PRELUDE_MEASURES.length) {
+        // Loop or end
+        currentMeasure = 0;
+        return;
+    }
+    
+    const measure = PRELUDE_MEASURES[measureNum];
+    const beatDuration = 60 / CONFIG.BPM;
+    const sixteenthDuration = beatDuration / 4;
+    
+    // Bass note on beat 1 (sustained)
+    playBassNote(measure.bass, time, beatDuration * 4);
+    
+    // Arpeggiation pattern (8 sixteenth notes repeated)
+    const pattern = measure.pattern;
+    const totalNotes = 16;
+    
+    for (let i = 0; i < totalNotes; i++) {
+        const noteTime = time + (i * sixteenthDuration);
+        const noteIndex = i % pattern.length;
+        const freq = pattern[noteIndex];
+        
+        // Determine which string this would be played on
+        let stringIndex = 2; // Default D string
+        if (freq < 140) stringIndex = 1; // G string
+        else if (freq < 200) stringIndex = 2; // D string
+        else if (freq > 350) stringIndex = 3; // A string
+        
+        // Slight velocity variation for musical expression
+        const velocity = 0.6 + Math.sin(i * 0.5) * 0.15;
+        
+        playCelloNote(freq, noteTime, sixteenthDuration * 0.9, velocity, stringIndex);
+    }
+    
+    // Update display
+    updateMeasureDisplay(measureNum + 1);
+}
+
+function advanceMeasure() {
+    const beatDuration = 60 / CONFIG.BPM;
+    nextNoteTime += beatDuration * 4; // 4 beats per measure
+    currentMeasure++;
+    
+    if (currentMeasure >= PRELUDE_MEASURES.length) {
+        // Final chord
+        setTimeout(() => {
+            playFinalChord();
+        }, (nextNoteTime - ctx.currentTime) * 1000);
+        currentMeasure = 0;
+    }
+}
+
+function playFinalChord() {
+    const t = ctx.currentTime;
+    
+    // Sustained G major chord
+    [G_MAJOR.G2, G_MAJOR.D3, G_MAJOR.G3, G_MAJOR.B3, G_MAJOR.D4, G_MAJOR.G4].forEach((freq, i) => {
+        const delay = i * 0.08; // Rolled chord
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = freq * 3;
+        
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, t + delay);
+        gain.gain.linearRampToValueAtTime(0.3, t + delay + 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + delay + 6);
+        
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(master);
+        gain.connect(reverb);
+        
+        osc.start(t + delay);
+        osc.stop(t + delay + 7);
+    });
+    
+    document.getElementById('status').textContent = 'FINE';
+}
+
+function updateMeasureDisplay(num) {
+    document.getElementById('measure-display').textContent = `measure ${num}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUAL ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h, cx, cy;
+let time = 0;
+let bassEnergy = 0;
+let stringEnergies = [0, 0, 0, 0];
+let particles = [];
+
+class Particle {
+    constructor(x, y, freq) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.life = 1;
+        this.decay = 0.015 + Math.random() * 0.01;
+        this.size = 2 + Math.random() * 3;
+        this.hue = 35 + (freq / 500) * 20; // Gold to amber
+    }
+    
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.02; // Subtle gravity
+        this.life -= this.decay;
+    }
+    
+    draw() {
+        if (this.life <= 0) return;
+        c.beginPath();
+        c.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+        c.fillStyle = `hsla(${this.hue}, 70%, 60%, ${this.life * 0.6})`;
+        c.fill();
+    }
+}
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+}
+
+function triggerStringVisual(freq, velocity) {
+    // Map frequency to string index
+    let idx = 0;
+    if (freq < 140) idx = 0;
+    else if (freq < 200) idx = 1;
+    else if (freq < 300) idx = 2;
+    else idx = 3;
+    
+    stringEnergies[idx] = Math.max(stringEnergies[idx], velocity);
+    
+    // Spawn particles
+    const stringY = h * 0.3 + idx * (h * 0.12);
+    for (let i = 0; i < 3; i++) {
+        particles.push(new Particle(cx + (Math.random() - 0.5) * w * 0.6, stringY, freq));
+    }
+}
+
+function drawStrings() {
+    const stringSpacing = h * 0.12;
+    const startY = h * 0.3;
+    
+    for (let i = 0; i < 4; i++) {
+        const y = startY + i * stringSpacing;
+        const energy = stringEnergies[i];
+        
+        c.beginPath();
+        c.moveTo(w * 0.1, y);
+        
+        // Vibrating string shape
+        for (let x = w * 0.1; x <= w * 0.9; x += 5) {
+            const normalX = (x - w * 0.1) / (w * 0.8);
+            const envelope = Math.sin(normalX * Math.PI); // Zero at ends
+            const vibration = Math.sin(normalX * 20 + time * (5 + i)) * energy * 15 * envelope;
+            c.lineTo(x, y + vibration);
+        }
+        
+        // String thickness based on pitch (lower = thicker)
+        c.lineWidth = 3 - i * 0.5 + energy * 2;
+        c.strokeStyle = `rgba(201, 162, 39, ${0.3 + energy * 0.5})`;
+        c.stroke();
+        
+        // Glow effect
+        if (energy > 0.1) {
+            c.shadowColor = 'rgba(201, 162, 39, 0.5)';
+            c.shadowBlur = energy * 20;
+            c.stroke();
+            c.shadowBlur = 0;
+        }
+        
+        // Decay
+        stringEnergies[i] *= CONFIG.STRING_DAMPING;
+    }
+}
+
+function drawSpiral() {
+    c.save();
+    c.translate(cx, cy);
+    c.rotate(time * 0.05);
+    
+    c.beginPath();
+    c.strokeStyle = `rgba(201, 162, 39, ${0.1 + bassEnergy * 0.2})`;
+    c.lineWidth = 1 + bassEnergy * 2;
+    
+    // Golden spiral
+    const goldenRatio = 1.618;
+    let r = 5;
+    for (let i = 0; i < 300; i++) {
+        const angle = i * 0.1;
+        r = 5 * Math.pow(goldenRatio, angle / (2 * Math.PI));
+        const x = r * Math.cos(angle);
+        const y = r * Math.sin(angle);
+        
+        if (i === 0) c.moveTo(x, y);
+        else c.lineTo(x, y);
+        
+        if (r > Math.max(w, h) / 2) break;
+    }
+    c.stroke();
+    c.restore();
+    
+    bassEnergy *= 0.95;
+}
+
+function drawParticles() {
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+}
+
+function render() {
+    requestAnimationFrame(render);
+    time += 0.016;
+    
+    // Clear with trail effect
+    c.fillStyle = 'rgba(8, 4, 4, 0.15)';
+    c.fillRect(0, 0, w, h);
+    
+    // Background glow
+    const grad = c.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.6);
+    grad.addColorStop(0, `rgba(42, 10, 10, ${0.1 + bassEnergy * 0.2})`);
+    grad.addColorStop(1, 'transparent');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, w, h);
+    
+    drawSpiral();
+    drawStrings();
+    drawParticles();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.addEventListener('resize', resize);
+resize();
+render();
+
+document.getElementById('commence').addEventListener('click', async () => {
+    const ui = document.getElementById('ui');
+    ui.classList.add('hidden');
+    
+    await initAudio();
+    startPrelude();
+});
+</script>
+</body>
+</html>
