@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALMA GITANA // Flamenco Fire</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=JetBrains+Mono&display=swap');
+
+    :root {
+        --night: #1a0a00;
+        --gold: #ffd700;
+        --fire: #ff6600;
+        --blood: #8b0000;
+        --cream: #fff8dc;
+    }
+
+    body {
+        margin: 0;
+        background: linear-gradient(135deg, #1a0a00 0%, #2d1810 50%, #1a0a00 100%);
+        overflow: hidden;
+        font-family: 'Playfair Display', serif;
+        color: var(--cream);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(26, 10, 0, 0.95);
+        z-index: 10;
+        transition: opacity 0.8s;
+    }
+
+    h1 {
+        font-size: 4rem;
+        margin: 0;
+        color: var(--gold);
+        text-shadow: 0 0 40px var(--fire);
+        letter-spacing: 6px;
+        font-style: italic;
+    }
+
+    h2 {
+        font-size: 1.2rem;
+        margin: 10px 0;
+        color: var(--fire);
+        letter-spacing: 8px;
+        font-weight: 400;
+    }
+
+    p {
+        font-family: 'JetBrains Mono', monospace;
+        margin-top: 25px;
+        font-size: 0.9rem;
+        color: #888;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--gold);
+        border-left: 2px solid var(--fire);
+        padding-left: 12px;
+    }
+
+    #section {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-family: 'Playfair Display', serif;
+        font-size: 18px;
+        color: var(--fire);
+        font-style: italic;
+        z-index: 5;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Alma Gitana</h1>
+    <h2>FLAMENCO • SANTANA • FUEGO</h2>
+    <p>[ CLICK TO IGNITE ]</p>
+</div>
+
+<div id="hud">
+    MODE: E PHRYGIAN DOMINANT<br>
+    BPM: 116 • COMPÁS FLAMENCO<br>
+    STYLE: SOLEÁ / BULERÍA
+</div>
+
+<div id="section">Llamada</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * ALMA GITANA - FLAMENCO ENGINE
+ * Santana-style Spanish guitar
+ * E Phrygian Dominant (Spanish scale)
+ * Rasgueado strumming + Picado runs + Tremolo
+ * EXACT proven architecture
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 116,
+    STRINGS: [64, 59, 55, 50, 45, 40],
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE (EXACT proven pattern + nylon warmth) ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    delay: null,
+    delayGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.5;
+
+        // Warm EQ for nylon/flamenco tone
+        AudioEngine.eq = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.eq.type = 'peaking';
+        AudioEngine.eq.frequency.value = 2500;
+        AudioEngine.eq.gain.value = 3;
+        AudioEngine.eq.Q.value = 1;
+
+        // Body resonance
+        AudioEngine.body = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.body.type = 'peaking';
+        AudioEngine.body.frequency.value = 250;
+        AudioEngine.body.gain.value = 4;
+        AudioEngine.body.Q.value = 2;
+
+        // Hall reverb
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(2.5, 2.5);
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.25;
+
+        // Slapback delay
+        AudioEngine.delay = AudioEngine.ctx.createDelay(1.0);
+        AudioEngine.delay.delayTime.value = 0.18;
+        AudioEngine.delayGain = AudioEngine.ctx.createGain();
+        AudioEngine.delayGain.gain.value = 0.15;
+
+        AudioEngine.body.connect(AudioEngine.eq);
+        AudioEngine.eq.connect(AudioEngine.master);
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(AudioEngine.delayGain);
+        AudioEngine.delayGain.connect(AudioEngine.ctx.destination);
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 1.2) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        const osc3 = AudioEngine.ctx.createOscillator();
+        
+        // Nylon guitar tone
+        osc1.type = 'triangle';
+        osc2.type = 'sine';
+        osc3.type = 'sine';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2; // 2nd harmonic
+        osc3.frequency.value = freq * 3; // 3rd harmonic
+
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3000, t);
+        filter.frequency.exponentialRampToValueAtTime(800, t + 0.2);
+        filter.Q.value = 1;
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.45, t + 0.008);
+        amp.gain.exponentialRampToValueAtTime(0.2, t + 0.15);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        const g1 = AudioEngine.ctx.createGain(); g1.gain.value = 0.5;
+        const g2 = AudioEngine.ctx.createGain(); g2.gain.value = 0.3;
+        const g3 = AudioEngine.ctx.createGain(); g3.gain.value = 0.2;
+
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        osc3.connect(g3); g3.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.body);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+        osc3.start(t); osc3.stop(t + duration);
+    },
+
+    setReverb: (val) => {
+        if (AudioEngine.reverbGain) {
+            AudioEngine.reverbGain.gain.setTargetAtTime(val, AudioEngine.ctx.currentTime, 0.1);
+        }
+    }
+};
+
+// --- TAB DATA ---
+const TAB = [];
+let currentSection = 'Llamada';
+
+function addNote(beat, string, fret) {
+    TAB.push({ beat, string, fret, section: currentSection });
+}
+
+// Rasgueado strum helper - rapid down stroke across strings
+function rasgueado(beat, chord, speed = 0.02) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1]);
+    });
+}
+
+// Golpe + strum (percussive hit then chord)
+function golpeStrum(beat, chord) {
+    // Strum from bass to treble
+    chord.forEach((note, i) => {
+        addNote(beat + i * 0.015, note[0], note[1]);
+    });
+}
+
+// Tremolo pattern (p-a-m-i rapid repeat)
+function tremolo(beat, string, fret, duration, speed = 0.08) {
+    let t = beat;
+    while (t < beat + duration) {
+        addNote(t, string, fret);
+        t += speed;
+    }
+}
+
+// Duration values
+const S = 0.25;   // Sixteenth
+const E = 0.5;    // Eighth  
+const Q = 1.0;    // Quarter
+const H = 2.0;    // Half
+const W = 4.0;    // Whole
+const T = 0.167;  // Triplet
+const X = 0.125;  // 32nd
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════
+// CHORD VOICINGS - Flamenco/Santana style
+// ═══════════════════════════════════════════════════════════════
+
+// E Phrygian chords
+const Am =    [[5,0], [4,0], [3,2], [2,2], [1,1], [0,0]];
+const E7 =    [[5,0], [4,2], [3,0], [2,1], [1,0], [0,0]];
+const F =     [[5,1], [4,3], [3,3], [2,2], [1,1], [0,1]];
+const G =     [[5,3], [4,2], [3,0], [2,0], [1,0], [0,3]];
+const Dm =    [[4,0], [3,0], [2,2], [1,3], [0,1]];
+const C =     [[4,3], [3,2], [2,0], [1,1], [0,0]];
+const B7 =    [[4,2], [3,1], [2,2], [1,0], [0,2]];
+const Em =    [[5,0], [4,2], [3,2], [2,0], [1,0], [0,0]];
+
+// Flamenco voicings
+const Fmaj7 = [[5,1], [4,3], [3,2], [2,2], [1,1], [0,0]];
+const E7b9 =  [[5,0], [4,2], [3,0], [2,1], [1,0], [0,1]]; // The flamenco chord
+const Am9 =   [[5,0], [4,0], [3,2], [2,0], [1,1], [0,0]];
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 1: LLAMADA (The Call) - Opening declaration
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Llamada';
+
+// Dramatic opening - single notes building
+addNote(b, 5, 0); b += Q; // Low E
+addNote(b, 4, 2); b += E;
+addNote(b, 3, 2); b += E;
+addNote(b, 2, 1); b += E;
+addNote(b, 1, 0); b += E;
+addNote(b, 0, 0); b += Q;
+
+// Rasgueado burst on Am
+rasgueado(b, Am); b += E;
+b += S;
+rasgueado(b, Am); b += S;
+rasgueado(b, Am); b += E;
+b += E;
+
+// Walk down to E Phrygian
+addNote(b, 0, 0); b += S;
+addNote(b, 1, 1); b += S;
+addNote(b, 1, 0); b += S;
+addNote(b, 2, 2); b += S;
+addNote(b, 2, 0); b += S;
+addNote(b, 3, 2); b += S;
+addNote(b, 3, 0); b += S;
+addNote(b, 4, 2); b += S;
+
+// E7 stab
+rasgueado(b, E7); b += H;
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 2: SOLEÁ - Deep flamenco rhythm
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Soleá';
+
+// 12-beat compás pattern (traditional soleá)
+for (let cycle = 0; cycle < 2; cycle++) {
+    // Beat 1-2-3
+    rasgueado(b, Am); b += Q;
+    addNote(b, 4, 0); addNote(b, 0, 0); b += E;
+    addNote(b, 3, 2); b += E;
+    rasgueado(b, Am); b += Q;
+    
+    // Beat 4-5-6
+    rasgueado(b, G); b += Q;
+    addNote(b, 5, 3); addNote(b, 0, 3); b += E;
+    addNote(b, 4, 2); b += E;
+    rasgueado(b, G); b += Q;
+    
+    // Beat 7-8
+    rasgueado(b, F); b += Q;
+    addNote(b, 5, 1); addNote(b, 0, 1); b += E;
+    addNote(b, 4, 3); b += E;
+    
+    // Beat 9-10 (accent)
+    rasgueado(b, E7); b += E;
+    rasgueado(b, E7); b += S;
+    rasgueado(b, E7); b += S;
+    rasgueado(b, E7); b += Q;
+    
+    // Beat 11-12 (resolution)
+    addNote(b, 5, 0); addNote(b, 4, 2); addNote(b, 3, 2); b += E;
+    addNote(b, 2, 1); b += E;
+    addNote(b, 1, 0); b += E;
+    addNote(b, 0, 0); b += E;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 3: PICADO - Fast scale runs (Santana style)
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Picado';
+
+// E Phrygian Dominant scale run (E F G# A B C D E)
+// Ascending blaze
+addNote(b, 5, 0); b += S; // E
+addNote(b, 5, 1); b += S; // F
+addNote(b, 5, 4); b += S; // G#
+addNote(b, 4, 0); b += S; // A
+addNote(b, 4, 2); b += S; // B
+addNote(b, 4, 3); b += S; // C
+addNote(b, 4, 5); b += S; // D
+addNote(b, 3, 2); b += S; // E
+
+// Continue up
+addNote(b, 3, 3); b += S; // F
+addNote(b, 3, 6); b += S; // G#
+addNote(b, 3, 7); b += S; // A
+addNote(b, 2, 4); b += S; // B
+addNote(b, 2, 5); b += S; // C
+addNote(b, 2, 7); b += S; // D
+addNote(b, 1, 5); b += S; // E
+addNote(b, 1, 6); b += S; // F
+
+// High position
+addNote(b, 1, 9); b += S; // G#
+addNote(b, 1, 10); b += S; // A
+addNote(b, 0, 7); b += S; // B
+addNote(b, 0, 8); b += S; // C
+addNote(b, 0, 10); b += S; // D
+addNote(b, 0, 12); b += E; // E (hold)
+
+// Descending fury
+addNote(b, 0, 12); b += S;
+addNote(b, 0, 10); b += S;
+addNote(b, 0, 8); b += S;
+addNote(b, 0, 7); b += S;
+addNote(b, 1, 10); b += S;
+addNote(b, 1, 9); b += S;
+addNote(b, 1, 6); b += S;
+addNote(b, 1, 5); b += S;
+addNote(b, 2, 7); b += S;
+addNote(b, 2, 5); b += S;
+addNote(b, 2, 4); b += S;
+addNote(b, 3, 7); b += S;
+addNote(b, 3, 6); b += S;
+addNote(b, 3, 3); b += S;
+addNote(b, 3, 2); b += S;
+addNote(b, 4, 5); b += S;
+
+// Land on Am chord
+rasgueado(b, Am); b += Q;
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 4: FALSETA - Melodic theme (Santana singing tone)
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Falseta';
+
+// Main melody - Europa/Samba Pa Ti style
+addNote(b, 0, 12); b += E;
+addNote(b, 0, 15); b += Q;
+addNote(b, 0, 12); b += E;
+addNote(b, 1, 13); b += E;
+addNote(b, 0, 12); b += E;
+addNote(b, 1, 12); b += Q;
+addNote(b, 1, 10); b += E;
+
+addNote(b, 0, 12); b += E;
+addNote(b, 0, 10); b += E;
+addNote(b, 0, 8); b += E;
+addNote(b, 0, 7); b += Q;
+addNote(b, 1, 10); b += E;
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 6); b += E;
+
+// Phrase 2 - crying bends implied through note choice
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 10); b += Q;
+addNote(b, 0, 8); b += E;
+addNote(b, 0, 10); b += E;
+addNote(b, 0, 12); b += Q;
+addNote(b, 0, 10); b += E;
+
+addNote(b, 0, 8); b += E;
+addNote(b, 1, 10); b += E;
+addNote(b, 1, 8); b += E;
+addNote(b, 2, 9); b += E;
+addNote(b, 2, 7); b += Q;
+addNote(b, 3, 9); b += E;
+addNote(b, 3, 7); b += E;
+
+// Resolve to E
+addNote(b, 3, 9); b += E;
+addNote(b, 4, 7); b += E;
+addNote(b, 4, 9); b += E;
+addNote(b, 5, 7); b += E;
+rasgueado(b, E7); b += H;
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 5: BULERÍA - Fast & furious
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Bulería';
+
+// Rapid-fire rasgueado pattern
+for (let i = 0; i < 3; i++) {
+    // Am attacks
+    rasgueado(b, Am, 0.015); b += S;
+    rasgueado(b, Am, 0.015); b += S;
+    rasgueado(b, Am, 0.015); b += E;
+    
+    // G attacks  
+    rasgueado(b, G, 0.015); b += S;
+    rasgueado(b, G, 0.015); b += S;
+    rasgueado(b, G, 0.015); b += E;
+    
+    // F attacks
+    rasgueado(b, F, 0.015); b += S;
+    rasgueado(b, F, 0.015); b += S;
+    
+    // E7 resolution with extra hits
+    rasgueado(b, E7, 0.015); b += S;
+    rasgueado(b, E7, 0.015); b += S;
+    rasgueado(b, E7, 0.015); b += S;
+    rasgueado(b, E7, 0.015); b += S;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 6: TREMOLO - The soul weeps
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Tremolo';
+
+// Bass note + tremolo melody (p-a-m-i pattern)
+// This is the iconic classical/flamenco technique
+addNote(b, 4, 0); // Bass A
+tremolo(b + 0.05, 0, 12, Q * 1.5, 0.06); b += H;
+
+addNote(b, 5, 0); // Bass E
+tremolo(b + 0.05, 0, 10, Q * 1.5, 0.06); b += H;
+
+addNote(b, 4, 3); // Bass C
+tremolo(b + 0.05, 0, 8, Q * 1.5, 0.06); b += H;
+
+addNote(b, 4, 2); // Bass B
+tremolo(b + 0.05, 0, 7, Q * 1.5, 0.06); b += H;
+
+// Descending tremolo line
+addNote(b, 4, 0);
+tremolo(b + 0.05, 0, 12, Q, 0.06); b += Q + E;
+addNote(b, 5, 3);
+tremolo(b + 0.05, 0, 10, Q, 0.06); b += Q + E;
+addNote(b, 5, 1);
+tremolo(b + 0.05, 0, 8, Q, 0.06); b += Q + E;
+addNote(b, 5, 0);
+tremolo(b + 0.05, 0, 7, Q, 0.06); b += Q + E;
+
+// Final tremolo on E
+addNote(b, 5, 0);
+tremolo(b + 0.05, 1, 5, H, 0.05); b += H + Q;
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 7: ALZAPÚA - Thumb technique fury
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Alzapúa';
+
+// Rapid thumb strokes on bass strings
+for (let rep = 0; rep < 2; rep++) {
+    addNote(b, 5, 0); b += S;
+    addNote(b, 4, 2); b += S;
+    addNote(b, 5, 0); b += S;
+    addNote(b, 4, 0); b += S;
+    addNote(b, 5, 0); b += S;
+    addNote(b, 4, 2); b += S;
+    addNote(b, 3, 2); b += S;
+    addNote(b, 4, 2); b += S;
+    
+    addNote(b, 5, 0); b += S;
+    addNote(b, 4, 0); b += S;
+    addNote(b, 5, 1); b += S;
+    addNote(b, 4, 3); b += S;
+    addNote(b, 5, 1); b += S;
+    addNote(b, 4, 3); b += S;
+    addNote(b, 3, 3); b += S;
+    addNote(b, 4, 3); b += S;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 8: SANTANA SOLO - Singing guitar
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Santana';
+
+// The crying, singing Santana tone
+// High position melodic phrases
+addNote(b, 0, 15); b += E;
+addNote(b, 0, 17); b += Q;
+addNote(b, 0, 15); b += E;
+addNote(b, 0, 17); b += E;
+addNote(b, 0, 19); b += E;
+addNote(b, 0, 17); b += Q;
+addNote(b, 0, 15); b += E;
+
+addNote(b, 0, 17); b += E;
+addNote(b, 0, 15); b += E;
+addNote(b, 1, 17); b += E;
+addNote(b, 1, 15); b += E;
+addNote(b, 1, 13); b += Q;
+addNote(b, 0, 12); b += E;
+addNote(b, 1, 15); b += E;
+
+// Call and response with bass
+addNote(b, 5, 0); b += E;
+addNote(b, 0, 12); b += S;
+addNote(b, 0, 15); b += S;
+addNote(b, 0, 12); b += E;
+addNote(b, 4, 0); b += E;
+addNote(b, 1, 13); b += S;
+addNote(b, 1, 15); b += S;
+addNote(b, 1, 13); b += E;
+
+// Climactic phrase
+addNote(b, 0, 12); b += S;
+addNote(b, 0, 15); b += S;
+addNote(b, 0, 17); b += S;
+addNote(b, 0, 19); b += S;
+addNote(b, 0, 20); b += Q;
+addNote(b, 0, 19); b += E;
+addNote(b, 0, 17); b += E;
+addNote(b, 0, 15); b += E;
+addNote(b, 0, 17); b += E;
+addNote(b, 0, 15); b += Q;
+
+// Resolution
+addNote(b, 0, 12); b += H;
+
+// ═══════════════════════════════════════════════════════════════
+// SECTION 9: REMATE - Grand finale
+// ═══════════════════════════════════════════════════════════════
+currentSection = 'Remate';
+
+// Build tension with rapid chord stabs
+rasgueado(b, Am, 0.01); b += S;
+b += S;
+rasgueado(b, Am, 0.01); b += S;
+rasgueado(b, Am, 0.01); b += S;
+rasgueado(b, G, 0.01); b += S;
+b += S;
+rasgueado(b, G, 0.01); b += S;
+rasgueado(b, G, 0.01); b += S;
+
+rasgueado(b, F, 0.01); b += S;
+rasgueado(b, F, 0.01); b += S;
+rasgueado(b, F, 0.01); b += S;
+rasgueado(b, F, 0.01); b += S;
+
+// Final E7 explosion
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += S;
+rasgueado(b, E7, 0.008); b += E;
+
+// Descending scale to final chord
+addNote(b, 0, 12); b += S;
+addNote(b, 0, 10); b += S;
+addNote(b, 0, 8); b += S;
+addNote(b, 0, 7); b += S;
+addNote(b, 1, 10); b += S;
+addNote(b, 1, 8); b += S;
+addNote(b, 1, 6); b += S;
+addNote(b, 1, 5); b += S;
+addNote(b, 2, 7); b += S;
+addNote(b, 2, 5); b += S;
+addNote(b, 2, 4); b += S;
+addNote(b, 3, 6); b += S;
+addNote(b, 3, 4); b += S;
+addNote(b, 3, 2); b += S;
+addNote(b, 4, 4); b += S;
+addNote(b, 4, 2); b += S;
+
+// THE FINAL CHORD - E Phrygian resolution
+addNote(b, 5, 0); b += 0.01;
+addNote(b, 4, 2); b += 0.01;
+addNote(b, 3, 2); b += 0.01;
+addNote(b, 2, 1); b += 0.01;
+addNote(b, 1, 0); b += 0.01;
+addNote(b, 0, 0); b += H;
+
+// Let it ring
+b += Q;
+
+const LOOP_LENGTH = b + 2;
+
+// --- SEQUENCER (EXACT pattern) ---
+let currentBeat = -1.0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60));
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            
+            // Update section display
+            if (note.section !== currentSection) {
+                currentSection = note.section;
+                document.getElementById('section').innerText = note.section;
+            }
+            
+            AudioEngine.playString(note.string, note.fret, playTime, 1.0);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE (EXACT pattern + warm colors) ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2,
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.fillStyle = 'rgba(26, 10, 0, 0.12)';
+    ctx.fillRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30;
+    const HIT_X = w * 0.2;
+
+    // Staff
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#3d2010';
+    ctx.font = "14px 'JetBrains Mono'";
+    ctx.fillStyle = '#8b4500';
+
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line with golden glow
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff6600';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Notes
+    const pixelsPerBeat = 150;
+
+    ctx.font = "14px 'JetBrains Mono'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH;
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#1a0a00';
+            ctx.fill();
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = '#fff8dc';
+            ctx.fillText(note.fret, x - (note.fret >= 10 ? 7 : 3), y + 4);
+        }
+    });
+
+    // Fire ripples
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+
+        const radius = 12 + ((1 - n.life) * 45);
+        
+        // Gradient from gold to red
+        const hue = 30 + (1 - n.life) * 20;
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${n.life})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        n.life -= 0.05;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS (EXACT pattern) ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setReverb(y * 0.5);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+
+</script>
+</body>
+</html>
