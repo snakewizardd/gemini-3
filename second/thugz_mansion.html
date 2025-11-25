@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THUGZ MANSION // TAB ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Courier+New:wght@700&display=swap');
+
+    :root {
+        --paper: #fdf6e3;
+        --ink: #2c3e50;
+        --accent: #d35400;
+        --string: #95a5a6;
+    }
+
+    body {
+        margin: 0;
+        background: var(--paper);
+        overflow: hidden;
+        font-family: 'Permanent Marker', cursive;
+        color: var(--ink);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(253, 246, 227, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 4rem;
+        margin: 0;
+        transform: rotate(-2deg);
+        text-shadow: 3px 3px 0px rgba(0,0,0,0.1);
+    }
+
+    p {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Thugz Mansion</h1>
+    <p>[ CLICK TO JAM ]</p>
+    <p style="font-size: 0.8rem; color: #666; margin-top: 2rem;">MOUSE Y = REVERB // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TUNING: E A D G B E<br>
+    BPM: 86
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * THUGZ MANSION TAB ENGINE
+ * Acoustic Physics + Tab Parser
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 86,
+    STRINGS: [64, 59, 55, 50, 45, 40], // MIDI notes for Open E A D G B E (High to Low order visually)
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], // High E to Low E
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.5;
+
+        // Reverb Chain
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(3.0, 2.0);
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.3;
+
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            const n = length - i;
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    // Guitar Tone: Sine + Triangle mix with filtered envelope
+    playString: (stringIdx, fret, time, duration = 2.0, slideTo = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        // Calculate frequency: f = base * 2^(fret/12)
+        // stringIdx 0 is High E, 5 is Low E
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        osc1.type = 'triangle'; // Body
+        osc2.type = 'sine';     // Fundamental
+        
+        // Handling Slides
+        if (slideTo !== null) {
+            const targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.15); // Slide duration
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+        }
+
+        // Filter Envelope (The "Pluck")
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 0.5;
+        filter.frequency.setValueAtTime(freq * 4, t);
+        filter.frequency.exponentialRampToValueAtTime(freq, t + 0.2);
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.4, t + 0.02); // Attack
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); // Release
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+
+        osc1.start(t);
+        osc1.stop(t + duration);
+        osc2.start(t);
+        osc2.stop(t + duration);
+    },
+
+    // Percussive "Dead Note" (The 'x' in tabs)
+    playDeadNote: (time) => {
+        const t = time;
+        const bufSize = AudioEngine.ctx.sampleRate * 0.05; // Short burst
+        const buffer = AudioEngine.ctx.createBuffer(1, bufSize, AudioEngine.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for(let i=0; i<bufSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = AudioEngine.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 400; // Thud frequency
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0.3, t);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+
+        noise.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+        noise.start(t);
+    },
+
+    setReverb: (val) => {
+        if(AudioEngine.reverbGain) AudioEngine.reverbGain.gain.setTargetAtTime(val, AudioEngine.ctx.currentTime, 0.1);
+    }
+};
+
+// --- TAB DATA PARSER ---
+// Format: { beat: float, string: 0-5 (High E to Low E), fret: int, type: 'pluck'|'slide'|'x', target: int }
+
+const TAB = [];
+
+function addNote(beat, string, fret, type = 'pluck', target = null) {
+    TAB.push({ beat, string, fret, type, target });
+}
+
+function addChord(beat, notes) {
+    // notes array: [[string, fret], [string, fret]...]
+    notes.forEach(n => addNote(beat, n[0], n[1]));
+}
+
+// -- BUILD THE SONG --
+// Pre-Intro
+addNote(0.0, 2, 4, 'slide', 3); // G string slide 4->3
+addNote(0.5, 2, 4, 'slide', 3); // Repeat
+
+// Measure 1 (Ab)
+addNote(1.0, 5, 4); // Low E, 4
+addChord(1.5, [[1, 4], [2, 5], [3, 6]]); // B, G, D strings
+addNote(2.0, 0, 0, 'x'); // Percussion
+addChord(2.5, [[1, 4], [2, 5], [3, 6], [5, 4]]); // Chord + Bass
+addNote(3.0, 5, 4); // Bass
+addChord(3.5, [[1, 4], [2, 5], [3, 6]]);
+
+// Measure 2 (Cm7)
+addNote(4.0, 4, 1, 'slide', 3); // A string slide into 3
+addChord(4.5, [[1, 4], [2, 3], [3, 5]]); // Chord
+addNote(5.0, 0, 0, 'x');
+addChord(5.5, [[1, 4], [2, 3], [3, 5], [4, 3]]); // Chord + Bass (A string)
+addNote(6.0, 4, 3); // Bass A string
+addChord(6.5, [[1, 4], [2, 3], [3, 5]]);
+
+// Measure 3 (Walkup Bbm7 -> Cm7 -> C#maj7)
+addChord(7.0, [[4, 1], [3, 3], [2, 1], [1, 2]]); // Bbm7
+addChord(7.5, [[4, 3], [3, 5], [2, 3], [1, 4]]); // Cm7
+addNote(8.0, 4, 3, 'slide', 4); // Slide Bass A string 3->4
+addChord(8.0, [[3, 6], [2, 5], [1, 6]]); // C#maj7 chord
+addNote(8.5, 0, 0, 'x');
+
+// Measure 4 (Turnaround Bbm7 -> Cm7 -> Gdim6)
+addChord(9.0, [[4, 1], [3, 3], [2, 1], [1, 2]]); // Bbm7
+addChord(9.5, [[4, 3], [3, 5], [2, 3], [1, 4]]); // Cm7
+addNote(10.0, 0, 3, 'slide', 6); // High E slide 3->6
+addNote(10.25, 0, 6); // Catch note
+addNote(10.5, 1, 5); // B string 5
+addNote(11.0, 2, 6); // G string 6
+
+// Loop Logic
+const LOOP_LENGTH = 12.0;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; // Start with lead-in
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    // Calculate current beat based on time elapsed
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    // Loop
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; // Reset tab pointer
+        // Skip pre-intro on loop if desired, but for now loop whole thing
+        // To skip pre-intro: nextNoteIdx = 2; startTime -= (beat_duration * 1.0);
+    }
+
+    // Schedule Lookahead (0.1s)
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        
+        // If note is within the play window
+        if (note.beat <= currentBeat + 0.1) {
+            // Schedule audio
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            
+            if (note.type === 'x') {
+                AudioEngine.playDeadNote(playTime);
+            } else if (note.type === 'slide') {
+                AudioEngine.playString(note.string, note.fret, playTime, 1.5, note.target);
+            } else {
+                AudioEngine.playString(note.string, note.fret, playTime, 1.5);
+            }
+            
+            // Mark for Visuals
+            triggerVisual(note);
+            
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, // Hit line position
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; // Distance between strings
+    const HIT_X = w * 0.2; // Where the notes hit
+
+    // Draw Staff
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#95a5a6';
+    ctx.font = "20px 'Courier New'";
+    ctx.fillStyle = '#7f8c8d';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        
+        // String Line
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+
+        // String Name
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Draw Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#d35400';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw Incoming Notes
+    const pixelsPerBeat = 200; // Scroll speed
+    
+    // 1. Draw Future Notes
+    ctx.font = "24px 'Permanent Marker'";
+    TAB.forEach(note => {
+        // Calculate relative position
+        let noteBeat = note.beat;
+        
+        // Handle looping visual logic
+        // If note is in the past relative to currentBeat, maybe it's coming up in next loop?
+        // Simplification: Just draw based on distance from currentBeat
+        
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; // Wrap visual approximation
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#2c3e50';
+            let txt = note.type === 'x' ? 'x' : note.fret;
+            if (note.type === 'slide') txt += '/';
+
+            // Draw circle background
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 12, 0, Math.PI*2);
+            ctx.fillStyle = '#fdf6e3';
+            ctx.fill();
+            
+            // Draw Text
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(txt, x - 6, y + 2);
+        }
+    });
+
+    // 2. Draw Active Flashes (Notes that just hit)
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        // Expanding ring
+        const radius = 15 + ((1 - n.life) * 30);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(211, 84, 0, ${n.life})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        n.life -= 0.05;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    // Playhead Text
+    ctx.font = "14px 'Courier New'";
+    ctx.fillStyle = '#d35400';
+    ctx.fillText("PLAYHEAD", HIT_X - 35, STAFF_Y - 110);
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        togglePlay();
+    }
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    // Map Y to Reverb Gain (0.0 to 1.0)
+    // Top = Dry, Bottom = Wet
+    AudioEngine.setReverb(y * 0.8);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        // Adjust start time to resume seamlessly would require tracking pause time
+        // For simple tab player, restart is cleaner or just sync:
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); // Start render loop
+
+</script>
+</body>
+</html>

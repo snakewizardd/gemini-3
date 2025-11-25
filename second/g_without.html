@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WITHOUT ME - FULL ARRANGEMENT</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080506;height:100vh;overflow:hidden;cursor:pointer;font-family:'Courier New', monospace; color: #eee;}
+canvas{position:fixed;top:0;left:0;z-index: 1;}
+#ui{position:fixed;top:50%;left:50%;transform:translate(-50%, -50%);text-align:center;z-index:10;pointer-events:none;width: 80%;}
+#t{font-size:1.2rem;letter-spacing:0.3em;text-transform:uppercase;margin-bottom: 1.5rem; color: #ff88bb; text-shadow: 0 0 15px rgba(255, 136, 187, 0.5); font-weight: bold;}
+#lyrics{font-size: 1rem; opacity: 0.8; line-height: 1.8; text-shadow: 0 0 5px #000; font-family: Georgia, serif; font-style: italic;}
+.hint {position: fixed; bottom: 20px; width: 100%; text-align: center; opacity: 0.4; font-size: 0.75rem; z-index: 10; letter-spacing: 0.1em;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+    <div id="t">CLICK TO START</div>
+    <div id="lyrics"></div>
+</div>
+<div class="hint">LINEAR AUDIO COMPOSITION | HEADPHONES REQUIRED</div>
+
+<script>
+/**
+ * ════════════════════════════════════════════════════════════════════
+ * W I T H O U T   M E  (Arranged)
+ * ════════════════════════════════════════════════════════════════════
+ * * Composition Structure:
+ * INTRO (Bars 1-4): Clean guitar, lonely atmosphere.
+ * VERSE 1 (Bars 5-12): Vocals implied, subtle pad swells.
+ * PRE-CHORUS (Bars 13-16): Snare rolls, rising tension.
+ * CHORUS 1 (Bars 17-24): Full Trap Beat + Sub Bass + Atmospheric Strings.
+ * VERSE 2 (Bars 25-32): Stripped back, hi-hat ticks.
+ * BRIDGE (Bars 33-36): Dark, detuned echoes.
+ * FINAL CHORUS (Bars 37-52): Maximum intensity, layers of harmony.
+ * OUTRO (Bars 53-56): Fade to single guitar.
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, limiter, delay, delayGain, verb, verbGain;
+let started = false;
+
+// ════════════════════════════════════════════════════════════════════
+// FREQUENCIES (Standard Tuning)
+// ════════════════════════════════════════════════════════════════════
+
+const F = {
+    // Bass / Sub (Octave 1-2)
+    E1: 41.20, G1: 49.00, A1: 55.00, B1: 61.74,
+    D2: 73.42, E2: 82.41, G2: 98.00, A2: 110.00, B2: 123.47,
+    // Mid (Octave 3)
+    D3: 146.83, E3: 164.81, Fs3: 185.00, G3: 196.00, A3: 220.00, B3: 246.94,
+    // Treble (Octave 4)
+    Cs4: 277.18, D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.00, A4: 440.00,
+    // High (Octave 5)
+    Cs5: 554.37, D5: 587.33, E5: 659.25
+};
+
+// ════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ════════════════════════════════════════════════════════════════════
+
+async function init() {
+    ctx = new AC();
+    if (ctx.state === 'suspended') await ctx.resume();
+
+    master = ctx.createGain();
+    master.gain.value = 0.9;
+
+    // Mastering Limiter (Essential for 808s)
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.005;
+    limiter.release.value = 0.1;
+
+    // Guitar Delay Line
+    delay = ctx.createDelay();
+    delay.delayTime.value = 0.33; // Dotted 8th note feel
+    delayGain = ctx.createGain();
+    delayGain.gain.value = 0.25;
+    const delayFilt = ctx.createBiquadFilter();
+    delayFilt.type = 'lowpass';
+    delayFilt.frequency.value = 1200; // Dark repeats
+
+    // Atmospheric Reverb
+    verb = ctx.createConvolver();
+    verb.buffer = await createImpulse(3.5, 2.0);
+    verbGain = ctx.createGain();
+    verbGain.gain.value = 0.25;
+
+    // Routing
+    delay.connect(delayFilt);
+    delayFilt.connect(delayGain);
+    delayGain.connect(delay); // Feedback loop
+    delayGain.connect(master);
+
+    master.connect(limiter);
+    limiter.connect(ctx.destination);
+    master.connect(verbGain);
+    verbGain.connect(verb);
+    verb.connect(limiter);
+}
+
+function createImpulse(sec, decay) {
+    const len = ctx.sampleRate * sec;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+        const d = buf.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/len, decay);
+        }
+    }
+    return buf;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// INSTRUMENTS
+// ════════════════════════════════════════════════════════════════════
+
+// 1. Clean Electric Guitar
+function guitar(freq, t, vel = 0.5, dur = 2.0) {
+    if(!freq) return;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine'; // Fundamental
+    
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'triangle'; // Harmonics
+    osc2.detune.value = 3; // Chorus effect
+
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.setValueAtTime(freq * 3, t);
+    flt.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.1);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vel, t + 0.005); // Pluck attack
+    env.gain.exponentialRampToValueAtTime(vel * 0.6, t + 0.1);
+    env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    osc.connect(flt);
+    osc2.connect(flt);
+    flt.connect(env);
+    env.connect(master);
+    
+    // Send to delay
+    const send = ctx.createGain();
+    send.gain.value = 0.5;
+    env.connect(send);
+    send.connect(delay);
+
+    osc.frequency.value = freq;
+    osc2.frequency.value = freq;
+    
+    osc.start(t);
+    osc2.start(t);
+    osc.stop(t + dur);
+    osc2.stop(t + dur);
+
+    triggerVis(t, vel, '#fff', false);
+}
+
+// 2. 808 Bass (The "Heartbeat")
+function kick808(freq, t, vel = 0.8) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 3, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+
+    const drive = ctx.createWaveShaper();
+    drive.curve = makeDistortionCurve(15); // Saturation
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel, t);
+    env.gain.exponentialRampToValueAtTime(0.01, t + 0.8);
+
+    osc.connect(drive);
+    drive.connect(env);
+    env.connect(master);
+
+    osc.start(t);
+    osc.stop(t + 0.8);
+    triggerVis(t, 1.0, '#d14', true);
+}
+
+// 3. Trap Snare
+function snare(t, vel = 0.6) {
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0; i<d.length; i++) d[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
+
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'highpass';
+    flt.frequency.value = 1500;
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel, t);
+    env.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+
+    noise.connect(flt);
+    flt.connect(env);
+    env.connect(master);
+    noise.start(t);
+}
+
+// 4. Hi-Hat
+function hat(t, vel = 0.3) {
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = 400; // Base freq for noise-like square
+    
+    const bpf = ctx.createBiquadFilter();
+    bpf.type = 'highpass';
+    bpf.frequency.value = 7000;
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.4, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+
+    osc.connect(bpf);
+    bpf.connect(env);
+    env.connect(master);
+    osc.start(t);
+    osc.stop(t + 0.05);
+}
+
+// 5. Atmospheric Pad (Orchestral layer)
+function pad(chordNotes, t, dur, vel = 0.2) {
+    chordNotes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        osc.detune.value = (Math.random() - 0.5) * 10;
+
+        const flt = ctx.createBiquadFilter();
+        flt.type = 'lowpass';
+        flt.frequency.setValueAtTime(400, t);
+        flt.frequency.linearRampToValueAtTime(1200, t + dur/2);
+        flt.frequency.linearRampToValueAtTime(400, t + dur);
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vel * 0.3, t + 1);
+        env.gain.linearRampToValueAtTime(0, t + dur);
+
+        const pan = ctx.createStereoPanner();
+        pan.pan.value = (i % 2 === 0 ? -1 : 1) * 0.4;
+
+        osc.connect(flt);
+        flt.connect(env);
+        env.connect(pan);
+        pan.connect(master);
+        pan.connect(verbGain); // Heavy reverb on pad
+
+        osc.start(t);
+        osc.stop(t + dur + 0.5);
+    });
+}
+
+function makeDistortionCurve(amount) {
+    const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+    for (let i = 0; i < n_samples; ++i ) {
+        let x = i * 2 / n_samples - 1;
+        curve[i] = ( 3 + k ) * x * 20 * (Math.PI/180) / ( Math.PI + k * Math.abs(x) );
+    }
+    return curve;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// TAB PATTERNS
+// ════════════════════════════════════════════════════════════════════
+
+// Rhythmic Constants (136 BPM / 2 = 68 BPM feel)
+const BPM = 136;
+const Q = 60 / BPM;     // Quarter
+const E = Q / 2;        // Eighth
+const S = Q / 4;        // Sixteenth
+
+// Tab pattern logic based on your request
+function playRiff(chord, t) {
+    if (chord === 'Bm7') {
+        guitar(F.B2, t, 0.6); // Bass
+        guitar(F.Fs3, t + E, 0.45);
+        guitar(F.A3, t + Q, 0.45);
+        guitar(F.D4, t + Q + E, 0.5);
+        guitar(F.Fs4, t + 2*Q, 0.55);
+        guitar(F.E4, t + 2*Q + E, 0.45);
+    } 
+    else if (chord === 'Dsus2') {
+        guitar(F.D2, t, 0.6); // Bass
+        guitar(F.A3, t + E, 0.45);
+        guitar(F.D4, t + Q, 0.45);
+        // Space
+        guitar(F.A3, t + 3*Q, 0.4);
+    }
+    else if (chord === 'A') {
+        guitar(F.A2, t, 0.6); // Bass
+        guitar(F.E3, t + E, 0.45);
+        guitar(F.A3, t + Q, 0.45);
+        guitar(F.Cs4, t + Q + E, 0.5);
+        guitar(F.E4, t + 2*Q, 0.55);
+        guitar(F.D4, t + 2*Q + E, 0.45);
+    }
+    else if (chord === 'G') {
+        guitar(F.G2, t, 0.6);
+        guitar(F.B2, t + E, 0.45);
+        guitar(F.D3, t + Q, 0.45);
+        guitar(F.G3, t + Q + E, 0.5);
+    }
+    else if (chord === 'Em7') {
+        guitar(F.E2, t, 0.6);
+        guitar(F.B2, t + E, 0.45);
+        guitar(F.D4, t + Q, 0.5);
+        guitar(F.D4, t + Q + S, 0.4); // Ghost note
+        guitar(F.Cs4, t + Q + E, 0.5);
+        guitar(F.B3, t + 2*Q, 0.45);
+    }
+}
+
+// Trap Hi-Hat rolls
+function playHats(t, complexity = 1) {
+    for(let i = 0; i < 8; i++) {
+        let time = t + i*E;
+        // Random triplet rolls on beats 2 or 4
+        if (complexity > 1 && (i === 2 || i === 6) && Math.random() > 0.6) {
+            hat(time, 0.4);
+            hat(time + E/3, 0.3);
+            hat(time + 2*E/3, 0.2);
+        } else {
+            hat(time, (i % 2 === 0) ? 0.4 : 0.25);
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// COMPOSITION
+// ════════════════════════════════════════════════════════════════════
+
+function compose() {
+    const t0 = ctx.currentTime + 0.2;
+    let t = t0;
+    const BAR = Q * 4;
+
+    function setUI(section, text) {
+        setTimeout(() => {
+            document.getElementById('t').innerText = section;
+            document.getElementById('lyrics').innerText = text;
+        }, (t - t0) * 1000);
+    }
+
+    // ─── INTRO (Bars 1-4) ───────────────────────────────────────────
+    setUI("INTRO", "");
+    
+    playRiff('Bm7', t); t += BAR;
+    playRiff('Dsus2', t); t += BAR;
+    playRiff('A', t); t += BAR;
+    playRiff('G', t); t += BAR;
+
+    // ─── VERSE 1 (Bars 5-12) ────────────────────────────────────────
+    setUI("VERSE", "Found you when your heart was broke...");
+    
+    // 5-6
+    playRiff('Bm7', t); 
+    kick808(F.B1, t, 0.5); // Soft heartbeat
+    t += BAR;
+    playRiff('Dsus2', t);
+    t += BAR;
+
+    // 7-8
+    playRiff('A', t);
+    kick808(F.A1, t, 0.5);
+    t += BAR;
+    playRiff('Em7', t);
+    t += BAR;
+
+    setUI("VERSE", "Took it so far to keep you close...");
+    // 9-10
+    playRiff('Bm7', t);
+    pad([F.B2, F.D3, F.Fs3], t, BAR*2, 0.3); // Pad enters
+    t += BAR;
+    playRiff('Dsus2', t);
+    t += BAR;
+    
+    // 11-12
+    playRiff('A', t);
+    t += BAR;
+    playRiff('Em7', t);
+    t += BAR;
+
+    // ─── PRE-CHORUS (Bars 13-16) ────────────────────────────────────
+    setUI("PRE-CHORUS", "I said I'd catch you if you fall...");
+
+    // 13
+    playRiff('Bm7', t);
+    pad([F.B2, F.Fs3, F.A3], t, BAR*2, 0.4);
+    hat(t, 0.3); hat(t+Q, 0.3); hat(t+2*Q, 0.3); hat(t+3*Q, 0.3); // Quarter note hats
+    t += BAR;
+
+    // 14
+    playRiff('Dsus2', t);
+    snare(t + 2*Q, 0.4); // First snare
+    t += BAR;
+
+    // 15
+    playRiff('A', t);
+    playHats(t, 1); // 8th note hats
+    snare(t + 2*Q, 0.5);
+    t += BAR;
+
+    // 16 (Build)
+    playRiff('Em7', t);
+    snare(t + 2*Q, 0.5);
+    snare(t + 2.5*Q, 0.4);
+    snare(t + 3*Q, 0.6);
+    snare(t + 3.5*Q, 0.7);
+    t += BAR;
+
+    // ─── CHORUS (Bars 17-24) ────────────────────────────────────────
+    setUI("CHORUS", "Tell me how's it feel sittin' up there?");
+
+    for(let i=0; i<2; i++) {
+        // Bm7
+        playRiff('Bm7', t);
+        pad([F.B2, F.D3, F.Fs3, F.A3], t, BAR, 0.5);
+        kick808(F.B1, t, 0.9);
+        kick808(F.B1, t + 2.5*Q, 0.7); // Syncopated kick
+        snare(t + 2*Q, 0.8);
+        playHats(t, 2); // Trap rolls
+        t += BAR;
+
+        // Dsus2
+        playRiff('Dsus2', t);
+        pad([F.D3, F.A3, F.D4], t, BAR, 0.5);
+        kick808(F.D2, t, 0.9);
+        snare(t + 2*Q, 0.8);
+        playHats(t, 2);
+        t += BAR;
+
+        // A
+        playRiff('A', t);
+        pad([F.A2, F.E3, F.A3], t, BAR, 0.5);
+        kick808(F.A1, t, 0.9);
+        kick808(F.A1, t + 3*Q, 0.7);
+        snare(t + 2*Q, 0.8);
+        playHats(t, 2);
+        t += BAR;
+
+        // G / Em7
+        let last = (i===0) ? 'G' : 'Em7';
+        playRiff(last, t);
+        pad((last==='G'?[F.G2, F.B2, F.D3]:[F.E2, F.G2, F.B2]), t, BAR, 0.5);
+        kick808((last==='G'?F.G1:F.E1), t, 0.9);
+        snare(t + 2*Q, 0.8);
+        playHats(t, 2);
+        t += BAR;
+    }
+
+    // ─── VERSE 2 (Bars 25-32) ───────────────────────────────────────
+    setUI("VERSE 2", "Gave love 'bout a hundred tries...");
+
+    // Strip beat, keep guitar + hats
+    // 25
+    playRiff('Bm7', t);
+    playHats(t, 1);
+    t += BAR;
+    
+    // 26
+    playRiff('Dsus2', t);
+    playHats(t, 1);
+    t += BAR;
+
+    // 27
+    playRiff('A', t);
+    playHats(t, 1);
+    t += BAR;
+
+    // 28
+    playRiff('Em7', t);
+    snare(t + 2*Q, 0.4); // Soft snare return
+    playHats(t, 1);
+    t += BAR;
+
+    setUI("VERSE 2", "Then I took yours and made 'em mine...");
+    // 29-32 (Add bass back)
+    playRiff('Bm7', t); kick808(F.B1, t, 0.6); t += BAR;
+    playRiff('Dsus2', t); kick808(F.D2, t, 0.6); t += BAR;
+    playRiff('A', t); kick808(F.A1, t, 0.6); t += BAR;
+    playRiff('G', t); kick808(F.G1, t, 0.6); t += BAR;
+
+    // ─── BRIDGE (Bars 33-36) ────────────────────────────────────────
+    setUI("BRIDGE", "You don't have to say just what you did...");
+
+    // Dark, just chords and kicks
+    playRiff('Bm7', t);
+    pad([F.B1, F.B2], t, BAR*2, 0.6); // Deep drone
+    kick808(F.B1, t, 0.8);
+    t += BAR;
+
+    playRiff('Dsus2', t);
+    kick808(F.D2, t, 0.8);
+    t += BAR;
+
+    playRiff('A', t);
+    pad([F.A1, F.A2], t, BAR*2, 0.6);
+    kick808(F.A1, t, 0.8);
+    t += BAR;
+
+    // Build into final chorus
+    playRiff('Em7', t);
+    kick808(F.E1, t, 0.8);
+    // Snare roll build
+    for(let i=0; i<8; i++) snare(t + 2*Q + i*E/2, 0.4 + i*0.05);
+    t += BAR;
+
+    // ─── FINAL CHORUS (Bars 37-52) ──────────────────────────────────
+    setUI("FINAL CHORUS", "Thinking you could live without me!");
+
+    for(let i=0; i<4; i++) { // Double length chorus
+        let intensity = 0.9;
+        
+        playRiff('Bm7', t);
+        pad([F.B2, F.D3, F.Fs3, F.A3, F.D4], t, BAR, 0.4); // Thicker pads
+        kick808(F.B1, t, intensity);
+        kick808(F.B1, t+2.5*Q, intensity);
+        snare(t+2*Q, intensity);
+        playHats(t, 2);
+        t += BAR;
+
+        playRiff('Dsus2', t);
+        pad([F.D3, F.A3, F.D4, F.Fs4], t, BAR, 0.4);
+        kick808(F.D2, t, intensity);
+        snare(t+2*Q, intensity);
+        playHats(t, 2);
+        t += BAR;
+
+        playRiff('A', t);
+        pad([F.A2, F.E3, F.A3, F.Cs4], t, BAR, 0.4);
+        kick808(F.A1, t, intensity);
+        kick808(F.A1, t+3*Q, intensity);
+        snare(t+2*Q, intensity);
+        playHats(t, 2);
+        t += BAR;
+
+        let last = (i%2===0) ? 'G' : 'Em7';
+        playRiff(last, t);
+        pad([F.E2, F.G2, F.B2], t, BAR, 0.4);
+        kick808((last==='G'?F.G1:F.E1), t, intensity);
+        snare(t+2*Q, intensity);
+        playHats(t, 2);
+        t += BAR;
+    }
+
+    // ─── OUTRO (Bars 53-56) ─────────────────────────────────────────
+    setUI("OUTRO", "");
+    
+    // Just guitar and reverb tail
+    playRiff('Bm7', t); t += BAR;
+    playRiff('Dsus2', t); t += BAR;
+    
+    // Final chord strum
+    setTimeout(() => {
+        guitar(F.A2, t, 0.5, 4);
+        guitar(F.E3, t + 0.05, 0.5, 4);
+        guitar(F.A3, t + 0.1, 0.5, 4);
+        guitar(F.Cs4, t + 0.15, 0.5, 4);
+        guitar(F.E4, t + 0.2, 0.5, 4);
+        setUI("FIN", "");
+    }, (t - t0) * 1000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// VISUALS
+// ════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h;
+let pulses = [];
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVis(t, vel, color, isKick) {
+    const delay = (t - ctx.currentTime) * 1000;
+    setTimeout(() => {
+        pulses.push({
+            r: isKick ? 50 : 10,
+            maxR: isKick ? Math.max(w,h) * 0.6 : 80,
+            a: vel,
+            color: color,
+            x: isKick ? w/2 : Math.random() * w,
+            y: isKick ? h/2 : Math.random() * h,
+            isKick: isKick
+        });
+    }, delay);
+}
+
+function loop() {
+    requestAnimationFrame(loop);
+    c.fillStyle = 'rgba(8, 5, 6, 0.2)'; // Fade trail
+    c.fillRect(0,0,w,h);
+
+    for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i];
+        c.beginPath();
+        c.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        
+        if(p.isKick) {
+            const grad = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+            grad.addColorStop(0, `rgba(255, 60, 100, ${p.a * 0.6})`);
+            grad.addColorStop(1, 'transparent');
+            c.fillStyle = grad;
+            c.fill();
+        } else {
+            c.strokeStyle = p.color;
+            c.lineWidth = 2;
+            c.globalAlpha = p.a;
+            c.stroke();
+            c.globalAlpha = 1;
+        }
+        
+        p.r += p.isKick ? 8 : 3;
+        p.a *= 0.94;
+        if (p.a < 0.01) pulses.splice(i, 1);
+    }
+}
+loop();
+
+// ════════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════════
+
+document.addEventListener('click', async () => {
+    if (started) return;
+    started = true;
+    document.getElementById('t').innerText = "LOADING...";
+    
+    try {
+        await init();
+        compose();
+    } catch(e) {
+        console.error(e);
+        document.getElementById('t').innerText = "ERROR";
+    }
+}, { once: true });
+
+</script>
+</body>
+</html>

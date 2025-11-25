@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PURPLE HAZE // ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Share+Tech+Mono&display=swap');
+
+    :root {
+        --bg: #1a0526; /* Deep Purple */
+        --neon: #b026ff; /* Bright Purple */
+        --haze: #800080;
+        --smoke: #dcd0ff;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Share Tech Mono', monospace;
+        color: var(--smoke);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+        filter: drop-shadow(0 0 15px var(--neon));
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(26, 5, 38, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-family: 'Creepster', cursive;
+        font-size: 6rem;
+        margin: 0;
+        color: var(--neon);
+        text-shadow: 4px 4px 0px #000;
+        letter-spacing: 5px;
+        transform: rotate(-2deg);
+    }
+
+    p {
+        font-weight: bold;
+        margin-top: 20px;
+        font-size: 1.2rem;
+        color: var(--smoke);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--neon);
+        text-shadow: 0 0 5px var(--neon);
+    }
+
+    /* Haze animation */
+    @keyframes haze {
+        0% { box-shadow: inset 0 0 50px var(--bg); }
+        50% { box-shadow: inset 0 0 150px var(--neon); }
+        100% { box-shadow: inset 0 0 50px var(--bg); }
+    }
+    body::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none;
+        animation: haze 4s infinite;
+        z-index: 2;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>PURPLE HAZE</h1>
+    <p>[ CLICK TO KISS THE SKY ]</p>
+    <p style="font-size: 0.8rem; color: #888; margin-top: 2rem;">MOUSE Y = FUZZ AMOUNT // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    FX: FUZZ FACE DISTORTION<br>
+    BPM: 124
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * PURPLE HAZE ENGINE
+ * Fuzz Physics + Hendrix Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 124, 
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null,
+    driveGain: null,
+    reverb: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.35;
+
+        // FUZZ CHAIN (High Gain Clipping)
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(800); // Extreme Gain
+        AudioEngine.drive.oversample = '4x';
+        
+        AudioEngine.driveGain = AudioEngine.ctx.createGain();
+        AudioEngine.driveGain.gain.value = 0.8; 
+
+        // Psychedelic Reverb (Large Hall)
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(2.0, 2.5);
+        
+        const verbMix = AudioEngine.ctx.createGain();
+        verbMix.gain.value = 0.3;
+
+        AudioEngine.driveGain.connect(AudioEngine.drive);
+        AudioEngine.drive.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(verbMix);
+        verbMix.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = typeof amount === 'number' ? amount : 50;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 1.0, slideTo = null, bendType = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Hendrix Fuzz Tone: Square dominant + Sawtooth
+        osc1.type = 'square'; 
+        osc2.type = 'sawtooth';
+        osc2.detune.value = 10; // Phasing effect
+        
+        // Pitch Logic
+        let targetFreq = freq;
+
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+        } else if (bendType) {
+            let interval = 0;
+            if(bendType.includes('b')) interval = 2; // Whole step default
+            if(bendType.includes('7b')) interval = 2;
+            if(bendType.includes('8b')) interval = 1; // Half step for blues usually, but lets stick to whole
+            
+            if(bendType.includes('pb')) { 
+                // Pre-bend logic not fully implemented, treating as bend up for chaos
+                targetFreq = freq * Math.pow(2, interval/12);
+                osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+                osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+            } else if(bendType.includes('b')) { 
+                targetFreq = freq * Math.pow(2, interval/12);
+                osc1.frequency.setValueAtTime(freq, t);
+                osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.3);
+                osc2.frequency.setValueAtTime(freq, t);
+                osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.3);
+            } else {
+                osc1.frequency.value = freq;
+                osc2.frequency.value = freq;
+            }
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+        }
+
+        // Filter (Wah-like envelope)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 1.0;
+        filter.frequency.setValueAtTime(800, t);
+        filter.frequency.linearRampToValueAtTime(2500, t + 0.1); // Wah open
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.6, t + 0.02); 
+        amp.gain.exponentialRampToValueAtTime(0.4, t + 0.1); 
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.driveGain);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setDistortion: (val) => {
+        if(AudioEngine.drive) {
+            AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(200 + val * 800);
+        }
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null, bend = null) {
+    TAB.push({ beat, string, fret, type, target, bend });
+}
+function addChord(beat, notes, type='pluck') {
+    notes.forEach(n => addNote(beat, n[0], n[1], type));
+}
+
+// -- BUILD THE SONG --
+let b = 0.0;
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+
+// === INTRO (The Tritone Stabs) ===
+// E|-6-----------6-----------|--6------------6------------|
+// D|-------8-----------8-----|---------8------------8-----|
+// Bb (E-6) and Bb (D-8). Octaves. 
+// Rhythm: 1 . 2 . 3 . 4 .
+// Staccato hits.
+
+function addIntroStabs() {
+    addNote(b, 5, 6); // Low E 6
+    b += 1.0;
+    addNote(b, 3, 8); // D 8
+    b += 1.0;
+    addNote(b, 5, 6); 
+    b += 1.0;
+    addNote(b, 3, 8); 
+    b += 1.0;
+}
+
+addIntroStabs(); // Bar 1
+addIntroStabs(); // Bar 2
+
+// === INTRO SOLO (The Lick) ===
+// Bar 3:
+// B|----------8b~------------|
+// G|-------7-----------------|
+// D|---/9--------7~-------(7)|--5---------------------|
+// A|-------------------------|-----5-----5/7~---------|
+// E|-------------------------|--------0---------------|
+
+// Slide into D-9
+addNote(b, 3, 7, 'slide', 9); b += E;
+// G-7
+addNote(b, 2, 7); b += E;
+// B-8 bend
+addNote(b, 1, 8, 'pluck', null, 'b'); b += Q;
+// D-7 vibrato
+addNote(b, 3, 7, 'pluck', null, 'vib'); b += Q;
+
+// Bar 4:
+// D-5
+addNote(b, 3, 5); b += E;
+// A-5
+addNote(b, 4, 5); b += E;
+// A-5 slide 7
+addNote(b, 4, 5, 'slide', 7); b += E;
+// Low E-0
+addNote(b, 5, 0); b += Q;
+
+b += 0.5;
+
+// === PART 2 OF INTRO SOLO ===
+// Slide D-9, G-7, B-8b
+addNote(b, 3, 7, 'slide', 9); b += E;
+addNote(b, 2, 7); b += E;
+addNote(b, 1, 8, 'pluck', null, 'b'); b += Q;
+// D-7
+addNote(b, 3, 7); b += Q;
+
+// Bar 6: D-7 slide 5, A-5, A-5 slide 7, E-0
+addNote(b, 3, 7, 'slide', 5); b += E;
+addNote(b, 4, 5); b += E;
+addNote(b, 4, 5, 'slide', 7); b += E;
+addNote(b, 5, 0); b += E;
+
+// Bar 7: Double stop bends
+// D-5-7-7b-5
+addNote(b, 3, 5); b += S;
+addNote(b, 3, 7); b += S;
+addNote(b, 3, 7, 'pluck', null, 'b'); b += S;
+addNote(b, 3, 5); b += E;
+
+// Bar 8:
+// D-5 A-0 E-0-3~
+addNote(b, 3, 5); b += E;
+addNote(b, 4, 0); b += E;
+addNote(b, 5, 0); b += E;
+addNote(b, 5, 3, 'pluck', null, 'vib'); b += Q;
+
+b += 1.0;
+
+// === MAIN RIFF (The Hendrix Chord E7#9) ===
+// E7#9: E-0 A-7 D-6 G-7 B-8
+// G: 355433
+// A: 577655
+// Rhythm: E7#9 (Hit Hit Hit Hit) -> G (Hit Hit) -> A (Hit Hit Hit)
+
+const E7s9 = [[5,0], [4,7], [3,6], [2,7], [1,8]];
+const G_Barre = [[5,3], [4,5], [3,5], [2,4], [1,3]];
+const A_Barre = [[5,5], [4,7], [3,7], [2,6], [1,5]];
+
+function addMainRiff() {
+    // E7#9 Phrase
+    addChord(b, E7s9); b += 0.75; // Dotted 8th
+    addChord(b, E7s9); b += 0.25; // 16th
+    addChord(b, E7s9); b += 0.5;  // 8th
+    addChord(b, E7s9); b += 0.5;
+    
+    // G
+    addChord(b, G_Barre); b += 0.5;
+    addChord(b, G_Barre); b += 0.5; // Staccato
+    
+    // A
+    addChord(b, A_Barre); b += 0.25;
+    addChord(b, A_Barre); b += 0.25;
+    
+    // Lick: A string 5-7-5 (hammer on pull off sim)
+    addNote(b, 4, 5); b += S;
+    addNote(b, 4, 7); b += S;
+    addNote(b, 4, 5); b += E;
+    
+    // Loop
+    addChord(b, E7s9); b += 0.75;
+    addChord(b, E7s9); b += 0.25;
+    addChord(b, E7s9); b += 0.5;
+    
+    // G -> A
+    addChord(b, G_Barre); b += 0.5;
+    addChord(b, A_Barre); b += 0.5;
+    
+    // Slide out on A string
+    addNote(b, 4, 7, 'slide', 0); b += 1.5;
+}
+
+// Play Riff 2 times
+addMainRiff();
+addMainRiff();
+
+const LOOP_LENGTH = b;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 1.5, note.target, note.bend);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Staff
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#552255';
+    ctx.font = "16px 'Share Tech Mono'";
+    ctx.fillStyle = '#b026ff';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#b026ff';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#b026ff';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Notes
+    const pixelsPerBeat = 130; 
+    
+    ctx.font = "22px 'Creepster'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#b026ff'; 
+            let txt = note.fret;
+            if(note.bend) txt += '~';
+            if(note.target) txt += '/';
+            
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 16, 0, Math.PI*2);
+            ctx.fillStyle = '#1a0526';
+            ctx.fill();
+            ctx.strokeStyle = '#b026ff'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#dcd0ff'; 
+            ctx.fillText(txt, x - 8, y + 6);
+        }
+    });
+
+    // Psychedelic Explosions
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 20 + ((1 - n.life) * 80);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(176, 38, 255, ${n.life})`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        n.life -= 0.05;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setDistortion(1 - y);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SANTERIA // ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Courier+New:wght@700&display=swap');
+
+    :root {
+        --bg: #fffbe6;
+        --ink: #2c3e50;
+        --accent: #e67e22;
+        --green: #27ae60;
+        --red: #c0392b;
+        --yellow: #f1c40f;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Permanent Marker', cursive;
+        color: var(--ink);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(255, 251, 230, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 5rem;
+        margin: 0;
+        color: var(--ink);
+        text-shadow: 3px 3px 0px var(--yellow);
+        transform: rotate(-2deg);
+    }
+
+    p {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+        color: var(--accent);
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--ink);
+    }
+    
+    .rasta-stripe {
+        height: 5px;
+        width: 100%;
+        position: absolute;
+        bottom: 0;
+        background: linear-gradient(90deg, var(--green) 33%, var(--yellow) 33%, var(--yellow) 66%, var(--red) 66%);
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>SUBLIME</h1>
+    <p>[ CLICK TO SKANK ]</p>
+    <p style="font-size: 0.8rem; color: #7f8c8d; margin-top: 2rem;">MOUSE Y = REVERB // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TONE: SKA CLEAN / LEAD DRIVE<br>
+    BPM: 90
+</div>
+<div class="rasta-stripe"></div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * SANTERIA ENGINE
+ * Ska Physics + Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 90, 
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null,
+    driveGain: null,
+    reverb: null,
+    reverbGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.5;
+
+        // Drive logic (Clean by default, cranked for solo)
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(0); // Start clean
+        AudioEngine.drive.oversample = '4x';
+        
+        AudioEngine.driveGain = AudioEngine.ctx.createGain();
+        AudioEngine.driveGain.gain.value = 1.0; 
+
+        // Spring Reverb
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(1.5, 4.0); // Twangy spring
+        
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.2;
+
+        AudioEngine.driveGain.connect(AudioEngine.drive);
+        AudioEngine.drive.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = typeof amount === 'number' ? amount : 0;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            if (k === 0) {
+                curve[i] = x;
+            } else {
+                curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+            }
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        // Simulate spring chirp
+        for (let i = 0; i < length; i++) {
+            const n = length - i;
+            const chirp = Math.sin(i * 0.1) * 0.5; 
+            L[i] = ((Math.random() * 2 - 1) + chirp) * Math.pow(1 - i / length, decay);
+            R[i] = ((Math.random() * 2 - 1) - chirp) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 1.0, slideTo = null, bendType = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Ska/Reggae Tone: Bright, thin, punchy
+        osc1.type = 'triangle'; // Body
+        osc2.type = 'sawtooth'; // Bite
+        
+        // Pitch Logic
+        let targetFreq = freq;
+
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+        } else if (bendType) {
+             // Bends logic (same as before)
+            let interval = 0;
+            if(bendType.includes('b')) interval = bendType.includes('11b') ? 1 : 2; // Heuristic
+            if(bendType.includes('half')) interval = 1;
+            
+            if(bendType.includes('b')) { 
+                targetFreq = freq * Math.pow(2, interval/12);
+                osc1.frequency.setValueAtTime(freq, t);
+                osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+                osc2.frequency.setValueAtTime(freq, t);
+                osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+            } else {
+                osc1.frequency.value = freq;
+                osc2.frequency.value = freq;
+            }
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+        }
+
+        // Filter (Bright for ska chords, Warm for solo)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        
+        // If solo range (high frets/strings), create sustain
+        // If rhythm (low strings/chords), make it staccato
+        const isSolo = fret > 7 || bendType; 
+        
+        if (isSolo) {
+            filter.frequency.value = 3000;
+            duration = 1.5; // Sustain
+        } else {
+            filter.frequency.value = 5000; // Bright chords
+            duration = 0.15; // Staccato (Reggae chop)
+        }
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.5, t + 0.01); 
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        // Dead Note / Mute
+        if (bendType === 'x') {
+            filter.frequency.value = 800;
+            amp.gain.setValueAtTime(0.3, t);
+            amp.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        }
+
+        // Mix
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.3;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.7; // More saw for ska
+
+        osc1.connect(osc1Gain); osc1Gain.connect(filter);
+        osc2.connect(osc2Gain); osc2Gain.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.driveGain);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setTone: (mode) => {
+        if (mode === 'solo') {
+            AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(150); // Overdrive
+            AudioEngine.driveGain.gain.setTargetAtTime(0.8, AudioEngine.ctx.currentTime, 0.1);
+        } else {
+            AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(0); // Clean
+            AudioEngine.driveGain.gain.setTargetAtTime(1.0, AudioEngine.ctx.currentTime, 0.1);
+        }
+    },
+    
+    setReverb: (val) => {
+        if(AudioEngine.reverbGain) AudioEngine.reverbGain.gain.setTargetAtTime(val, AudioEngine.ctx.currentTime, 0.1);
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null, bend = null) {
+    TAB.push({ beat, string, fret, type, target, bend });
+}
+function addChord(beat, notes, type='pluck') {
+    notes.forEach(n => addNote(beat, n[0], n[1], type, null, type==='x'?'x':null));
+}
+
+// -- BUILD THE SONG --
+let b = 0.0;
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+
+// === INTRO ===
+// Clean Tone
+// E maj arpeggio stuff
+// e--------------------------------------------------
+// g------9---------9----------------5--------5-------
+// d----9---9---------9-9--------------6--------6-6---
+// a--7-------7--7--------7------6-------6----------6-
+// Timing is loose, let's approximate 8th notes
+
+// Phrase 1 (E)
+addNote(b, 4, 7); b+=E; // A-7
+addNote(b, 3, 9); b+=E; // D-9
+addNote(b, 2, 9); b+=E; // G-9
+addNote(b, 3, 9); b+=E; // D-9
+addNote(b, 4, 7); b+=E; // A-7
+addNote(b, 4, 7); b+=E; // A-7
+addNote(b, 2, 9); b+=E; // G-9
+addNote(b, 3, 9); b+=E; // D-9
+// Phrase 2 (G#?)
+// A-6 D-6 G-5
+// d--------------6--------6-6---
+// a------6-------6----------6-
+// e--4------------4----------
+addNote(b, 5, 4); b+=E; // E-4
+addNote(b, 4, 6); b+=E; // A-6
+addNote(b, 2, 5); b+=E; // G-5
+addNote(b, 3, 6); b+=E; // D-6
+addNote(b, 5, 4); b+=E; // E-4
+addNote(b, 3, 6); b+=E; // D-6
+addNote(b, 3, 6); b+=E; // D-6
+addNote(b, 4, 6); b+=E; // A-6
+
+// Phrase 3 (C#m)
+// e------------------------------------
+// b-----------5------5-----------------
+// g-----6----------4--------------8---8
+// d---6---6------6-------------9----9--
+// a-4-------4----------------9---------
+// e------------------------7-----------
+// C#m arpeggio
+addNote(b, 4, 4); b+=E; // A-4
+addNote(b, 3, 6); b+=E; // D-6
+addNote(b, 2, 6); b+=E; // G-6
+addNote(b, 3, 6); b+=E; // D-6
+addNote(b, 4, 4); b+=E; // A-4
+addNote(b, 1, 5); b+=E; // B-5
+// B major arpeggio
+addNote(b, 3, 6); b+=E; // D-6? Tab says 6 on D for next part? No wait g-4 b-5. That's B major (D#-F#-B)
+addNote(b, 2, 4); b+=E; // G-4
+addNote(b, 1, 5); b+=E; // B-5
+// B power chord run?
+// e--7--
+// a--9--
+// d--9--
+// g--8--
+addNote(b, 5, 7); b+=E; // E-7
+addNote(b, 4, 9); b+=E; // A-9
+addNote(b, 3, 9); b+=E; // D-9
+addNote(b, 2, 8); b+=E; // G-8
+addNote(b, 2, 8); b+=E; // G-8
+addNote(b, 3, 9); b+=E; // D-9
+
+b += 1.0; // Breath
+
+// === VERSE 1 ===
+// Upstrokes Reggae Style (x-x-x-x...)
+// E (x7999x) -> G# (466544) -> C#m (x46654) -> B (799877)
+// Pattern: Mute down, Chord up.
+// & 2 & 4
+const E_chord = [[4,7], [3,9], [2,9], [1,9]];
+const Gs_chord = [[5,4], [4,6], [3,5], [2,4]]; // Using simplified voicing
+const Csm_chord = [[4,6], [3,6], [2,5], [1,4]];
+const B_chord = [[5,7], [4,9], [3,8], [2,7]];
+
+function addReggaeBar(chord) {
+    addChord(b, chord, 'x'); b+=E; // 1 (Mute)
+    addChord(b, chord); b+=E;      // & (Up)
+    addChord(b, chord, 'x'); b+=E; // 2 (Mute)
+    addChord(b, chord); b+=E;      // & (Up)
+    addChord(b, chord, 'x'); b+=E; // 3
+    addChord(b, chord); b+=E;      // &
+    addChord(b, chord, 'x'); b+=E; // 4
+    addChord(b, chord); b+=E;      // &
+}
+
+// Verse x2
+for(let k=0; k<2; k++) {
+    addReggaeBar(E_chord);
+    addReggaeBar(Gs_chord);
+    addReggaeBar(Csm_chord);
+    addReggaeBar(B_chord);
+}
+
+// === CHORUS ===
+// A -> B -> E -> C#m (with slides)
+// A (577655) -> B (799877)
+// Riff: A... B... E walkdown
+// Tab:
+// e--5----7-----------------4/5----7
+// b---5----7---------------5---5-----7
+// g----6/---8----9---8----6-----6/----8
+// d-------------9---8----6
+function addChorusRiff() {
+    // A (sweep)
+    addNote(b, 0, 5); b+=S;
+    addNote(b, 1, 5); b+=S;
+    addNote(b, 2, 6, 'slide', 8); b+=E; // Slide up
+    
+    // B (sweep)
+    addNote(b, 0, 7); b+=S;
+    addNote(b, 1, 7); b+=S;
+    addNote(b, 2, 8); b+=E; 
+    
+    // Walkdown (E -> D# -> C#m -> B)
+    // g-9 d-9 (E)
+    // g-8 d-8 (Eb)
+    // g-6 d-6 (C#m)
+    addNote(b, 2, 9); addNote(b, 3, 9); b+=E;
+    addNote(b, 2, 8); addNote(b, 3, 8); b+=E;
+    addNote(b, 2, 6); addNote(b, 3, 6); b+=E;
+    
+    // A fill (4/5 slide)
+    addNote(b, 0, 4, 'slide', 5); b+=S;
+    addNote(b, 1, 5); b+=S;
+    addNote(b, 2, 6); b+=E;
+}
+
+addChorusRiff();
+addChorusRiff();
+
+// === SOLO ===
+// Drive ON
+addNote(b, 5, 0, 'switch_drive'); // Fake note to trigger tone switch logic if we had it in sequencer
+// Note: We'll handle tone switch in visual/scheduler
+
+// Phrase 1
+// g-------------9-11b11-9-8-8p6-8b--6 6p4-4
+b += 1.0;
+addNote(b, 4, 7); b+=S; // A-7 pickup
+addNote(b, 4, 9, 'slide', 11); b+=S; // h11
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 11, 'pluck', null, 'b'); b+=S; // 11b
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 8); b+=S;
+addNote(b, 2, 8); b+=S; // p6 sim
+addNote(b, 2, 6); b+=S;
+addNote(b, 2, 8, 'pluck', null, 'b'); b+=S;
+addNote(b, 2, 6); b+=S;
+addNote(b, 2, 6); b+=S; // p4 sim
+addNote(b, 2, 4); b+=E;
+
+// Phrase 2: Fast run
+// d-4h2-2 a-4 e-2-3-4 a-4-5-6 d-4-5-6 g-5
+addNote(b, 3, 4); b+=S;
+addNote(b, 3, 2); b+=S;
+addNote(b, 4, 4); b+=S;
+addNote(b, 5, 2); b+=S;
+addNote(b, 5, 3); b+=S;
+addNote(b, 5, 4); b+=S;
+addNote(b, 4, 4); b+=S;
+addNote(b, 4, 5); b+=S;
+addNote(b, 4, 6); b+=S;
+addNote(b, 3, 4); b+=S;
+addNote(b, 3, 5); b+=S;
+addNote(b, 3, 6); b+=S;
+addNote(b, 1, 5); b+=Q;
+
+// Phrase 3: High E bends
+// b-12b e-12-9 b-12-9 g-11-9 ...
+b += 1.0;
+addNote(b, 1, 12, 'pluck', null, 'b'); b+=S;
+addNote(b, 0, 12); b+=S;
+addNote(b, 0, 9); b+=S;
+addNote(b, 1, 12); b+=S;
+addNote(b, 1, 9); b+=S;
+addNote(b, 2, 11); b+=S;
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 8); b+=S; // h9p8
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 8); b+=S;
+addNote(b, 3, 9); b+=S;
+addNote(b, 3, 9); b+=S;
+
+// Phrase 4: D string run
+// d-10 10 a-10h11 11 ...
+addNote(b, 3, 10); b+=S;
+addNote(b, 3, 10); b+=S;
+addNote(b, 4, 10); b+=S;
+addNote(b, 4, 11); b+=S;
+
+// End Solo - Clean Tone
+addNote(b, 5, 0, 'switch_clean'); 
+
+// Verse x2 again
+for(let k=0; k<2; k++) {
+    addReggaeBar(E_chord);
+    addReggaeBar(Gs_chord);
+    addReggaeBar(Csm_chord);
+    addReggaeBar(B_chord);
+}
+
+
+// Loop Logic
+const LOOP_LENGTH = b + 4;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            // TONE SWITCHING LOGIC
+            if(note.type === 'switch_drive') {
+                AudioEngine.setTone('solo');
+                nextNoteIdx++;
+                continue;
+            }
+            if(note.type === 'switch_clean') {
+                AudioEngine.setTone('clean');
+                nextNoteIdx++;
+                continue;
+            }
+
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 1.0, note.target, note.bend);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Staff
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#95a5a6';
+    ctx.font = "16px 'Courier New'";
+    ctx.fillStyle = '#2c3e50';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Notes
+    const pixelsPerBeat = 120; 
+    
+    ctx.font = "20px 'Permanent Marker'";
+    TAB.forEach(note => {
+        if(note.type.includes('switch')) return;
+
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#27ae60'; 
+            let txt = note.fret;
+            if(note.bend === 'x') txt = 'x';
+            else if(note.bend) txt += 'b';
+            if(note.target) txt += '/';
+            
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 14, 0, Math.PI*2);
+            ctx.fillStyle = '#f1c40f';
+            ctx.fill();
+            ctx.strokeStyle = '#c0392b'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#2c3e50'; 
+            ctx.fillText(txt, x - 10, y + 2);
+        }
+    });
+
+    // Explosions
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 20 + ((1 - n.life) * 60);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(230, 126, 34, ${n.life})`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        n.life -= 0.05;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setReverb(y * 0.5);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

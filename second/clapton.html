@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLAPTON // ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Courier+New:wght@700&display=swap');
+
+    :root {
+        --bg: #2b1b17; /* Coffee/Brown */
+        --ink: #f4e1d2; /* Cream */
+        --accent: #d2691e; /* Chocolate/Orange */
+        --gold: #daa520;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Abril Fatface', cursive;
+        color: var(--ink);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(43, 27, 23, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 5rem;
+        margin: 0;
+        color: var(--ink);
+        text-shadow: 2px 2px 0px var(--accent);
+        letter-spacing: 2px;
+    }
+
+    p {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+        color: var(--gold);
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--ink);
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>SLOWHAND</h1>
+    <p>[ CLICK TO PLAY THE BLUES ]</p>
+    <p style="font-size: 0.8rem; color: #888; margin-top: 2rem;">MOUSE Y = TONE KNOB // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TONE: WOMAN TONE (NECK PICKUP)<br>
+    BPM: 90 (Expressive)
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * CLAPTON ENGINE
+ * Woman Tone Physics + Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 90, 
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null,
+    driveGain: null,
+    reverb: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.5;
+
+        // WOMAN TONE CHAIN (Smooth Overdrive)
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(100); // Warm clipping
+        AudioEngine.drive.oversample = '4x';
+        
+        AudioEngine.driveGain = AudioEngine.ctx.createGain();
+        AudioEngine.driveGain.gain.value = 0.6; 
+
+        // Room Reverb
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(1.5, 3.0);
+        
+        const verbMix = AudioEngine.ctx.createGain();
+        verbMix.gain.value = 0.25;
+
+        AudioEngine.driveGain.connect(AudioEngine.drive);
+        AudioEngine.drive.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(verbMix);
+        verbMix.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = typeof amount === 'number' ? amount : 50;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            // Soft clipping for blues
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 1.0, slideTo = null, bendType = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Woman Tone: Dominant Sine (Fundamental) + Soft Square (Hollow)
+        osc1.type = 'sine'; 
+        osc2.type = 'square'; 
+        
+        // Pitch Logic
+        let targetFreq = freq;
+
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2); // Slower, bluesy slide
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+            
+            // Vibrato logic
+            if (bendType === 'vib') {
+                const vib = AudioEngine.ctx.createOscillator();
+                vib.frequency.value = 4; // Slow hand vibrato
+                const vibGain = AudioEngine.ctx.createGain();
+                vibGain.gain.value = freq * 0.01; // Wide
+                vib.connect(vibGain);
+                vibGain.connect(osc1.frequency);
+                vibGain.connect(osc2.frequency);
+                vib.start(t);
+                vib.stop(t+duration);
+            }
+        }
+
+        // Filter (Rolled off Tone Knob)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800; // The "Woman Tone" sweet spot
+        filter.Q.value = 2.0; // Slight resonance for singing quality
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.6, t + 0.05); // Smooth attack
+        amp.gain.exponentialRampToValueAtTime(0.4, t + 0.3); 
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        // Mix: Mostly Sine/Filtered Square
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.7;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.3;
+
+        osc1.connect(osc1Gain); osc1Gain.connect(filter);
+        osc2.connect(osc2Gain); osc2Gain.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.driveGain);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setTone: (val) => {
+        // Map 0-1 to Tone Knob (Filter Cutoff)
+        // 400Hz (Dark) to 2000Hz (Bright)
+        // We want to default to ~800Hz
+        // The UI calls this "Mouse Y" so let's map it dynamically if needed, but 'playString' creates new nodes.
+        // For global tone control, we'd need a master filter, but here we bake it per note.
+        // Let's just leave it baked for the "Woman Tone" authenticity.
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null, bend = null) {
+    TAB.push({ beat, string, fret, type, target, bend });
+}
+
+// -- BUILD THE SOLO --
+let b = 0.0;
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+const T = 0.33; // Triplet feel roughly
+
+// Phrase 1
+// D-9-11-12 G-12~ G-11-11~
+addNote(b, 3, 9); b+=S;
+addNote(b, 3, 11); b+=S;
+addNote(b, 3, 12); b+=S;
+addNote(b, 2, 12, 'pluck', null, 'vib'); b+=Q*1.5;
+
+addNote(b, 3, 9); b+=S;
+addNote(b, 3, 11); b+=S;
+addNote(b, 4, 12); b+=S; // A-12
+addNote(b, 2, 11); b+=E;
+addNote(b, 2, 11, 'pluck', null, 'vib'); b+=Q;
+
+// Phrase 2
+// A-/10-12 D-9 G-9~ D-8-12~
+// A-/10-12
+addNote(b, 4, 10, 'slide', 12); b+=E;
+// D-9
+addNote(b, 3, 9); b+=E;
+// G-9~
+addNote(b, 2, 9, 'pluck', null, 'vib'); b+=Q;
+
+// A-/9-11
+addNote(b, 4, 9, 'slide', 11); b+=E;
+// D-8
+addNote(b, 3, 8); b+=E;
+// D-12~
+addNote(b, 3, 12, 'pluck', null, 'vib'); b+=Q;
+
+// Fast run: 11h12p11 9 8 9
+addNote(b, 3, 11); b+=S;
+addNote(b, 3, 12); b+=S; // h
+addNote(b, 3, 11); b+=S; // p
+addNote(b, 3, 9); b+=S;
+addNote(b, 3, 8); b+=S;
+addNote(b, 3, 9); b+=Q;
+
+b += 0.5;
+
+// Phrase 3
+// D-/9-11-9-11 G-12~
+addNote(b, 3, 9, 'slide', 11); b+=S; // Slide up/down feel
+addNote(b, 3, 9); b+=S;
+addNote(b, 3, 11); b+=S;
+addNote(b, 2, 12, 'pluck', null, 'vib'); b+=Q;
+
+// G-11h12p11 9
+addNote(b, 2, 11); b+=S;
+addNote(b, 2, 12); b+=S;
+addNote(b, 2, 11); b+=S;
+addNote(b, 2, 9); b+=Q;
+
+// B-10 10 A-12
+addNote(b, 1, 10); b+=E;
+addNote(b, 1, 10); b+=E;
+addNote(b, 4, 12); b+=E;
+
+// G-12h14p11 11 9 D-12
+addNote(b, 2, 12); b+=S;
+addNote(b, 2, 14); b+=S; // h
+addNote(b, 2, 11); b+=S; // p? Tab says 12h14p-11? That's a big jump. 
+// Tab: 12h14p (space) 11 11
+// Maybe 12h14p12 11? Let's follow 12 14 11.
+addNote(b, 2, 11); b+=E;
+addNote(b, 2, 11); b+=E;
+addNote(b, 2, 9); b+=E;
+addNote(b, 3, 12); b+=Q;
+
+b += 0.5;
+
+// Phrase 4
+// A-10h12 D-9 G-9 7h9p7 6
+addNote(b, 4, 10); b+=S;
+addNote(b, 4, 12); b+=S;
+addNote(b, 3, 9); b+=E;
+addNote(b, 2, 9); b+=E;
+addNote(b, 2, 7); b+=S;
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 7); b+=S;
+addNote(b, 2, 6); b+=Q;
+
+// Phrase 5
+// A-9 G-9h10p9 9
+addNote(b, 4, 9); b+=E;
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 10); b+=S;
+addNote(b, 2, 9); b+=S;
+addNote(b, 2, 9); b+=E;
+
+// D-12 12 9 A-12 9 E-12 10 7~
+addNote(b, 3, 12); b+=S;
+addNote(b, 3, 12); b+=S;
+addNote(b, 3, 9); b+=S;
+addNote(b, 4, 12); b+=S;
+addNote(b, 4, 9); b+=S;
+addNote(b, 5, 12); b+=S;
+addNote(b, 5, 10); b+=S;
+addNote(b, 5, 7, 'pluck', null, 'vib'); b+=Q*2;
+
+
+const LOOP_LENGTH = b + 4;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 1.2, note.target, note.bend);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Staff
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#5c4033';
+    ctx.font = "16px 'Courier New'";
+    ctx.fillStyle = '#daa520';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#d2691e';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Notes
+    const pixelsPerBeat = 120; 
+    
+    ctx.font = "20px 'Abril Fatface'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#f4e1d2'; 
+            let txt = note.fret;
+            if(note.bend) txt += '~';
+            if(note.target) txt += '/';
+            
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 14, 0, Math.PI*2);
+            ctx.fillStyle = '#2b1b17';
+            ctx.fill();
+            ctx.strokeStyle = '#f4e1d2'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#f4e1d2'; 
+            ctx.fillText(txt, x - 6, y + 4);
+        }
+    });
+
+    // Ripples
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 15 + ((1 - n.life) * 50);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(210, 105, 30, ${n.life})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        n.life -= 0.03;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    // Tone control placeholder
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

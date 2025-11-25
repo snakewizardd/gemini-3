@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TENDER SURRENDER // ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=Rajdhani:wght@600&display=swap');
+
+    :root {
+        --bg: #000000;
+        --ink: #00ff00; /* Vai Green */
+        --accent: #ff00ff; /* Vai Pink */
+        --white: #ffffff;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Rajdhani', sans-serif;
+        color: var(--white);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 5rem;
+        margin: 0;
+        color: var(--ink);
+        text-shadow: 0 0 20px var(--ink);
+        letter-spacing: 5px;
+        transform: skewX(-10deg);
+    }
+
+    p {
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 3px;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--ink);
+        text-shadow: 0 0 5px var(--ink);
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>STEVE VAI</h1>
+    <p>[ CLICK TO SURRENDER ]</p>
+    <p style="font-size: 0.8rem; color: #888; margin-top: 2rem;">MOUSE Y = WAH / WHAMMY // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TONE: LIQUID LEAD + DELAY<br>
+    BPM: FREE (Expressive)
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * TENDER SURRENDER ENGINE
+ * High Gain Physics + Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 85, // Base tempo, but phrasing is loose
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null,
+    driveGain: null,
+    delay: null,
+    delayGain: null,
+    wah: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.3;
+
+        // LEAD TONE CHAIN:
+        // Source -> Wah -> Drive -> Master -> Delay -> Dest
+        
+        // Wah Filter (Bandpass)
+        AudioEngine.wah = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.wah.type = 'bandpass';
+        AudioEngine.wah.frequency.value = 1200;
+        AudioEngine.wah.Q.value = 1.5;
+
+        // Smooth High Gain Distortion
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(600); // Saturation
+        AudioEngine.drive.oversample = '4x';
+        
+        AudioEngine.driveGain = AudioEngine.ctx.createGain();
+        AudioEngine.driveGain.gain.value = 0.8; 
+
+        // Stereo Delay (Ping Pong ish)
+        AudioEngine.delay = AudioEngine.ctx.createDelay();
+        AudioEngine.delay.delayTime.value = 0.4; // 400ms
+        
+        AudioEngine.delayGain = AudioEngine.ctx.createGain();
+        AudioEngine.delayGain.gain.value = 0.3;
+        
+        const delayFeedback = AudioEngine.ctx.createGain();
+        delayFeedback.gain.value = 0.4;
+
+        // Routing
+        // Guitar Input (Simulated later) -> Wah -> DriveGain -> Drive -> Master
+        AudioEngine.wah.connect(AudioEngine.driveGain);
+        AudioEngine.driveGain.connect(AudioEngine.drive);
+        AudioEngine.drive.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        
+        // Delay Send
+        AudioEngine.master.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(delayFeedback);
+        delayFeedback.connect(AudioEngine.delay); // Feedback loop
+        AudioEngine.delay.connect(AudioEngine.delayGain);
+        AudioEngine.delayGain.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = typeof amount === 'number' ? amount : 50;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            // Sigmoid for smooth lead compression
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    playString: (stringIdx, fret, time, duration = 1.0, slideTo = null, bendType = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Vai Tone: Sawtooth + Pulse (Harmonics)
+        osc1.type = 'sawtooth'; 
+        osc2.type = 'square'; 
+        
+        // Pitch Logic
+        let targetFreq = freq;
+
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+            
+            // Vibrato (Whammy Bar) logic
+            // If bendType is 'vib' or 'whammy'
+            if (bendType === 'vib') {
+               const vib = AudioEngine.ctx.createOscillator();
+               vib.frequency.value = 6; 
+               const vibGain = AudioEngine.ctx.createGain();
+               vibGain.gain.value = freq * 0.02; // Heavy vibrato
+               vib.connect(vibGain);
+               vibGain.connect(osc1.frequency);
+               vibGain.connect(osc2.frequency);
+               vib.start(t);
+               vib.stop(t+duration);
+            }
+        }
+
+        // Note Envelope
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.7, t + 0.01); 
+        amp.gain.exponentialRampToValueAtTime(0.5, t + 0.2); 
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        // Mix
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.6;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.4;
+
+        osc1.connect(osc1Gain); osc1Gain.connect(AudioEngine.wah);
+        osc2.connect(osc2Gain); osc2Gain.connect(AudioEngine.wah);
+        // Connect Gain nodes to Wah, but wait, Wah is global.
+        // Let's connect to amp first then Wah.
+        // Osc -> Mix -> Amp -> Wah -> Drive...
+        
+        // Re-routing for polyphony safety (creating per-note amp, connecting to global wah)
+        osc1Gain.disconnect(); osc2Gain.disconnect();
+        osc1.disconnect(); osc2.disconnect();
+        
+        osc1.connect(osc1Gain); osc1Gain.connect(amp);
+        osc2.connect(osc2Gain); osc2Gain.connect(amp);
+        amp.connect(AudioEngine.wah); // Connect to global effects chain
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setEffect: (val) => {
+        // Map 0-1 to Wah Frequency (Up) or Whammy Dive (Down)?
+        // Let's do Wah sweep for now
+        if(AudioEngine.wah) {
+            const minF = 300;
+            const maxF = 3000;
+            AudioEngine.wah.frequency.setTargetAtTime(minF + (val * (maxF-minF)), AudioEngine.ctx.currentTime, 0.1);
+        }
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null, bend = null) {
+    TAB.push({ beat, string, fret, type, target, bend });
+}
+function addChord(beat, notes) {
+    notes.forEach(n => addNote(beat, n[0], n[1]));
+}
+
+// -- BUILD THE SONG --
+let b = 0.0;
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+
+// === INTRO (Octaves) ===
+// Octave melody: A-7/G-9 -> ...
+// 7-x-9-x-x-x (E)
+// e|-----------------10-------------------------|
+// B|------8--10--12------/--12--\--10--\--8-----|
+// G|---9-------------7--------------------------|
+// D|------5--7---9-------/--9---\--7---\--5--5--|
+// A|---7----------------------------------------|
+// E|--------------------------------------------|
+// Rhythm: Octaves sliding.
+// A-7/G-9
+addNote(b, 4, 7); addNote(b, 2, 9); b += E;
+// D-5/B-8
+addNote(b, 3, 5); addNote(b, 1, 8); b += S;
+// D-7/B-10
+addNote(b, 3, 7); addNote(b, 1, 10); b += S;
+// D-9/B-12
+addNote(b, 3, 9); addNote(b, 1, 12); b += E;
+// G-7/e-10
+addNote(b, 2, 7); addNote(b, 0, 10); b += E;
+// Slide up D-9/B-12 -> 12/15? Tab says /12
+// Actually tab says: / 12 \ 10 \ 8
+// D-9/B-12 slide 12/15?
+// Let's just play the target notes for engine stability
+addNote(b, 3, 9, 'slide', 12); addNote(b, 1, 12, 'slide', 15); b += E; // Slide up
+addNote(b, 3, 9, 'slide', 7); addNote(b, 1, 12, 'slide', 10); b += E; // Slide down
+addNote(b, 3, 7, 'slide', 5); addNote(b, 1, 10, 'slide', 8); b += Q; // Slide down
+
+// === LICK 2 ===
+// |------------5h7p5--------|
+// |--8--/--10---------5-----|
+// |-------------------------|
+// |--5--/--7----------------|
+// Octaves D-5/B-8 slide 7/10
+addNote(b, 3, 5, 'slide', 7); addNote(b, 1, 8, 'slide', 10); b += Q;
+// High E 5 h7 p5
+addNote(b, 0, 5); b += S;
+addNote(b, 0, 7); b += S;
+addNote(b, 0, 5); b += S;
+// B-5
+addNote(b, 1, 5); b += Q;
+
+// === LICK 3 ===
+// |------5-7----------|
+// |------5h7--5-------|
+// |---5----------5h7--|
+addNote(b, 3, 5); b += S; // D-5
+addNote(b, 2, 5, 'slide', 7); addNote(b, 1, 5, 'slide', 7); b += E; // Double stop hammer?
+addNote(b, 2, 5); b += E;
+addNote(b, 3, 5, 'slide', 7); b += Q;
+
+b += 1.0;
+
+// === MAIN THEME ===
+// Octaves A-5 -> /9 \7 5
+// B-12 \ 10 8 10
+addNote(b, 4, 5); b += E; // A-5
+// Slide A-9 / B-12
+addNote(b, 3, 9); addNote(b, 1, 12); b += E;
+// Slide down 7/10
+addNote(b, 3, 7); addNote(b, 1, 10); b += E;
+// 5/8
+addNote(b, 3, 5); addNote(b, 1, 8); b += E;
+// 5/7 10
+addNote(b, 3, 7); addNote(b, 1, 10); b += E;
+// G-7/12 Slide
+addNote(b, 2, 7, 'slide', 12); b += Q;
+// G-9
+addNote(b, 2, 9, 'pluck', null, 'vib'); b += Q*2;
+
+// === ENDING THUNDER EFFECT ===
+// Low E Rumble + Whammy Bar Dive
+b += 2.0;
+addNote(b, 5, 0, 'pluck', null, 'vib'); // Low E
+addNote(b, 5, 0); b += S;
+addNote(b, 5, 0); b += S;
+addNote(b, 5, 0); b += S;
+// Dive logic handled by user Mouse Y usually, but we can sim it
+// Slide to -12 (octave down)
+addNote(b, 5, 0, 'slide', -12); b += 4.0;
+
+
+const LOOP_LENGTH = b + 4;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 2.5, note.target, note.bend);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Staff
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#333';
+    ctx.font = "16px 'Rajdhani'";
+    ctx.fillStyle = '#00ff00';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff00ff';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Notes
+    const pixelsPerBeat = 100; 
+    
+    ctx.font = "20px 'Orbitron'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#00ff00'; 
+            let txt = note.fret;
+            if(note.target) txt += '/';
+            
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 14, 0, Math.PI*2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            ctx.strokeStyle = '#00ff00'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillText(txt, x - 6, y + 4);
+        }
+    });
+
+    // Neon Ripples
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 15 + ((1 - n.life) * 60);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(255, 0, 255, ${n.life})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        n.life -= 0.02;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setEffect(1 - y); // Control Wah
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

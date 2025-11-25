@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WITHOUT ME - CHORUS VOCAL</title>
+<style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#000;height:100vh;overflow:hidden;cursor:pointer;font-family:'Courier New', monospace; color: #ff0055;}
+    canvas{position:fixed;top:0;left:0;z-index: 1; opacity: 0.6;}
+    #ui{position:fixed;top:50%;left:50%;transform:translate(-50%, -50%);text-align:center;z-index:10;pointer-events:none; width: 100%;}
+    #t{font-size:3rem; font-weight: 900; letter-spacing:-0.05em; text-transform:uppercase; text-shadow: 0 0 30px #ff0055;}
+    #sub{font-size: 1.2rem; margin-top: 10px; color: white; background: black; padding: 5px 10px;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+    <div id="t">CLICK TO START</div>
+    <div id="sub">VOLUME 250% | HIGH SPEED</div>
+</div>
+
+<script>
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, limiter;
+let started = false;
+
+// ════════════════════════════════════════════════════════════════════
+// PITCH DATA (B Minor Scale)
+// ════════════════════════════════════════════════════════════════════
+const F = {
+    B1: 61.74, D2: 73.42, E2: 82.41, G2: 98.00, A2: 110.00, 
+    B2: 123.47, D3: 146.83, E3: 164.81, Fs3: 185.00, G3: 196.00, A3: 220.00,
+    B3: 246.94, Cs4: 277.18, D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.00, A4: 440.00,
+    B4: 493.88, Cs5: 554.37, D5: 587.33, E5: 659.25, Fs5: 739.99
+};
+
+// ════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ════════════════════════════════════════════════════════════════════
+
+async function init() {
+    ctx = new AC();
+    if (ctx.state === 'suspended') await ctx.resume();
+
+    master = ctx.createGain();
+    // REQUESTED: VOLUME 250%
+    master.gain.value = 2.5; 
+
+    // Hard Limiter to prevent speakers from exploding at 250% gain
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -1; 
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+
+    master.connect(limiter);
+    limiter.connect(ctx.destination);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// THE "SINGING" LOGIC (Adapted from your Orchestral File)
+// ════════════════════════════════════════════════════════════════════
+
+function choirNote(freq, t, dur, vel = 0.6) {
+    // 3 Oscillators per note for thickness
+    for (let v = 0; v < 3; v++) {
+        const osc = ctx.createOscillator();
+        // Mix sine and triangle for "vocal" texture
+        osc.type = v % 2 === 0 ? 'sawtooth' : 'triangle'; 
+        osc.frequency.value = freq;
+        osc.detune.value = (v - 1) * 6; // Chorus effect
+        
+        // FORMANT FILTER (The "Singing" part)
+        // Bandpass around 800Hz-1200Hz mimics human vowels
+        const f1 = ctx.createBiquadFilter();
+        f1.type = 'bandpass';
+        f1.frequency.value = 900 + (Math.random() * 200); 
+        f1.Q.value = 2.5; // Resonant peak
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, t);
+        // Legato attack
+        env.gain.linearRampToValueAtTime(vel * 0.15, t + 0.05); 
+        env.gain.linearRampToValueAtTime(0, t + dur);
+        
+        osc.connect(f1);
+        f1.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + dur + 0.1);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BACKING INSTRUMENTS
+// ════════════════════════════════════════════════════════════════════
+
+function kick808(t) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.15);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(1.0, t);
+    env.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
+    osc.connect(env);
+    env.connect(master);
+    osc.start(t);
+    osc.stop(t + 0.6);
+    vis(t, 100, '#f05');
+}
+
+function snare(t) {
+    const noise = ctx.createBufferSource();
+    const b = ctx.createBuffer(1, 44100*0.2, 44100);
+    const d = b.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    noise.buffer = b;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = 1000;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.7, t);
+    g.gain.exponentialRampToValueAtTime(0.01, t+0.15);
+    noise.connect(f); f.connect(g); g.connect(master);
+    noise.start(t);
+    vis(t, 50, '#fff');
+}
+
+function hihat(t) {
+    const osc = ctx.createOscillator();
+    osc.type = 'square'; osc.frequency.value = 800;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = 6000;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.04);
+    osc.connect(f); f.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t+0.05);
+}
+
+function guitar(freq, t, dur) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = freq;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.4, t+0.01);
+    env.gain.exponentialRampToValueAtTime(0.01, t+dur);
+    osc.connect(env); env.connect(master);
+    osc.start(t); osc.stop(t+dur);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// COMPOSITION
+// ════════════════════════════════════════════════════════════════════
+
+function compose() {
+    const t0 = ctx.currentTime + 0.2;
+    // REQUESTED: SPEED UP (148 BPM)
+    const BPM = 148; 
+    const Q = 60 / BPM;     // Quarter Note
+    const E = Q / 2;        // Eighth Note
+    const BAR = Q * 4;
+
+    let t = t0;
+
+    // ─── INTRO RIFF (Kept as requested) ─────────────────────────────
+    document.getElementById('t').innerText = "INTRO";
+    
+    // Simple fast riff to establish key
+    [F.B2, F.Fs3, F.A3, F.D4, F.Fs4].forEach((n, i) => guitar(n, t + i*E, 1.0));
+    t += BAR;
+    [F.D2, F.A3, F.D4, F.A3].forEach((n, i) => guitar(n, t + i*E, 1.0));
+    t += BAR;
+    [F.A2, F.E3, F.A3, F.Cs4].forEach((n, i) => guitar(n, t + i*E, 1.0));
+    t += BAR;
+    [F.G2, F.B2, F.D3, F.G3].forEach((n, i) => guitar(n, t + i*E, 1.0));
+    t += BAR;
+
+    // ─── CHORUS (Logic: Choir Singing) ──────────────────────────────
+    
+    const sing = (note, time, dur) => choirNote(note, time, dur);
+    const word = (txt) => setTimeout(() => document.getElementById('t').innerText = txt, (t - t0) * 1000);
+
+    // Loop Chorus Twice
+    for (let round = 0; round < 2; round++) {
+        
+        // BAR 1-2: Bm7 "Tell me how's it feel sittin' up there?"
+        word("TELL ME");
+        // Melody: F# F# E D E (Tell me how's it feel)
+        sing(F.Fs4, t, E);
+        sing(F.Fs4, t+E, E);
+        sing(F.E4, t+2*E, E);
+        sing(F.D4, t+3*E, E);
+        sing(F.E4, t+4*E, Q);
+        
+        // Melody: F# F# A F# (Sittin' up there)
+        sing(F.Fs4, t+6*E, E);
+        sing(F.Fs4, t+7*E, E);
+        sing(F.A4, t+8*E, E);
+        sing(F.Fs4, t+9*E, Q);
+
+        // Beat
+        kick808(t); kick808(t+2.5*Q); snare(t+2*Q); snare(t+6*Q);
+        for(let i=0;i<16;i++) hihat(t+i*E);
+        
+        t += BAR * 2;
+
+        // BAR 3-4: A / G "Feeling so high but too far away to hold me"
+        word("SO HIGH");
+        // Melody: F# F# E D (Feeling so high)
+        sing(F.Fs4, t, E);
+        sing(F.Fs4, t+E, E);
+        sing(F.E4, t+2*E, E);
+        sing(F.D4, t+3*E, Q);
+
+        // Melody: D E F# E D (But too far away)
+        sing(F.D4, t+4*E, E);
+        sing(F.E4, t+5*E, E);
+        sing(F.Fs4, t+6*E, E);
+        sing(F.E4, t+7*E, E);
+        sing(F.D4, t+8*E, E);
+        
+        // Melody: B A B (To hold me)
+        sing(F.B3, t+9*E, E);
+        sing(F.A3, t+10*E, E);
+        sing(F.B3, t+11*E, Q);
+
+        // Beat
+        kick808(t); kick808(t+3*Q); snare(t+2*Q); snare(t+6*Q);
+        for(let i=0;i<16;i++) hihat(t+i*E);
+        
+        t += BAR * 2;
+
+        // BAR 5-6: Bm7 "You know I'm the one who put you up there"
+        word("UP THERE");
+        // Melody: F# F# E D E (You know I'm the one)
+        sing(F.Fs4, t, E);
+        sing(F.Fs4, t+E, E);
+        sing(F.E4, t+2*E, E);
+        sing(F.D4, t+3*E, E);
+        sing(F.E4, t+4*E, Q);
+        
+        // Melody: F# F# A F# (Put you up there)
+        sing(F.Fs4, t+6*E, E);
+        sing(F.Fs4, t+7*E, E);
+        sing(F.A4, t+8*E, E);
+        sing(F.Fs4, t+9*E, Q);
+
+        // Beat
+        kick808(t); kick808(t+2.5*Q); snare(t+2*Q); snare(t+6*Q);
+        for(let i=0;i<16;i++) hihat(t+i*E);
+
+        t += BAR * 2;
+
+        // BAR 7-8: "Thinking you could live without me"
+        word("WITHOUT ME");
+        // Melody: F# F# E D (Thinking you could)
+        sing(F.Fs4, t, E);
+        sing(F.Fs4, t+E, E);
+        sing(F.E4, t+2*E, E);
+        sing(F.D4, t+3*E, Q);
+        
+        // Melody: F# E D (Live without me)
+        sing(F.Fs4, t+4.5*Q, E);
+        sing(F.E4, t+5*Q, E);
+        sing(F.D4, t+5.5*Q, Q);
+
+        // Beat
+        kick808(t); snare(t+2*Q); snare(t+6*Q);
+        for(let i=0;i<16;i++) hihat(t+i*E);
+        
+        t += BAR * 2;
+    }
+    
+    setTimeout(() => document.getElementById('t').innerText = "FIN", (t - t0) * 1000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// VISUALS
+// ════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h;
+let pulses = [];
+
+function resize() { w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+function vis(t, r, col) {
+    setTimeout(() => {
+        pulses.push({r:10, max:r*2, col:col, a:1});
+    }, (t - ctx.currentTime)*1000);
+}
+
+function loop() {
+    requestAnimationFrame(loop);
+    c.fillStyle = 'rgba(0,0,0,0.1)';
+    c.fillRect(0,0,w,h);
+    pulses.forEach((p, i) => {
+        c.beginPath(); c.arc(w/2, h/2, p.r, 0, Math.PI*2);
+        c.strokeStyle = p.col; c.lineWidth = 5; c.globalAlpha = p.a;
+        c.stroke();
+        p.r += 10; p.a *= 0.9;
+        if(p.a < 0.01) pulses.splice(i,1);
+    });
+}
+loop();
+
+document.addEventListener('click', async () => {
+    if(started) return; started=true;
+    await init(); compose();
+});
+</script>
+</body>
+</html>

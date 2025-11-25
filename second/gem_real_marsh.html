@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARSHMELLO // ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Courier+New:wght@700&display=swap');
+
+    :root {
+        --bg: #111;
+        --white: #fff;
+        --pink: #ff69b4; /* Hot Pink */
+        --cyan: #00ffff;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Fredoka One', cursive;
+        color: var(--white);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(17, 17, 17, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 5rem;
+        margin: 0;
+        color: var(--white);
+        text-shadow: 4px 4px 0px var(--pink);
+        letter-spacing: 2px;
+    }
+
+    p {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+        color: var(--cyan);
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--white);
+    }
+    
+    .mello-eyes {
+        font-size: 3rem;
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        color: var(--white);
+        transform: rotate(10deg);
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>ALONE</h1>
+    <p>[ CLICK TO DROP THE BEAT ]</p>
+    <p style="font-size: 0.8rem; color: #888; margin-top: 2rem;">MOUSE Y = FILTER / DROP // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TONE: SYNTH PLUCK<br>
+    BPM: 142
+</div>
+<div class="mello-eyes">X X</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * MARSHMELLO ENGINE
+ * Synth Physics + Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 142, 
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    filter: null,
+    delay: null,
+    delayGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4;
+
+        // Global Lowpass Filter (The "Mello" sound)
+        AudioEngine.filter = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.filter.type = 'lowpass';
+        AudioEngine.filter.frequency.value = 20000; // Open
+        AudioEngine.filter.Q.value = 1.0;
+
+        // Tempo-synced Delay
+        AudioEngine.delay = AudioEngine.ctx.createDelay();
+        AudioEngine.delay.delayTime.value = (60 / CONFIG.BPM) * 0.75; // Dotted 8th
+        
+        AudioEngine.delayGain = AudioEngine.ctx.createGain();
+        AudioEngine.delayGain.gain.value = 0.4;
+        
+        const delayFb = AudioEngine.ctx.createGain();
+        delayFb.gain.value = 0.4;
+
+        // Routing
+        AudioEngine.master.connect(AudioEngine.filter);
+        AudioEngine.filter.connect(AudioEngine.ctx.destination);
+        
+        // Delay Send
+        AudioEngine.filter.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(delayFb);
+        delayFb.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(AudioEngine.delayGain);
+        AudioEngine.delayGain.connect(AudioEngine.ctx.destination);
+    },
+
+    // Synth Pluck Tone
+    playString: (stringIdx, fret, time, duration = 0.5, slideTo = null, bendType = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // EDM Tone: Sawtooth + Square (Detuned)
+        osc1.type = 'sawtooth'; 
+        osc2.type = 'square'; 
+        osc2.detune.value = 10; // Super-saw width
+        
+        // Pitch Logic
+        let targetFreq = freq;
+
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+        }
+
+        // Pluck Envelope
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.6, t + 0.005); // Instant attack
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        // Note Filter (Bright pluck)
+        const nFilter = AudioEngine.ctx.createBiquadFilter();
+        nFilter.type = 'lowpass';
+        nFilter.frequency.setValueAtTime(5000, t);
+        nFilter.frequency.exponentialRampToValueAtTime(500, t + 0.2); // Filter pluck
+        
+        // Dead note logic
+        if (bendType === 'x') {
+            duration = 0.05;
+            nFilter.frequency.value = 1000;
+        }
+
+        // Mix
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.5;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.5;
+
+        osc1.connect(osc1Gain); osc1Gain.connect(nFilter);
+        osc2.connect(osc2Gain); osc2Gain.connect(nFilter);
+        nFilter.connect(amp);
+        amp.connect(AudioEngine.master);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setFilter: (val) => {
+        if(AudioEngine.filter) {
+            // Map 0-1 to 200Hz - 20000Hz
+            const freq = 200 + (val * 19800);
+            AudioEngine.filter.frequency.setTargetAtTime(freq, AudioEngine.ctx.currentTime, 0.1);
+        }
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null) {
+    TAB.push({ beat, string, fret, type, target });
+}
+function addChord(beat, notes, type='pluck') {
+    notes.forEach(n => addNote(beat, n[0], n[1], type, null));
+}
+
+// -- BUILD THE SONG --
+let b = 0.0;
+const E = 0.5; // 8th note
+const S = 0.25; // 16th note
+// Intro arpeggios are fast. Tab shows 16th notes? Or 8ths at high tempo?
+// 142 BPM is fast. The intro looks like 8th notes.
+// D---0---0---0 (repeats)
+// Let's interpret the intro rhythm.
+
+// === INTRO ===
+// G-3 3 3 3/5 5 5 5 5/7 7 7 7 7 ...
+// e|-------------------------------------------------|
+// B|-------------------------------------------------|
+// G|-------------------------------------------------|
+// D|---0---0---0---------4---4---4-------------------|
+// A|---------------------------------------5---5---5-|
+// E|-3---3---3---3/5---5---5---5---5/7---7---7---7---|
+// Rhythm: 8th notes
+function addIntro() {
+    // G chord (3rd fret E, open D)
+    for(let i=0; i<3; i++) {
+        addNote(b, 5, 3); b+=E; // E-3
+        addNote(b, 3, 0); b+=E; // D-0
+    }
+    // Slide up / transition
+    addNote(b, 5, 3, 'slide', 5); b+=E; // E-3/5
+    addNote(b, 3, 0); b+=E; // D-0? Tab says D-4 next measure
+    
+    // A chord (5th fret E, 4th fret D)
+    for(let i=0; i<3; i++) {
+        addNote(b, 5, 5); b+=E; // E-5
+        addNote(b, 3, 4); b+=E; // D-4
+    }
+    // Transition
+    addNote(b, 5, 5, 'slide', 7); b+=E;
+    addNote(b, 3, 4); b+=E; 
+    
+    // B chord (7th fret E, 5th fret A? No tab says A string notes now)
+    // A string 5
+    // E-7
+    for(let i=0; i<3; i++) {
+        addNote(b, 5, 7); b+=E; 
+        addNote(b, 4, 5); b+=E;
+    }
+    // Ending lick
+    // A-4-5-5-5-4
+    // D-4-4-4-2
+    addNote(b, 5, 7); b+=E;
+    addNote(b, 4, 4); b+=E;
+    // A-5 D-4
+    addNote(b, 4, 5); b+=E; addNote(b, 3, 4); b+=E;
+    addNote(b, 4, 5); b+=E; addNote(b, 3, 4); b+=E;
+    addNote(b, 4, 5); b+=E; addNote(b, 3, 4); b+=E;
+    addNote(b, 4, 4); b+=E; addNote(b, 3, 2); b+=E;
+}
+
+addIntro();
+
+// === CHORUS (THE DROP) ===
+// Melody: E-2 5 0-2-0~
+// B-3 3
+// G-0
+// D-
+// A-0~
+// E-3 3
+// Rhythm: Syncopated melody
+b += 1.0; // Breath
+
+// Phrase 1
+// G chord (E-3)
+addNote(b, 0, 2); b+=0.75;
+addNote(b, 0, 5); b+=0.25;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 0); b+=1.0; // ~
+addNote(b, 1, 3); b+=0.5;
+addNote(b, 1, 3); b+=0.5;
+addNote(b, 5, 3); b+=0.5; // Bass G
+addNote(b, 2, 0); b+=0.5;
+addNote(b, 5, 3); b+=1.0; 
+
+// Phrase 2 (D/F#?)
+// e-3 2 3 2 0-2
+// A-0~
+addNote(b, 0, 3); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 3); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 1, 3); b+=1.0; // ~
+addNote(b, 2, 0); b+=0.5;
+addNote(b, 2, 0); b+=0.5;
+addNote(b, 4, 0); b+=1.0; // Bass A
+
+// Phrase 3 (Bm?)
+// e-0-2 b-3 3
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 1, 3); b+=0.5;
+addNote(b, 1, 3); b+=0.5;
+addNote(b, 2, 0); b+=0.5;
+addNote(b, 4, 2); b+=1.5; // Bass B
+
+// Phrase 4
+// e-5 0-2-0~
+addNote(b, 0, 5); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 0); b+=1.0;
+addNote(b, 2, 0); b+=0.5;
+addNote(b, 4, 2); b+=1.0;
+
+b += 1.0;
+
+// === BREAKDOWN (The Strumming/Wrist Thump Part) ===
+// e-3-0-2-0 0-2-0
+// b-3-3-3-3 3-3-3-3
+// o (Wrist Thump)
+// This is percussive. Let's use 'x' note for thumps.
+
+function addThump() {
+    addNote(b, 5, 0, 'x'); // Thump
+}
+
+// Phrase 1
+addThump(); b+=0.5;
+addNote(b, 0, 3); addNote(b, 1, 3); b+=0.5;
+addNote(b, 0, 0); addNote(b, 1, 3); b+=0.5;
+addNote(b, 0, 2); addNote(b, 1, 3); b+=0.5;
+addNote(b, 0, 0); addNote(b, 1, 3); b+=0.5;
+addThump(); b+=0.5;
+addNote(b, 0, 0); addNote(b, 1, 3); b+=0.5;
+addNote(b, 0, 2); addNote(b, 1, 3); b+=0.5;
+addNote(b, 0, 0); addNote(b, 1, 3); b+=0.5;
+
+// Phrase 2
+addThump(); b+=0.5;
+addNote(b, 0, 3); addNote(b, 1, 3); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 3); b+=0.5;
+addThump(); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 3, 'slide', 5); b+=0.5; // 3/5
+addNote(b, 0, 3); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+
+b += 2.0;
+
+// === VERSE (Fingerstyle Arpeggio) ===
+// e-----5 2-0
+// b---3 3
+// g---0
+// d-0
+addNote(b, 3, 0); b+=0.5; // Bass D
+addNote(b, 1, 3); b+=0.5;
+addNote(b, 2, 0); b+=0.5;
+addNote(b, 0, 5); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 1, 3); b+=1.0;
+
+// Walkdown
+// b-2 2/3 e-0 2 3-2 0
+addNote(b, 1, 2); b+=0.5;
+addNote(b, 1, 2, 'slide', 3); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 3); b+=0.5;
+addNote(b, 0, 2); b+=0.5;
+addNote(b, 0, 0); b+=0.5;
+addNote(b, 1, 3); b+=1.0;
+
+const LOOP_LENGTH = b;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            // Use 'pluck' mostly, unless 'slide'
+            AudioEngine.playString(note.string, note.fret, playTime, 0.4, note.target, note.type);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Staff
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.font = "16px 'Courier New'";
+    ctx.fillStyle = '#00ffff';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ff69b4';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Notes
+    const pixelsPerBeat = 180; 
+    
+    ctx.font = "20px 'Fredoka One'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#ff69b4'; 
+            let txt = note.fret;
+            if(note.target) txt += '/';
+            if(note.type === 'x') txt = 'X';
+            
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 14, 0, Math.PI*2);
+            ctx.fillStyle = '#111';
+            ctx.fill();
+            ctx.strokeStyle = '#ff69b4'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#fff'; 
+            ctx.fillText(txt, x - 6, y + 6);
+        }
+    });
+
+    // Explosions
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 15 + ((1 - n.life) * 60);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(0, 255, 255, ${n.life})`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        n.life -= 0.08;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setFilter(1 - y);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

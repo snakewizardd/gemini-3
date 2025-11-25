@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WITHOUT</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0608;height:100vh;overflow:hidden;cursor:pointer;font-family:Georgia,serif}
+canvas{position:fixed;top:0;left:0}
+#t{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);color:rgba(255,200,200,0.8);font-size:0.85rem;letter-spacing:0.4em;z-index:10;text-transform:uppercase;transition: opacity 1s;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="t">click to start</div>
+<script>
+/**
+ * ════════════════════════════════════════════════════════════════════
+ * W I T H O U T (Optimized)
+ * ════════════════════════════════════════════════════════════════════
+ */
+
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx, master, comp, verb, verbGain;
+let started = false;
+
+// ════════════════════════════════════════════════════════════════════
+// FREQUENCIES
+// ════════════════════════════════════════════════════════════════════
+
+const F = {
+    B0: 30.87, D1: 36.71, E1: 41.20, F1: 43.65, G1: 49.00, A1: 55.00,
+    B1: 61.74, C2: 65.41, D2: 73.42, E2: 82.41, Fs2: 92.50, G2: 98.00, A2: 110.00,
+    B2: 123.47, Cs3: 138.59, D3: 146.83, E3: 164.81, Fs3: 185.00, G3: 196.00, A3: 220.00,
+    B3: 246.94, Cs4: 277.18, D4: 293.66, E4: 329.63, Fs4: 369.99, G4: 392.00, A4: 440.00,
+    B4: 493.88, Cs5: 554.37, D5: 587.33, E5: 659.25, Fs5: 739.99, G5: 783.99, A5: 880.00,
+    B5: 987.77, D6: 1174.66, Fs6: 1479.98
+};
+
+const CHORDS = {
+    Bm7:   { bass: F.B1, notes: [F.B2, F.D3, F.Fs3, F.A3] },
+    Dsus2: { bass: F.D2, notes: [F.D3, F.E3, F.A3, F.D4] },
+    A:     { bass: F.A1, notes: [F.A2, F.Cs3, F.E3, F.A3] },
+    G:     { bass: F.G1, notes: [F.G2, F.B2, F.D3, F.G3] },
+    Em7:   { bass: F.E1, notes: [F.E2, F.G2, F.B2, F.D3] }
+};
+
+// ════════════════════════════════════════════════════════════════════
+// AUDIO INIT
+// ════════════════════════════════════════════════════════════════════
+
+async function init() {
+    ctx = new AC();
+    
+    // Safety resume for modern autoplay policies
+    if (ctx.state === 'suspended') {
+        await ctx.resume();
+    }
+    
+    master = ctx.createGain();
+    master.gain.value = 1.0; // Normalized gain
+    
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -12;
+    comp.knee.value = 10;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.05;
+    comp.release.value = 0.25;
+    
+    // Reduced reverb tail slightly for performance
+    verb = ctx.createConvolver();
+    verb.buffer = impulse(3.5, 2.5); 
+    
+    verbGain = ctx.createGain();
+    verbGain.gain.value = 0.35;
+    
+    master.connect(comp);
+    comp.connect(ctx.destination);
+    master.connect(verbGain);
+    verbGain.connect(verb);
+    verb.connect(comp);
+}
+
+function impulse(sec, decay) {
+    const len = ctx.sampleRate * sec;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            // Simple noise impulse
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+        }
+    }
+    return buf;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// INSTRUMENTS (Optimized Polyphony)
+// ════════════════════════════════════════════════════════════════════
+
+function safeCreatePanner() {
+    if (ctx.createStereoPanner) return ctx.createStereoPanner();
+    const g = ctx.createGain(); // Fallback for ancient browsers
+    g.pan = { value: 0 }; 
+    return g;
+}
+
+function piano(freq, t, dur, vel = 0.5) {
+    // Reduced from 3 to 2 oscillators per note
+    for (let v = 0; v < 2; v++) {
+        const osc = ctx.createOscillator();
+        osc.type = v === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = freq * (v === 1 ? 2.003 : 1);
+        osc.detune.value = (v - 0.5) * 5;
+        
+        const flt = ctx.createBiquadFilter();
+        flt.type = 'lowpass';
+        flt.frequency.setValueAtTime(freq * 8, t);
+        flt.frequency.exponentialRampToValueAtTime(freq * 2.0, t + dur * 0.4);
+        
+        const env = ctx.createGain();
+        const vol = vel * (v === 0 ? 0.2 : 0.08);
+        
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(vol, t + 0.01);
+        env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        
+        osc.connect(flt);
+        flt.connect(env);
+        env.connect(master);
+        
+        osc.start(t);
+        osc.stop(t + dur + 0.1);
+    }
+}
+
+function strings(freqs, t, dur, vel = 0.4, att = 0.3) {
+    freqs.forEach((freq, fi) => {
+        // OPTIMIZED: Reduced unison from 6 to 3 to prevent node overload
+        for (let v = 0; v < 3; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 1) * 8 + (Math.random() - 0.5) * 4;
+            
+            const flt = ctx.createBiquadFilter();
+            flt.type = 'lowpass';
+            flt.frequency.value = 1800 + Math.random() * 500;
+            flt.Q.value = 0.5;
+            
+            const env = ctx.createGain();
+            const vol = vel * 0.06; // Boosted slightly
+            
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + att);
+            env.gain.setValueAtTime(vol * 0.9, t + dur - att * 0.5);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            const pan = safeCreatePanner();
+            if(pan.pan) pan.pan.value = (fi / freqs.length - 0.5) * 0.6;
+            
+            osc.connect(flt);
+            flt.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+function brass(freqs, t, dur, vel = 0.5) {
+    freqs.forEach((freq, fi) => {
+        // OPTIMIZED: Reduced from 4 to 2
+        for (let v = 0; v < 2; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 0.5) * 12;
+            
+            const form = ctx.createBiquadFilter();
+            form.type = 'peaking';
+            form.frequency.value = 800;
+            form.Q.value = 1.5;
+            form.gain.value = 6;
+            
+            const bright = ctx.createBiquadFilter();
+            bright.type = 'lowpass';
+            bright.frequency.setValueAtTime(400, t);
+            bright.frequency.linearRampToValueAtTime(2500, t + 0.15);
+            bright.frequency.linearRampToValueAtTime(600, t + dur);
+            
+            const env = ctx.createGain();
+            const vol = vel * 0.08;
+            
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vol, t + 0.1);
+            env.gain.setValueAtTime(vol * 0.85, t + dur * 0.8);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            const pan = safeCreatePanner();
+            if(pan.pan) pan.pan.value = (fi / freqs.length - 0.5) * 0.4;
+            
+            osc.connect(form);
+            form.connect(bright);
+            bright.connect(env);
+            env.connect(pan);
+            pan.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+function choir(freqs, t, dur, vel = 0.3) {
+    freqs.forEach((freq) => {
+        // OPTIMIZED: Reduced from 5 to 2
+        for (let v = 0; v < 2; v++) {
+            const osc = ctx.createOscillator();
+            osc.type = v % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.value = freq;
+            osc.detune.value = (v - 0.5) * 8;
+            
+            const f1 = ctx.createBiquadFilter();
+            f1.type = 'bandpass';
+            f1.frequency.value = 800 + Math.random() * 100;
+            f1.Q.value = 3;
+            
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(vel * 0.06, t + 0.8);
+            env.gain.linearRampToValueAtTime(0, t + dur);
+            
+            osc.connect(f1);
+            f1.connect(env);
+            env.connect(master);
+            
+            osc.start(t);
+            osc.stop(t + dur + 0.1);
+        }
+    });
+}
+
+function bass(freq, t, dur, vel = 0.5) {
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = freq / 2;
+    
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.value = 240;
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vel * 0.4, t + 0.05);
+    env.gain.setValueAtTime(vel * 0.35, t + dur - 0.1);
+    env.gain.linearRampToValueAtTime(0, t + dur);
+    
+    osc.connect(flt);
+    sub.connect(flt);
+    flt.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    sub.start(t);
+    osc.stop(t + dur + 0.1);
+    sub.stop(t + dur + 0.1);
+}
+
+function kick(t, vel = 0.7) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.15);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.8, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    
+    osc.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 0.6);
+    
+    pulseVis = Math.max(pulseVis, vel * 0.9);
+}
+
+function snare(t, vel = 0.5) {
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
+    
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'bandpass';
+    flt.frequency.value = 2000;
+    flt.Q.value = 1;
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.5, t); // Boosted
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    
+    noise.connect(flt);
+    flt.connect(env);
+    env.connect(master);
+    
+    noise.start(t);
+}
+
+function timpani(freq, t, vel = 0.6) {
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(freq * 1.3, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+    
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * 0.7, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    
+    osc.connect(env);
+    env.connect(master);
+    
+    osc.start(t);
+    osc.stop(t + 1.5);
+}
+
+function pickPattern(chord, t, beatDur, vel = 0.5) {
+    const ch = CHORDS[chord];
+    // Ensure we have notes
+    const notes = ch.notes || [];
+    const pattern = [ch.bass, notes[0], notes[1], notes[2], notes[3] || notes[1], notes[2]];
+    const eighth = beatDur / 2;
+    
+    pattern.forEach((note, i) => {
+        if (note) piano(note, t + i * eighth * 0.99, beatDur * 1.5, vel * (i === 0 ? 1 : 0.7));
+    });
+}
+
+function blockChord(chord, t, dur, vel, instruments = ['strings']) {
+    const ch = CHORDS[chord];
+    
+    if (instruments.includes('bass')) bass(ch.bass, t, dur, vel);
+    if (instruments.includes('strings')) strings(ch.notes, t, dur, vel, dur * 0.2);
+    if (instruments.includes('brass')) brass(ch.notes, t, dur, vel * 0.8);
+    if (instruments.includes('choir')) choir(ch.notes.map(n => n * 2), t, dur, vel * 0.6);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// THE COMPOSITION
+// ════════════════════════════════════════════════════════════════════
+
+function compose() {
+    // IMPORTANT: Add a slight buffer to time to prevent 'past' scheduling
+    const t0 = ctx.currentTime + 0.3;
+    let t = t0;
+    
+    const BPM = 68;
+    const BEAT = 60 / BPM;
+    const BAR = BEAT * 4;
+    
+    // INTRO
+    setText('INTRO');
+    pickPattern('Bm7', t, BEAT, 0.6);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.6);
+    t += BAR;
+    pickPattern('A', t, BEAT, 0.6);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.6);
+    t += BAR;
+    
+    pickPattern('Bm7', t, BEAT, 0.6);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.3);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.55);
+    t += BAR;
+    
+    pickPattern('A', t, BEAT, 0.6);
+    bass(CHORDS.A.bass, t, BAR, 0.3);
+    t += BAR;
+    pickPattern('Em7', t, BEAT, 0.55);
+    bass(CHORDS.Em7.bass, t, BAR, 0.3);
+    t += BAR;
+    
+    // VERSE 1
+    setTimeout(() => setText('VERSE'), (t - t0) * 1000);
+    
+    // 9-10
+    pickPattern('Bm7', t, BEAT, 0.6);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.3, 0.8);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.4);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    // 11-12
+    pickPattern('A', t, BEAT, 0.6);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.3, 0.6);
+    bass(CHORDS.A.bass, t, BAR * 2, 0.4);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.5);
+    t += BAR;
+    
+    // 13-14
+    pickPattern('Bm7', t, BEAT, 0.6);
+    strings(CHORDS.Bm7.notes, t, BAR * 2, 0.35, 0.6);
+    bass(CHORDS.Bm7.bass, t, BAR * 2, 0.4);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    // 15-16
+    pickPattern('A', t, BEAT, 0.6);
+    strings(CHORDS.A.notes, t, BAR * 2, 0.35, 0.5);
+    bass(CHORDS.A.bass, t, BAR, 0.4);
+    t += BAR;
+    pickPattern('Em7', t, BEAT, 0.6);
+    bass(CHORDS.Em7.bass, t, BAR, 0.4);
+    t += BAR;
+    
+    // PRE-CHORUS
+    setTimeout(() => setText('PRE-CHORUS'), (t - t0) * 1000);
+    
+    // 17-18
+    blockChord('Bm7', t, BAR * 2, 0.5, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.5);
+    pickPattern('Bm7', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    t += BAR;
+    
+    // 19-20
+    blockChord('A', t, BAR * 2, 0.5, ['strings', 'bass']);
+    timpani(CHORDS.A.bass, t, 0.5);
+    pickPattern('A', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('G', t, BEAT, 0.5);
+    t += BAR;
+    
+    // 21-22
+    blockChord('Bm7', t, BAR * 2, 0.6, ['strings', 'bass']);
+    timpani(CHORDS.Bm7.bass, t, 0.6);
+    kick(t, 0.6);
+    pickPattern('Bm7', t, BEAT, 0.5);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.5);
+    kick(t + BEAT * 2, 0.5);
+    t += BAR;
+    
+    // 23-24
+    blockChord('A', t, BAR, 0.65, ['strings', 'bass']);
+    timpani(CHORDS.A.bass, t, 0.6);
+    kick(t, 0.6);
+    pickPattern('A', t, BEAT, 0.6);
+    t += BAR;
+    
+    blockChord('Em7', t, BAR, 0.65, ['strings', 'bass']);
+    timpani(CHORDS.Em7.bass, t, 0.6);
+    kick(t, 0.6);
+    snare(t + BEAT * 2, 0.5);
+    snare(t + BEAT * 2.5, 0.45);
+    snare(t + BEAT * 3, 0.5);
+    snare(t + BEAT * 3.5, 0.55);
+    t += BAR;
+    
+    // CHORUS
+    setTimeout(() => setText('CHORUS'), (t - t0) * 1000);
+    
+    // 25-26
+    blockChord('Bm7', t, BAR * 2, 0.7, ['strings', 'bass', 'brass']);
+    choir(CHORDS.Bm7.notes.map(n => n * 2), t, BAR * 2, 0.4);
+    timpani(CHORDS.Bm7.bass, t, 0.7);
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.D5, t, BEAT * 1.5, 0.7);
+    piano(F.Fs5, t + BEAT * 1.5, BEAT, 0.6);
+    t += BAR;
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.B5, t, BEAT * 2, 0.7);
+    t += BAR;
+    
+    // 27-28
+    blockChord('A', t, BAR * 2, 0.7, ['strings', 'bass', 'brass']);
+    choir(CHORDS.A.notes.map(n => n * 2), t, BAR * 2, 0.4);
+    timpani(CHORDS.A.bass, t, 0.7);
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.A5, t, BEAT, 0.7);
+    piano(F.Fs5, t + BEAT, BEAT, 0.6);
+    t += BAR;
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.E5, t, BEAT * 2, 0.7);
+    t += BAR;
+    
+    // 29-30
+    blockChord('Bm7', t, BAR * 2, 0.75, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Bm7.bass, t, 0.7);
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.D5, t, BEAT, 0.7);
+    piano(F.E5, t + BEAT, BEAT, 0.6);
+    t += BAR;
+    kick(t, 0.75);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.Fs5, t, BEAT * 2, 0.7);
+    t += BAR;
+    
+    // 31-32
+    blockChord('Em7', t, BAR * 2, 0.7, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Em7.bass, t, 0.7);
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.6);
+    piano(F.E5, t, BEAT, 0.65);
+    piano(F.D5, t + BEAT, BEAT * 2, 0.7);
+    t += BAR;
+    kick(t, 0.7);
+    snare(t + BEAT * 2, 0.6);
+    t += BAR;
+    
+    // 33-34 (2nd half)
+    blockChord('Bm7', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+    timpani(CHORDS.Bm7.bass, t, 0.8);
+    kick(t, 0.85);
+    snare(t + BEAT * 2, 0.65);
+    brass([F.Fs5, F.B5], t, BAR, 0.5);
+    t += BAR;
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.65);
+    brass([F.D5, F.Fs5], t, BAR, 0.5);
+    t += BAR;
+    
+    // 35-36
+    blockChord('A', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+    timpani(CHORDS.A.bass, t, 0.8);
+    kick(t, 0.85);
+    snare(t + BEAT * 2, 0.65);
+    brass([F.E5, F.A5], t, BAR, 0.5);
+    t += BAR;
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.65);
+    brass([F.Cs5, F.E5], t, BAR, 0.5);
+    t += BAR;
+    
+    // 37-38
+    blockChord('Bm7', t, BAR * 2, 0.8, ['strings', 'bass', 'brass', 'choir']);
+    timpani(CHORDS.Bm7.bass, t, 0.8);
+    kick(t, 0.85);
+    snare(t + BEAT * 2, 0.65);
+    brass([F.D5, F.Fs5, F.B5], t, BAR * 2, 0.6);
+    t += BAR;
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.65);
+    t += BAR;
+    
+    // 39-40
+    blockChord('Em7', t, BAR * 2, 0.8, ['strings', 'bass', 'brass']);
+    timpani(CHORDS.Em7.bass, t, 0.75);
+    kick(t, 0.8);
+    snare(t + BEAT * 2, 0.6);
+    brass([F.B4, F.E5], t, BAR * 2, 0.5);
+    t += BAR;
+    kick(t, 0.75);
+    snare(t + BEAT * 2, 0.6);
+    t += BAR;
+    
+    // FADE OUT / OUTRO (Shortened for demo stability)
+    setTimeout(() => setText('OUTRO'), (t - t0) * 1000);
+    
+    pickPattern('Bm7', t, BEAT, 0.5);
+    strings(CHORDS.Bm7.notes, t, BAR * 4, 0.3, 2);
+    t += BAR;
+    pickPattern('Dsus2', t, BEAT, 0.45);
+    t += BAR;
+    
+    // Final notes
+    piano(F.B3, t, BAR * 2, 0.5);
+    piano(F.Fs4, t, BAR * 2, 0.5);
+    piano(F.B4, t + 0.1, BAR * 3, 0.5);
+    
+    setTimeout(() => setText('— FINE —'), (t - t0 + BAR * 2) * 1000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// VISUALS
+// ════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const c = canvas.getContext('2d');
+let w, h;
+let pulseVis = 0;
+let time = 0;
+
+function setText(txt) {
+    const el = document.getElementById('t');
+    el.style.opacity = 0;
+    setTimeout(() => {
+        el.textContent = txt;
+        el.style.opacity = 1;
+    }, 200);
+}
+
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+
+function render() {
+    requestAnimationFrame(render);
+    time += 0.008;
+    
+    c.fillStyle = 'rgba(10, 6, 8, 0.12)';
+    c.fillRect(0, 0, w, h);
+    
+    if (pulseVis > 0.03) {
+        const grad = c.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h) * pulseVis * 0.7);
+        grad.addColorStop(0, `rgba(200, 150, 180, ${pulseVis * 0.4})`);
+        grad.addColorStop(0.5, `rgba(120, 80, 100, ${pulseVis * 0.2})`);
+        grad.addColorStop(1, 'transparent');
+        c.fillStyle = grad;
+        c.fillRect(0, 0, w, h);
+    }
+    
+    if (started) {
+        c.fillStyle = `rgba(255, 220, 230, ${0.08 + pulseVis * 0.25})`;
+        for (let i = 0; i < 15; i++) {
+            const x = (Math.sin(time * 0.4 + i * 0.6) * 0.35 + 0.5) * w;
+            const y = (Math.cos(time * 0.25 + i * 0.8) * 0.35 + 0.5) * h;
+            const r = 1.5 + pulseVis * 5;
+            c.beginPath();
+            c.arc(x, y, r, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+    
+    pulseVis *= 0.94;
+}
+
+window.addEventListener('resize', resize);
+resize();
+render();
+
+// ════════════════════════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════════════════════════
+
+document.addEventListener('click', async () => {
+    if (started) return;
+    started = true;
+    document.getElementById('t').textContent = "loading...";
+    
+    try {
+        await init();
+        compose();
+    } catch(e) {
+        console.error(e);
+        document.getElementById('t').textContent = "Error: " + e.message;
+    }
+}, { once: true });
+</script>
+</body>
+</html>

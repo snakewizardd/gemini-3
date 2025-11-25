@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELECTRIC LEAD // DISTORTION ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=Share+Tech+Mono&display=swap');
+
+    :root {
+        --bg: #050510;
+        --neon: #00f3ff;
+        --hot: #ff0055;
+        --dim: #1a1a2e;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Share Tech Mono', monospace;
+        color: var(--neon);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+        filter: drop-shadow(0 0 10px var(--neon));
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(5, 5, 16, 0.9);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 4rem;
+        margin: 0;
+        color: #fff;
+        text-shadow: 0 0 20px var(--neon), 0 0 40px var(--neon);
+        letter-spacing: 5px;
+        font-style: italic;
+    }
+
+    p {
+        font-weight: bold;
+        margin-top: 20px;
+        font-size: 1.2rem;
+        color: var(--hot);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: #fff;
+        text-shadow: 0 0 5px #fff;
+    }
+
+    /* Tube glow animation */
+    @keyframes pulse {
+        0% { opacity: 0.8; }
+        50% { opacity: 1; text-shadow: 0 0 30px var(--neon); }
+        100% { opacity: 0.8; }
+    }
+    .tube-glow { animation: pulse 2s infinite; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1 class="tube-glow">HIGH GAIN</h1>
+    <p>[ CLICK TO SHRED ]</p>
+    <p style="font-size: 0.8rem; color: #888; margin-top: 2rem;">MOUSE Y = DISTORTION AMOUNT // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    AMP: OVERDRIVE<br>
+    BPM: 75 (Ballad Tempo)
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * ELECTRIC GUITAR ENGINE
+ * Distortion Physics + Solo Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 75, 
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null,
+    driveGain: null,
+    reverb: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4;
+
+        // DISTORTION CHAIN
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(400); // High gain
+        AudioEngine.drive.oversample = '4x';
+        
+        AudioEngine.driveGain = AudioEngine.ctx.createGain();
+        AudioEngine.driveGain.gain.value = 0.5; // Input gain into distortion
+
+        // Delay/Reverb for "Stadium" sound
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(2.5, 2.0);
+        
+        const verbMix = AudioEngine.ctx.createGain();
+        verbMix.gain.value = 0.3;
+
+        // Routing: Source -> Drive -> Master -> Dest
+        //                       \-> Reverb -> Dest
+        AudioEngine.driveGain.connect(AudioEngine.drive);
+        AudioEngine.drive.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(verbMix);
+        verbMix.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = typeof amount === 'number' ? amount : 50;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    // ELECTRIC TONE: Sawtooth (Bridge Pickup) + Square (Neck Pickup)
+    playString: (stringIdx, fret, time, duration = 2.0, slideTo = null, bendType = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        osc1.type = 'sawtooth'; 
+        osc2.type = 'square';
+        
+        // PITCH LOGIC
+        let targetFreq = freq;
+        let bendTime = 0.2;
+
+        if (slideTo !== null) {
+            // Standard slide
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.15);
+        } else if (bendType === 'full') {
+            // 10(12) - Whole Step Bend
+            targetFreq = freq * Math.pow(2, 2/12); 
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2); 
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2); 
+        } else if (bendType === 'release') {
+            // (12)(10) - Pre-bend release
+            const startFreq = freq * Math.pow(2, 2/12); // Start at bend
+            osc1.frequency.setValueAtTime(startFreq, t);
+            osc1.frequency.linearRampToValueAtTime(freq, t + 0.15);
+            osc2.frequency.setValueAtTime(startFreq, t);
+            osc2.frequency.linearRampToValueAtTime(freq, t + 0.15);
+        } else if (bendType === 'half') {
+            // 12(13)
+             targetFreq = freq * Math.pow(2, 1/12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+            
+            // Subtle Vibrato for sustain
+            const vib = AudioEngine.ctx.createOscillator();
+            vib.frequency.value = 5;
+            const vibGain = AudioEngine.ctx.createGain();
+            vibGain.gain.value = freq * 0.005;
+            vib.connect(vibGain);
+            vibGain.connect(osc1.frequency);
+            vibGain.connect(osc2.frequency);
+            vib.start(t);
+            vib.stop(t+duration);
+        }
+
+        // TONE FILTER (Cab Simulation)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3500; // Roll off harsh highs
+        filter.Q.value = 0.7;
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.5, t + 0.01); // Instant attack
+        amp.gain.exponentialRampToValueAtTime(0.3, t + 0.2); // Sustain level
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); // Fade out
+
+        // Mix: 60% Saw, 40% Square
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.6;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.4;
+
+        osc1.connect(osc1Gain); osc1Gain.connect(filter);
+        osc2.connect(osc2Gain); osc2Gain.connect(filter);
+        filter.connect(amp);
+        
+        // Connect to Drive
+        amp.connect(AudioEngine.driveGain);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setDistortion: (val) => {
+        // Map 0-1 to Curve amount 0-1000
+        if(AudioEngine.drive) {
+            AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(val * 1000);
+        }
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null, bend = null) {
+    TAB.push({ beat, string, fret, type, target, bend });
+}
+
+// -- BUILD THE SOLO --
+let b = 0.5; // Lead-in
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+
+// === PHRASE 1 ===
+// B-13. 13 13 | 12. 12 12 | 10. (12)(10) | G-9
+addNote(b, 1, 13); b += Q*1.5; // 13.
+addNote(b, 1, 13); b += S; 
+addNote(b, 1, 13); b += S;
+
+addNote(b, 1, 12); b += Q*1.5; // 12.
+addNote(b, 1, 12); b += S; 
+addNote(b, 1, 12); b += S;
+
+addNote(b, 1, 10); b += Q; // 10.
+addNote(b, 1, 10, 'pluck', null, 'full'); b += E; // (12) Bend up
+addNote(b, 1, 10, 'pluck', null, 'release'); b += E; // (10) Release
+addNote(b, 2, 9); b += Q*2; // G-9 Sustain
+
+b += Q; // Rest
+
+// === PHRASE 2 ===
+// B-10. (12)(10) 8 10. (12)(10) | G-10
+addNote(b, 1, 10); b += Q; 
+addNote(b, 1, 10, 'pluck', null, 'full'); b += S; // Bend
+addNote(b, 1, 10, 'pluck', null, 'release'); b += S; // Release
+
+addNote(b, 1, 8); b += E;
+addNote(b, 2, 9); b += E; // G-9 harmony/passing? Tab says 9 on G? Actually tab says 9 on G then back to B line.
+// Tab: G-9 (between phrases?) Wait, looking at tab:
+// B-10 (12)(10) 8 | 10 (12)(10) | G-10
+// There is a G-9 under the first bend group? Let's follow the melodic line.
+// B string mostly.
+addNote(b, 1, 10); b += Q; 
+addNote(b, 1, 10, 'pluck', null, 'full'); b += S; 
+addNote(b, 1, 10, 'pluck', null, 'release'); b += S;
+addNote(b, 2, 10); b += Q*2; // G-10
+
+b += Q;
+
+// === PHRASE 3 ===
+// D-12 G-9 10. 12 | B-10 | G-12. | D-12 G-9 10. 12
+addNote(b, 3, 12); b += E;
+addNote(b, 2, 9); b += E;
+addNote(b, 2, 10); b += Q;
+addNote(b, 2, 12); b += E;
+addNote(b, 1, 10); b += Q; // B-10
+addNote(b, 2, 12); b += Q*1.5; // G-12.
+
+addNote(b, 3, 12); b += E;
+addNote(b, 2, 9); b += E;
+addNote(b, 2, 10); b += Q;
+addNote(b, 2, 12); b += Q*1.5;
+
+// === PHRASE 4 ===
+// B-10 8 10(12) (12)(10) 8 10 8 8\ | G-8. 8\
+// High E-10 involved? "e---10---"
+addNote(b, 1, 10); b += E;
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 10, 'pluck', null, 'full'); b += E; // Bend 12
+addNote(b, 0, 10); b += E; // High E 10 (Blues lick)
+addNote(b, 1, 10, 'pluck', null, 'release'); b += E; // Release to 10
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 10); b += E;
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 8, 'slide', 1); b += Q; // Slide down
+addNote(b, 2, 8); b += Q; // G-8
+addNote(b, 2, 8, 'slide', 1); b += Q;
+
+b += Q;
+
+// === PHRASE 5 ===
+// B-12(13) (13) (13) | 12. 12 12 | 10. (12)(10) | G-9
+addNote(b, 1, 12, 'pluck', null, 'half'); b += Q; // Bend 13
+addNote(b, 1, 12, 'pluck', null, 'half'); b += Q; // Re-pick bent? or hold? Tab implies hold/re-pick
+addNote(b, 1, 12, 'pluck', null, 'half'); b += Q;
+
+addNote(b, 1, 12); b += Q*1.5;
+addNote(b, 1, 12); b += S;
+addNote(b, 1, 12); b += S;
+
+addNote(b, 1, 10); b += Q;
+addNote(b, 1, 10, 'pluck', null, 'full'); b += E;
+addNote(b, 1, 10, 'pluck', null, 'release'); b += E;
+addNote(b, 2, 9); b += Q*2;
+
+b += Q;
+
+// === PHRASE 6 ===
+// G-9 B-8 10. (12)(10) 8 (12)(10) | G-10
+addNote(b, 2, 9); b += E;
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 10); b += Q;
+addNote(b, 1, 10, 'pluck', null, 'full'); b += S;
+addNote(b, 1, 10, 'pluck', null, 'release'); b += S;
+addNote(b, 2, 9); b += E; // Tab has G-9 here?
+addNote(b, 1, 8); b += E;
+addNote(b, 1, 10, 'pluck', null, 'full'); b += S; // Another bend?
+addNote(b, 1, 10, 'pluck', null, 'release'); b += S;
+addNote(b, 2, 10); b += Q*2;
+
+b += Q;
+
+// === PHRASE 7 ===
+// D-12 G-9 10 12 | B-10 | D-12 G-9 10 12 | B-10 12 13 12
+addNote(b, 3, 12); b += S;
+addNote(b, 2, 9); b += S;
+addNote(b, 2, 10); b += S;
+addNote(b, 2, 12); b += S;
+addNote(b, 1, 10); b += Q;
+
+addNote(b, 3, 12); b += S;
+addNote(b, 2, 9); b += S;
+addNote(b, 2, 10); b += S;
+addNote(b, 2, 12); b += S;
+
+addNote(b, 1, 10); b += E;
+addNote(b, 1, 12); b += E;
+addNote(b, 1, 13); b += E;
+addNote(b, 1, 12); b += E;
+
+// === PHRASE 8 (OUTRO) ===
+// G-14. 12. | B-(15)(13) 13
+addNote(b, 2, 14); b += Q*1.5;
+addNote(b, 2, 12); b += Q*1.5;
+addNote(b, 1, 13, 'pluck', null, 'full'); b += E; // Pre-bend 15? or 13->15
+addNote(b, 1, 13, 'pluck', null, 'release'); b += E; // Release
+addNote(b, 1, 13); b += Q*4; // Final sustain
+
+
+// Loop Logic
+const LOOP_LENGTH = b + 4;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            // Play logic
+            AudioEngine.playString(note.string, note.fret, playTime, 2.5, note.target, note.bend);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Draw Staff Strings
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#333';
+    ctx.font = "16px 'Share Tech Mono'";
+    ctx.fillStyle = '#00f3ff';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        
+        // Glowing String
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#00f3ff';
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Draw Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ff0055';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff0055';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Draw Notes
+    const pixelsPerBeat = 120; // Slower scroll for ballad
+    
+    ctx.font = "20px 'Orbitron'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            // Note Body
+            ctx.fillStyle = '#00f3ff'; 
+            let txt = note.fret;
+            if (note.bend === 'full') txt += 'b';
+            if (note.bend === 'half') txt += '½';
+            if (note.bend === 'release') txt = '(' + txt + ')';
+            if (note.type === 'slide') txt += '\\';
+
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 14, 0, Math.PI*2);
+            ctx.fillStyle = '#050510';
+            ctx.fill();
+            ctx.strokeStyle = '#00f3ff'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#fff'; 
+            ctx.fillText(txt, x - 10, y + 2);
+        }
+    });
+
+    // Active Flashes (Sparks)
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        // Electric Burst
+        const radius = 20 + ((1 - n.life) * 50);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(0, 243, 255, ${n.life})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Cross spark
+        ctx.beginPath();
+        ctx.moveTo(HIT_X - radius, y - 5);
+        ctx.lineTo(HIT_X + radius, y - 5);
+        ctx.moveTo(HIT_X, y - 5 - radius);
+        ctx.lineTo(HIT_X, y - 5 + radius);
+        ctx.strokeStyle = `rgba(255, 0, 85, ${n.life})`;
+        ctx.stroke();
+
+        n.life -= 0.05;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    // Map Y to Distortion (0.0 to 1.0)
+    AudioEngine.setDistortion(1 - y);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>
