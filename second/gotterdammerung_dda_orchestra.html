@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Götterdämmerung — DDA Orchestral Engine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --obsidian: #0a0a0f;
+    --storm: #1a1a2e;
+    --iron: #2d2d44;
+    --silver: #8a8aa3;
+    --gold: #d4af37;
+    --fire: #ff6b35;
+    --blood: #8b0000;
+    --ice: #a8d0e6;
+    --mist: rgba(168, 208, 230, 0.1);
+    --lightning: #f0e68c;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Crimson Pro', serif;
+    background: var(--obsidian);
+}
+
+/* Dramatic storm background */
+body {
+    background: 
+        radial-gradient(ellipse 150% 100% at 50% 120%, rgba(139, 0, 0, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse 100% 80% at 20% 0%, rgba(168, 208, 230, 0.08) 0%, transparent 40%),
+        radial-gradient(ellipse 100% 80% at 80% 0%, rgba(212, 175, 55, 0.06) 0%, transparent 40%),
+        linear-gradient(180deg, #0a0a0f 0%, #12121f 50%, #1a1a2e 100%);
+}
+
+/* Aurora/Valhalla lights */
+.aurora {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.3;
+    background: 
+        linear-gradient(180deg, 
+            rgba(168, 208, 230, 0.1) 0%,
+            rgba(212, 175, 55, 0.05) 30%,
+            transparent 60%
+        );
+    animation: auroraPulse 12s ease-in-out infinite;
+    filter: blur(40px);
+}
+
+@keyframes auroraPulse {
+    0%, 100% { opacity: 0.2; transform: translateY(0); }
+    50% { opacity: 0.4; transform: translateY(-20px); }
+}
+
+/* Storm clouds */
+.storm-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 40%;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.6;
+    background: 
+        radial-gradient(ellipse 30% 50% at 20% 30%, rgba(45, 45, 68, 0.8) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 60% 20%, rgba(26, 26, 46, 0.9) 0%, transparent 60%),
+        radial-gradient(ellipse 35% 45% at 85% 35%, rgba(45, 45, 68, 0.7) 0%, transparent 65%);
+    animation: stormDrift 60s linear infinite;
+}
+
+@keyframes stormDrift {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+/* Lightning flash overlay */
+.lightning-flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 50;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.05s;
+}
+
+.lightning-flash.active {
+    opacity: 0.3;
+}
+
+/* Ember particles */
+.ember-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+    overflow: hidden;
+}
+
+.ember {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: var(--fire);
+    border-radius: 50%;
+    opacity: 0;
+    box-shadow: 0 0 6px var(--fire), 0 0 12px var(--gold);
+    animation: riseEmber 8s ease-out infinite;
+}
+
+@keyframes riseEmber {
+    0% { transform: translateY(100vh) translateX(0) scale(1); opacity: 0; }
+    10% { opacity: 0.8; }
+    90% { opacity: 0.6; }
+    100% { transform: translateY(-20vh) translateX(100px) scale(0.3); opacity: 0; }
+}
+
+/* Main container */
+.container {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 15px 20px;
+}
+
+/* Header - Epic title treatment */
+header {
+    text-align: center;
+    padding: 15px 0 10px;
+    position: relative;
+}
+
+.runes {
+    display: block;
+    font-size: 18px;
+    letter-spacing: 1em;
+    color: var(--gold);
+    opacity: 0.5;
+    margin-bottom: 5px;
+}
+
+h1 {
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+    font-size: clamp(1.8rem, 4.5vw, 3rem);
+    color: var(--gold);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-shadow: 
+        0 0 30px rgba(212, 175, 55, 0.5),
+        0 2px 4px rgba(0, 0, 0, 0.8);
+    background: linear-gradient(180deg, #f0e68c 0%, #d4af37 50%, #8b6914 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.subtitle {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 1rem;
+    color: var(--silver);
+    margin-top: 5px;
+    letter-spacing: 0.1em;
+}
+
+/* DDA Panel - Iron and gold aesthetic */
+.dda-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    max-width: 1000px;
+    margin: 10px auto;
+    padding: 12px 15px;
+    background: linear-gradient(135deg, rgba(45, 45, 68, 0.8) 0%, rgba(26, 26, 46, 0.9) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 3px;
+    box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.dda-var {
+    text-align: center;
+    padding: 6px;
+    border-right: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.dda-var:last-child { border-right: none; }
+
+.dda-var .label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--silver);
+    margin-bottom: 3px;
+}
+
+.dda-var .value {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1rem;
+    color: var(--gold);
+    font-weight: 400;
+}
+
+.dda-var .symbol {
+    font-size: 0.7rem;
+    color: rgba(212, 175, 55, 0.5);
+    margin-top: 2px;
+}
+
+/* Intensity meter */
+.intensity-container {
+    max-width: 600px;
+    margin: 8px auto;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.intensity-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--silver);
+    white-space: nowrap;
+}
+
+.intensity-bar {
+    flex: 1;
+    height: 8px;
+    background: rgba(45, 45, 68, 0.8);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.intensity-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--ice), var(--gold), var(--fire), var(--blood));
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px currentColor;
+}
+
+/* Canvas */
+.canvas-container {
+    flex: 1;
+    position: relative;
+    min-height: 250px;
+}
+
+#canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Leitmotif indicators */
+.leitmotif-panel {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    padding: 8px;
+    flex-wrap: wrap;
+}
+
+.leitmotif {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    background: rgba(45, 45, 68, 0.5);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 2px;
+    opacity: 0.4;
+    transition: all 0.3s ease;
+}
+
+.leitmotif.active {
+    opacity: 1;
+    border-color: var(--gold);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+}
+
+.leitmotif-icon {
+    font-size: 16px;
+}
+
+.leitmotif-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--silver);
+}
+
+.leitmotif.active .leitmotif-name {
+    color: var(--gold);
+}
+
+/* Orchestra section indicators */
+.orchestra-sections {
+    display: flex;
+    justify-content: center;
+    gap: 25px;
+    margin-top: 5px;
+}
+
+.section-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: var(--silver);
+    opacity: 0.6;
+}
+
+.section-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.section-dot.brass { background: var(--gold); }
+.section-dot.strings { background: var(--ice); }
+.section-dot.winds { background: #7fcd91; }
+.section-dot.percussion { background: var(--fire); }
+
+.section-indicator.active .section-dot {
+    box-shadow: 0 0 12px currentColor;
+    transform: scale(1.3);
+}
+
+/* Start overlay */
+#overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 10, 15, 0.97);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+    transition: opacity 1s ease, visibility 1s;
+}
+
+#overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#overlay .emblem {
+    font-size: 100px;
+    margin-bottom: 30px;
+    animation: emblemGlow 4s ease-in-out infinite;
+    filter: drop-shadow(0 0 30px rgba(212, 175, 55, 0.5));
+}
+
+@keyframes emblemGlow {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 30px rgba(212, 175, 55, 0.3)); }
+    50% { transform: scale(1.05); filter: drop-shadow(0 0 50px rgba(212, 175, 55, 0.6)); }
+}
+
+#overlay h2 {
+    font-family: 'Cinzel', serif;
+    font-weight: 500;
+    font-size: 2.2rem;
+    color: var(--gold);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    text-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
+}
+
+#overlay .opus {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--silver);
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+}
+
+#overlay .instruction {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    color: rgba(138, 138, 163, 0.7);
+    letter-spacing: 0.1em;
+    animation: fadeInOut 2.5s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+/* Controls */
+footer {
+    display: flex;
+    justify-content: center;
+    gap: 25px;
+    padding: 12px;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.control-group label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--silver);
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 90px;
+    height: 4px;
+    background: var(--iron);
+    border-radius: 2px;
+    outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--gold);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+}
+
+button {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    padding: 8px 18px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background: rgba(212, 175, 55, 0.2);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+</style>
+</head>
+<body>
+
+<div class="aurora"></div>
+<div class="storm-layer"></div>
+<div class="lightning-flash" id="lightningFlash"></div>
+<div class="ember-container" id="emberContainer"></div>
+
+<div class="container">
+    <header>
+        <span class="runes">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ</span>
+        <h1>Götterdämmerung</h1>
+        <p class="subtitle">Twilight of the Gods — Dynamic Decision Algorithm</p>
+    </header>
+
+    <div class="dda-panel" id="ddaPanel">
+        <div class="dda-var">
+            <div class="label">Goal</div>
+            <div class="value" id="p0">Transcendence</div>
+            <div class="symbol">P₀</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Momentum</div>
+            <div class="value" id="kf">Building</div>
+            <div class="symbol">kFₙ₋₁</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Tension</div>
+            <div class="value" id="in">Gathering</div>
+            <div class="symbol">Iₙ + IΔ</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Voices</div>
+            <div class="value" id="dn">—</div>
+            <div class="symbol">Dₙ</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Harmonic</div>
+            <div class="value" id="fm">—</div>
+            <div class="symbol">FMₙ</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Resolution</div>
+            <div class="value" id="fn">Suspended</div>
+            <div class="symbol">Fₙ</div>
+        </div>
+    </div>
+
+    <div class="intensity-container">
+        <span class="intensity-label">Dramatic Intensity</span>
+        <div class="intensity-bar">
+            <div class="intensity-fill" id="intensityFill"></div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="leitmotif-panel">
+        <div class="leitmotif" id="motif-fate">
+            <span class="leitmotif-icon">⚔️</span>
+            <span class="leitmotif-name">Fate</span>
+        </div>
+        <div class="leitmotif" id="motif-hero">
+            <span class="leitmotif-icon">🛡️</span>
+            <span class="leitmotif-name">Hero</span>
+        </div>
+        <div class="leitmotif" id="motif-love">
+            <span class="leitmotif-icon">💫</span>
+            <span class="leitmotif-name">Love</span>
+        </div>
+        <div class="leitmotif" id="motif-doom">
+            <span class="leitmotif-icon">🔥</span>
+            <span class="leitmotif-name">Doom</span>
+        </div>
+        <div class="leitmotif" id="motif-redemption">
+            <span class="leitmotif-icon">✨</span>
+            <span class="leitmotif-name">Redemption</span>
+        </div>
+    </div>
+
+    <div class="orchestra-sections">
+        <div class="section-indicator" id="sec-brass">
+            <div class="section-dot brass"></div>
+            <span>Brass</span>
+        </div>
+        <div class="section-indicator" id="sec-strings">
+            <div class="section-dot strings"></div>
+            <span>Strings</span>
+        </div>
+        <div class="section-indicator" id="sec-winds">
+            <div class="section-dot winds"></div>
+            <span>Winds</span>
+        </div>
+        <div class="section-indicator" id="sec-percussion">
+            <div class="section-dot percussion"></div>
+            <span>Percussion</span>
+        </div>
+    </div>
+
+    <footer>
+        <div class="control-group">
+            <label>Hall</label>
+            <input type="range" id="reverbSlider" min="0" max="100" value="70">
+        </div>
+        <div class="control-group">
+            <label>Tempo</label>
+            <input type="range" id="tempoSlider" min="40" max="80" value="52">
+        </div>
+        <button id="playBtn">Play / Pause</button>
+    </footer>
+</div>
+
+<div id="overlay">
+    <div class="emblem">⚜️</div>
+    <h2>Götterdämmerung</h2>
+    <p class="opus">A Symphonic Poem in the Wagnerian Tradition</p>
+    <p class="instruction">Click to awaken the orchestra</p>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DYNAMIC DECISION ALGORITHM (DDA) — ORCHESTRAL DRAMA ENGINE
+// Fₙ = P₀ * kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DDA = {
+    P0: 'Mythic Transcendence',      // Goal: Wagner's endless melody seeking resolution
+    kF_prev: null,                    // Previous harmonic state
+    I_n: null,                        // Current dramatic context
+    I_delta: [],                      // Accumulated tension
+    D_n: [],                          // Available orchestral voices
+    FM_n: {},                         // Assessment of dramatic weight
+    F_n: null,                        // Final orchestral decision
+    m: 1.0,                           // Rate vector
+    
+    // Dramatic state
+    intensity: 0,                     // 0-1 dramatic intensity
+    tensionAccumulator: 0,           // Builds toward climax
+    currentMotif: null,              // Active leitmotif
+    wavePhase: 'building',           // building, climax, falling, suspense
+    
+    // Leitmotifs (recurring musical ideas)
+    leitmotifs: {
+        fate: { intervals: [0, 3, 7], character: 'ominous', weight: 0.9 },
+        hero: { intervals: [0, 4, 7, 12], character: 'triumphant', weight: 1.0 },
+        love: { intervals: [0, 4, 7, 11], character: 'yearning', weight: 0.8 },
+        doom: { intervals: [0, 1, 5, 6], character: 'tragic', weight: 0.95 },
+        redemption: { intervals: [0, 5, 7, 12], character: 'transcendent', weight: 1.0 }
+    },
+    
+    // Gather dramatic information
+    gatherInformation(currentBeat, totalBeats) {
+        const progress = currentBeat / totalBeats;
+        
+        // Determine wave phase based on position
+        if (progress < 0.15) this.wavePhase = 'suspense';
+        else if (progress < 0.4) this.wavePhase = 'building';
+        else if (progress < 0.55) this.wavePhase = 'climax';
+        else if (progress < 0.7) this.wavePhase = 'falling';
+        else if (progress < 0.85) this.wavePhase = 'building';
+        else this.wavePhase = 'climax';
+        
+        this.I_n = {
+            beat: currentBeat,
+            progress: progress,
+            phase: this.wavePhase,
+            tension: this.tensionAccumulator
+        };
+        
+        // Accumulate tension (I_delta)
+        if (this.wavePhase === 'building' || this.wavePhase === 'suspense') {
+            this.tensionAccumulator = Math.min(1, this.tensionAccumulator + 0.02);
+        } else if (this.wavePhase === 'climax') {
+            this.tensionAccumulator = Math.max(0.7, this.tensionAccumulator);
+        } else {
+            this.tensionAccumulator = Math.max(0, this.tensionAccumulator - 0.03);
+        }
+        
+        this.intensity = this.tensionAccumulator;
+        this.I_delta.push(this.intensity);
+        if (this.I_delta.length > 16) this.I_delta.shift();
+        
+        return this.I_n;
+    },
+    
+    // Select appropriate leitmotif based on dramatic phase
+    selectMotif() {
+        const phase = this.wavePhase;
+        const motifMap = {
+            'suspense': ['fate', 'doom'],
+            'building': ['hero', 'fate'],
+            'climax': ['hero', 'doom', 'redemption'],
+            'falling': ['love', 'redemption']
+        };
+        
+        const candidates = motifMap[phase] || ['fate'];
+        this.currentMotif = candidates[Math.floor(Math.random() * candidates.length)];
+        return this.currentMotif;
+    },
+    
+    // Generate orchestral voice choices
+    generateVoiceChoices(section) {
+        const motif = this.leitmotifs[this.currentMotif];
+        this.D_n = motif.intervals.map((interval, i) => ({
+            interval,
+            voice: i,
+            section: section,
+            weight: motif.weight,
+            character: motif.character
+        }));
+        return this.D_n;
+    },
+    
+    // Evaluate dramatic effectiveness
+    evaluate(choice) {
+        this.FM_n = {
+            dramaticFit: this.evaluateDramaticFit(choice),
+            orchestralBalance: this.evaluateBalance(choice),
+            emotionalArc: this.evaluateArc(choice)
+        };
+        
+        return (
+            this.FM_n.dramaticFit * 0.4 +
+            this.FM_n.orchestralBalance * 0.3 +
+            this.FM_n.emotionalArc * 0.3
+        ) * this.m;
+    },
+    
+    evaluateDramaticFit(choice) {
+        // How well does this choice fit the current dramatic moment?
+        const phaseWeights = {
+            'suspense': choice.character === 'ominous' ? 1.0 : 0.6,
+            'building': choice.character === 'triumphant' ? 1.0 : 0.7,
+            'climax': choice.weight,
+            'falling': choice.character === 'yearning' ? 1.0 : 0.5
+        };
+        return phaseWeights[this.wavePhase] || 0.5;
+    },
+    
+    evaluateBalance(choice) {
+        // Orchestral sections should balance over time
+        return 0.7 + Math.random() * 0.3;
+    },
+    
+    evaluateArc(choice) {
+        // Does this contribute to the overall emotional arc?
+        const progress = this.I_n ? this.I_n.progress : 0;
+        // Redemption motif more fitting near the end
+        if (this.currentMotif === 'redemption' && progress > 0.7) return 1.0;
+        if (this.currentMotif === 'fate' && progress < 0.3) return 0.9;
+        return 0.7;
+    },
+    
+    // Final decision
+    decide() {
+        if (this.D_n.length === 0) return null;
+        
+        let bestChoice = this.D_n[0];
+        let bestScore = 0;
+        
+        for (const choice of this.D_n) {
+            const score = this.evaluate(choice);
+            if (score > bestScore) {
+                bestScore = score;
+                bestChoice = choice;
+            }
+        }
+        
+        this.F_n = bestChoice;
+        this.kF_prev = bestChoice;
+        
+        return this.F_n;
+    },
+    
+    updateDisplay() {
+        document.getElementById('p0').textContent = 
+            this.wavePhase === 'climax' ? 'CLIMAX' : 
+            this.wavePhase === 'suspense' ? 'Suspense' : 
+            this.wavePhase.charAt(0).toUpperCase() + this.wavePhase.slice(1);
+        
+        document.getElementById('kf').textContent = this.currentMotif ? 
+            this.currentMotif.charAt(0).toUpperCase() + this.currentMotif.slice(1) : '—';
+        
+        document.getElementById('in').textContent = 
+            `${Math.round(this.tensionAccumulator * 100)}%`;
+        
+        document.getElementById('dn').textContent = this.D_n.length > 0 ? 
+            `${this.D_n.length} voices` : '—';
+        
+        document.getElementById('fm').textContent = this.FM_n.dramaticFit ? 
+            `${Math.round(this.FM_n.dramaticFit * 100)}%` : '—';
+        
+        document.getElementById('fn').textContent = this.F_n ? 
+            this.F_n.character : 'Suspended';
+        
+        // Update intensity bar
+        document.getElementById('intensityFill').style.width = 
+            `${this.intensity * 100}%`;
+        
+        // Update leitmotif indicators
+        document.querySelectorAll('.leitmotif').forEach(el => el.classList.remove('active'));
+        if (this.currentMotif) {
+            const motifEl = document.getElementById(`motif-${this.currentMotif}`);
+            if (motifEl) motifEl.classList.add('active');
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION — Orchestral Frequencies
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+    BPM: 52,  // Majestic, sweeping tempo
+    // Base frequencies for different orchestral sections (C minor - tragic key)
+    BASS_ROOT: 65.41,      // C2 - Double basses, tubas
+    CELLO_ROOT: 130.81,    // C3 - Cellos, trombones
+    VIOLA_ROOT: 261.63,    // C4 - Violas, horns
+    VIOLIN_ROOT: 523.25,   // C5 - Violins, trumpets
+    
+    // C minor scale ratios (tragic, heroic)
+    SCALE: [1, 9/8, 6/5, 4/3, 3/2, 8/5, 9/5, 2],  // Natural minor
+    
+    SECTION_COLORS: {
+        brass: '#d4af37',
+        strings: '#a8d0e6',
+        winds: '#7fcd91',
+        percussion: '#ff6b35'
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE — Full Orchestra Synthesis
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    dryGain: null,
+    compressor: null,
+    isPlaying: false,
+    activeSections: new Set(),
+
+    init: async function() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        
+        // Compressor for orchestral dynamics
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -24;
+        this.compressor.knee.value = 30;
+        this.compressor.ratio.value = 4;
+        this.compressor.attack.value = 0.003;
+        this.compressor.release.value = 0.25;
+        
+        // Master
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.5;
+        
+        // Dry path
+        this.dryGain = this.ctx.createGain();
+        this.dryGain.gain.value = 0.35;
+        
+        // Concert hall reverb
+        this.reverb = this.ctx.createConvolver();
+        this.reverb.buffer = await this.createConcertHall(5.0, 3.0);
+        
+        this.reverbGain = this.ctx.createGain();
+        this.reverbGain.gain.value = 0.65;
+        
+        // Connections
+        this.master.connect(this.compressor);
+        this.compressor.connect(this.dryGain);
+        this.dryGain.connect(this.ctx.destination);
+        
+        this.compressor.connect(this.reverb);
+        this.reverb.connect(this.reverbGain);
+        this.reverbGain.connect(this.ctx.destination);
+    },
+
+    createConcertHall: async function(duration, decay) {
+        const sampleRate = this.ctx.sampleRate;
+        const length = sampleRate * duration;
+        const buffer = this.ctx.createBuffer(2, length, sampleRate);
+        
+        for (let channel = 0; channel < 2; channel++) {
+            const data = buffer.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+                const envelope = Math.exp(-i / (sampleRate * decay));
+                // Rich, diffuse tail with early reflections
+                const diffusion = (Math.random() * 2 - 1) * envelope;
+                const early = (i < sampleRate * 0.15) ? 
+                    Math.sin(i * 0.0008) * Math.exp(-i / (sampleRate * 0.08)) * 0.4 : 0;
+                data[i] = diffusion * 0.4 + early;
+            }
+        }
+        return buffer;
+    },
+
+    setReverb: function(val) {
+        const n = val / 100;
+        this.reverbGain.gain.value = n * 0.8;
+        this.dryGain.gain.value = 1 - n * 0.65;
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BRASS SECTION — Heroic, blazing
+    // ═══════════════════════════════════════════════════════════════════
+    playBrass: function(freq, time, duration = 2.0, intensity = 0.5) {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        
+        this.activeSections.add('brass');
+        setTimeout(() => this.activeSections.delete('brass'), duration * 1000);
+        
+        // French horns / Trumpets: Sawtooth + Square for rich brass
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const osc3 = ctx.createOscillator();
+        
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc3.type = 'sawtooth';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        osc2.detune.value = 5;
+        osc3.frequency.value = freq * 2; // Octave doubling for power
+        
+        const g1 = ctx.createGain();
+        const g2 = ctx.createGain();
+        const g3 = ctx.createGain();
+        
+        g1.gain.value = 0.4 * intensity;
+        g2.gain.value = 0.25 * intensity;
+        g3.gain.value = 0.15 * intensity;
+        
+        // Brass filter - bright but not harsh
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2000, time);
+        filter.frequency.linearRampToValueAtTime(3500 * intensity, time + 0.1);
+        filter.frequency.exponentialRampToValueAtTime(1500, time + duration * 0.8);
+        filter.Q.value = 1.5;
+        
+        // Brass envelope - bold attack, sustaining
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.5 * intensity, time + 0.04);
+        amp.gain.setValueAtTime(0.45 * intensity, time + 0.1);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Vibrato for sustaining brass
+        const vib = ctx.createOscillator();
+        const vibGain = ctx.createGain();
+        vib.frequency.value = 5;
+        vibGain.gain.value = 4 * intensity;
+        vib.connect(vibGain);
+        vibGain.connect(osc1.frequency);
+        vib.start(time + 0.3);
+        vib.stop(time + duration);
+        
+        osc1.connect(g1);
+        osc2.connect(g2);
+        osc3.connect(g3);
+        
+        const mixer = ctx.createGain();
+        g1.connect(mixer);
+        g2.connect(mixer);
+        g3.connect(mixer);
+        
+        mixer.connect(filter);
+        filter.connect(amp);
+        amp.connect(this.master);
+        
+        osc1.start(time);
+        osc2.start(time);
+        osc3.start(time);
+        osc1.stop(time + duration + 0.1);
+        osc2.stop(time + duration + 0.1);
+        osc3.stop(time + duration + 0.1);
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STRING SECTION — Soaring, tragic, transcendent
+    // ═══════════════════════════════════════════════════════════════════
+    playStrings: function(freq, time, duration = 3.0, intensity = 0.5) {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        
+        this.activeSections.add('strings');
+        setTimeout(() => this.activeSections.delete('strings'), duration * 1000);
+        
+        // String section: layered sawtooths with detuning for richness
+        const voices = [];
+        const detuneAmounts = [-12, -5, 0, 5, 12]; // Slight chorus effect
+        
+        detuneAmounts.forEach((detune, i) => {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = detune;
+            
+            const gain = ctx.createGain();
+            gain.gain.value = 0.15 * intensity;
+            
+            osc.connect(gain);
+            voices.push({ osc, gain });
+        });
+        
+        // String filter - warm, not too bright
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 2500;
+        filter.Q.value = 0.7;
+        
+        // Body resonance
+        const body = ctx.createBiquadFilter();
+        body.type = 'peaking';
+        body.frequency.value = 300;
+        body.Q.value = 2;
+        body.gain.value = 4;
+        
+        // String envelope - smooth attack, long sustain
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.4 * intensity, time + 0.15);
+        amp.gain.setValueAtTime(0.35 * intensity, time + duration * 0.3);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Rich vibrato
+        const vib = ctx.createOscillator();
+        const vibGain = ctx.createGain();
+        vib.frequency.value = 5.5;
+        vibGain.gain.value = 6;
+        vib.connect(vibGain);
+        voices.forEach(v => vibGain.connect(v.osc.frequency));
+        vib.start(time + 0.2);
+        vib.stop(time + duration);
+        
+        const mixer = ctx.createGain();
+        voices.forEach(v => v.gain.connect(mixer));
+        
+        mixer.connect(filter);
+        filter.connect(body);
+        body.connect(amp);
+        amp.connect(this.master);
+        
+        voices.forEach(v => {
+            v.osc.start(time);
+            v.osc.stop(time + duration + 0.1);
+        });
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // WOODWIND SECTION — Ethereal, mysterious
+    // ═══════════════════════════════════════════════════════════════════
+    playWinds: function(freq, time, duration = 2.5, intensity = 0.5) {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        
+        this.activeSections.add('winds');
+        setTimeout(() => this.activeSections.delete('winds'), duration * 1000);
+        
+        // Flute/Oboe: Sine + Triangle for pure, reedy tone
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2;
+        
+        const g1 = ctx.createGain();
+        const g2 = ctx.createGain();
+        
+        g1.gain.value = 0.3 * intensity;
+        g2.gain.value = 0.1 * intensity;
+        
+        // Breathy noise
+        const noise = ctx.createBufferSource();
+        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) {
+            noiseData[i] = Math.random() * 2 - 1;
+        }
+        noise.buffer = noiseBuffer;
+        noise.loop = true;
+        
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = freq * 2;
+        noiseFilter.Q.value = 5;
+        
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.value = 0.02 * intensity;
+        
+        // Wind envelope
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.25 * intensity, time + 0.08);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Gentle vibrato
+        const vib = ctx.createOscillator();
+        const vibGain = ctx.createGain();
+        vib.frequency.value = 4.5;
+        vibGain.gain.value = 5;
+        vib.connect(vibGain);
+        vibGain.connect(osc1.frequency);
+        vib.start(time + 0.15);
+        vib.stop(time + duration);
+        
+        osc1.connect(g1);
+        osc2.connect(g2);
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        
+        g1.connect(amp);
+        g2.connect(amp);
+        noiseGain.connect(amp);
+        amp.connect(this.master);
+        
+        osc1.start(time);
+        osc2.start(time);
+        noise.start(time);
+        osc1.stop(time + duration + 0.1);
+        osc2.stop(time + duration + 0.1);
+        noise.stop(time + duration + 0.1);
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PERCUSSION — Timpani, cymbals
+    // ═══════════════════════════════════════════════════════════════════
+    playTimpani: function(freq, time, intensity = 0.7) {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        
+        this.activeSections.add('percussion');
+        setTimeout(() => this.activeSections.delete('percussion'), 1500);
+        
+        // Timpani: Low sine with pitch bend
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * 1.5, time);
+        osc.frequency.exponentialRampToValueAtTime(freq, time + 0.08);
+        
+        // Noise component for attack
+        const noise = ctx.createBufferSource();
+        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) {
+            noiseData[i] = Math.random() * 2 - 1;
+        }
+        noise.buffer = noiseBuffer;
+        
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.value = 200;
+        
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.3 * intensity, time);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        
+        // Timpani envelope
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.6 * intensity, time + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
+        
+        osc.connect(amp);
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(amp);
+        amp.connect(this.master);
+        
+        osc.start(time);
+        noise.start(time);
+        osc.stop(time + 2);
+        noise.stop(time + 0.15);
+        
+        // Flash lightning on big timpani hits
+        if (intensity > 0.6) {
+            setTimeout(() => triggerLightning(), (time - ctx.currentTime) * 1000);
+        }
+    },
+
+    playCymbal: function(time, intensity = 0.5) {
+        if (!this.ctx) return;
+        const ctx = this.ctx;
+        
+        // Crash cymbal: filtered noise
+        const noise = ctx.createBufferSource();
+        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) {
+            noiseData[i] = Math.random() * 2 - 1;
+        }
+        noise.buffer = noiseBuffer;
+        
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 3000;
+        
+        const lpf = ctx.createBiquadFilter();
+        lpf.type = 'lowpass';
+        lpf.frequency.setValueAtTime(12000, time);
+        lpf.frequency.exponentialRampToValueAtTime(4000, time + 2);
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.25 * intensity, time + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + 3);
+        
+        noise.connect(hpf);
+        hpf.connect(lpf);
+        lpf.connect(amp);
+        amp.connect(this.master);
+        
+        noise.start(time);
+        noise.stop(time + 3.5);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORCHESTRAL SCORE — Wagnerian Symphonic Poem
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SCORE = [];
+
+function addEvent(beat, section, freqRatio, duration, intensity, motif = null) {
+    SCORE.push({ beat, section, freqRatio, duration, intensity, motif });
+}
+
+// Timing constants
+const W = 4.0;   // Whole note
+const H = 2.0;   // Half
+const Q = 1.0;   // Quarter
+const E = 0.5;   // Eighth
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOVEMENT I: "Fate Awakens" — Suspenseful opening
+// The DDA begins in suspense phase, gathering tension (I_delta)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Ominous low strings drone
+addEvent(b, 'strings', 1, W * 2, 0.3, 'fate');
+addEvent(b, 'strings', 3/2, W * 2, 0.2, 'fate');
+b += H;
+
+// Fate motif emerges in winds
+addEvent(b, 'winds', 2, H, 0.25, 'fate');
+b += Q;
+addEvent(b, 'winds', 2 * 6/5, Q, 0.3, 'fate');  // Minor third - ominous
+b += Q;
+addEvent(b, 'winds', 2 * 3/2, H, 0.35, 'fate');
+b += H;
+
+// Strings answer
+addEvent(b, 'strings', 1, W, 0.35, 'fate');
+addEvent(b, 'strings', 6/5, W, 0.3, 'fate');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOVEMENT II: "The Hero Rises" — Building intensity
+// DDA transitions to building phase, intensity accumulates
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Hero motif in brass - ascending
+addEvent(b, 'brass', 1, H, 0.45, 'hero');
+addEvent(b, 'strings', 0.5, H, 0.4, 'hero');
+b += Q;
+addEvent(b, 'brass', 5/4, H, 0.5, 'hero');  // Major third - heroic
+b += Q;
+addEvent(b, 'brass', 3/2, H, 0.55, 'hero');  // Fifth - triumphant
+b += Q;
+addEvent(b, 'brass', 2, W, 0.6, 'hero');     // Octave - arrival
+addEvent(b, 'strings', 1, W, 0.5, 'hero');
+b += H;
+
+// Timpani punctuation
+addEvent(b, 'timpani', 0.5, Q, 0.5);
+b += Q;
+
+// Strings surge
+addEvent(b, 'strings', 1, H, 0.5, 'hero');
+addEvent(b, 'strings', 5/4, H, 0.45, 'hero');
+addEvent(b, 'strings', 3/2, H, 0.5, 'hero');
+b += H;
+
+addEvent(b, 'brass', 2, W, 0.55, 'hero');
+addEvent(b, 'winds', 4, H, 0.4, 'hero');
+b += H;
+
+// Building sequence
+addEvent(b, 'strings', 1, Q, 0.55);
+b += E;
+addEvent(b, 'strings', 9/8, Q, 0.55);
+b += E;
+addEvent(b, 'strings', 5/4, Q, 0.6);
+b += E;
+addEvent(b, 'strings', 4/3, Q, 0.6);
+b += E;
+addEvent(b, 'strings', 3/2, H, 0.65, 'hero');
+addEvent(b, 'brass', 3/2, H, 0.6, 'hero');
+b += H;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOVEMENT III: "Twilight Climax" — Titanic peak
+// DDA reaches climax, FM_n maximizes dramatic weight
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Cymbal crash heralds climax
+addEvent(b, 'cymbal', 1, Q, 0.8);
+addEvent(b, 'timpani', 0.5, Q, 0.9, 'doom');
+
+// Full orchestra blazes
+addEvent(b, 'brass', 1, W, 0.85, 'doom');
+addEvent(b, 'brass', 5/4, W, 0.8, 'doom');
+addEvent(b, 'brass', 3/2, W, 0.85, 'doom');
+addEvent(b, 'strings', 2, W, 0.9, 'doom');
+addEvent(b, 'strings', 4, W, 0.8, 'doom');
+addEvent(b, 'winds', 4, W, 0.6, 'doom');
+b += H;
+
+addEvent(b, 'timpani', 0.5, Q, 0.85);
+b += Q;
+
+// Doom motif at fortissimo
+addEvent(b, 'brass', 2, H, 0.9, 'doom');
+b += E;
+addEvent(b, 'brass', 2 * 16/15, H, 0.9, 'doom');  // Chromatic - doom
+b += E;
+addEvent(b, 'brass', 2 * 4/3, H, 0.85, 'doom');
+b += E;
+addEvent(b, 'brass', 2 * 64/45, H, 0.85, 'doom'); // Tritone - darkness
+b += E + Q;
+
+// Sustained climax
+addEvent(b, 'strings', 1, W, 0.85);
+addEvent(b, 'strings', 3/2, W, 0.8);
+addEvent(b, 'strings', 2, W, 0.85);
+addEvent(b, 'brass', 1, W, 0.8);
+addEvent(b, 'brass', 2, W, 0.85);
+b += Q;
+
+addEvent(b, 'timpani', 0.5, Q, 0.9);
+addEvent(b, 'cymbal', 1, Q, 0.9);
+b += W - Q;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOVEMENT IV: "Love's Lament" — Falling, yearning
+// DDA enters falling phase, kF_prev carries emotional weight
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Gentle strings emerge from chaos
+addEvent(b, 'strings', 2, W, 0.45, 'love');
+addEvent(b, 'strings', 2 * 5/4, W, 0.4, 'love');
+b += H;
+
+// Love motif - yearning, unresolved
+addEvent(b, 'winds', 4, H, 0.35, 'love');
+b += Q;
+addEvent(b, 'winds', 4 * 5/4, Q, 0.35, 'love');  // Major - tender
+b += Q;
+addEvent(b, 'winds', 4 * 3/2, H, 0.4, 'love');
+b += Q;
+addEvent(b, 'winds', 4 * 15/8, H, 0.45, 'love'); // Major 7th - longing
+b += Q + H;
+
+// Strings respond
+addEvent(b, 'strings', 1, W, 0.4, 'love');
+addEvent(b, 'strings', 5/4, W, 0.35, 'love');
+addEvent(b, 'strings', 3/2, W, 0.4, 'love');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOVEMENT V: "Final Ascent" — Second climax building
+// DDA rebuilds toward transcendence
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Hero motif returns, transformed
+addEvent(b, 'brass', 1, H, 0.5, 'hero');
+addEvent(b, 'strings', 0.5, H, 0.45);
+b += Q;
+addEvent(b, 'brass', 5/4, H, 0.55, 'hero');
+addEvent(b, 'strings', 5/8, H, 0.5);
+b += Q;
+addEvent(b, 'brass', 3/2, H, 0.6, 'hero');
+addEvent(b, 'winds', 3, H, 0.45, 'hero');
+b += Q;
+addEvent(b, 'brass', 2, W, 0.7, 'hero');
+addEvent(b, 'strings', 1, W, 0.6, 'hero');
+b += Q;
+
+addEvent(b, 'timpani', 0.5, Q, 0.6);
+b += H;
+
+// Ascending sequence toward redemption
+addEvent(b, 'strings', 2, H, 0.65, 'redemption');
+addEvent(b, 'brass', 2, H, 0.6, 'redemption');
+b += Q;
+addEvent(b, 'strings', 2 * 5/4, H, 0.7, 'redemption');
+addEvent(b, 'winds', 4, H, 0.5, 'redemption');
+b += Q;
+addEvent(b, 'strings', 2 * 3/2, H, 0.75, 'redemption');
+addEvent(b, 'brass', 3, H, 0.65, 'redemption');
+b += Q;
+addEvent(b, 'strings', 4, W, 0.8, 'redemption');
+addEvent(b, 'brass', 4, W, 0.75, 'redemption');
+b += H;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOVEMENT VI: "Redemption" — Final transcendent climax
+// DDA achieves P₀: Mythic Transcendence
+// ═══════════════════════════════════════════════════════════════════════════
+
+addEvent(b, 'cymbal', 1, Q, 0.85);
+addEvent(b, 'timpani', 0.5, Q, 0.9);
+
+// Full orchestra - redemption motif blazing
+addEvent(b, 'brass', 1, W + H, 0.9, 'redemption');
+addEvent(b, 'brass', 5/4, W + H, 0.85, 'redemption');
+addEvent(b, 'brass', 3/2, W + H, 0.9, 'redemption');
+addEvent(b, 'brass', 2, W + H, 0.95, 'redemption');
+addEvent(b, 'strings', 1, W + H, 0.85, 'redemption');
+addEvent(b, 'strings', 2, W + H, 0.9, 'redemption');
+addEvent(b, 'strings', 4, W + H, 0.85, 'redemption');
+addEvent(b, 'winds', 4, W + H, 0.6, 'redemption');
+addEvent(b, 'winds', 8, W + H, 0.5, 'redemption');
+b += W;
+
+addEvent(b, 'timpani', 0.5, Q, 0.85);
+b += Q;
+
+// Final sustained chord - transcendence achieved
+addEvent(b, 'brass', 1, W * 2, 0.85, 'redemption');
+addEvent(b, 'brass', 3/2, W * 2, 0.8, 'redemption');
+addEvent(b, 'brass', 2, W * 2, 0.75, 'redemption');
+addEvent(b, 'strings', 0.5, W * 2, 0.7, 'redemption');
+addEvent(b, 'strings', 1, W * 2, 0.8, 'redemption');
+addEvent(b, 'strings', 2, W * 2, 0.85, 'redemption');
+addEvent(b, 'strings', 4, W * 2, 0.75, 'redemption');
+addEvent(b, 'winds', 4, W * 2, 0.5, 'redemption');
+
+b += W * 2;
+
+// Final timpani roll fading to silence
+addEvent(b, 'timpani', 0.5, Q, 0.5);
+b += W;
+
+const LOOP_LENGTH = b + W;
+
+// Sort by beat
+SCORE.sort((a, c) => a.beat - c.beat);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEQUENCER
+// ═══════════════════════════════════════════════════════════════════════════
+
+let currentBeat = 0;
+let startTime = 0;
+let nextEventIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Loop
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextEventIdx = 0;
+        DDA.tensionAccumulator = 0;
+        DDA.I_delta = [];
+    }
+    
+    // Lookahead scheduling
+    while (nextEventIdx < SCORE.length && SCORE[nextEventIdx].beat <= currentBeat + 0.2) {
+        const event = SCORE[nextEventIdx];
+        const playTime = startTime + (event.beat * (60 / CONFIG.BPM));
+        
+        // DDA: Gather information
+        DDA.gatherInformation(event.beat, LOOP_LENGTH);
+        
+        // DDA: Select motif and generate choices
+        if (event.motif) {
+            DDA.currentMotif = event.motif;
+        } else {
+            DDA.selectMotif();
+        }
+        DDA.generateVoiceChoices(event.section);
+        DDA.decide();
+        DDA.updateDisplay();
+        
+        // Calculate frequency
+        const baseFreq = event.section === 'timpani' ? CONFIG.BASS_ROOT :
+                        event.section === 'brass' ? CONFIG.CELLO_ROOT :
+                        event.section === 'strings' ? CONFIG.VIOLA_ROOT :
+                        CONFIG.VIOLIN_ROOT;
+        
+        const freq = baseFreq * event.freqRatio;
+        
+        // Play the appropriate instrument
+        switch(event.section) {
+            case 'brass':
+                AudioEngine.playBrass(freq, playTime, event.duration * (60 / CONFIG.BPM), event.intensity);
+                break;
+            case 'strings':
+                AudioEngine.playStrings(freq, playTime, event.duration * (60 / CONFIG.BPM) * 1.5, event.intensity);
+                break;
+            case 'winds':
+                AudioEngine.playWinds(freq, playTime, event.duration * (60 / CONFIG.BPM) * 1.2, event.intensity);
+                break;
+            case 'timpani':
+                AudioEngine.playTimpani(freq, playTime, event.intensity);
+                break;
+            case 'cymbal':
+                AudioEngine.playCymbal(playTime, event.intensity);
+                break;
+        }
+        
+        // Trigger visual
+        triggerVisual(event);
+        
+        nextEventIdx++;
+    }
+    
+    // Update section indicators
+    updateSectionIndicators();
+    
+    requestAnimationFrame(scheduler);
+}
+
+function updateSectionIndicators() {
+    ['brass', 'strings', 'winds', 'percussion'].forEach(section => {
+        const el = document.getElementById(`sec-${section}`);
+        if (AudioEngine.activeSections.has(section) || 
+            (section === 'percussion' && AudioEngine.activeSections.has('timpani'))) {
+            el.classList.add('active');
+        } else {
+            el.classList.remove('active');
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUAL ENGINE — Epic Orchestral Visualization
+// ═══════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h;
+const visualEvents = [];
+const waveforms = [];
+
+function resize() {
+    w = canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    h = canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(event) {
+    visualEvents.push({
+        ...event,
+        life: 1.0,
+        x: Math.random() * canvas.offsetWidth * 0.6 + canvas.offsetWidth * 0.2,
+        y: canvas.offsetHeight * 0.5
+    });
+    
+    // Add waveform ripple
+    waveforms.push({
+        y: canvas.offsetHeight * 0.5,
+        radius: 0,
+        intensity: event.intensity,
+        section: event.section,
+        life: 1.0
+    });
+}
+
+function triggerLightning() {
+    const flash = document.getElementById('lightningFlash');
+    flash.classList.add('active');
+    setTimeout(() => flash.classList.remove('active'), 100);
+}
+
+function draw() {
+    const displayW = canvas.offsetWidth;
+    const displayH = canvas.offsetHeight;
+    
+    ctx.clearRect(0, 0, displayW, displayH);
+    
+    // Draw intensity-based background glow
+    const intensity = DDA.intensity;
+    const glowGradient = ctx.createRadialGradient(
+        displayW / 2, displayH / 2, 0,
+        displayW / 2, displayH / 2, displayH
+    );
+    
+    if (DDA.wavePhase === 'climax') {
+        glowGradient.addColorStop(0, `rgba(139, 0, 0, ${intensity * 0.3})`);
+        glowGradient.addColorStop(0.5, `rgba(212, 175, 55, ${intensity * 0.15})`);
+        glowGradient.addColorStop(1, 'transparent');
+    } else if (DDA.wavePhase === 'suspense') {
+        glowGradient.addColorStop(0, `rgba(168, 208, 230, ${intensity * 0.2})`);
+        glowGradient.addColorStop(1, 'transparent');
+    } else {
+        glowGradient.addColorStop(0, `rgba(212, 175, 55, ${intensity * 0.15})`);
+        glowGradient.addColorStop(1, 'transparent');
+    }
+    
+    ctx.fillStyle = glowGradient;
+    ctx.fillRect(0, 0, displayW, displayH);
+    
+    // Draw waveform visualization
+    const centerY = displayH / 2;
+    const waveAmplitude = 50 + intensity * 100;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    
+    for (let x = 0; x < displayW; x += 3) {
+        const t = Date.now() * 0.001;
+        const wave1 = Math.sin((x * 0.01) + t * 2) * waveAmplitude * 0.5;
+        const wave2 = Math.sin((x * 0.02) + t * 1.5) * waveAmplitude * 0.3;
+        const wave3 = Math.sin((x * 0.005) + t) * waveAmplitude * 0.7;
+        
+        const y = centerY + (wave1 + wave2 + wave3) * intensity;
+        ctx.lineTo(x, y);
+    }
+    
+    const waveGradient = ctx.createLinearGradient(0, centerY - waveAmplitude, 0, centerY + waveAmplitude);
+    waveGradient.addColorStop(0, `rgba(168, 208, 230, ${0.3 + intensity * 0.3})`);
+    waveGradient.addColorStop(0.5, `rgba(212, 175, 55, ${0.4 + intensity * 0.4})`);
+    waveGradient.addColorStop(1, `rgba(139, 0, 0, ${0.2 + intensity * 0.3})`);
+    
+    ctx.strokeStyle = waveGradient;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw expanding waveform ripples
+    for (let i = waveforms.length - 1; i >= 0; i--) {
+        const wf = waveforms[i];
+        
+        const color = CONFIG.SECTION_COLORS[wf.section] || '#d4af37';
+        ctx.beginPath();
+        ctx.arc(displayW / 2, wf.y, wf.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = color.replace(')', `, ${wf.life * 0.5})`).replace('rgb', 'rgba');
+        ctx.lineWidth = 3 * wf.life;
+        ctx.stroke();
+        
+        wf.radius += 5 + wf.intensity * 10;
+        wf.life -= 0.015;
+        
+        if (wf.life <= 0 || wf.radius > displayW) {
+            waveforms.splice(i, 1);
+        }
+    }
+    
+    // Draw visual events (note bursts)
+    for (let i = visualEvents.length - 1; i >= 0; i--) {
+        const ev = visualEvents[i];
+        
+        const color = CONFIG.SECTION_COLORS[ev.section] || '#d4af37';
+        const size = 20 + ev.intensity * 40;
+        
+        // Glow
+        const glowSize = size * (2 - ev.life);
+        const glow = ctx.createRadialGradient(ev.x, ev.y, 0, ev.x, ev.y, glowSize);
+        glow.addColorStop(0, color.replace(')', `, ${ev.life * 0.6})`).replace('rgb', 'rgba').replace('#', 'rgba(').replace(/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i, (m, r, g, b) => 
+            `${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}`));
+        glow.addColorStop(1, 'transparent');
+        
+        ctx.fillStyle = `rgba(212, 175, 55, ${ev.life * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(ev.x, ev.y, glowSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Core
+        ctx.fillStyle = `rgba(255, 255, 255, ${ev.life * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(ev.x, ev.y, size * 0.3 * ev.life, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ev.life -= 0.02;
+        ev.y -= 0.5;
+        
+        if (ev.life <= 0) {
+            visualEvents.splice(i, 1);
+        }
+    }
+    
+    // Draw beat progress
+    const progress = currentBeat / LOOP_LENGTH;
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.3)';
+    ctx.fillRect(0, displayH - 4, displayW * progress, 4);
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INITIALIZATION & CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Create embers
+function createEmbers() {
+    const container = document.getElementById('emberContainer');
+    for (let i = 0; i < 20; i++) {
+        const ember = document.createElement('div');
+        ember.className = 'ember';
+        ember.style.left = Math.random() * 100 + '%';
+        ember.style.animationDelay = Math.random() * 8 + 's';
+        ember.style.animationDuration = (6 + Math.random() * 4) + 's';
+        container.appendChild(ember);
+    }
+}
+createEmbers();
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+document.getElementById('overlay').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+    }
+    togglePlay();
+});
+
+document.getElementById('playBtn').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+    }
+    togglePlay();
+});
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (AudioEngine.ctx) togglePlay();
+    }
+});
+
+document.getElementById('reverbSlider').addEventListener('input', e => {
+    if (AudioEngine.ctx) {
+        AudioEngine.setReverb(parseInt(e.target.value));
+    }
+});
+
+document.getElementById('tempoSlider').addEventListener('input', e => {
+    CONFIG.BPM = parseInt(e.target.value);
+    DDA.m = CONFIG.BPM / 52;
+});
+
+draw();
+</script>
+</body>
+</html>
