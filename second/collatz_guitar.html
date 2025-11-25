@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHANNEL 17 // COLLATZ FLAMENCO</title>
+<style>
+    body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; filter: contrast(1.2) brightness(1.2); }
+    #ui {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: rgba(0,0,0,0.85); color: #f0f; transition: opacity 0.5s ease;
+        z-index: 10;
+        text-shadow: 0 0 10px #f0f;
+    }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { font-size: 3rem; margin: 0; letter-spacing: 5px; text-align: center; }
+    p { color: #fff; font-size: 1.2rem; margin-top: 1rem; }
+    .seed-disp { color: #0ff; margin-top: 0.5rem; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>3n + 1<br>SINGULARITY</h1>
+    <p>[ CLICK TO COLLAPSE WAVEFUNCTION ]</p>
+    <div class="seed-disp">SEED: N=27 (Orbit Length: 111 steps)</div>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * ═════════════════════════════════════════════════════════════════════════
+ * PART I: CONFIGURATION & TUNING
+ * Tuned to Drop-C for maximum heaviness, aligned with Reference guidelines.
+ * ═════════════════════════════════════════════════════════════════════════
+ */
+const CONFIG = {
+    BPM: 175,  // Presto Agitato
+    // Drop C Tuning (C G C F A D)
+    BASE_FREQS: [293.66, 220.00, 174.61, 130.81, 98.00, 65.41], 
+    STRING_NAMES: ['d', 'A', 'F', 'C', 'G', 'C'],
+    FLAMENCO_SCALE: [0, 1, 4, 5, 7, 8, 10, 12] // Phrygian Dominant intervals
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART II: AUDIO ENGINE (Distortion + Auto-Wah Implementation)
+// ═════════════════════════════════════════════════════════════════════════
+const AE = {
+    ctx: null,
+    master: null,
+    dist: null,
+    driveBus: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AE.ctx = new AC();
+        
+        // Master Volume
+        AE.master = AE.ctx.createGain();
+        AE.master.gain.value = 0.4;
+        
+        // 1. Distortion Node (The "Clipped" Pillar)
+        AE.dist = AE.ctx.createWaveShaper();
+        AE.dist.curve = AE.makeDistortionCurve(100); // 400 is heavy, 100 is overdrive
+        AE.dist.oversample = '4x';
+        
+        // 2. High Shelf (Presence for that "Gemmy" sparkle)
+        const eq = AE.ctx.createBiquadFilter();
+        eq.type = 'highshelf';
+        eq.frequency.value = 3000;
+        eq.gain.value = 6;
+        
+        // 3. Cabinet Simulator (Lowpass)
+        const cab = AE.ctx.createBiquadFilter();
+        cab.type = 'lowpass';
+        cab.frequency.value = 6500;
+        
+        // Routing Chain
+        AE.driveBus = AE.ctx.createGain(); // Input bus
+        AE.driveBus.connect(AE.dist);
+        AE.dist.connect(eq);
+        eq.connect(cab);
+        cab.connect(AE.master);
+        
+        // Reverb (Space)
+        const verb = AE.ctx.createConvolver();
+        verb.buffer = await AE.createImpulse(2.0, 3.0);
+        const verbGain = AE.ctx.createGain();
+        verbGain.gain.value = 0.25;
+        cab.connect(verb);
+        verb.connect(verbGain);
+        verbGain.connect(AE.master);
+        
+        AE.master.connect(AE.ctx.destination);
+    },
+
+    // Standard Tone Recipe: "Hybrid Flamenco-Metal"
+    playString: (sIdx, fret, time, duration, technique) => {
+        if (!AE.ctx) return;
+        const baseFreq = CONFIG.BASE_FREQS[sIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        // Oscillators
+        const osc1 = AE.ctx.createOscillator();
+        const osc2 = AE.ctx.createOscillator();
+        
+        osc1.type = 'sawtooth'; // The bite
+        osc2.type = 'triangle'; // The body
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        
+        // Auto-Wah / Envelope Filter Logic
+        const filter = AE.ctx.createBiquadFilter();
+        filter.type = technique === 'pm' ? 'lowpass' : 'bandpass';
+        filter.Q.value = technique === 'pm' ? 1 : 4; // Resonant 'wah' sound for leads
+        
+        // Filter movement logic
+        if (technique === 'pm') {
+            // Chugs stay tight and low
+            filter.frequency.setValueAtTime(300, time);
+            filter.frequency.exponentialRampToValueAtTime(100, time + 0.1);
+        } else {
+            // "Gemmy" Wah sweep (start mid, go high, drop low)
+            filter.frequency.setValueAtTime(600, time);
+            filter.frequency.exponentialRampToValueAtTime(3200, time + 0.1); 
+            filter.frequency.exponentialRampToValueAtTime(400, time + duration);
+        }
+        
+        const amp = AE.ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(technique === 'pm' ? 0.7 : 0.6, time + 0.005);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AE.driveBus); // Route to distortion chain
+        
+        osc1.start(time); osc2.start(time);
+        osc1.stop(time + duration); osc2.stop(time + duration);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+        for (let i = 0; i < n_samples; ++i ) {
+            const x = i * 2 / n_samples - 1;
+            curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+    
+    createImpulse: async (duration, decay) => {
+        const rate = AE.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AE.ctx.createBuffer(2, length, rate);
+        for (let ch = 0; ch < 2; ch++) {
+            const data = impulse.getChannelData(ch);
+            for (let i = 0; i < length; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            }
+        }
+        return impulse;
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART III: THE SEQUENCER (Data Structure)
+// ═════════════════════════════════════════════════════════════════════════
+const TAB = [];
+
+const S = 0.25; // 16th note
+const E = 0.5;  // 8th
+const Q = 1.0;  // Quarter
+const SX = 0.125; // 32nd notes for shreds
+
+function addNote(beat, string, fret, tech = 'normal') {
+    TAB.push({ beat, string, fret, tech });
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART IV: COMPOSITION "MAGNUM OPUS"
+// ═════════════════════════════════════════════════════════════════════════
+let b = 0.0; // Current beat tracker
+
+// Helper: Phrygian Quantizer (Maps chaos to flamenco scales)
+const quantize = (n) => {
+    const scale = CONFIG.FLAMENCO_SCALE;
+    const octave = Math.floor(n / 7);
+    const interval = scale[n % 7];
+    return (octave * 12) + interval;
+};
+
+// SECTION 1: THE RASGUEADO INTRO (Chaos Initialization)
+for(let i=0; i<4; i++) {
+    // Heavy Chugs (Open C Power Chords)
+    addNote(b, 5, 0, 'pm'); addNote(b, 4, 0, 'pm'); addNote(b, 3, 2, 'pm');
+    b += S;
+    addNote(b, 5, 0, 'pm'); addNote(b, 4, 0, 'pm'); addNote(b, 3, 2, 'pm');
+    b += S;
+    // Flamenco Triplet Snap
+    addNote(b, 2, 6); b += SX; // F
+    addNote(b, 1, 5); b += SX; // E
+    addNote(b, 5, 1); b += E;  // Low C# (Phrygian flavor)
+}
+
+// SECTION 2: THE COLLATZ ALGORITHM
+// Start Seed N = 27 (Generates a long volatile sequence)
+let N = 27; 
+const SEQUENCE_LIMIT = 200; // Limit steps
+let steps = 0;
+
+while(N !== 1 && steps < SEQUENCE_LIMIT) {
+    const isOdd = (N % 2 !== 0);
+    const oldN = N;
+    
+    // THE LOGIC
+    if (isOdd) {
+        N = (3 * N) + 1; // Expansive (Chaos/Melody)
+        
+        // Map 3n+1 to High strings, intense fret runs
+        const stringIdx = Math.abs(N % 4); // Top 4 strings
+        const fretBase = quantize((N % 14) + 1); // Melodic fret
+        
+        // Fast ascending run or aggressive bend
+        addNote(b, stringIdx, fretBase, 'pick');
+        b += SX; 
+        addNote(b, stringIdx, fretBase + 1, 'pick'); // chromatic pass
+        b += SX;
+        
+    } else {
+        N = N / 2; // Collapse (Order/Rhythm)
+        
+        // Map Even numbers to Rhythmic chugs or Pedals
+        if (oldN > 100) {
+            // Complex break
+             addNote(b, 5, 0, 'pm');
+             addNote(b, 3, 7, 'pick'); // Harmonized 5th
+             b += S;
+        } else {
+            // Gallop Engine
+            addNote(b, 5, 0, 'pm'); 
+            b += SX;
+            addNote(b, 5, 0, 'pm'); 
+            b += SX;
+        }
+    }
+    steps++;
+}
+
+// Resolution Chord (Phrygian Dominant E major relative)
+addNote(b, 5, 4); addNote(b, 4, 6); addNote(b, 3, 6); addNote(b, 2, 5);
+b += 2.0;
+
+const LOOP_LENGTH = b;
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART V: SCHEDULER & RUNTIME
+// ═════════════════════════════════════════════════════════════════════════
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AE.isPlaying) return;
+    const ct = AE.ctx.currentTime;
+    
+    // Check loop
+    currentBeat = (ct - startTime) * (CONFIG.BPM / 60);
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = ct;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    // Lookahead (0.1 beat)
+    while (nextNoteIdx < TAB.length) {
+        const n = TAB[nextNoteIdx];
+        if (n.beat <= currentBeat + 0.1) {
+            const time = startTime + (n.beat * (60 / CONFIG.BPM));
+            
+            // Calc duration based on next note (prevent muddy distortion)
+            let dur = 0.3; 
+            if (n.tech === 'pm') dur = 0.1;
+            
+            AE.playString(n.string, n.fret, time, dur, n.tech);
+            triggerVisual(n, time - ct);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART VI: VISUAL ENGINE (The Singularity)
+// ═════════════════════════════════════════════════════════════════════════
+const cvs = document.getElementById('c');
+const cx = cvs.getContext('2d');
+let W, H;
+const visualNotes = [];
+
+function resize() { W = cvs.width = window.innerWidth; H = cvs.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note, delay) {
+    visualNotes.push({
+        ...note,
+        spawn: performance.now(),
+        color: note.tech === 'pm' ? '#ff2200' : '#00ffff',
+        x: W * 0.2 // Hit zone
+    });
+}
+
+function draw() {
+    // Pseudo-Scanline Trail
+    cx.fillStyle = 'rgba(10, 5, 10, 0.15)'; 
+    cx.fillRect(0, 0, W, H);
+    
+    const SY = H / 2;
+    const SPACING = 35;
+    const HX = W * 0.2;
+    
+    // Strings (Vibrating look)
+    cx.lineWidth = 1;
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = SY + (i-2.5)*SPACING;
+        cx.strokeStyle = (i === activeStringIdx && AE.isPlaying) ? '#fff' : '#444';
+        cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke();
+        
+        cx.fillStyle = '#666'; 
+        cx.font = "12px Courier";
+        cx.fillText(name + " [" + CONFIG.BASE_FREQS[i].toFixed(1) + "]", 10, y-5);
+    });
+
+    // Hit Line
+    cx.strokeStyle = '#f0f';
+    cx.lineWidth = 2;
+    cx.shadowBlur = 10; cx.shadowColor = '#f0f';
+    cx.beginPath(); cx.moveTo(HX, SY-150); cx.lineTo(HX, SY+150); cx.stroke();
+    cx.shadowBlur = 0;
+
+    // Drawing Notes
+    const now = performance.now();
+    const PX_PER_BEAT = 200; // Fast scroll speed for "high bpm"
+    
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -LOOP_LENGTH/2) dist += LOOP_LENGTH; // Visual wrap help
+        
+        const x = HX + (dist * PX_PER_BEAT);
+        
+        // Optimization: only draw visible
+        if (x > -50 && x < W) {
+            const y = SY + (note.string - 2.5) * SPACING;
+            
+            // Tech-specific shape
+            cx.beginPath();
+            if(note.tech === 'pm') {
+                cx.rect(x-6, y-6, 12, 12);
+                cx.fillStyle = dist < 0.1 && dist > -0.1 ? '#fff' : '#600';
+            } else {
+                cx.arc(x, y, 6, 0, Math.PI*2);
+                cx.fillStyle = dist < 0.1 && dist > -0.1 ? '#fff' : '#0cc';
+            }
+            cx.fill();
+            
+            // Note trail/line for speed effect
+            if (note.beat > currentBeat) {
+                 cx.strokeStyle = note.tech==='pm'?'#600':'#066';
+                 cx.lineWidth = 1;
+                 cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x+30, y); cx.stroke();
+            }
+        }
+    });
+
+    // Ripple effects
+    for(let i=visualNotes.length-1; i>=0; i--) {
+        const n = visualNotes[i];
+        const age = (performance.now() - n.spawn) / 1000;
+        if(age > 0.5) { visualNotes.splice(i,1); continue; }
+        
+        const y = SY + (n.string - 2.5) * SPACING;
+        cx.beginPath();
+        cx.arc(HX, y, 10 + (age * 100), 0, Math.PI*2);
+        cx.strokeStyle = n.color;
+        cx.globalAlpha = 1 - (age * 2);
+        cx.stroke();
+        cx.globalAlpha = 1.0;
+        activeStringIdx = n.string; // For string vibration
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+let activeStringIdx = -1;
+
+// ═════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ═════════════════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AE.ctx) {
+        AE.init();
+        AE.isPlaying = true;
+        document.getElementById('ui').classList.add('hidden');
+        scheduler();
+        draw();
+    } else {
+        AE.isPlaying = !AE.isPlaying;
+        if(!AE.isPlaying) document.getElementById('ui').classList.remove('hidden');
+        else {
+             document.getElementById('ui').classList.add('hidden');
+             startTime = AE.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+             scheduler();
+        }
+    }
+});
+
+// Collatz commentary
+console.log(`%c STRING ENGINE: COLLATZ MODE `, "background:#000; color:#0f0; padding:10px; font-size:16px");
+console.log(`Tuning: ${CONFIG.STRING_NAMES.join(' ')} (Hz: ${CONFIG.BASE_FREQS.join(', ')})`);
+console.log(`Generated ${TAB.length} notes based on Seed N=${27}`);
+
+</script>
+</body>
+</html>

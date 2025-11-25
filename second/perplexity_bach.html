@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invention in C Major - Two-Voice Contrapuntal Study</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400,600,700&family=Crimson+Text:wght@400,600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --gold: #d4af37;
+            --copper: #c9a961;
+            --text-light: #f5f5f5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Crimson Text', serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background-color: var(--bg-dark);
+        }
+
+        #startScreen.hidden {
+            display: none;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 4rem;
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: 1rem;
+            letter-spacing: 0.1em;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: var(--copper);
+            margin-bottom: 3rem;
+            font-style: italic;
+            text-align: center;
+        }
+
+        #startButton {
+            padding: 1.5rem 3rem;
+            font-size: 1.3rem;
+            font-family: 'Playfair Display', serif;
+            background: linear-gradient(135deg, var(--gold), var(--copper));
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        #startButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(217, 175, 55, 0.4);
+        }
+
+        #startButton:active {
+            transform: translateY(0);
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #info {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            color: var(--copper);
+            font-size: 1.1rem;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #info .label {
+            color: var(--gold);
+            font-weight: 600;
+        }
+
+        #beatCounter {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            font-size: 1.5rem;
+            color: var(--gold);
+            font-family: 'Playfair Display', serif;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #playPauseBtn {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.8rem 2rem;
+            font-size: 1rem;
+            font-family: 'Playfair Display', serif;
+            background: rgba(217, 175, 55, 0.2);
+            color: var(--gold);
+            border: 2px solid var(--gold);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        #playPauseBtn:hover {
+            background: rgba(217, 175, 55, 0.4);
+        }
+
+        .voice-label {
+            position: absolute;
+            font-size: 0.9rem;
+            color: var(--copper);
+            opacity: 0.7;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #voice1Label {
+            top: 80px;
+            right: 30px;
+            color: var(--gold);
+        }
+
+        #voice2Label {
+            bottom: 80px;
+            right: 30px;
+            color: var(--copper);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="startScreen">
+            <h1>INVENTION IN C MAJOR</h1>
+            <p class="subtitle">A Two-Voice Contrapuntal Study</p>
+            <button id="startButton">BEGIN COMPOSITION</button>
+        </div>
+
+        <canvas id="canvas"></canvas>
+
+        <div id="info">
+            <div><span class="label">Key:</span> C Major</div>
+            <div><span class="label">Tempo:</span> 100 BPM</div>
+            <div><span class="label">Style:</span> Baroque Counterpoint</div>
+        </div>
+
+        <div id="beatCounter">Beat: 0</div>
+
+        <div id="voice1Label" class="voice-label">Voice I: Right Hand (Square)</div>
+        <div id="voice2Label" class="voice-label">Voice II: Left Hand (Sawtooth)</div>
+
+        <button id="playPauseBtn" style="display: none;">PAUSE</button>
+    </div>
+
+    <script>
+        // ============================================
+        // MUSICAL PHYSICS IMPLEMENTATION
+        // ============================================
+
+        // 1. HARMONIC FOUNDATION - C Major Scale with Equal Temperament
+        const cMajorFrequencies = [
+            // Octave 3
+            130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94,
+            // Octave 4
+            261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88,
+            // Octave 5
+            523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77,
+            // Octave 6
+            1046.50
+        ];
+
+        const scaleNotes = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+        // Audio context and nodes
+        let audioContext;
+        let masterGain;
+        let reverbNode;
+        let isPlaying = false;
+        let intervalId;
+        let beatCount = 0;
+        let sixteenthCount = 0;
+
+        // Voice states for generative algorithm
+        let voice1Index = 14; // Start at C5
+        let voice2Index = 7;  // Start at C4
+
+        // Canvas elements
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let voice1Trail = [];
+        let voice2Trail = [];
+        const maxTrailLength = 60;
+
+        // UI elements
+        const startScreen = document.getElementById('startScreen');
+        const startButton = document.getElementById('startButton');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const beatCounter = document.getElementById('beatCounter');
+
+        // Resize canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // ============================================
+        // 2. AUDIO INITIALIZATION
+        // ============================================
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Master gain
+            masterGain = audioContext.createGain();
+            masterGain.gain.value = 0.3;
+            masterGain.connect(audioContext.destination);
+
+            // 6. SPATIAL PROCESSING - Create convolution reverb
+            createReverb();
+        }
+
+        // Create procedural reverb impulse response
+        function createReverb() {
+            const reverbTime = 4; // 4-second tail
+            const sampleRate = audioContext.sampleRate;
+            const length = sampleRate * reverbTime;
+            const impulse = audioContext.createBuffer(2, length, sampleRate);
+            
+            for (let channel = 0; channel < 2; channel++) {
+                const channelData = impulse.getChannelData(channel);
+                for (let i = 0; i < length; i++) {
+                    // Exponential decay with random noise
+                    const decay = Math.exp(-3 * i / length);
+                    channelData[i] = (Math.random() * 2 - 1) * decay;
+                }
+            }
+
+            reverbNode = audioContext.createConvolver();
+            reverbNode.buffer = impulse;
+            
+            const reverbGain = audioContext.createGain();
+            reverbGain.gain.value = 0.25;
+            reverbNode.connect(reverbGain);
+            reverbGain.connect(masterGain);
+        }
+
+        // ============================================
+        // 3. NOTE GENERATION WITH COUNTERPOINT RULES
+        // ============================================
+        
+        function getNextNote(voiceIndex, isVoice1, otherVoiceIndex) {
+            const rand = Math.random();
+            let newIndex = voiceIndex;
+            
+            if (isVoice1) {
+                // Voice 1: 50% step, 30% leap (3rd), 20% repeat
+                if (rand < 0.25) {
+                    newIndex = voiceIndex + 1; // Step up
+                } else if (rand < 0.50) {
+                    newIndex = voiceIndex - 1; // Step down
+                } else if (rand < 0.65) {
+                    newIndex = voiceIndex + 2; // Leap up (3rd)
+                } else if (rand < 0.80) {
+                    newIndex = voiceIndex - 2; // Leap down (3rd)
+                } else {
+                    newIndex = voiceIndex; // Repeat
+                }
+                
+                // Constrain to register (octaves 4-5): indices 7-20
+                newIndex = Math.max(7, Math.min(20, newIndex));
+                
+            } else {
+                // Voice 2: 60% step, 25% leap, 15% repeat
+                if (rand < 0.30) {
+                    newIndex = voiceIndex + 1; // Step up
+                } else if (rand < 0.60) {
+                    newIndex = voiceIndex - 1; // Step down
+                } else if (rand < 0.725) {
+                    newIndex = voiceIndex + 2; // Leap up
+                } else if (rand < 0.85) {
+                    newIndex = voiceIndex - 2; // Leap down
+                } else {
+                    newIndex = voiceIndex; // Repeat
+                }
+                
+                // Constrain to register (octaves 3-4): indices 0-13
+                newIndex = Math.max(0, Math.min(13, newIndex));
+            }
+
+            // Implement contrary motion tendency
+            const intervalBetweenVoices = Math.abs(newIndex - otherVoiceIndex);
+            
+            // Avoid unisons and prefer consonant intervals (3rds, 6ths, perfect 5ths)
+            if (intervalBetweenVoices < 2 && Math.random() > 0.7) {
+                // Too close, push away
+                newIndex = isVoice1 ? newIndex + 2 : newIndex - 2;
+                newIndex = isVoice1 ? 
+                    Math.max(7, Math.min(20, newIndex)) :
+                    Math.max(0, Math.min(13, newIndex));
+            }
+
+            return newIndex;
+        }
+
+        function getCadenceNote(voiceIndex, isVoice1, isTonic) {
+            // Create cadential formula
+            if (isTonic) {
+                // Resolve to C (index 0, 7, 14, 21 in scale)
+                return isVoice1 ? 14 : 7; // C5 or C4
+            } else {
+                // Go to G (dominant) - index 4, 11, 18 in scale
+                return isVoice1 ? 11 : 4; // G4 or G3
+            }
+        }
+
+        // ============================================
+        // 4. ENVELOPE SHAPING & 5. FILTER PROCESSING
+        // ============================================
+        
+        function playNote(frequency, isVoice1, velocity = 1.0) {
+            const now = audioContext.currentTime;
+            
+            // Create oscillator
+            const osc = audioContext.createOscillator();
+            osc.type = isVoice1 ? 'square' : 'sawtooth';
+            osc.frequency.value = frequency;
+            
+            // Create gain for ADSR envelope
+            const gainNode = audioContext.createGain();
+            const baseGain = isVoice1 ? 0.12 : 0.15;
+            const gain = baseGain * velocity;
+            
+            // ADSR Envelope
+            gainNode.gain.setValueAtTime(0, now);
+            if (isVoice1) {
+                // Voice 1: Harpsichord-like (instant pluck)
+                gainNode.gain.linearRampToValueAtTime(gain, now + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            } else {
+                // Voice 2: Organ-like (slight attack)
+                gainNode.gain.linearRampToValueAtTime(gain, now + 0.03);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            }
+            
+            // Create filter for timbral separation
+            const filter = audioContext.createBiquadFilter();
+            if (isVoice1) {
+                // Voice 1: Highpass at 400Hz (bright and clear)
+                filter.type = 'highpass';
+                filter.frequency.value = 400;
+            } else {
+                // Voice 2: Lowpass at 600Hz (warm and supportive)
+                filter.type = 'lowpass';
+                filter.frequency.value = 600;
+            }
+            filter.Q.value = 2;
+            
+            // Create panner for spatial positioning
+            const panner = audioContext.createStereoPanner();
+            panner.pan.value = isVoice1 ? 0.2 : -0.2; // Voice 1 right, Voice 2 left
+            
+            // Connect nodes: osc -> filter -> gain -> panner -> destination + reverb
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(panner);
+            panner.connect(masterGain);
+            panner.connect(reverbNode); // Send to reverb
+            
+            // Start and stop
+            osc.start(now);
+            osc.stop(now + (isVoice1 ? 0.4 : 0.6));
+        }
+
+        // ============================================
+        // 7. TIMING & RHYTHM - 100 BPM
+        // ============================================
+        
+        function startComposition() {
+            if (!audioContext) {
+                initAudio();
+            }
+
+            isPlaying = true;
+            beatCount = 0;
+            sixteenthCount = 0;
+
+            // 150ms per 16th note at 100 BPM
+            intervalId = setInterval(() => {
+                const now = audioContext.currentTime;
+                
+                // 8. STRUCTURE - Cadence every 32 beats
+                const isCadence = (beatCount % 32 === 0 && beatCount > 0);
+                
+                if (isCadence) {
+                    // Create cadence point
+                    const isTonic = Math.random() > 0.5;
+                    voice1Index = getCadenceNote(voice1Index, true, isTonic);
+                    voice2Index = getCadenceNote(voice2Index, false, isTonic);
+                } else {
+                    // Generate next notes with counterpoint rules
+                    voice1Index = getNextNote(voice1Index, true, voice2Index);
+                    
+                    // Voice 2 moves on 8th notes (every other 16th)
+                    if (sixteenthCount % 2 === 0) {
+                        voice2Index = getNextNote(voice2Index, false, voice1Index);
+                    }
+                }
+
+                // Humanization: vary velocity slightly
+                const velocity = 0.85 + Math.random() * 0.15;
+                
+                // Voice 1 plays every 16th note
+                playNote(cMajorFrequencies[voice1Index], true, velocity);
+                
+                // Voice 2 plays every 8th note
+                if (sixteenthCount % 2 === 0) {
+                    playNote(cMajorFrequencies[voice2Index], false, velocity);
+                }
+
+                // Update visual trail
+                voice1Trail.push(voice1Index);
+                if (voice1Trail.length > maxTrailLength) voice1Trail.shift();
+                
+                if (sixteenthCount % 2 === 0) {
+                    voice2Trail.push(voice2Index);
+                    if (voice2Trail.length > maxTrailLength) voice2Trail.shift();
+                }
+
+                sixteenthCount++;
+                if (sixteenthCount % 4 === 0) {
+                    beatCount++;
+                    beatCounter.textContent = `Beat: ${beatCount}`;
+                }
+
+            }, 150); // 16th note at 100 BPM = 150ms
+        }
+
+        function stopComposition() {
+            isPlaying = false;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        }
+
+        // ============================================
+        // VISUAL FEEDBACK - Canvas Animation
+        // ============================================
+        
+        function drawVisualization() {
+            ctx.fillStyle = 'rgba(10, 10, 10, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const centerY = canvas.height / 2;
+            const amplitude = canvas.height * 0.3;
+
+            // Draw Voice 1 (upper portion)
+            if (voice1Trail.length > 1) {
+                ctx.strokeStyle = '#d4af37';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#d4af37';
+                
+                ctx.beginPath();
+                voice1Trail.forEach((noteIndex, i) => {
+                    const x = canvas.width - (voice1Trail.length - i) * (canvas.width / maxTrailLength);
+                    // Map note index to vertical position (higher notes = higher on screen)
+                    const normalizedNote = (noteIndex - 7) / 14; // 0 to 1 range
+                    const y = centerY - (normalizedNote * amplitude * 0.7) - amplitude * 0.2;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw Voice 2 (lower portion)
+            if (voice2Trail.length > 1) {
+                ctx.strokeStyle = '#c9a961';
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#c9a961';
+                
+                ctx.beginPath();
+                voice2Trail.forEach((noteIndex, i) => {
+                    const x = canvas.width - (voice2Trail.length - i) * (canvas.width / maxTrailLength) * 2;
+                    // Map note index to vertical position
+                    const normalizedNote = noteIndex / 14; // 0 to 1 range
+                    const y = centerY + (normalizedNote * amplitude * 0.7) + amplitude * 0.2;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw current note indicators
+            if (voice1Trail.length > 0) {
+                const noteIndex = voice1Trail[voice1Trail.length - 1];
+                const normalizedNote = (noteIndex - 7) / 14;
+                const y = centerY - (normalizedNote * amplitude * 0.7) - amplitude * 0.2;
+                
+                ctx.fillStyle = '#d4af37';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#d4af37';
+                ctx.beginPath();
+                ctx.arc(canvas.width - 50, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            if (voice2Trail.length > 0) {
+                const noteIndex = voice2Trail[voice2Trail.length - 1];
+                const normalizedNote = noteIndex / 14;
+                const y = centerY + (normalizedNote * amplitude * 0.7) + amplitude * 0.2;
+                
+                ctx.fillStyle = '#c9a961';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#c9a961';
+                ctx.beginPath();
+                ctx.arc(canvas.width - 50, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(drawVisualization);
+        }
+
+        drawVisualization();
+
+        // ============================================
+        // USER INTERACTION
+        // ============================================
+        
+        startButton.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            playPauseBtn.style.display = 'block';
+            startComposition();
+        });
+
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopComposition();
+                playPauseBtn.textContent = 'RESUME';
+            } else {
+                startComposition();
+                playPauseBtn.textContent = 'PAUSE';
+            }
+        });
+
+        // Smooth fade on page load
+        window.addEventListener('load', () => {
+            document.body.style.opacity = '0';
+            document.body.style.transition = 'opacity 0.5s';
+            setTimeout(() => {
+                document.body.style.opacity = '1';
+            }, 100);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BACH // SUITE NO. 1</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400&display=swap');
+
+        body {
+            margin: 0;
+            background: #080808;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(8, 8, 8, 0.8);
+            transition: opacity 1.5s ease;
+            z-index: 10;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 3rem;
+            color: #d4af37; /* Metallic Gold */
+            letter-spacing: 0.2rem;
+            margin: 0;
+            text-shadow: 0 0 30px rgba(212, 175, 55, 0.4);
+        }
+
+        p {
+            font-family: monospace;
+            color: #666;
+            margin-top: 1rem;
+            letter-spacing: 0.1rem;
+        }
+
+        .fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="c"></canvas>
+    
+    <div id="overlay">
+        <h1>Suite No. 1 in G</h1>
+        <p>[ Click to Bow ]</p>
+    </div>
+
+<script>
+    /**
+     * BACH PHYSICS ENGINE
+     * Concept: 4 Vertical Strings (C, G, D, A)
+     * Audio: Sawtooth synthesis with Body Resonance (Formants)
+     */
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+
+    // --- PHYSICS CONSTANTS ---
+    // The 4 strings of a Cello
+    const STRING_NAMES = ['C', 'G', 'D', 'A'];
+    // X positions (calculated in resize)
+    let stringX = []; 
+
+    // --- AUDIO ENGINE ---
+    const AC = window.AudioContext || window.webkitAudioContext;
+    let actx, master, reverb;
+    let isPlaying = false;
+
+    // Frequencies
+    const ROOT = 98.00; // G2
+    // Simple lookup for the Prelude notes (Just Intonation approximation)
+    const NOTES = {
+        'G2': 98.00, 'A2': 110.00, 'B2': 123.47,
+        'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'E3': 164.81, 'F#3': 185.00, 'G3': 196.00, 'A3': 220.00, 'B3': 246.94,
+        'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F#4': 369.99
+    };
+
+    // The Score: Prelude in G Major (First few bars pattern)
+    // Format: [Note, Duration (16th notes)]
+    const SCORE = [
+        // Bar 1
+        'G2','D3','B3','A3','B3','D3','B3','D3',
+        'G2','D3','B3','A3','B3','D3','B3','D3',
+        // Bar 2
+        'G2','E3','C4','B3','C4','E3','C4','E3',
+        'G2','E3','C4','B3','C4','E3','C4','E3',
+        // Bar 3
+        'G2','F#3','C4','B3','C4','F#3','C4','F#3',
+        'G2','F#3','C4','B3','C4','F#3','C4','F#3',
+        // Bar 4
+        'G2','G3','B3','A3','B3','G3','B3','G3',
+        'G2','G3','B3','A3','B3','G3','B3','G3',
+        // Bar 5 (Deep)
+        'G2','E3','B3','A3','B3','E3','B3','E3',
+        'G2','E3','B3','A3','B3','E3','B3','E3',
+        // Bar 6 (D Pedal)
+        'G2','F#3','D4','C#4','D4','F#3','A3','F#3', // Variation
+        'D3','A3','D4','F#4','A3','D4','F#4','A3', // Climbing
+    ];
+
+    // --- VISUAL OBJECTS ---
+    class CelloString {
+        constructor(x, index) {
+            this.x = x;
+            this.index = index;
+            this.amplitude = 0;
+            this.frequency = 1; // Visual wobble speed
+            this.phase = 0;
+            this.color = `hsl(${35 + index * 5}, 60%, 50%)`; // Gold/Amber gradients
+        }
+
+        vibrate(intensity, freqHz) {
+            this.amplitude = 15 * intensity;
+            // Visual frequency roughly maps to pitch but slower for visibility
+            this.frequency = freqHz * 0.2; 
+        }
+
+        update() {
+            // Physics: Damped Harmonic Oscillator
+            this.amplitude *= 0.94; // Tension damping
+            this.phase += this.frequency * 0.05;
+        }
+
+        draw() {
+            ctx.beginPath();
+            
+            // If vibrating, draw sine wave
+            if (this.amplitude > 0.5) {
+                ctx.moveTo(this.x, 0);
+                // Draw vertical wave
+                for (let y = 0; y < h; y += 10) {
+                    // Standing wave equation: sin(y) * sin(t)
+                    const wave = Math.sin(y * 0.015) * Math.sin(this.phase);
+                    const offset = wave * this.amplitude;
+                    ctx.lineTo(this.x + offset, y);
+                }
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#fff'; // Bright core when vibrating
+                ctx.stroke();
+                
+                // Outer glow
+                ctx.lineWidth = 4 + this.amplitude;
+                ctx.strokeStyle = this.color;
+                ctx.globalAlpha = 0.6;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+
+            } else {
+                // Static String
+                ctx.moveTo(this.x, 0);
+                ctx.lineTo(this.x, h);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#444'; // Dim string
+                ctx.stroke();
+            }
+        }
+    }
+
+    let strings = [];
+
+    // --- INIT ---
+    function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+        
+        strings = [];
+        // Create 4 strings centered
+        const centerX = w / 2;
+        const spacing = w * 0.15; // Space between strings
+        
+        // C(Left), G, D, A(Right)
+        strings.push(new CelloString(centerX - spacing * 1.5, 0)); // C String
+        strings.push(new CelloString(centerX - spacing * 0.5, 1)); // G String
+        strings.push(new CelloString(centerX + spacing * 0.5, 2)); // D String
+        strings.push(new CelloString(centerX + spacing * 1.5, 3)); // A String
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- AUDIO SYNTHESIS ---
+    async function initAudio() {
+        actx = new AC();
+        master = actx.createGain();
+        master.gain.value = 0.5;
+
+        // Convolver for Wooden Hall Sound
+        reverb = actx.createConvolver();
+        reverb.buffer = await createImpulse(3.0);
+        
+        master.connect(reverb);
+        reverb.connect(actx.destination);
+        // Direct signal
+        master.connect(actx.destination);
+    }
+
+    // Procedural Impulse
+    async function createImpulse(duration) {
+        const rate = actx.sampleRate;
+        const len = rate * duration;
+        const buf = actx.createBuffer(2, len, rate);
+        for(let c=0; c<2; c++){
+            const d = buf.getChannelData(c);
+            for(let i=0; i<len; i++) {
+                // Exponential decay noise
+                d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3);
+            }
+        }
+        return buf;
+    }
+
+    // THE CELLO VOICE
+    function playNote(noteName, duration) {
+        const freq = NOTES[noteName];
+        const t = actx.currentTime;
+
+        // 1. Oscillator (The String)
+        const osc = actx.createOscillator();
+        osc.type = 'sawtooth'; // Rich harmonics like a bowed string
+        osc.frequency.setValueAtTime(freq, t);
+
+        // 2. Vibrato (The Hand)
+        const lfo = actx.createOscillator();
+        lfo.frequency.value = 4.0; // 4Hz vibrato
+        const lfoGain = actx.createGain();
+        lfoGain.gain.value = 3.0; // Pitch depth
+        lfo.connect(lfoGain).connect(osc.frequency);
+        lfo.start(t);
+
+        // 3. Filter (The Body/Resonance)
+        // Cello has strong resonances around 200-400Hz
+        const filter = actx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 1.0;
+        
+        // Bowing articulation: Filter opens slightly on attack
+        filter.frequency.setValueAtTime(freq * 1.5, t); 
+        filter.frequency.linearRampToValueAtTime(freq * 3.0, t + 0.1);
+        filter.frequency.exponentialRampToValueAtTime(freq * 2.0, t + duration);
+
+        // 4. Envelope (The Bow Pressure)
+        const env = actx.createGain();
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(0.8, t + 0.1); // Attack (not instant)
+        env.gain.setValueAtTime(0.6, t + duration * 0.8); // Sustain
+        env.gain.exponentialRampToValueAtTime(0.001, t + duration + 0.5); // Release
+
+        // Connect
+        osc.connect(filter);
+        filter.connect(env);
+        env.connect(master);
+
+        osc.start(t);
+        osc.stop(t + duration + 1.0);
+        lfo.stop(t + duration + 1.0);
+
+        // --- VISUAL TRIGGER ---
+        // Determine which string vibrates based on pitch range
+        let strIndex = 0; // C string default
+        if (freq >= 98.00) strIndex = 1; // G String
+        if (freq >= 146.83) strIndex = 2; // D String
+        if (freq >= 220.00) strIndex = 3; // A String
+
+        if (strings[strIndex]) {
+            strings[strIndex].vibrate(1.0, freq);
+        }
+        
+        // Dust Particles
+        createDust(strings[strIndex].x);
+    }
+
+    // --- SEQUENCER ---
+    let noteIdx = 0;
+    
+    function playSequence() {
+        if (!isPlaying) return;
+
+        const noteName = SCORE[noteIdx % SCORE.length];
+        const noteDur = 0.25; // 16th notes speed
+        
+        playNote(noteName, noteDur);
+
+        noteIdx++;
+        
+        // Slight rubato (human timing imperfection)
+        const swing = Math.random() * 0.05;
+        setTimeout(playSequence, (noteDur + swing) * 1000);
+    }
+
+    // --- PARTICLES (Dust in the light) ---
+    let particles = [];
+    function createDust(x) {
+        for(let i=0; i<5; i++) {
+            particles.push({
+                x: x + (Math.random()-0.5)*20,
+                y: Math.random() * h,
+                vx: (Math.random()-0.5) * 2,
+                vy: (Math.random()-0.5) * 2,
+                life: 1.0,
+                color: '#d4af37'
+            });
+        }
+    }
+
+    function updateParticles() {
+        ctx.fillStyle = '#fff';
+        particles.forEach((p, i) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.02;
+            
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1, 0, Math.PI*2);
+            ctx.fill();
+            
+            if(p.life <= 0) particles.splice(i, 1);
+        });
+        ctx.globalAlpha = 1.0;
+    }
+
+    // --- MAIN LOOP ---
+    function loop() {
+        requestAnimationFrame(loop);
+        
+        // Clear with trails
+        ctx.fillStyle = 'rgba(8, 8, 8, 0.3)';
+        ctx.fillRect(0, 0, w, h);
+
+        strings.forEach(s => {
+            s.update();
+            s.draw();
+        });
+
+        updateParticles();
+    }
+
+    // --- STARTUP ---
+    document.body.addEventListener('click', async () => {
+        if (isPlaying) return;
+        
+        document.getElementById('overlay').classList.add('fade-out');
+        
+        await initAudio();
+        if(actx.state === 'suspended') await actx.resume();
+        
+        isPlaying = true;
+        playSequence();
+        loop();
+    });
+
+</script>
+</body>
+</html>

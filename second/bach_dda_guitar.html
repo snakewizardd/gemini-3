@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heavenly Bach — DDA Guitar Engine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --gold: #c9a227;
+    --gold-light: #e8d48b;
+    --gold-dark: #8b7020;
+    --parchment: #f5f0e1;
+    --parchment-dark: #e8dcc8;
+    --ink: #2a1810;
+    --ink-light: #4a3828;
+    --sepia: #704214;
+    --cathedral: #1a1510;
+    --divine-light: rgba(255, 250, 235, 0.9);
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'EB Garamond', serif;
+    background: var(--cathedral);
+}
+
+body {
+    background: 
+        radial-gradient(ellipse 120% 80% at 50% 0%, rgba(201, 162, 39, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 60% at 30% 100%, rgba(139, 66, 8, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse 80% 60% at 70% 100%, rgba(139, 66, 8, 0.1) 0%, transparent 50%),
+        linear-gradient(180deg, #1a1510 0%, #0d0a08 100%);
+}
+
+/* Stained glass light rays */
+.divine-rays {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.4;
+    background: 
+        conic-gradient(from 270deg at 50% -10%, 
+            transparent 35%, 
+            rgba(201, 162, 39, 0.03) 40%, 
+            transparent 42%,
+            transparent 48%,
+            rgba(201, 162, 39, 0.04) 50%,
+            transparent 52%,
+            transparent 58%,
+            rgba(201, 162, 39, 0.03) 60%,
+            transparent 65%
+        );
+    animation: raysPulse 8s ease-in-out infinite;
+}
+
+@keyframes raysPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.5; }
+}
+
+/* Floating dust particles */
+.dust-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    overflow: hidden;
+}
+
+.dust {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: var(--gold-light);
+    border-radius: 50%;
+    opacity: 0;
+    animation: floatDust 20s linear infinite;
+}
+
+@keyframes floatDust {
+    0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.6; }
+    100% { transform: translateY(-10vh) translateX(50px); opacity: 0; }
+}
+
+/* Main container */
+.container {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 20px;
+}
+
+/* Header with baroque ornamentation */
+header {
+    text-align: center;
+    padding: 20px 0 10px;
+    position: relative;
+}
+
+.ornament {
+    display: block;
+    font-size: 24px;
+    color: var(--gold);
+    letter-spacing: 0.5em;
+    opacity: 0.7;
+    margin-bottom: 8px;
+}
+
+h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    color: var(--gold-light);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 20px rgba(201, 162, 39, 0.3);
+}
+
+.subtitle {
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--gold);
+    opacity: 0.8;
+    margin-top: 8px;
+    letter-spacing: 0.05em;
+}
+
+/* DDA State Display */
+.dda-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    max-width: 900px;
+    margin: 15px auto;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, rgba(42, 24, 16, 0.9) 0%, rgba(26, 21, 16, 0.95) 100%);
+    border: 1px solid var(--gold-dark);
+    border-radius: 2px;
+    box-shadow: 
+        inset 0 1px 0 rgba(201, 162, 39, 0.1),
+        0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.dda-var {
+    text-align: center;
+    padding: 8px;
+}
+
+.dda-var .label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    opacity: 0.8;
+    margin-bottom: 4px;
+}
+
+.dda-var .value {
+    font-family: 'EB Garamond', serif;
+    font-size: 1.1rem;
+    color: var(--gold-light);
+    font-style: italic;
+}
+
+.dda-var .symbol {
+    font-size: 0.8rem;
+    color: var(--gold-dark);
+    margin-top: 2px;
+}
+
+/* Canvas Area */
+.canvas-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+}
+
+#canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Notation scroll decoration */
+.scroll-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    pointer-events: none;
+}
+
+.scroll-edge.left {
+    left: 0;
+    background: linear-gradient(90deg, var(--cathedral), transparent);
+}
+
+.scroll-edge.right {
+    right: 0;
+    background: linear-gradient(-90deg, var(--cathedral), transparent);
+}
+
+/* Start overlay */
+#overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(13, 10, 8, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+    transition: opacity 0.8s ease, visibility 0.8s;
+}
+
+#overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#overlay .emblem {
+    font-size: 80px;
+    color: var(--gold);
+    margin-bottom: 30px;
+    text-shadow: 0 0 60px rgba(201, 162, 39, 0.5);
+    animation: emblePulse 3s ease-in-out infinite;
+}
+
+@keyframes emblePulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.05); opacity: 1; }
+}
+
+#overlay h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 2.5rem;
+    color: var(--gold-light);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+}
+
+#overlay p {
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    color: var(--gold);
+    opacity: 0.7;
+    font-size: 1.1rem;
+    margin-bottom: 40px;
+}
+
+#overlay .instruction {
+    font-family: 'EB Garamond', serif;
+    font-size: 0.9rem;
+    color: var(--gold-dark);
+    letter-spacing: 0.1em;
+    animation: fadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Controls footer */
+footer {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    padding: 15px;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.control-group label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+    opacity: 0.8;
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 100px;
+    height: 4px;
+    background: var(--ink-light);
+    border-radius: 2px;
+    outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--gold);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(201, 162, 39, 0.5);
+}
+
+button {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--gold-light);
+    background: transparent;
+    border: 1px solid var(--gold-dark);
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background: var(--gold-dark);
+    color: var(--parchment);
+    box-shadow: 0 0 20px rgba(201, 162, 39, 0.3);
+}
+
+/* Voice indicators */
+.voice-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 5px;
+}
+
+.voice-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--gold);
+    opacity: 0.7;
+}
+
+.voice-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.voice-dot.soprano { background: #f0c040; }
+.voice-dot.alto { background: #c9a227; }
+.voice-dot.tenor { background: #8b7020; }
+.voice-dot.bass { background: #5a4510; }
+</style>
+</head>
+<body>
+
+<div class="divine-rays"></div>
+<div class="dust-container" id="dustContainer"></div>
+
+<div class="container">
+    <header>
+        <span class="ornament">❧ ☙</span>
+        <h1>Soli Deo Gloria</h1>
+        <p class="subtitle">Dynamic Decision Algorithm × Heavenly Counterpoint</p>
+    </header>
+
+    <div class="dda-panel" id="ddaPanel">
+        <div class="dda-var">
+            <div class="label">Initial Goal</div>
+            <div class="value" id="p0">Counterpoint</div>
+            <div class="symbol">P₀</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Previous Effect</div>
+            <div class="value" id="kf">—</div>
+            <div class="symbol">kFₙ₋₁</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Current Info</div>
+            <div class="value" id="in">Gathering...</div>
+            <div class="symbol">Iₙ + IΔ</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Choice Evaluated</div>
+            <div class="value" id="dn">—</div>
+            <div class="symbol">Dₙ</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Assessment</div>
+            <div class="value" id="fm">—</div>
+            <div class="symbol">FMₙ</div>
+        </div>
+        <div class="dda-var">
+            <div class="label">Choice Taken</div>
+            <div class="value" id="fn">—</div>
+            <div class="symbol">Fₙ</div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <div class="scroll-edge left"></div>
+        <canvas id="canvas"></canvas>
+        <div class="scroll-edge right"></div>
+    </div>
+
+    <div class="voice-legend">
+        <div class="voice-indicator"><div class="voice-dot soprano"></div>Soprano</div>
+        <div class="voice-indicator"><div class="voice-dot alto"></div>Alto</div>
+        <div class="voice-indicator"><div class="voice-dot tenor"></div>Tenor</div>
+        <div class="voice-indicator"><div class="voice-dot bass"></div>Bass</div>
+    </div>
+
+    <footer>
+        <div class="control-group">
+            <label>Reverb</label>
+            <input type="range" id="reverbSlider" min="0" max="100" value="60">
+        </div>
+        <div class="control-group">
+            <label>Tempo</label>
+            <input type="range" id="tempoSlider" min="40" max="80" value="54">
+        </div>
+        <button id="playBtn">Play / Pause</button>
+    </footer>
+</div>
+
+<div id="overlay">
+    <div class="emblem">✠</div>
+    <h2>J. S. Bach</h2>
+    <p>Prelude in D Major — BWV 1007</p>
+    <p class="instruction">Click anywhere to begin</p>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DYNAMIC DECISION ALGORITHM (DDA) STATE
+// Fₙ = P₀ * kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DDA = {
+    P0: 'Heavenly Counterpoint',  // Initial Goal: Bach's divine musical order
+    kF_prev: null,                 // Previous note/chord context
+    I_n: null,                     // Current measure context
+    I_delta: [],                   // Accumulated harmonic information
+    D_n: [],                       // Potential note choices
+    FM_n: {},                      // Subjective/Objective assessment
+    F_n: null,                     // Final choice taken
+    m: 1.0,                        // Rate vector (tempo influence)
+    
+    // Information gathering: analyze harmonic context
+    gatherInformation(currentBeat, voiceHistory) {
+        this.I_n = {
+            beat: currentBeat,
+            measure: Math.floor(currentBeat / 4),
+            position: currentBeat % 4,
+            recentNotes: voiceHistory.slice(-8)
+        };
+        
+        // Accumulated delta: harmonic tendencies observed
+        if (voiceHistory.length > 0) {
+            const intervals = [];
+            for (let i = 1; i < Math.min(voiceHistory.length, 8); i++) {
+                intervals.push(voiceHistory[i].freq / voiceHistory[i-1].freq);
+            }
+            this.I_delta = intervals;
+        }
+        
+        return this.I_n;
+    },
+    
+    // Generate potential choices based on current harmonic context
+    generateChoices(baseFreq, scaleType = 'major') {
+        const majorIntervals = [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8, 2];
+        this.D_n = majorIntervals.map((ratio, i) => ({
+            freq: baseFreq * ratio,
+            interval: i,
+            consonance: this.assessConsonance(ratio)
+        }));
+        return this.D_n;
+    },
+    
+    // Assess consonance (objective) and fit (subjective)
+    assessConsonance(ratio) {
+        // Pure intervals ranked by consonance (Baroque aesthetic)
+        const pureRatios = { 1: 1.0, 2: 0.95, 1.5: 0.9, 1.333: 0.85, 1.25: 0.8, 1.667: 0.75 };
+        let bestMatch = 0;
+        for (const [r, score] of Object.entries(pureRatios)) {
+            if (Math.abs(ratio - parseFloat(r)) < 0.05) {
+                bestMatch = Math.max(bestMatch, score);
+            }
+        }
+        return bestMatch || 0.5;
+    },
+    
+    // Evaluate a specific choice against the goal
+    evaluate(choice, previousNote) {
+        this.FM_n = {
+            harmonic: choice.consonance,
+            voiceLeading: previousNote ? this.evaluateVoiceLeading(choice.freq, previousNote.freq) : 0.8,
+            bachStyle: this.evaluateBachStyle(choice.interval)
+        };
+        
+        // Weighted combination reflecting P₀ (heavenly counterpoint)
+        const score = 
+            this.FM_n.harmonic * 0.3 + 
+            this.FM_n.voiceLeading * 0.4 + 
+            this.FM_n.bachStyle * 0.3;
+            
+        return score;
+    },
+    
+    evaluateVoiceLeading(freq, prevFreq) {
+        const interval = Math.abs(Math.log2(freq / prevFreq) * 12);
+        // Bach preferred stepwise motion (0-2 semitones) or thirds (3-4)
+        if (interval <= 2) return 1.0;
+        if (interval <= 4) return 0.85;
+        if (interval <= 7) return 0.6;
+        return 0.3;
+    },
+    
+    evaluateBachStyle(intervalDegree) {
+        // Bach's characteristic interval preferences in preludes
+        const bachPreferences = { 0: 0.7, 2: 0.9, 4: 1.0, 5: 0.85, 7: 0.8 };
+        return bachPreferences[intervalDegree] || 0.5;
+    },
+    
+    // Make the final decision: Fₙ = P₀ * kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+    decide() {
+        if (this.D_n.length === 0) return null;
+        
+        let bestChoice = this.D_n[0];
+        let bestScore = 0;
+        
+        for (const choice of this.D_n) {
+            const score = this.evaluate(choice, this.kF_prev) * this.m;
+            if (score > bestScore) {
+                bestScore = score;
+                bestChoice = choice;
+            }
+        }
+        
+        this.F_n = bestChoice;
+        this.kF_prev = bestChoice;  // Update for next decision
+        
+        return this.F_n;
+    },
+    
+    // Update UI display
+    updateDisplay() {
+        document.getElementById('p0').textContent = 'Counterpoint';
+        document.getElementById('kf').textContent = this.kF_prev ? 
+            `${Math.round(this.kF_prev.freq)}Hz` : '—';
+        document.getElementById('in').textContent = this.I_n ? 
+            `M${this.I_n.measure + 1} B${Math.floor(this.I_n.position) + 1}` : '—';
+        document.getElementById('dn').textContent = this.D_n.length > 0 ? 
+            `${this.D_n.length} options` : '—';
+        document.getElementById('fm').textContent = this.FM_n.harmonic ? 
+            `${Math.round(this.FM_n.harmonic * 100)}%` : '—';
+        document.getElementById('fn').textContent = this.F_n ? 
+            `${Math.round(this.F_n.freq)}Hz` : '—';
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION — D Major Tuning for Bach Cello Suite adapted to Guitar
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+    BPM: 54,  // Solemn, processional tempo
+    STRINGS: [64, 59, 55, 50, 45, 40],
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E'],
+    VOICE_COLORS: ['#f0c040', '#c9a227', '#8b7020', '#5a4510']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE — Warm Baroque Classical Guitar Tone
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    dryGain: null,
+    isPlaying: false,
+    voiceHistory: [],
+
+    init: async function() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        
+        // Master output chain
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.6;
+        
+        // Dry path
+        this.dryGain = this.ctx.createGain();
+        this.dryGain.gain.value = 0.4;
+        
+        // Reverb (cathedral)
+        this.reverb = this.ctx.createConvolver();
+        this.reverb.buffer = await this.createCathedralReverb(4.0, 2.5);
+        
+        this.reverbGain = this.ctx.createGain();
+        this.reverbGain.gain.value = 0.6;
+        
+        // Connections
+        this.master.connect(this.dryGain);
+        this.dryGain.connect(this.ctx.destination);
+        
+        this.master.connect(this.reverb);
+        this.reverb.connect(this.reverbGain);
+        this.reverbGain.connect(this.ctx.destination);
+    },
+
+    createCathedralReverb: async function(duration, decay) {
+        const sampleRate = this.ctx.sampleRate;
+        const length = sampleRate * duration;
+        const buffer = this.ctx.createBuffer(2, length, sampleRate);
+        
+        for (let channel = 0; channel < 2; channel++) {
+            const data = buffer.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+                // Early reflections + diffuse tail
+                const envelope = Math.exp(-i / (sampleRate * decay));
+                const diffusion = (Math.random() * 2 - 1) * envelope;
+                
+                // Add early reflection spikes
+                const earlyReflection = (i < sampleRate * 0.1) ? 
+                    Math.sin(i * 0.001) * Math.exp(-i / (sampleRate * 0.05)) * 0.3 : 0;
+                    
+                data[i] = diffusion * 0.5 + earlyReflection;
+            }
+        }
+        return buffer;
+    },
+
+    setReverb: function(val) {
+        const normalized = val / 100;
+        this.reverbGain.gain.value = normalized * 0.8;
+        this.dryGain.gain.value = 1 - normalized * 0.6;
+    },
+
+    // Baroque nylon guitar tone with harmonics
+    playNote: function(freq, time, duration = 2.0, voice = 0) {
+        if (!this.ctx) return;
+        
+        const ctx = this.ctx;
+        
+        // Track for DDA
+        this.voiceHistory.push({ freq, time, voice });
+        if (this.voiceHistory.length > 32) this.voiceHistory.shift();
+        
+        // Main oscillator: triangle for warmth
+        const osc1 = ctx.createOscillator();
+        osc1.type = 'triangle';
+        osc1.frequency.value = freq;
+        
+        // Second harmonic (octave up, subtle)
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = freq * 2;
+        
+        // Third harmonic (12th, very subtle)
+        const osc3 = ctx.createOscillator();
+        osc3.type = 'sine';
+        osc3.frequency.value = freq * 3;
+        
+        // Mix gains - fundamental dominant
+        const g1 = ctx.createGain();
+        const g2 = ctx.createGain();
+        const g3 = ctx.createGain();
+        
+        g1.gain.value = 0.5;
+        g2.gain.value = 0.2;
+        g3.gain.value = 0.1;
+        
+        // Warmth filter - simulates nylon string body resonance
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2800, time);
+        filter.frequency.exponentialRampToValueAtTime(800, time + 0.3);
+        filter.Q.value = 1.2;
+        
+        // Body resonance
+        const bodyFilter = ctx.createBiquadFilter();
+        bodyFilter.type = 'peaking';
+        bodyFilter.frequency.value = 200;
+        bodyFilter.Q.value = 2;
+        bodyFilter.gain.value = 3;
+        
+        // Amplitude envelope - classical guitar character
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.35, time + 0.012);  // Fast but not harsh
+        amp.gain.exponentialRampToValueAtTime(0.15, time + 0.15);  // Quick initial decay
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Subtle vibrato for longer notes
+        if (duration > 1.5) {
+            const vib = ctx.createOscillator();
+            const vibGain = ctx.createGain();
+            vib.frequency.value = 5.2;
+            vibGain.gain.value = 3;
+            vib.connect(vibGain);
+            vibGain.connect(osc1.frequency);
+            vib.start(time + 0.5);
+            vib.stop(time + duration);
+        }
+        
+        // Connect oscillators through gains to filter
+        osc1.connect(g1);
+        osc2.connect(g2);
+        osc3.connect(g3);
+        
+        const mixer = ctx.createGain();
+        mixer.gain.value = 1;
+        g1.connect(mixer);
+        g2.connect(mixer);
+        g3.connect(mixer);
+        
+        mixer.connect(filter);
+        filter.connect(bodyFilter);
+        bodyFilter.connect(amp);
+        amp.connect(this.master);
+        
+        osc1.start(time);
+        osc2.start(time);
+        osc3.start(time);
+        
+        osc1.stop(time + duration + 0.1);
+        osc2.stop(time + duration + 0.1);
+        osc3.stop(time + duration + 0.1);
+    },
+
+    // Play string by index and fret
+    playString: function(stringIdx, fret, time, duration = 2.0) {
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        this.playNote(freq, time, duration, stringIdx);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BACH PRELUDE IN D MAJOR (Cello Suite No. 1, adapted for guitar)
+// Each measure demonstrates the DDA in action
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TAB = [];
+function addNote(beat, string, fret, duration = 0.5) {
+    TAB.push({ beat, string, fret, duration });
+}
+
+// Rhythmic values
+const S = 0.25;   // Sixteenth
+const E = 0.5;    // Eighth
+const Q = 1.0;    // Quarter
+const H = 2.0;    // Half
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRELUDE IN D MAJOR - BWV 1007 (First 8 measures, guitar adaptation)
+// Each arpeggiated figure represents a DDA decision cycle
+// P₀ = Establish D Major tonality through flowing counterpoint
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Measure 1: D Major arpeggio - establishing the goal (P₀)
+// The DDA gathers initial information (I_n) about the tonic
+addNote(b, 3, 0, E); b += S;  // Open D (bass voice establishes P₀)
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F# (leading tone creates tension)
+addNote(b, 1, 3, E); b += S;  // D (resolution - DDA evaluates FM_n)
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+
+// Measure 2: Same pattern with variation (kF_n-1 influences)
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+
+// Measure 3: Move to A (dominant) - new I_delta acquired
+addNote(b, 4, 0, E); b += S;  // A (bass moves - new harmonic info)
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 2, E); b += S;  // C# 
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 2, E); b += S;  // C#
+
+// Measure 4: A7 - building tension (D_n expands with choices)
+addNote(b, 4, 0, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 0, E); b += S;  // B (7th adds tension)
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 0, E); b += S;  // B
+
+// Measure 5: G major - subdominant color (FM_n assesses new sonority)
+addNote(b, 5, 3, E); b += S;  // G (new bass - major shift in I_n)
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 2, 0, E); b += S;  // G
+
+// Measure 6: Em - relative minor (DDA explores modal territory)
+addNote(b, 5, 0, E); b += S;  // E
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 0, E); b += S;  // G
+
+// Measure 7: Return to D via A7 (kF_n-1 remembers home)
+addNote(b, 4, 0, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 0, 0, E); b += S;  // E (high voice enters)
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+
+// Measure 8: D Major resolution (F_n achieves P₀)
+addNote(b, 3, 0, E); b += S;  // D (triumphant return)
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 0, 5, E); b += S;  // A (high point - goal achieved)
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 2, 2, E); b += S;  // A
+
+// Extended measures for continued meditation...
+// Measure 9-10: Bm - minor inflection
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 2, 4, E); b += S;  // B
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 2, 4, E); b += S;  // B
+addNote(b, 3, 0, E); b += S;  // D
+
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 2, 4, E); b += S;  // B
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 2, 4, E); b += S;  // B
+addNote(b, 3, 0, E); b += S;  // D
+
+// Measure 11-12: F#m - deeper into relative territory
+addNote(b, 4, 4, E); b += S;  // C#
+addNote(b, 3, 4, E); b += S;  // F#
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 3, 4, E); b += S;  // F#
+
+addNote(b, 4, 4, E); b += S;  // C#
+addNote(b, 3, 4, E); b += S;  // F#
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 3, 4, E); b += S;  // F#
+
+// Measure 13-14: Return through E to A
+addNote(b, 5, 0, E); b += S;  // E
+addNote(b, 4, 2, E); b += S;  // B
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 1, E); b += S;  // G#
+addNote(b, 1, 0, E); b += S;  // B
+addNote(b, 2, 1, E); b += S;  // G#
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 4, 2, E); b += S;  // B
+
+addNote(b, 4, 0, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 0, 0, E); b += S;  // E
+addNote(b, 1, 2, E); b += S;  // C#
+addNote(b, 2, 2, E); b += S;  // A
+addNote(b, 3, 2, E); b += S;  // E
+
+// Measure 15-16: Final D Major cadence - ultimate resolution
+addNote(b, 3, 0, E); b += S;  // D
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 2, E); b += S;  // F#
+
+// Final flourish to high D
+addNote(b, 3, 0, E); b += S;  // D (bass anchor)
+addNote(b, 2, 0, E); b += S;  // G
+addNote(b, 1, 3, E); b += S;  // D
+addNote(b, 0, 5, E); b += S;  // A
+addNote(b, 0, 7, H); b += H;  // High D - final resolution
+
+const LOOP_LENGTH = b + 2;
+
+// Sort by beat
+TAB.sort((a, c) => a.beat - c.beat);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEQUENCER ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Loop
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    // Lookahead scheduling
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.15) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        
+        // DDA: Gather information for this note
+        DDA.gatherInformation(note.beat, AudioEngine.voiceHistory);
+        
+        // DDA: Generate and evaluate choices
+        const baseFreq = CONFIG.BASE_FREQS[note.string];
+        DDA.generateChoices(baseFreq);
+        DDA.decide();
+        DDA.updateDisplay();
+        
+        // Play the note
+        AudioEngine.playString(note.string, note.fret, playTime, note.duration * (60 / CONFIG.BPM) * 2);
+        triggerVisual(note);
+        
+        nextNoteIdx++;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUAL ENGINE - Baroque Manuscript Style
+// ═══════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h;
+const activeNotes = [];
+const trailParticles = [];
+
+function resize() {
+    w = canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    h = canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({ 
+        ...note, 
+        life: 1.0,
+        glow: 1.0
+    });
+    
+    // Add trail particles
+    for (let i = 0; i < 3; i++) {
+        trailParticles.push({
+            x: 0,
+            y: 0,
+            string: note.string,
+            life: 1.0,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2
+        });
+    }
+}
+
+function draw() {
+    const displayW = canvas.offsetWidth;
+    const displayH = canvas.offsetHeight;
+    
+    ctx.clearRect(0, 0, displayW, displayH);
+    
+    // Layout
+    const STAFF_Y = displayH / 2;
+    const SPACING = Math.min(35, displayH / 10);
+    const HIT_X = displayW * 0.15;
+    const pixelsPerBeat = displayW / 12;
+    
+    // Draw string lines (subtle, aged parchment look)
+    ctx.lineWidth = 1;
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        
+        // String line
+        const gradient = ctx.createLinearGradient(0, y, displayW, y);
+        gradient.addColorStop(0, 'rgba(139, 112, 32, 0)');
+        gradient.addColorStop(0.1, 'rgba(139, 112, 32, 0.3)');
+        gradient.addColorStop(0.9, 'rgba(139, 112, 32, 0.3)');
+        gradient.addColorStop(1, 'rgba(139, 112, 32, 0)');
+        
+        ctx.strokeStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(displayW, y);
+        ctx.stroke();
+        
+        // String label
+        ctx.font = 'italic 14px "EB Garamond", serif';
+        ctx.fillStyle = 'rgba(201, 162, 39, 0.5)';
+        ctx.fillText(name, 20, y + 5);
+    });
+    
+    // Draw hit line (golden, glowing)
+    const hitGradient = ctx.createLinearGradient(HIT_X, STAFF_Y - 100, HIT_X, STAFF_Y + 100);
+    hitGradient.addColorStop(0, 'rgba(201, 162, 39, 0)');
+    hitGradient.addColorStop(0.3, 'rgba(201, 162, 39, 0.8)');
+    hitGradient.addColorStop(0.5, 'rgba(240, 192, 64, 1)');
+    hitGradient.addColorStop(0.7, 'rgba(201, 162, 39, 0.8)');
+    hitGradient.addColorStop(1, 'rgba(201, 162, 39, 0)');
+    
+    ctx.strokeStyle = hitGradient;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.stroke();
+    
+    // Glow effect on hit line
+    ctx.shadowColor = 'rgba(201, 162, 39, 0.5)';
+    ctx.shadowBlur = 20;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Draw approaching notes
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -4) dist += LOOP_LENGTH;
+        
+        const x = HIT_X + dist * pixelsPerBeat;
+        
+        if (x > -20 && x < displayW + 20) {
+            const y = STAFF_Y + (note.string - 2.5) * SPACING;
+            const opacity = Math.max(0, Math.min(1, 1 - Math.abs(dist) / 8));
+            
+            // Note glow
+            const glowRadius = 15 + Math.sin(Date.now() * 0.003 + note.beat) * 3;
+            const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+            glowGradient.addColorStop(0, `rgba(201, 162, 39, ${opacity * 0.3})`);
+            glowGradient.addColorStop(1, 'rgba(201, 162, 39, 0)');
+            
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Note body
+            ctx.beginPath();
+            ctx.arc(x, y, 12, 0, Math.PI * 2);
+            
+            // Color based on voice/string
+            const voiceColors = ['#f0c040', '#c9a227', '#8b7020', '#6a5515', '#4a3a10', '#3a2a08'];
+            ctx.fillStyle = voiceColors[note.string] || '#c9a227';
+            ctx.globalAlpha = opacity;
+            ctx.fill();
+            
+            ctx.strokeStyle = `rgba(255, 250, 235, ${opacity * 0.8})`;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            
+            // Fret number
+            ctx.font = 'bold 11px "Cormorant Garamond", serif';
+            ctx.fillStyle = `rgba(26, 21, 16, ${opacity})`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(note.fret, x, y + 1);
+            
+            ctx.globalAlpha = 1;
+        }
+    });
+    
+    // Draw active note ripples
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string - 2.5) * SPACING;
+        
+        // Ripple effect
+        const rippleRadius = 15 + (1 - n.life) * 60;
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, rippleRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(240, 192, 64, ${n.life * 0.6})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Inner glow
+        if (n.glow > 0.5) {
+            const glowGradient = ctx.createRadialGradient(HIT_X, y, 0, HIT_X, y, 25);
+            glowGradient.addColorStop(0, `rgba(255, 250, 235, ${n.glow * 0.8})`);
+            glowGradient.addColorStop(1, 'rgba(255, 250, 235, 0)');
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(HIT_X, y, 25, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        n.life -= 0.02;
+        n.glow -= 0.04;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+    
+    // Draw trail particles
+    for (let i = trailParticles.length - 1; i >= 0; i--) {
+        const p = trailParticles[i];
+        const baseY = STAFF_Y + (p.string - 2.5) * SPACING;
+        
+        if (p.x === 0) {
+            p.x = HIT_X;
+            p.y = baseY;
+        }
+        
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05; // gravity
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(240, 192, 64, ${p.life * 0.5})`;
+        ctx.fill();
+        
+        p.life -= 0.02;
+        if (p.life <= 0) trailParticles.splice(i, 1);
+    }
+    
+    // Beat indicator
+    ctx.font = '12px "EB Garamond", serif';
+    ctx.fillStyle = 'rgba(201, 162, 39, 0.6)';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Beat: ${currentBeat.toFixed(1)}`, 20, displayH - 20);
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLS & INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Create dust particles
+function createDust() {
+    const container = document.getElementById('dustContainer');
+    for (let i = 0; i < 30; i++) {
+        const dust = document.createElement('div');
+        dust.className = 'dust';
+        dust.style.left = Math.random() * 100 + '%';
+        dust.style.animationDelay = Math.random() * 20 + 's';
+        dust.style.animationDuration = (15 + Math.random() * 10) + 's';
+        container.appendChild(dust);
+    }
+}
+createDust();
+
+// Toggle playback
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+// Event listeners
+document.getElementById('overlay').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+    }
+    togglePlay();
+});
+
+document.getElementById('playBtn').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+    }
+    togglePlay();
+});
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (AudioEngine.ctx) togglePlay();
+    }
+});
+
+document.getElementById('reverbSlider').addEventListener('input', e => {
+    if (AudioEngine.ctx) {
+        AudioEngine.setReverb(parseInt(e.target.value));
+    }
+});
+
+document.getElementById('tempoSlider').addEventListener('input', e => {
+    CONFIG.BPM = parseInt(e.target.value);
+    DDA.m = CONFIG.BPM / 54; // Adjust rate vector based on tempo
+});
+
+// Start visual loop
+draw();
+</script>
+</body>
+</html>

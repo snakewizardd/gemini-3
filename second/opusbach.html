@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.S. BACH — Symphony for Strings in D Minor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0806; 
+            overflow: hidden; 
+            font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+        }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background: radial-gradient(ellipse at center, #1a1510 0%, #0a0806 100%);
+            transition: opacity 1.5s ease-out;
+        }
+        #ui.hidden { opacity: 0; pointer-events: none; }
+        h1 {
+            font-size: 2.8em;
+            color: #d4af37;
+            text-transform: uppercase;
+            letter-spacing: 0.4em;
+            margin-bottom: 0.3em;
+            text-shadow: 0 0 40px rgba(212, 175, 55, 0.3);
+            font-weight: 300;
+        }
+        h2 {
+            font-size: 1.1em;
+            color: #8b7355;
+            letter-spacing: 0.6em;
+            margin-bottom: 2em;
+            font-weight: 300;
+            font-style: italic;
+        }
+        #startBtn {
+            padding: 1em 3em;
+            font-size: 1.1em;
+            background: transparent;
+            color: #d4af37;
+            border: 1px solid #d4af37;
+            cursor: pointer;
+            letter-spacing: 0.3em;
+            transition: all 0.4s ease;
+            font-family: inherit;
+        }
+        #startBtn:hover {
+            background: #d4af37;
+            color: #0a0806;
+        }
+        #movement {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #d4af37;
+            font-size: 1.4em;
+            letter-spacing: 0.3em;
+            opacity: 0;
+            transition: opacity 1s ease;
+            text-align: center;
+            z-index: 50;
+        }
+        #movement.visible { opacity: 1; }
+        #movement .tempo {
+            font-size: 0.6em;
+            color: #8b7355;
+            font-style: italic;
+            margin-top: 0.3em;
+            letter-spacing: 0.15em;
+        }
+        #dedication {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #5a4a3a;
+            font-size: 0.85em;
+            font-style: italic;
+            letter-spacing: 0.15em;
+            opacity: 0;
+            transition: opacity 1s ease;
+            z-index: 50;
+        }
+        #dedication.visible { opacity: 0.7; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h1>Johann Sebastian Bach</h1>
+        <h2>Symphony for Strings in D Minor</h2>
+        <button id="startBtn">Commence</button>
+    </div>
+    <div id="movement">
+        <div class="name">I. GRAVE</div>
+        <div class="tempo">Lento e solenne</div>
+    </div>
+    <div id="dedication">Soli Deo Gloria</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// J.S. BACH — SYMPHONY FOR STRINGS IN D MINOR
+// A complete orchestral work in four movements
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let audioCtx, masterGain, reverbGain, convolver, compressor;
+let isPlaying = false;
+
+const MOVEMENTS = [
+    { 
+        name: 'I. GRAVE', 
+        tempo: 'Lento e solenne', 
+        bpm: 40, 
+        key: 'Dm',
+        duration: 90,
+        character: 'suffering'
+    },
+    { 
+        name: 'II. ALLEGRO MODERATO', 
+        tempo: 'Con spirito', 
+        bpm: 88, 
+        key: 'F',
+        duration: 75,
+        character: 'striving'
+    },
+    { 
+        name: 'III. ADAGIO LAMENTOSO', 
+        tempo: 'Espressivo e dolente', 
+        bpm: 52, 
+        key: 'Gm',
+        duration: 100,
+        character: 'weeping'
+    },
+    { 
+        name: 'IV. ALLEGRO MAESTOSO', 
+        tempo: 'Triumphale', 
+        bpm: 108, 
+        key: 'D',
+        duration: 85,
+        character: 'transcendence'
+    }
+];
+
+let currentMovement = 0;
+let movementStartTime = 0;
+let globalStartTime = 0;
+
+// Note frequencies
+const NOTE_FREQ = {};
+const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+for (let octave = 0; octave <= 8; octave++) {
+    NOTES.forEach((note, i) => {
+        const midi = 12 + octave * 12 + i;
+        NOTE_FREQ[note + octave] = 440 * Math.pow(2, (midi - 69) / 12);
+    });
+}
+
+const FLAT_TO_SHARP = { 'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#' };
+for (let octave = 0; octave <= 8; octave++) {
+    for (const [flat, sharp] of Object.entries(FLAT_TO_SHARP)) {
+        NOTE_FREQ[flat + octave] = NOTE_FREQ[sharp + octave];
+    }
+}
+
+// Chord voicings - full orchestral
+const CHORD_VOICINGS = {
+    // D minor - the key of sorrow
+    'Dm': {
+        bass: ['D2', 'D3'],
+        cello: ['D3', 'A3', 'D4', 'F4'],
+        viola: ['A3', 'D4', 'F4', 'A4'],
+        violin2: ['D4', 'F4', 'A4', 'D5'],
+        violin1: ['F4', 'A4', 'D5', 'F5']
+    },
+    'Dm7': {
+        bass: ['D2', 'D3'],
+        cello: ['D3', 'A3', 'C4', 'F4'],
+        viola: ['A3', 'C4', 'F4', 'A4'],
+        violin2: ['C4', 'F4', 'A4', 'D5'],
+        violin1: ['F4', 'A4', 'C5', 'F5']
+    },
+    'Gm': {
+        bass: ['G2', 'G3'],
+        cello: ['G3', 'D4', 'G4', 'Bb4'],
+        viola: ['D4', 'G4', 'Bb4', 'D5'],
+        violin2: ['G4', 'Bb4', 'D5', 'G5'],
+        violin1: ['Bb4', 'D5', 'G5', 'Bb5']
+    },
+    'Gm7': {
+        bass: ['G2', 'G3'],
+        cello: ['G3', 'D4', 'F4', 'Bb4'],
+        viola: ['D4', 'F4', 'Bb4', 'D5'],
+        violin2: ['F4', 'Bb4', 'D5', 'G5'],
+        violin1: ['Bb4', 'D5', 'F5', 'Bb5']
+    },
+    'A': {
+        bass: ['A2', 'A3'],
+        cello: ['A3', 'E4', 'A4', 'C#5'],
+        viola: ['E4', 'A4', 'C#5', 'E5'],
+        violin2: ['A4', 'C#5', 'E5', 'A5'],
+        violin1: ['C#5', 'E5', 'A5', 'C#6']
+    },
+    'A7': {
+        bass: ['A2', 'A3'],
+        cello: ['A3', 'E4', 'G4', 'C#5'],
+        viola: ['E4', 'G4', 'C#5', 'E5'],
+        violin2: ['G4', 'C#5', 'E5', 'A5'],
+        violin1: ['C#5', 'E5', 'G5', 'C#6']
+    },
+    'Bb': {
+        bass: ['Bb2', 'Bb3'],
+        cello: ['Bb3', 'F4', 'Bb4', 'D5'],
+        viola: ['F4', 'Bb4', 'D5', 'F5'],
+        violin2: ['Bb4', 'D5', 'F5', 'Bb5'],
+        violin1: ['D5', 'F5', 'Bb5', 'D6']
+    },
+    'C': {
+        bass: ['C3', 'C4'],
+        cello: ['C3', 'G3', 'C4', 'E4'],
+        viola: ['G3', 'C4', 'E4', 'G4'],
+        violin2: ['C4', 'E4', 'G4', 'C5'],
+        violin1: ['E4', 'G4', 'C5', 'E5']
+    },
+    'F': {
+        bass: ['F2', 'F3'],
+        cello: ['F3', 'C4', 'F4', 'A4'],
+        viola: ['C4', 'F4', 'A4', 'C5'],
+        violin2: ['F4', 'A4', 'C5', 'F5'],
+        violin1: ['A4', 'C5', 'F5', 'A5']
+    },
+    'Fmaj7': {
+        bass: ['F2', 'F3'],
+        cello: ['F3', 'C4', 'E4', 'A4'],
+        viola: ['C4', 'E4', 'A4', 'C5'],
+        violin2: ['E4', 'A4', 'C5', 'F5'],
+        violin1: ['A4', 'C5', 'E5', 'A5']
+    },
+    'D': {
+        bass: ['D2', 'D3'],
+        cello: ['D3', 'A3', 'D4', 'F#4'],
+        viola: ['A3', 'D4', 'F#4', 'A4'],
+        violin2: ['D4', 'F#4', 'A4', 'D5'],
+        violin1: ['F#4', 'A4', 'D5', 'F#5']
+    },
+    'Dmaj7': {
+        bass: ['D2', 'D3'],
+        cello: ['D3', 'A3', 'C#4', 'F#4'],
+        viola: ['A3', 'C#4', 'F#4', 'A4'],
+        violin2: ['C#4', 'F#4', 'A4', 'D5'],
+        violin1: ['F#4', 'A4', 'C#5', 'F#5']
+    },
+    'Em': {
+        bass: ['E2', 'E3'],
+        cello: ['E3', 'B3', 'E4', 'G4'],
+        viola: ['B3', 'E4', 'G4', 'B4'],
+        violin2: ['E4', 'G4', 'B4', 'E5'],
+        violin1: ['G4', 'B4', 'E5', 'G5']
+    },
+    'Am': {
+        bass: ['A2', 'A3'],
+        cello: ['A3', 'E4', 'A4', 'C5'],
+        viola: ['E4', 'A4', 'C5', 'E5'],
+        violin2: ['A4', 'C5', 'E5', 'A5'],
+        violin1: ['C5', 'E5', 'A5', 'C6']
+    },
+    'E': {
+        bass: ['E2', 'E3'],
+        cello: ['E3', 'B3', 'E4', 'G#4'],
+        viola: ['B3', 'E4', 'G#4', 'B4'],
+        violin2: ['E4', 'G#4', 'B4', 'E5'],
+        violin1: ['G#4', 'B4', 'E5', 'G#5']
+    },
+    'Cm': {
+        bass: ['C3', 'C4'],
+        cello: ['C3', 'G3', 'C4', 'Eb4'],
+        viola: ['G3', 'C4', 'Eb4', 'G4'],
+        violin2: ['C4', 'Eb4', 'G4', 'C5'],
+        violin1: ['Eb4', 'G4', 'C5', 'Eb5']
+    },
+    // Diminished for tension
+    'Ddim': {
+        bass: ['D2', 'D3'],
+        cello: ['D3', 'Ab3', 'D4', 'F4'],
+        viola: ['Ab3', 'D4', 'F4', 'Ab4'],
+        violin2: ['D4', 'F4', 'Ab4', 'D5'],
+        violin1: ['F4', 'Ab4', 'D5', 'F5']
+    },
+    'G#dim': {
+        bass: ['G#2', 'G#3'],
+        cello: ['G#3', 'D4', 'G#4', 'B4'],
+        viola: ['D4', 'G#4', 'B4', 'D5'],
+        violin2: ['G#4', 'B4', 'D5', 'G#5'],
+        violin1: ['B4', 'D5', 'G#5', 'B5']
+    },
+    // Suspended for yearning
+    'Dsus4': {
+        bass: ['D2', 'D3'],
+        cello: ['D3', 'A3', 'D4', 'G4'],
+        viola: ['A3', 'D4', 'G4', 'A4'],
+        violin2: ['D4', 'G4', 'A4', 'D5'],
+        violin1: ['G4', 'A4', 'D5', 'G5']
+    },
+    'Asus4': {
+        bass: ['A2', 'A3'],
+        cello: ['A3', 'E4', 'A4', 'D5'],
+        viola: ['E4', 'A4', 'D5', 'E5'],
+        violin2: ['A4', 'D5', 'E5', 'A5'],
+        violin1: ['D5', 'E5', 'A5', 'D6']
+    },
+    // Added missing chords used in Movement 4
+    'G': {
+        bass: ['G2', 'G3'],
+        cello: ['G3', 'D4', 'G4', 'B4'],
+        viola: ['D4', 'G4', 'B4', 'D5'],
+        violin2: ['G4', 'B4', 'D5', 'G5'],
+        violin1: ['B4', 'D5', 'G5', 'B5']
+    },
+    'Bm': {
+        bass: ['B2', 'B3'],
+        cello: ['B3', 'F#4', 'B4', 'D5'],
+        viola: ['F#4', 'B4', 'D5', 'F#5'],
+        violin2: ['B4', 'D5', 'F#5', 'B5'],
+        violin1: ['D5', 'F#5', 'B5', 'D6']
+    },
+    'F#m': {
+        bass: ['F#2', 'F#3'],
+        cello: ['F#3', 'C#4', 'F#4', 'A4'],
+        viola: ['C#4', 'F#4', 'A4', 'C#5'],
+        violin2: ['F#4', 'A4', 'C#5', 'F#5'],
+        violin1: ['A4', 'C#5', 'F#5', 'A5']
+    }
+};
+
+// Create reverb impulse response
+function createReverb(duration = 4, decay = 3) {
+    const rate = audioCtx.sampleRate;
+    const length = rate * duration;
+    const impulse = audioCtx.createBuffer(2, length, rate);
+    
+    for (let channel = 0; channel < 2; channel++) {
+        const data = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            const t = i / rate;
+            // Cathedral reverb with early reflections
+            let sample = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            // Early reflections
+            if (i < rate * 0.1) {
+                sample += (Math.random() * 2 - 1) * 0.3 * Math.pow(1 - i / (rate * 0.1), 1);
+            }
+            data[i] = sample;
+        }
+    }
+    return impulse;
+}
+
+// String instrument synthesis - rich bowed strings
+function createStringVoice(freq, section, startTime, duration, dynamics = 0.5, vibRate = 5.5, vibDepth = 0.003) {
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const osc3 = audioCtx.createOscillator();
+    const noise = audioCtx.createBufferSource();
+    
+    // Noise for bow texture
+    const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) {
+        noiseData[i] = Math.random() * 2 - 1;
+    }
+    noise.buffer = noiseBuffer;
+    noise.loop = true;
+    
+    // Vibrato LFO
+    const vibrato = audioCtx.createOscillator();
+    const vibratoGain = audioCtx.createGain();
+    vibrato.frequency.value = vibRate + Math.random() * 0.5;
+    vibratoGain.gain.value = freq * vibDepth;
+    vibrato.connect(vibratoGain);
+    
+    // Main oscillators with slight detuning for richness
+    osc1.type = 'sawtooth';
+    osc2.type = 'sawtooth';
+    osc3.type = 'triangle';
+    
+    osc1.frequency.value = freq;
+    osc2.frequency.value = freq * 1.002; // Slight detune
+    osc3.frequency.value = freq * 0.998;
+    
+    vibratoGain.connect(osc1.frequency);
+    vibratoGain.connect(osc2.frequency);
+    vibratoGain.connect(osc3.frequency);
+    
+    // Mixer
+    const mixer = audioCtx.createGain();
+    const gain1 = audioCtx.createGain();
+    const gain2 = audioCtx.createGain();
+    const gain3 = audioCtx.createGain();
+    const noiseGain = audioCtx.createGain();
+    
+    gain1.gain.value = 0.4;
+    gain2.gain.value = 0.35;
+    gain3.gain.value = 0.25;
+    noiseGain.gain.value = 0.02; // Subtle bow noise
+    
+    osc1.connect(gain1);
+    osc2.connect(gain2);
+    osc3.connect(gain3);
+    noise.connect(noiseGain);
+    
+    gain1.connect(mixer);
+    gain2.connect(mixer);
+    gain3.connect(mixer);
+    noiseGain.connect(mixer);
+    
+    // Section-specific filtering
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    
+    // Body resonance
+    const bodyFilter = audioCtx.createBiquadFilter();
+    bodyFilter.type = 'peaking';
+    bodyFilter.Q.value = 2;
+    
+    switch(section) {
+        case 'bass':
+            filter.frequency.value = 800 + dynamics * 600;
+            filter.Q.value = 0.7;
+            bodyFilter.frequency.value = 200;
+            bodyFilter.gain.value = 4;
+            break;
+        case 'cello':
+            filter.frequency.value = 1500 + dynamics * 1000;
+            filter.Q.value = 0.8;
+            bodyFilter.frequency.value = 350;
+            bodyFilter.gain.value = 3;
+            break;
+        case 'viola':
+            filter.frequency.value = 2500 + dynamics * 1500;
+            filter.Q.value = 0.9;
+            bodyFilter.frequency.value = 500;
+            bodyFilter.gain.value = 2;
+            break;
+        case 'violin2':
+        case 'violin1':
+            filter.frequency.value = 4000 + dynamics * 2000;
+            filter.Q.value = 1;
+            bodyFilter.frequency.value = 700;
+            bodyFilter.gain.value = 2;
+            break;
+    }
+    
+    mixer.connect(filter);
+    filter.connect(bodyFilter);
+    
+    // Output envelope
+    const envelope = audioCtx.createGain();
+    envelope.gain.value = 0;
+    bodyFilter.connect(envelope);
+    
+    // Volume by section
+    const sectionVolumes = {
+        bass: 0.45,
+        cello: 0.4,
+        viola: 0.35,
+        violin2: 0.32,
+        violin1: 0.35
+    };
+    
+    const baseVol = sectionVolumes[section] * dynamics;
+    const attackTime = section === 'bass' ? 0.15 : section === 'cello' ? 0.1 : 0.08;
+    const releaseTime = 0.4;
+    
+    // ADSR envelope
+    envelope.gain.setValueAtTime(0, startTime);
+    envelope.gain.linearRampToValueAtTime(baseVol * 1.1, startTime + attackTime);
+    envelope.gain.linearRampToValueAtTime(baseVol, startTime + attackTime + 0.1);
+    envelope.gain.setValueAtTime(baseVol, startTime + duration - releaseTime);
+    envelope.gain.linearRampToValueAtTime(0, startTime + duration);
+    
+    // Filter envelope for expressiveness
+    filter.frequency.setValueAtTime(filter.frequency.value * 0.5, startTime);
+    filter.frequency.linearRampToValueAtTime(filter.frequency.value, startTime + attackTime);
+    
+    envelope.connect(masterGain);
+    envelope.connect(reverbGain);
+    
+    // Start everything
+    osc1.start(startTime);
+    osc2.start(startTime);
+    osc3.start(startTime);
+    noise.start(startTime);
+    vibrato.start(startTime);
+    
+    const stopTime = startTime + duration + 0.1;
+    osc1.stop(stopTime);
+    osc2.stop(stopTime);
+    osc3.stop(stopTime);
+    noise.stop(stopTime);
+    vibrato.stop(stopTime);
+    
+    return { envelope, filter };
+}
+
+// Play a full orchestral chord
+function playChord(chordName, startTime, duration, dynamics = 0.5, style = 'sustained') {
+    const voicing = CHORD_VOICINGS[chordName];
+    if (!voicing) return;
+    
+    const voices = [];
+    
+    // Stagger entries slightly for realism
+    const staggerTime = style === 'sustained' ? 0.02 : 0.005;
+    let offset = 0;
+    
+    for (const [section, notes] of Object.entries(voicing)) {
+        notes.forEach((note, i) => {
+            const freq = NOTE_FREQ[note];
+            if (freq) {
+                const voice = createStringVoice(
+                    freq, 
+                    section, 
+                    startTime + offset + i * 0.008, 
+                    duration - offset, 
+                    dynamics,
+                    section.includes('violin') ? 5.8 : 5.2,
+                    section.includes('violin') ? 0.004 : 0.003
+                );
+                voices.push(voice);
+            }
+        });
+        offset += staggerTime;
+    }
+    
+    return voices;
+}
+
+// Play melodic line (for counterpoint)
+function playMelody(notes, startTime, noteDuration, section, dynamics = 0.5) {
+    notes.forEach((note, i) => {
+        if (note) {
+            const freq = NOTE_FREQ[note];
+            if (freq) {
+                createStringVoice(freq, section, startTime + i * noteDuration, noteDuration * 0.95, dynamics);
+            }
+        }
+    });
+}
+
+// Tremolo effect
+function playTremolo(chordName, startTime, duration, dynamics = 0.4) {
+    const voicing = CHORD_VOICINGS[chordName];
+    if (!voicing) return;
+    
+    const tremoloSpeed = 0.08;
+    const numTrems = Math.floor(duration / tremoloSpeed);
+    
+    for (let i = 0; i < numTrems; i++) {
+        const vol = dynamics * (0.7 + Math.sin(i * 0.5) * 0.3);
+        for (const [section, notes] of Object.entries(voicing)) {
+            if (section === 'violin1' || section === 'violin2') {
+                notes.forEach(note => {
+                    const freq = NOTE_FREQ[note];
+                    if (freq) {
+                        createStringVoice(freq, section, startTime + i * tremoloSpeed, tremoloSpeed * 0.9, vol * 0.5, 0, 0);
+                    }
+                });
+            }
+        }
+    }
+}
+
+// Pizzicato
+function playPizzicato(note, startTime, section = 'cello', dynamics = 0.4) {
+    const freq = NOTE_FREQ[note];
+    if (!freq) return;
+    
+    const osc = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const envelope = audioCtx.createGain();
+    
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    
+    filter.type = 'lowpass';
+    filter.frequency.value = 2000;
+    filter.Q.value = 1;
+    
+    osc.connect(filter);
+    filter.connect(envelope);
+    
+    envelope.gain.setValueAtTime(0, startTime);
+    envelope.gain.linearRampToValueAtTime(dynamics * 0.6, startTime + 0.01);
+    envelope.gain.exponentialRampToValueAtTime(0.001, startTime + 0.8);
+    
+    envelope.connect(masterGain);
+    envelope.connect(reverbGain);
+    
+    osc.start(startTime);
+    osc.stop(startTime + 1);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOVEMENT COMPOSITIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function composeMovement1(startTime) {
+    // I. GRAVE - Lento e solenne (D minor)
+    // Deep suffering, chromatic descent, heavy sighs
+    const beat = 60 / 40; // quarter note at 40 BPM
+    let t = startTime;
+    
+    // Opening - bare octaves in bass, slowly building
+    playChord('Dm', t, beat * 6, 0.3); t += beat * 4;
+    
+    // First phrase - descending line of sorrow
+    playChord('Dm', t, beat * 4, 0.45); t += beat * 4;
+    playChord('Gm', t, beat * 3, 0.5); t += beat * 3;
+    playChord('A7', t, beat * 3, 0.55); t += beat * 3;
+    playChord('Dm', t, beat * 4, 0.5); t += beat * 4;
+    
+    // Second phrase - deeper
+    playChord('Bb', t, beat * 3, 0.55); t += beat * 3;
+    playChord('Gm7', t, beat * 3, 0.6); t += beat * 3;
+    playChord('Dsus4', t, beat * 2, 0.55);
+    playChord('Dm', t + beat * 2, beat * 4, 0.6); t += beat * 6;
+    
+    // Third phrase - the weeping
+    playChord('Dm7', t, beat * 3, 0.55); t += beat * 3;
+    playChord('Gm', t, beat * 3, 0.6); t += beat * 3;
+    playChord('C', t, beat * 3, 0.55); t += beat * 3;
+    playChord('F', t, beat * 3, 0.5); t += beat * 3;
+    
+    // Chromatic descent - the abyss
+    playChord('Bb', t, beat * 2, 0.6); t += beat * 2;
+    playChord('A7', t, beat * 2, 0.65); t += beat * 2;
+    playChord('Dm', t, beat * 2, 0.6); t += beat * 2;
+    playChord('G#dim', t, beat * 2, 0.7); t += beat * 2;
+    
+    // Climax of suffering
+    playChord('Gm', t, beat * 4, 0.75);
+    playTremolo('Gm', t, beat * 4, 0.4); t += beat * 4;
+    
+    playChord('A7', t, beat * 4, 0.8);
+    playTremolo('A7', t, beat * 4, 0.5); t += beat * 4;
+    
+    // Resolution - but still in minor
+    playChord('Dsus4', t, beat * 3, 0.65); t += beat * 3;
+    playChord('Dm', t, beat * 6, 0.5); t += beat * 6;
+    
+    // Coda - fading into silence
+    playChord('Dm', t, beat * 8, 0.35);
+}
+
+function composeMovement2(startTime) {
+    // II. ALLEGRO MODERATO - Con spirito (F major)
+    // Striving upward, fugal entries, hope emerging
+    const beat = 60 / 88;
+    let t = startTime;
+    
+    // Subject enters in bass
+    const subject = ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'C4', 'A3'];
+    playMelody(subject, t, beat, 'cello', 0.5);
+    t += beat * 8;
+    
+    // Answer in viola
+    const answer = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'G4', 'E4'];
+    playMelody(answer, t, beat, 'viola', 0.5);
+    playMelody(['F3', 'F3', 'F3', 'E3', 'D3', 'C3', 'D3', 'E3'], t, beat, 'cello', 0.4);
+    t += beat * 8;
+    
+    // Subject in violin 2, countersubject continues
+    playMelody(['F4', 'G4', 'A4', 'Bb4', 'C5', 'D5', 'C5', 'A4'], t, beat, 'violin2', 0.55);
+    playMelody(['C4', 'Bb3', 'A3', 'G3', 'F3', 'E3', 'F3', 'G3'], t, beat, 'viola', 0.4);
+    playChord('F', t, beat * 4, 0.35);
+    playChord('C', t + beat * 4, beat * 4, 0.35);
+    t += beat * 8;
+    
+    // Full texture - all voices
+    playChord('F', t, beat * 4, 0.6); t += beat * 4;
+    playChord('Bb', t, beat * 4, 0.6); t += beat * 4;
+    playChord('C', t, beat * 4, 0.65); t += beat * 4;
+    playChord('F', t, beat * 4, 0.6); t += beat * 4;
+    
+    // Development - modulation
+    playChord('Dm', t, beat * 4, 0.55); t += beat * 4;
+    playChord('Gm', t, beat * 4, 0.6); t += beat * 4;
+    playChord('C', t, beat * 4, 0.65); t += beat * 4;
+    playChord('F', t, beat * 4, 0.6); t += beat * 4;
+    
+    // Stretto - entries closer together
+    playChord('Dm', t, beat * 2, 0.65); t += beat * 2;
+    playChord('Am', t, beat * 2, 0.65); t += beat * 2;
+    playChord('E', t, beat * 2, 0.7); t += beat * 2;
+    playChord('Am', t, beat * 2, 0.65); t += beat * 2;
+    
+    // Return to F major
+    playChord('C', t, beat * 4, 0.7); t += beat * 4;
+    playChord('F', t, beat * 4, 0.65); t += beat * 4;
+    
+    // Final statement
+    playChord('Bb', t, beat * 3, 0.7); t += beat * 3;
+    playChord('C', t, beat * 3, 0.75); t += beat * 3;
+    playChord('F', t, beat * 6, 0.7);
+}
+
+function composeMovement3(startTime) {
+    // III. ADAGIO LAMENTOSO - Espressivo e dolente (G minor)
+    // The movement of weeping - the heart of the symphony
+    const beat = 60 / 52;
+    let t = startTime;
+    
+    // Opening sigh
+    playChord('Gm', t, beat * 6, 0.4); t += beat * 5;
+    
+    // First lamentation
+    playChord('Gm', t, beat * 4, 0.5);
+    playMelody(['D5', 'Eb5', 'D5', 'C5', 'Bb4', 'A4', 'G4', null], t, beat * 0.5, 'violin1', 0.55);
+    t += beat * 4;
+    
+    playChord('Cm', t, beat * 4, 0.55);
+    playMelody(['G4', 'Ab4', 'G4', 'F4', 'Eb4', 'D4', 'C4', null], t, beat * 0.5, 'violin1', 0.5);
+    t += beat * 4;
+    
+    playChord('D', t, beat * 4, 0.6);
+    t += beat * 4;
+    
+    playChord('Gm', t, beat * 4, 0.5);
+    t += beat * 4;
+    
+    // Second phrase - deeper grief
+    playChord('Gm7', t, beat * 4, 0.55); t += beat * 4;
+    playChord('Cm', t, beat * 4, 0.6);
+    playTremolo('Cm', t, beat * 4, 0.35);
+    t += beat * 4;
+    
+    playChord('F', t, beat * 3, 0.55); t += beat * 3;
+    playChord('Bb', t, beat * 3, 0.5); t += beat * 3;
+    
+    // The great lament
+    playChord('Gm', t, beat * 4, 0.65);
+    playMelody(['D5', 'D5', 'Eb5', 'D5', 'C5', 'Bb4', 'A4', 'G4'], t, beat * 0.5, 'violin1', 0.6);
+    t += beat * 4;
+    
+    playChord('D', t, beat * 4, 0.7);
+    playTremolo('D', t, beat * 4, 0.45);
+    t += beat * 4;
+    
+    // Climax of sorrow
+    playChord('Gm', t, beat * 3, 0.75);
+    playTremolo('Gm', t, beat * 3, 0.5);
+    t += beat * 3;
+    
+    playChord('Ddim', t, beat * 3, 0.8);
+    t += beat * 3;
+    
+    playChord('Gm', t, beat * 4, 0.75); t += beat * 4;
+    
+    // Consolation begins
+    playChord('Bb', t, beat * 4, 0.6); t += beat * 4;
+    playChord('F', t, beat * 4, 0.55); t += beat * 4;
+    
+    // Final phrases - acceptance
+    playChord('Gm', t, beat * 4, 0.5);
+    playMelody(['G4', 'A4', 'Bb4', 'C5', 'D5', 'D5', 'D5', 'D5'], t, beat * 0.5, 'violin1', 0.45);
+    t += beat * 4;
+    
+    playChord('D', t, beat * 6, 0.5); t += beat * 5;
+    
+    // Ending - transformed
+    playChord('Gm', t, beat * 8, 0.4);
+}
+
+function composeMovement4(startTime) {
+    // IV. ALLEGRO MAESTOSO - Triumphale (D major)
+    // Transcendence, victory over suffering, glory
+    const beat = 60 / 108;
+    let t = startTime;
+    
+    // Triumphant opening
+    playChord('D', t, beat * 4, 0.7); t += beat * 4;
+    playChord('A', t, beat * 2, 0.65); t += beat * 2;
+    playChord('D', t, beat * 2, 0.7); t += beat * 2;
+    
+    // First theme - majestic
+    playChord('D', t, beat * 4, 0.7); t += beat * 4;
+    playChord('G', t, beat * 2, 0.65);
+    playChord('D', t + beat * 2, beat * 2, 0.7); t += beat * 4;
+    playChord('A', t, beat * 2, 0.7);
+    playChord('D', t + beat * 2, beat * 4, 0.75); t += beat * 6;
+    
+    // Second theme - lyrical
+    playChord('Dmaj7', t, beat * 4, 0.6); t += beat * 4;
+    playChord('G', t, beat * 4, 0.55); t += beat * 4;
+    playChord('Em', t, beat * 2, 0.5);
+    playChord('A', t + beat * 2, beat * 2, 0.6); t += beat * 4;
+    playChord('D', t, beat * 4, 0.6); t += beat * 4;
+    
+    // Development - contrapuntal
+    playMelody(['D4', 'E4', 'F#4', 'G4', 'A4', 'B4', 'A4', 'G4'], t, beat, 'violin1', 0.65);
+    playChord('D', t, beat * 4, 0.5);
+    playChord('Bm', t + beat * 4, beat * 4, 0.55);
+    t += beat * 8;
+    
+    playChord('Em', t, beat * 4, 0.6);
+    playChord('A', t + beat * 4, beat * 4, 0.65);
+    t += beat * 8;
+    
+    // Building to climax
+    playChord('D', t, beat * 2, 0.7); t += beat * 2;
+    playChord('A', t, beat * 2, 0.7); t += beat * 2;
+    playChord('Bm', t, beat * 2, 0.7); t += beat * 2;
+    playChord('F#m', t, beat * 2, 0.7); t += beat * 2;
+    
+    playChord('G', t, beat * 2, 0.75); t += beat * 2;
+    playChord('D', t, beat * 2, 0.75); t += beat * 2;
+    playChord('A', t, beat * 4, 0.8);
+    playTremolo('A', t, beat * 4, 0.5);
+    t += beat * 4;
+    
+    // Recapitulation
+    playChord('D', t, beat * 4, 0.8); t += beat * 4;
+    playChord('G', t, beat * 2, 0.75);
+    playChord('D', t + beat * 2, beat * 2, 0.8); t += beat * 4;
+    
+    // Grand finale
+    playChord('Em', t, beat * 2, 0.75); t += beat * 2;
+    playChord('A', t, beat * 2, 0.8); t += beat * 2;
+    
+    playChord('D', t, beat * 2, 0.85); t += beat * 2;
+    playChord('A', t, beat * 2, 0.85); t += beat * 2;
+    playChord('D', t, beat * 4, 0.9);
+    playTremolo('D', t, beat * 4, 0.5);
+    t += beat * 4;
+    
+    // Final chords - Soli Deo Gloria
+    playChord('G', t, beat * 3, 0.85); t += beat * 3;
+    playChord('A', t, beat * 3, 0.9); t += beat * 3;
+    playChord('D', t, beat * 8, 0.85);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VISUAL SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let visualTime = 0;
+const strings = [];
+const particles = [];
+const waveforms = [];
+
+class OrchestraString {
+    constructor(x, y, length, angle, section) {
+        this.x = x;
+        this.y = y;
+        this.length = length;
+        this.angle = angle;
+        this.section = section;
+        this.vibration = 0;
+        this.phase = Math.random() * Math.PI * 2;
+        this.baseColor = this.getSectionColor();
+    }
+    
+    getSectionColor() {
+        switch(this.section) {
+            case 'bass': return { h: 25, s: 70, l: 25 };
+            case 'cello': return { h: 30, s: 65, l: 35 };
+            case 'viola': return { h: 35, s: 60, l: 45 };
+            case 'violin2': return { h: 40, s: 55, l: 55 };
+            case 'violin1': return { h: 45, s: 50, l: 65 };
+            default: return { h: 35, s: 50, l: 50 };
+        }
+    }
+    
+    update(intensity) {
+        this.vibration = intensity * (0.5 + Math.random() * 0.5);
+        this.phase += 0.1;
+    }
+    
+    draw(ctx) {
+        const segments = 30;
+        const segLen = this.length / segments;
+        
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        
+        for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const wave = Math.sin(t * Math.PI) * Math.sin(this.phase + t * 4) * this.vibration * 15;
+            const px = this.x + Math.cos(this.angle) * segLen * i + Math.sin(this.angle) * wave;
+            const py = this.y + Math.sin(this.angle) * segLen * i + Math.cos(this.angle) * wave;
+            ctx.lineTo(px, py);
+        }
+        
+        const brightness = this.baseColor.l + this.vibration * 20;
+        ctx.strokeStyle = `hsl(${this.baseColor.h}, ${this.baseColor.s}%, ${brightness}%)`;
+        ctx.lineWidth = 1 + this.vibration * 2;
+        ctx.stroke();
+        
+        // Glow effect
+        if (this.vibration > 0.3) {
+            ctx.shadowColor = `hsl(${this.baseColor.h}, ${this.baseColor.s}%, 70%)`;
+            ctx.shadowBlur = this.vibration * 20;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+    }
+}
+
+class Particle {
+    constructor(x, y, hue) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = -Math.random() * 3 - 1;
+        this.life = 1;
+        this.decay = 0.008 + Math.random() * 0.012;
+        this.size = 2 + Math.random() * 4;
+        this.hue = hue;
+    }
+    
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.02; // Slight gravity
+        this.life -= this.decay;
+    }
+    
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${this.hue}, 60%, 70%, ${this.life * 0.6})`;
+        ctx.fill();
+    }
+}
+
+class Waveform {
+    constructor(y, amplitude, frequency, color) {
+        this.y = y;
+        this.amplitude = amplitude;
+        this.frequency = frequency;
+        this.color = color;
+        this.phase = 0;
+        this.targetAmplitude = amplitude;
+    }
+    
+    update(intensity) {
+        this.phase += 0.02;
+        this.targetAmplitude = 20 + intensity * 80;
+        this.amplitude += (this.targetAmplitude - this.amplitude) * 0.1;
+    }
+    
+    draw(ctx) {
+        ctx.beginPath();
+        for (let x = 0; x < W; x += 3) {
+            const wave = Math.sin(x * this.frequency + this.phase) * this.amplitude;
+            const y = this.y + wave;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+
+// Initialize visual elements
+function initVisuals() {
+    strings.length = 0;
+    particles.length = 0;
+    waveforms.length = 0;
+    
+    const sections = ['bass', 'cello', 'viola', 'violin2', 'violin1'];
+    const sectionCounts = [4, 6, 5, 8, 10];
+    
+    sections.forEach((section, sIdx) => {
+        const count = sectionCounts[sIdx];
+        const baseY = H * 0.3 + sIdx * H * 0.12;
+        
+        for (let i = 0; i < count; i++) {
+            const x = W * 0.1 + (i / count) * W * 0.8;
+            const length = 80 + (4 - sIdx) * 20;
+            const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+            strings.push(new OrchestraString(x, baseY, length, angle, section));
+        }
+    });
+    
+    // Background waveforms
+    waveforms.push(new Waveform(H * 0.2, 30, 0.005, 'rgba(212, 175, 55, 0.1)'));
+    waveforms.push(new Waveform(H * 0.5, 40, 0.003, 'rgba(139, 115, 85, 0.1)'));
+    waveforms.push(new Waveform(H * 0.8, 25, 0.007, 'rgba(90, 74, 58, 0.1)'));
+}
+
+// Get current musical intensity based on timing
+function getMusicalIntensity(time) {
+    const movement = MOVEMENTS[currentMovement];
+    if (!movement) return 0;
+    
+    const beat = 60 / movement.bpm;
+    const beatNum = Math.floor((time - movementStartTime) / beat);
+    
+    // Pulsing on beats with character variation
+    let intensity = 0.3 + Math.sin(beatNum * 0.5) * 0.2;
+    
+    switch(movement.character) {
+        case 'suffering':
+            intensity *= 0.7 + Math.sin(time * 0.3) * 0.3;
+            break;
+        case 'striving':
+            intensity *= 0.8 + Math.abs(Math.sin(time * 0.8)) * 0.4;
+            break;
+        case 'weeping':
+            intensity *= 0.6 + Math.sin(time * 0.2) * 0.4;
+            break;
+        case 'transcendence':
+            intensity *= 0.9 + Math.sin(time * 0.5) * 0.2;
+            break;
+    }
+    
+    return Math.min(1, intensity);
+}
+
+// Main animation loop
+function animate() {
+    if (!isPlaying) return;
+    
+    const currentTime = audioCtx.currentTime;
+    const elapsed = currentTime - globalStartTime;
+    visualTime += 0.016;
+    
+    // Check for movement transitions
+    let accumulatedTime = 0;
+    for (let i = 0; i < MOVEMENTS.length; i++) {
+        if (elapsed < accumulatedTime + MOVEMENTS[i].duration) {
+            if (currentMovement !== i) {
+                currentMovement = i;
+                movementStartTime = currentTime;
+                updateMovementDisplay();
+            }
+            break;
+        }
+        accumulatedTime += MOVEMENTS[i].duration;
+    }
+    
+    // Check if symphony is complete
+    const totalDuration = MOVEMENTS.reduce((sum, m) => sum + m.duration, 0);
+    if (elapsed > totalDuration) {
+        // Loop the symphony
+        globalStartTime = currentTime;
+        currentMovement = 0;
+        movementStartTime = currentTime;
+        scheduleAllMovements();
+    }
+    
+    const intensity = getMusicalIntensity(currentTime);
+    const movement = MOVEMENTS[currentMovement];
+    
+    // Background color based on movement
+    let bgColor;
+    switch(movement?.character) {
+        case 'suffering':
+            bgColor = `rgb(${10 + intensity * 5}, ${8 + intensity * 3}, ${6 + intensity * 2})`;
+            break;
+        case 'striving':
+            bgColor = `rgb(${12 + intensity * 8}, ${10 + intensity * 6}, ${8 + intensity * 4})`;
+            break;
+        case 'weeping':
+            bgColor = `rgb(${8 + intensity * 4}, ${8 + intensity * 4}, ${12 + intensity * 6})`;
+            break;
+        case 'transcendence':
+            bgColor = `rgb(${15 + intensity * 15}, ${12 + intensity * 12}, ${8 + intensity * 8})`;
+            break;
+        default:
+            bgColor = '#0a0806';
+    }
+    
+    // Clear with fade
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+    
+    // Draw waveforms
+    waveforms.forEach(w => {
+        w.update(intensity);
+        w.draw(ctx);
+    });
+    
+    // Update and draw strings
+    strings.forEach(s => {
+        s.update(intensity);
+        s.draw(ctx);
+        
+        // Spawn particles from vibrating strings
+        if (s.vibration > 0.5 && Math.random() < 0.1) {
+            const endX = s.x + Math.cos(s.angle) * s.length;
+            const endY = s.y + Math.sin(s.angle) * s.length;
+            particles.push(new Particle(endX, endY, s.baseColor.h));
+        }
+    });
+    
+    // Update and draw particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].draw(ctx);
+        if (particles[i].life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+    
+    // Staff lines
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.1)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+        const y = H * 0.85 + i * 8;
+        ctx.beginPath();
+        ctx.moveTo(W * 0.1, y);
+        ctx.lineTo(W * 0.9, y);
+        ctx.stroke();
+    }
+    
+    // Floating notes
+    ctx.fillStyle = `rgba(212, 175, 55, ${0.2 + intensity * 0.3})`;
+    ctx.font = '24px serif';
+    for (let i = 0; i < 5; i++) {
+        const x = W * 0.15 + i * W * 0.15 + Math.sin(visualTime + i) * 20;
+        const y = H * 0.85 + Math.cos(visualTime * 0.5 + i) * 15;
+        ctx.fillText('♪', x, y);
+    }
+    
+    requestAnimationFrame(animate);
+}
+
+function updateMovementDisplay() {
+    const movementDiv = document.getElementById('movement');
+    const movement = MOVEMENTS[currentMovement];
+    if (movement) {
+        movementDiv.querySelector('.name').textContent = movement.name;
+        movementDiv.querySelector('.tempo').textContent = movement.tempo;
+        movementDiv.classList.add('visible');
+    }
+}
+
+function scheduleAllMovements() {
+    let t = audioCtx.currentTime + 0.5;
+    
+    composeMovement1(t);
+    t += MOVEMENTS[0].duration;
+    
+    composeMovement2(t);
+    t += MOVEMENTS[1].duration;
+    
+    composeMovement3(t);
+    t += MOVEMENTS[2].duration;
+    
+    composeMovement4(t);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+    document.getElementById('ui').classList.add('hidden');
+    document.getElementById('dedication').classList.add('visible');
+    
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    await audioCtx.resume();
+    
+    // Master chain
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.7;
+    
+    reverbGain = audioCtx.createGain();
+    reverbGain.gain.value = 0.4;
+    
+    convolver = audioCtx.createConvolver();
+    convolver.buffer = createReverb(4.5, 2.5);
+    
+    compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 10;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.01;
+    compressor.release.value = 0.25;
+    
+    masterGain.connect(compressor);
+    reverbGain.connect(convolver);
+    convolver.connect(compressor);
+    compressor.connect(audioCtx.destination);
+    
+    globalStartTime = audioCtx.currentTime;
+    movementStartTime = audioCtx.currentTime;
+    isPlaying = true;
+    
+    initVisuals();
+    updateMovementDisplay();
+    scheduleAllMovements();
+    animate();
+});
+
+    </script>
+</body>
+</html>
