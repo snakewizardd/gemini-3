@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Midnight Caravan | E Phrygian Dominant</title>
+<style>
+    body { margin: 0; background: #050505; overflow: hidden; color: #ffd700; font-family: 'Courier New', monospace; }
+    #canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+               display: flex; flex-direction: column; justify-content: center; align-items: center;
+               background: rgba(0,0,0,0.9); z-index: 10; transition: opacity 0.5s; cursor: pointer; }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { text-shadow: 0 0 10px #ff8c00; letter-spacing: 4px; }
+    p { color: #888; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>MIDNIGHT CARAVAN</h1>
+    <p>E Phrygian Dominant &bull; Nylon Simulation</p>
+    <br>
+    <div style="border: 1px solid #ffd700; padding: 10px 20px; color: #ffd700;">CLICK TO START CARAVAN</div>
+</div>
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 95, // Specified in prompt
+    // Standard Tuning (High E to Low E)
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// Rhythm Constants
+const X = 0.125; // 32nd
+const S = 0.25;  // 16th
+const E = 0.5;   // 8th
+const Q = 1.0;   // Quarter
+const H = 2.0;   // Half
+const W = 4.0;   // Whole
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (PHYSICS & SYNTHESIS)
+// ═══════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        // Master Gain
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4;
+
+        // Reverb Setup (Hall: 2.0s duration, 3.0 decay per manual)
+        const convolver = AudioEngine.ctx.createConvolver();
+        convolver.buffer = await AudioEngine.createImpulse(2.0, 3.0);
+        const reverbGain = AudioEngine.ctx.createGain();
+        reverbGain.gain.value = 0.35; // Wet level
+
+        // Routing: Master -> Destination AND Master -> Reverb -> Destination
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(convolver);
+        convolver.connect(reverbGain);
+        reverbGain.connect(AudioEngine.ctx.destination);
+    },
+
+    // Impulse Response Generator (Manual Part III)
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            // Exponential decay noise
+            const env = Math.pow(1 - i / length, decay);
+            L[i] = (Math.random() * 2 - 1) * env;
+            R[i] = (Math.random() * 2 - 1) * env;
+        }
+        return impulse;
+    },
+
+    // NYLON GUITAR RECIPE (Manual Part III)
+    // Physics: Triangle (Body) + Sine (Harmonics) + Lowpass Sweep (Pluck)
+    playString: (stringIdx, fret, time, duration = 1.2) => {
+        if (!AudioEngine.ctx) return;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        const ctx = AudioEngine.ctx;
+
+        // Oscillators
+        const osc1 = ctx.createOscillator(); osc1.type = 'triangle'; // Fundamental/Body
+        const osc2 = ctx.createOscillator(); osc2.type = 'sine';     // 2nd Harmonic
+        const osc3 = ctx.createOscillator(); osc3.type = 'sine';     // 3rd Harmonic
+
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2;
+        osc3.frequency.value = freq * 3;
+
+        // Mix Gains
+        const g1 = ctx.createGain(); g1.gain.value = 0.5;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        const g3 = ctx.createGain(); g3.gain.value = 0.15;
+
+        // Filter (Warm Lowpass with pluck decay)
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3000, time);
+        filter.frequency.exponentialRampToValueAtTime(600, time + 0.15); // The "snap" down to warm tone
+        filter.Q.value = 0.5;
+
+        // Envelope (Fast attack, natural decay)
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.5, time + 0.008); // 8ms attack
+        amp.gain.exponentialRampToValueAtTime(0.2, time + 0.15);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        // Connections
+        osc1.connect(g1); osc2.connect(g2); osc3.connect(g3);
+        g1.connect(filter); g2.connect(filter); g3.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+
+        [osc1, osc2, osc3].forEach(o => {
+            o.start(time);
+            o.stop(time + duration);
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. COMPOSITION (DATA & HELPERS)
+// ═══════════════════════════════════════════════════════════════
+const TAB = [];
+
+// Helper: Add Single Note
+function addNote(beat, string, fret) { 
+    TAB.push({ beat, string, fret }); 
+}
+
+// Helper: Tremolo (Part V)
+function tremolo(beat, string, fret, duration, speed = 0.125) { // 32nd note tremolo
+    let t = beat;
+    while (t < beat + duration) {
+        addNote(t, string, fret);
+        t += speed;
+    }
+}
+
+// Helper: Rasgueado (Part V) - Rapid Strum
+function rasgueado(beat, chord, speed = 0.015) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1]);
+    });
+}
+
+// ─── CHORD DEFINITIONS (E Phrygian Dominant Context) ───
+const Am = [[5,0], [4,0], [3,2], [2,2], [1,1], [0,0]];
+const G  = [[5,3], [4,2], [3,0], [2,0], [1,0], [0,3]];
+const F  = [[5,1], [4,3], [3,2], [2,1], [1,1], [0,1]]; // F Major
+const E7 = [[5,0], [4,2], [3,0], [2,1], [1,0], [0,0]]; // V chord (Phrygian Dominant)
+
+// ─── THE SCORE: "MIDNIGHT CARAVAN" ───
+let b = 0; // Beat Cursor
+
+// SECTION 1: INTRO (8 Beats)
+// Drone Low E + High E Tremolo
+addNote(b, 5, 0); // Drone Low E
+tremolo(b, 0, 12, 8, S); // High E string, 12th fret (E)
+b += 8;
+
+// SECTION 2: THEME A (16 Beats) - Descending Phrygian
+// E Phrygian Dominant: E F G# A B C D E
+// Beat 8-12: Am flavor
+addNote(b, 4, 0); // Bass A
+addNote(b, 0, 5); b+=Q; // A
+addNote(b, 0, 4); b+=Q; // G# (The "Middle Eastern" note)
+addNote(b, 0, 1); b+=Q; // F
+addNote(b, 0, 0); b+=Q; // E
+
+// Beat 12-16: G flavor
+addNote(b, 5, 3); // Bass G
+addNote(b, 1, 3); b+=Q; // D
+addNote(b, 1, 1); b+=Q; // C
+addNote(b, 1, 0); b+=Q; // B
+addNote(b, 2, 2); b+=Q; // A
+
+// Beat 16-20: F flavor
+addNote(b, 5, 1); // Bass F
+addNote(b, 2, 1); b+=Q; // G# (Accidental tension)
+addNote(b, 2, 2); b+=Q; // A
+addNote(b, 2, 1); b+=Q; // G#
+addNote(b, 2, 0); b+=Q; // G natural (passing)
+
+// Beat 20-24: E Resolution
+addNote(b, 5, 0); // Bass E
+addNote(b, 3, 3); b+=Q; // F
+addNote(b, 3, 2); b+=Q; // E
+addNote(b, 3, 0); b+=H; // D (Suspense) -> Sustain
+
+// SECTION 3: RASGUEADO CYCLE (16 Beats)
+// Andalusian Cadence: Am -> G -> F -> E
+rasgueado(b, Am); b += 4;
+rasgueado(b, G);  b += 4;
+rasgueado(b, F);  b += 4;
+rasgueado(b, E7); b += 4;
+
+// SECTION 4: PICADO RUN (8 Beats)
+// Fast 16th note run from Low E to High E
+const scaleRun = [
+    [5,0], [5,1], [5,4], // E, F, G# (Low E string)
+    [4,0], [4,2], [4,3], // A, B, C
+    [3,0], [3,2],        // D, E
+    [2,0], [2,1], [2,3], // G, G#, A# (Chromatic flavor)
+    [1,0], [1,1], [1,4], // B, C, D#
+    [0,0], [0,1], [0,4], [0,5], [0,7], [0,8], [0,12] // High E run up
+];
+
+scaleRun.forEach((n) => {
+    addNote(b, n[0], n[1]);
+    b += S; // 16th notes
+});
+b += (32 - scaleRun.length) * S; // Fill rest of measure
+
+// SECTION 5: OUTRO (8 Beats)
+// Ritardando effect (manually spacing notes)
+addNote(b, 5, 0); // Final Bass E
+let delay = S;
+[12, 10, 8, 7, 5, 4, 1, 0].forEach(fret => {
+    addNote(b, 0, fret);
+    b += delay;
+    delay += 0.05; // Slow down
+});
+
+// Final Chord
+addNote(b + 1, 5, 0);
+addNote(b + 1.05, 4, 2);
+addNote(b + 1.10, 3, 2);
+addNote(b + 1.15, 2, 1); // G# (Picardy third feel / Dominant)
+addNote(b + 1.20, 1, 0);
+addNote(b + 1.25, 0, 0);
+
+const LOOP_LENGTH = b + 8;
+
+// ═══════════════════════════════════════════════════════════════
+// 4. SEQUENCER ENGINE
+// ═══════════════════════════════════════════════════════════════
+let currentBeat = 0, startTime = 0, nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Loop Logic
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    // Lookahead
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.1) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        
+        // Random velocity for human feel
+        const velocity = 1.0 + (Math.random() * 0.2 - 0.1);
+        
+        AudioEngine.playString(note.string, note.fret, playTime, 2.0 * velocity);
+        triggerVisual(note);
+        nextNoteIdx++;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. VISUAL ENGINE (Gold/Amber Theme)
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() { w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) { 
+    activeNotes.push({ ...note, life: 1.0, born: Date.now() }); 
+}
+
+function draw() {
+    // Clear with trail for dreamlike effect
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.2)'; 
+    ctx.fillRect(0, 0, w, h);
+    
+    const STAFF_Y = h / 2; 
+    const SPACING = 30; 
+    const HIT_X = w * 0.2;
+    const pixelsPerBeat = 120; // Adjusted for visibility
+    
+    // Draw Strings (Metallic Grey)
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); 
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.font = "12px monospace"; ctx.fillText(name, 10, y + 4);
+    });
+    
+    // Draw Hit Line (Gold)
+    ctx.beginPath(); ctx.moveTo(HIT_X, STAFF_Y - 90); ctx.lineTo(HIT_X, STAFF_Y + 90); 
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.stroke();
+    
+    // Draw Incoming Notes
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; // Loop wrapping visual
+        const x = HIT_X + dist * pixelsPerBeat;
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string - 2.5) * SPACING;
+            
+            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#111'; ctx.fill();
+            ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5; ctx.stroke(); // Gold rings
+            
+            // Fret number
+            if (dist > 0.5) { // Only show number if not hitting yet
+                ctx.fillStyle = '#ff8c00'; ctx.fillText(note.fret, x - 3, y - 10);
+            }
+        }
+    });
+    
+    // Draw Ripples (Amber)
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string - 2.5) * SPACING;
+        
+        // Expanding ripple
+        const radius = 10 + ((1 - n.life) * 60);
+        ctx.beginPath(); ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 140, 0, ${n.life})`; // Amber fade
+        ctx.lineWidth = 2; ctx.stroke();
+        
+        n.life -= 0.04;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. INTERACTION
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) { AudioEngine.init(); }
+    togglePlay();
+});
+
+document.addEventListener('keydown', e => { 
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); } 
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        // Seamless resume logic
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+// Start Visual Loop
+draw();
+
+</script>
+</body>
+</html>

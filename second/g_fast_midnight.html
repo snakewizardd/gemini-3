@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>THUNDERSTRUCK OVERDRIVE | Neoclassical Engine</title>
+<style>
+    body { margin: 0; background: #080808; overflow: hidden; color: #00f3ff; font-family: 'Segoe UI', monospace; }
+    #canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+               display: flex; flex-direction: column; justify-content: center; align-items: center;
+               background: rgba(0,0,0,0.92); z-index: 10; transition: opacity 0.2s; cursor: pointer; }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { text-shadow: 0 0 15px #00f3ff; font-style: italic; letter-spacing: 2px; text-transform: uppercase; }
+    .status { font-size: 12px; color: #666; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Thunderstruck Overdrive</h1>
+    <p>180 BPM &bull; High Gain Distortion &bull; Harmonic Minor</p>
+    <div class="status">CLICK TO ENGAGE SYSTEMS</div>
+</div>
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 180, // High Speed (Metal)
+    // Standard Tuning
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// Durations
+const S = 0.25;  // 16th note
+const E = 0.5;   // 8th note
+const Q = 1.0;   // Quarter
+const H = 2.0;   // Half
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (HIGH GAIN PHYSICS)
+// ═══════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null, // Distortion bus
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        // Master Bus
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.3;
+
+        // DISTORTION BUS (Ref: Part III - Tone Recipe 2)
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(400); // 400 = Heavy Saturation
+        AudioEngine.drive.oversample = '4x';
+
+        // CAB SIMULATION (Tight Lowpass)
+        const cabSim = AudioEngine.ctx.createBiquadFilter();
+        cabSim.type = 'lowpass';
+        cabSim.frequency.value = 3500; // Cut off digital fizz
+        cabSim.Q.value = 0.7;
+
+        // Routing: Drive -> Cab -> Master -> Out
+        AudioEngine.drive.connect(cabSim);
+        cabSim.connect(AudioEngine.master);
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+    },
+
+    // Soft Clipping Curve Generator
+    makeDistortionCurve: (amount) => {
+        const k = amount;
+        const n = 44100;
+        const curve = new Float32Array(n);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n; i++) {
+            let x = i * 2 / n - 1;
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    // HIGH GAIN STRING SYNTHESIS
+    playString: (stringIdx, fret, time, duration = 0.4, technique = 'normal') => {
+        if (!AudioEngine.ctx) return;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        const ctx = AudioEngine.ctx;
+
+        // OSCILLATOR MIX: Sawtooth + Square (Ref: Part III)
+        const osc1 = ctx.createOscillator(); osc1.type = 'sawtooth';
+        const osc2 = ctx.createOscillator(); osc2.type = 'square';
+        osc2.detune.value = 5; // Thickness detune
+
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+
+        // PALM MUTE FILTERING
+        // If palm mute, we lower the cutoff frequency to create "chug"
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(technique === 'pm' ? 400 : 8000, time);
+        filter.Q.value = 1;
+
+        // TIGHT ENVELOPE
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.6, time + 0.005); // Snap attack
+        
+        // Decay depends on technique
+        if (technique === 'pm') {
+            amp.gain.exponentialRampToValueAtTime(0.001, time + 0.15); // Fast cutoff for chugs
+        } else {
+            amp.gain.exponentialRampToValueAtTime(0.001, time + duration); // Sustain
+        }
+
+        // Routing: Osc -> Filter -> Amp -> DISTORTION BUS
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.drive); // Hits the distortion hard
+
+        osc1.start(time); osc2.start(time);
+        osc1.stop(time + duration); osc2.stop(time + duration);
+    },
+
+    // POWER CHORD HELPER (Root + 5th)
+    playPowerChord: (rootString, rootFret, time, duration = 0.4, technique = 'normal') => {
+        // Root
+        AudioEngine.playString(rootString, rootFret, time, duration, technique);
+        // Fifth (2 frets up, next string)
+        if (rootString > 0) {
+            AudioEngine.playString(rootString - 1, rootFret + 2, time + 0.005, duration, technique);
+        }
+        // Octave (optional, adds wall of sound)
+        if (rootString > 1) {
+            AudioEngine.playString(rootString - 2, rootFret + 2, time + 0.01, duration, technique);
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. COMPOSITION (A Harmonic Minor Speed Metal)
+// ═══════════════════════════════════════════════════════════════
+const TAB = [];
+function addNote(beat, string, fret, technique = 'normal') { 
+    TAB.push({ beat, string, fret, technique }); 
+}
+function addPower(beat, rootString, rootFret, technique = 'normal') {
+    TAB.push({ beat, string: rootString, fret: rootFret, type: 'power', technique });
+}
+
+let b = 0; // Beat Cursor
+
+// ─── SECTION A: THE GALLOP (Thrash Riff) ───
+// Pattern: 16th-16th-8th (PM-PM-Accent)
+const gallopRiff = (startBeat, root) => {
+    let t = startBeat;
+    for(let i=0; i<4; i++) {
+        addPower(t, 5, root, 'pm'); t+=S; // Chug
+        addPower(t, 5, root, 'pm'); t+=S; // Chug
+        addPower(t, 5, root, 'normal'); t+=E; // Accent
+    }
+    return t;
+};
+
+// 4 Bars of Galloping on A (Fret 5) and F (Fret 1)
+b = gallopRiff(b, 5); // A
+b = gallopRiff(b, 5); // A
+b = gallopRiff(b, 1); // F
+b = gallopRiff(b, 3); // G (End on G power chord)
+
+// ─── SECTION B: NEOCLASSICAL PEDAL POINT (Lead) ───
+// Alternating Open High E string (Pedal) with Melody
+// Scale: A Harmonic Minor (A B C D E F G# A)
+const pedalMelody = [7, 8, 10, 8, 7, 8, 5, 7, 4, 5, 7, 5, 4, 5, 1, 4]; // Frets on A string
+pedalMelody.forEach(fret => {
+    addNote(b, 4, fret); b += S; // Melody Note
+    addNote(b, 5, 5, 'pm'); b += S;  // Pedal Note (Low A) to anchor it
+});
+
+// ─── SECTION C: SWEEP PICKING ARPEGGIOS (Diminished) ───
+// E7b9 Arpeggio shape swept across strings
+function sweepUp(beat, startString, frets) {
+    frets.forEach((fret, i) => {
+        addNote(beat + (i*S), startString - i, fret);
+    });
+}
+// Sweep E Major shape: Low E(12) -> A(11) -> D(9) -> G(9) -> B(9) -> e(7)
+addNote(b, 5, 12); b+=S;
+addNote(b, 4, 11); b+=S;
+addNote(b, 3, 9); b+=S;
+addNote(b, 2, 9); b+=S;
+addNote(b, 1, 9); b+=S;
+addNote(b, 0, 7); b+=S;
+// Hold high note
+addNote(b, 0, 12, 'vib'); b+=Q; // High E vibrato
+
+// Descending run (Fast Scale)
+const run = [12, 10, 8, 7]; // High E
+const run2 = [10, 9, 7, 6]; // B String
+run.forEach(f => { addNote(b, 0, f); b+=S; });
+run2.forEach(f => { addNote(b, 1, f); b+=S; });
+
+// ─── SECTION D: BREAKDOWN (Djent Syncopation) ───
+// Pattern: 1, 0, 0, 1, 0, 1 (Binary Metal)
+const rhythm = [1,0,0,1, 0,1,1,0, 1,0,1,0, 1,1,1,1]; 
+rhythm.forEach(hit => {
+    if(hit) {
+        addPower(b, 5, 1, 'pm'); // Low F Power Chord Chug
+        // Add pinch harmonic occasionally
+        if(Math.random() > 0.7) addNote(b, 2, 5, 'harm'); 
+    }
+    b += S; // 16th note grid
+});
+
+// ─── OUTRO: BIG FINISH ───
+addPower(b, 5, 5); b+=Q; // A5
+addPower(b, 5, 3); b+=Q; // G5
+addPower(b, 5, 1); b+=Q; // F5
+addPower(b, 5, 0); b+=W; // E5 (Open low chug sustain)
+
+const LOOP_LENGTH = b + 4;
+
+// ═══════════════════════════════════════════════════════════════
+// 4. SEQUENCER ENGINE (Optimized for Speed)
+// ═══════════════════════════════════════════════════════════════
+let currentBeat = 0, startTime = 0, nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    // Lookahead (0.1s is enough even at high BPM)
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.15) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        
+        if (note.type === 'power') {
+            AudioEngine.playPowerChord(note.string, note.fret, playTime, 0.3, note.technique);
+        } else {
+            AudioEngine.playString(note.string, note.fret, playTime, 0.3, note.technique);
+        }
+        
+        triggerVisual(note);
+        nextNoteIdx++;
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. VISUAL ENGINE (Lightning Theme)
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() { w = cvs.width = innerWidth; h = cvs.height = innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) { 
+    // Randomize X slightly for "organic" electricity feel
+    activeNotes.push({ ...note, life: 1.0, offset: (Math.random()-0.5)*10 }); 
+}
+
+function draw() {
+    ctx.fillStyle = 'rgba(8, 8, 8, 0.3)'; // Fast fade for strobe effect
+    ctx.fillRect(0, 0, w, h);
+    
+    const STAFF_Y = h / 2;
+    const SPACING = 35;
+    const HIT_X = w * 0.25;
+    const pixelsPerBeat = 200; // Wider spacing for high speed
+    
+    // Draw Strings (Steel)
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); 
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke();
+    });
+    
+    // Draw Hit Line (Electric Blue)
+    ctx.shadowBlur = 15; ctx.shadowColor = '#00f3ff';
+    ctx.beginPath(); ctx.moveTo(HIT_X, STAFF_Y - 100); ctx.lineTo(HIT_X, STAFF_Y + 100); 
+    ctx.strokeStyle = '#00f3ff'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Draw Notes
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -4) dist += LOOP_LENGTH;
+        
+        const x = HIT_X + dist * pixelsPerBeat;
+        if (x > -50 && x < w) {
+            const y = STAFF_Y + (note.string - 2.5) * SPACING;
+            
+            // Note Head
+            ctx.fillStyle = note.technique === 'pm' ? '#444' : '#fff'; // Darker for palm mute
+            ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+            
+            // Fret Number
+            if (x > HIT_X + 20) {
+                ctx.fillStyle = '#00f3ff'; ctx.font = '10px monospace';
+                ctx.fillText(note.fret, x-3, y-8);
+            }
+        }
+    });
+    
+    // Explosions/Lightning
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string - 2.5) * SPACING;
+        
+        // Electric burst
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, 5 + ((1-n.life)*40), 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(0, 243, 255, ${n.life})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Sparks
+        if (n.life > 0.8) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(HIT_X + n.offset, y + n.offset, 4, 4);
+        }
+
+        n.life -= 0.1; // Fast decay for metal
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. CONTROLS
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) { AudioEngine.init(); }
+    togglePlay();
+});
+document.addEventListener('keydown', e => { 
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); } 
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+</script>
+</body>
+</html>

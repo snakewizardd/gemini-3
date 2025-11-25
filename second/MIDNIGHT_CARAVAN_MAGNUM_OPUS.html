@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIDNIGHT CARAVAN // Magnum Opus</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body { 
+        background: #000;
+        overflow: hidden; 
+        font-family: 'Cormorant Garamond', serif;
+        color: #ffd700;
+    }
+    
+    #canvas { 
+        display: block; 
+        position: absolute; 
+        top: 0; left: 0; 
+        width: 100%; height: 100%; 
+    }
+    
+    #overlay { 
+        position: absolute; 
+        top: 0; left: 0; 
+        width: 100%; height: 100%;
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        align-items: center;
+        background: radial-gradient(ellipse at center, rgba(20,10,5,0.97) 0%, rgba(0,0,0,0.99) 100%);
+        z-index: 10; 
+        transition: opacity 1.5s ease-out; 
+    }
+    
+    .hidden { opacity: 0; pointer-events: none; }
+    
+    h1 { 
+        font-size: 4.5em; 
+        font-weight: 400;
+        font-style: italic;
+        color: #ffd700; 
+        text-shadow: 0 0 60px #ff6600, 0 0 120px #ff3300;
+        letter-spacing: 0.2em;
+        margin-bottom: 0.2em;
+        animation: glow 3s ease-in-out infinite;
+    }
+    
+    @keyframes glow {
+        0%, 100% { text-shadow: 0 0 60px #ff6600, 0 0 120px #ff3300; }
+        50% { text-shadow: 0 0 80px #ffd700, 0 0 160px #ff6600; }
+    }
+    
+    h2 {
+        font-size: 1.4em;
+        font-weight: 400;
+        color: #cc8800;
+        letter-spacing: 0.5em;
+        margin-bottom: 0.5em;
+    }
+    
+    .subtitle {
+        font-size: 1em;
+        font-style: italic;
+        color: #886633;
+        margin-bottom: 2em;
+    }
+    
+    p.start { 
+        color: #aa7722; 
+        font-size: 1.2em;
+        letter-spacing: 0.15em;
+        animation: pulse 2.5s ease-in-out infinite;
+        cursor: pointer;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 0.5; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.02); }
+    }
+    
+    #hud {
+        position: absolute;
+        bottom: 25px;
+        left: 25px;
+        font-size: 0.9em;
+        color: #664422;
+        z-index: 5;
+        line-height: 1.6;
+    }
+    
+    #section-display {
+        position: absolute;
+        top: 30px;
+        right: 30px;
+        font-size: 1.5em;
+        font-style: italic;
+        color: #ffd700;
+        text-shadow: 0 0 20px #ff8c00;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.8s;
+    }
+    
+    #time-display {
+        position: absolute;
+        bottom: 25px;
+        right: 25px;
+        font-size: 1.1em;
+        color: #664422;
+        z-index: 5;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Midnight Caravan</h1>
+    <h2>E PHRYGIAN DOMINANT</h2>
+    <p class="subtitle">"Where the desert meets the stars"</p>
+    <p class="start">— click to begin the journey —</p>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+    BPM: 95 — Mode: E Phrygian Dominant<br>
+    Duration: ~3:30
+</div>
+<div id="section-display"></div>
+<div id="time-display">0:00 / 3:30</div>
+
+<script>
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MIDNIGHT CARAVAN — MAGNUM OPUS
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * A 3+ minute journey through:
+ *   I.   AWAKENING — Sparse, mysterious, the desert at midnight
+ *   II.  THE CALL — Melody emerges, the caravan stirs
+ *   III. GATHERING — Rhythm builds, travelers join
+ *   IV.  THE JOURNEY — Full motion, rasgueado fire
+ *   V.   OASIS — Gentle respite, tremolo dreams
+ *   VI.  SANDSTORM — Intense picado fury
+ *   VII. STARLIGHT — Soaring melody, emotional peak
+ *   VIII.HOMECOMING — Resolution, peace
+ * 
+ * E Phrygian Dominant: E F G# A B C D E
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 95,
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// Duration constants
+const X = 0.125;   // 32nd
+const S = 0.25;    // 16th
+const T = 0.167;   // Triplet
+const E = 0.5;     // 8th
+const Q = 1.0;     // Quarter
+const H = 2.0;     // Half
+const W = 4.0;     // Whole
+const DQ = 1.5;    // Dotted quarter
+const DH = 3.0;    // Dotted half
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE — Multi-layered Nylon Orchestra
+// ═══════════════════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    guitarBus: null,
+    bassBus: null,
+    padBus: null,
+    reverb: null,
+    reverbGain: null,
+    delay: null,
+    delayGain: null,
+    isPlaying: false,
+
+    init: async function() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        // Master
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.7;
+        
+        // Separate buses for layering
+        AudioEngine.guitarBus = AudioEngine.ctx.createGain();
+        AudioEngine.guitarBus.gain.value = 0.6;
+        
+        AudioEngine.bassBus = AudioEngine.ctx.createGain();
+        AudioEngine.bassBus.gain.value = 0.5;
+        
+        AudioEngine.padBus = AudioEngine.ctx.createGain();
+        AudioEngine.padBus.gain.value = 0.25;
+        
+        // EQ for warmth
+        AudioEngine.warmth = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.warmth.type = 'peaking';
+        AudioEngine.warmth.frequency.value = 200;
+        AudioEngine.warmth.gain.value = 3;
+        AudioEngine.warmth.Q.value = 1;
+        
+        // Presence
+        AudioEngine.presence = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.presence.type = 'peaking';
+        AudioEngine.presence.frequency.value = 3000;
+        AudioEngine.presence.gain.value = 2;
+        AudioEngine.presence.Q.value = 1.5;
+        
+        // Hall reverb (large, lush)
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createHallImpulse(3.5, 2.0);
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.35;
+        
+        // Delay (subtle slapback)
+        AudioEngine.delay = AudioEngine.ctx.createDelay(2.0);
+        AudioEngine.delay.delayTime.value = 0.22;
+        AudioEngine.delayGain = AudioEngine.ctx.createGain();
+        AudioEngine.delayGain.gain.value = 0.12;
+        
+        // Routing
+        AudioEngine.guitarBus.connect(AudioEngine.warmth);
+        AudioEngine.bassBus.connect(AudioEngine.warmth);
+        AudioEngine.padBus.connect(AudioEngine.warmth);
+        
+        AudioEngine.warmth.connect(AudioEngine.presence);
+        AudioEngine.presence.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        
+        // Reverb send
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+        
+        // Delay send
+        AudioEngine.guitarBus.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(AudioEngine.delayGain);
+        AudioEngine.delayGain.connect(AudioEngine.reverb);
+    },
+
+    createHallImpulse: async function(duration, decay) {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        
+        // Early reflections + diffuse tail
+        for (let i = 0; i < length; i++) {
+            const t = i / rate;
+            const env = Math.pow(1 - i / length, decay);
+            
+            // Add some early reflection character
+            const early = t < 0.08 ? Math.sin(t * 800) * 0.3 : 0;
+            
+            L[i] = ((Math.random() * 2 - 1) * env + early) * 0.8;
+            R[i] = ((Math.random() * 2 - 1) * env - early) * 0.8;
+        }
+        return impulse;
+    },
+
+    // ─── NYLON GUITAR (Main voice) ───
+    playString: function(stringIdx, fret, time, duration = 1.2, velocity = 0.8, vibrato = false) {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const osc3 = ctx.createOscillator();
+        const osc4 = ctx.createOscillator();
+        
+        osc1.type = 'triangle';
+        osc2.type = 'sine';
+        osc3.type = 'sine';
+        osc4.type = 'sine';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2;
+        osc3.frequency.value = freq * 3;
+        osc4.frequency.value = freq * 4;
+        
+        // Vibrato for sustaining notes
+        if (vibrato) {
+            const vib = ctx.createOscillator();
+            const vibGain = ctx.createGain();
+            vib.frequency.value = 5.2;
+            vibGain.gain.value = 6;
+            vib.connect(vibGain);
+            vibGain.connect(osc1.frequency);
+            vibGain.connect(osc2.frequency);
+            vib.start(time + 0.3);
+            vib.stop(time + duration);
+        }
+        
+        const g1 = ctx.createGain(); g1.gain.value = 0.45 * velocity;
+        const g2 = ctx.createGain(); g2.gain.value = 0.25 * velocity;
+        const g3 = ctx.createGain(); g3.gain.value = 0.18 * velocity;
+        const g4 = ctx.createGain(); g4.gain.value = 0.08 * velocity;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3200, time);
+        filter.frequency.exponentialRampToValueAtTime(700, time + 0.3);
+        filter.Q.value = 0.7;
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.5 * velocity, time + 0.008);
+        amp.gain.exponentialRampToValueAtTime(0.25 * velocity, time + 0.15);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        osc3.connect(g3); g3.connect(filter);
+        osc4.connect(g4); g4.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.guitarBus);
+        
+        osc1.start(time); osc1.stop(time + duration + 0.05);
+        osc2.start(time); osc2.stop(time + duration + 0.05);
+        osc3.start(time); osc3.stop(time + duration + 0.05);
+        osc4.start(time); osc4.stop(time + duration + 0.05);
+    },
+
+    // ─── DEEP BASS (Foundation) ───
+    playBass: function(stringIdx, fret, time, duration = 2.0) {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        osc2.frequency.value = freq;
+        osc1.frequency.value = freq;
+        
+        const g1 = ctx.createGain(); g1.gain.value = 0.6;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 350;
+        filter.Q.value = 1;
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.5, time + 0.02);
+        amp.gain.setValueAtTime(0.5, time + duration * 0.8);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.bassBus);
+        
+        osc1.start(time); osc1.stop(time + duration + 0.1);
+        osc2.start(time); osc2.stop(time + duration + 0.1);
+    },
+
+    // ─── ATMOSPHERIC PAD (Depth) ───
+    playPad: function(freqs, time, duration = 4.0) {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        
+        freqs.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            
+            // Slow LFO for movement
+            const lfo = ctx.createOscillator();
+            const lfoGain = ctx.createGain();
+            lfo.frequency.value = 0.3 + idx * 0.1;
+            lfoGain.gain.value = 3;
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc.frequency);
+            
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+            
+            const amp = ctx.createGain();
+            amp.gain.setValueAtTime(0, time);
+            amp.gain.linearRampToValueAtTime(0.15, time + 0.5);
+            amp.gain.setValueAtTime(0.15, time + duration - 0.8);
+            amp.gain.linearRampToValueAtTime(0, time + duration);
+            
+            osc.connect(filter);
+            filter.connect(amp);
+            amp.connect(AudioEngine.padBus);
+            
+            osc.start(time);
+            osc.stop(time + duration + 0.1);
+            lfo.start(time);
+            lfo.stop(time + duration + 0.1);
+        });
+    },
+
+    // ─── HARMONIC (Bell-like overtone) ───
+    playHarmonic: function(stringIdx, fret, time, duration = 3.0) {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq * 2; // Octave harmonic
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.2, time + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(amp);
+        amp.connect(AudioEngine.guitarBus);
+        
+        osc.start(time);
+        osc.stop(time + duration);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB DATA & COMPOSITION HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+const TAB = [];
+const BASS = [];
+const PADS = [];
+const HARMONICS = [];
+let currentSection = 'Awakening';
+
+function addNote(beat, string, fret, dur = Q, vel = 0.8, vib = false) {
+    TAB.push({ beat, string, fret, duration: dur, velocity: vel, vibrato: vib, section: currentSection });
+}
+
+function addBass(beat, string, fret, dur = H) {
+    BASS.push({ beat, string, fret, duration: dur, section: currentSection });
+}
+
+function addPad(beat, freqs, dur = W) {
+    PADS.push({ beat, freqs, duration: dur, section: currentSection });
+}
+
+function addHarmonic(beat, string, fret, dur = DH) {
+    HARMONICS.push({ beat, string, fret, duration: dur, section: currentSection });
+}
+
+// Chord library - Phrygian Dominant voicings
+const chords = {
+    E7b9:   [[5,0], [4,2], [3,1], [2,0], [1,0], [0,1]],
+    Am:     [[4,0], [3,2], [2,2], [1,1], [0,0]],
+    Am7:    [[4,0], [3,2], [2,0], [1,1], [0,0]],
+    G:      [[5,3], [4,2], [3,0], [2,0], [1,0], [0,3]],
+    F:      [[5,1], [4,3], [3,2], [2,1], [1,1], [0,1]],
+    Fmaj7:  [[5,1], [4,3], [3,2], [2,1], [1,0], [0,0]],
+    Dm:     [[4,0], [3,0], [2,2], [1,3], [0,1]],
+    Dm7:    [[4,0], [3,2], [2,1], [1,1], [0,1]],
+    Bdim:   [[4,2], [3,0], [2,0], [1,0]],
+    C:      [[4,3], [3,2], [2,0], [1,1], [0,0]],
+    Em:     [[5,0], [4,2], [3,2], [2,0], [1,0], [0,0]]
+};
+
+// Rasgueado with dynamics
+function rasgueado(beat, chord, speed = 0.018, vel = 0.9) {
+    chord.forEach((note, i) => {
+        const noteVel = vel * (0.7 + (i / chord.length) * 0.3);
+        addNote(beat + i * speed, note[0], note[1], 0.8, noteVel);
+    });
+}
+
+// Gentle arpeggio
+function arpeggio(beat, chord, speed = 0.12, vel = 0.6) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1], 1.5, vel);
+    });
+}
+
+// Tremolo pattern
+function tremolo(beat, string, fret, duration, speed = 0.07, vel = 0.5) {
+    let t = beat;
+    while (t < beat + duration) {
+        addNote(t, string, fret, 0.3, vel);
+        t += speed;
+    }
+}
+
+// Golpe + chord
+function golpeChord(beat, chord, vel = 1.0) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * 0.012, note[0], note[1], 0.6, vel * (0.8 + i * 0.04));
+    });
+}
+
+// Melodic phrase helper
+function phrase(beat, notes, baseVel = 0.75) {
+    notes.forEach(n => {
+        addNote(beat + n[0], n[1], n[2], n[3] || Q, n[4] || baseVel, n[5] || false);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE COMPOSITION — MIDNIGHT CARAVAN
+// ═══════════════════════════════════════════════════════════════════════════
+let b = 0;
+
+// Pad frequencies for ambience (E minor/Phrygian)
+const padE = [82.41, 123.47, 164.81];      // E2, B2, E3
+const padAm = [110, 164.81, 220];          // A2, E3, A3
+const padF = [87.31, 130.81, 174.61];      // F2, C3, F3
+
+// ═══════════════════════════════════════════════════════════════════════════
+// I. AWAKENING (0-32 beats) — Sparse, mysterious
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'Awakening';
+
+// Ambient pad entrance
+addPad(b, padE, 16);
+
+// Silence... then a single harmonic emerges
+b += 2;
+addHarmonic(b, 0, 12, 6);
+addBass(b, 5, 0, 8);
+
+b += 4;
+// Sparse melodic fragments
+addNote(b, 0, 0, H, 0.4);
+b += 3;
+addNote(b, 1, 1, Q, 0.35);
+b += 1.5;
+addNote(b, 0, 0, Q, 0.3);
+
+b += 2;
+addHarmonic(b, 1, 12, 4);
+
+b += 2.5;
+// The first real phrase - questioning
+addNote(b, 0, 3, E, 0.5);
+addNote(b + E, 0, 1, E, 0.45);
+addNote(b + Q, 0, 0, DQ, 0.5, true);
+
+b += 3;
+addBass(b, 5, 0, 6);
+addPad(b, padE, 12);
+
+b += 2;
+// Response phrase
+addNote(b, 1, 0, E, 0.5);
+addNote(b + E, 1, 1, E, 0.55);
+addNote(b + Q, 1, 3, Q, 0.5);
+addNote(b + Q + E, 2, 2, H, 0.5, true);
+
+b += 4;
+// Building slightly
+addNote(b, 0, 5, E, 0.55);
+addNote(b + E, 0, 3, E, 0.5);
+addNote(b + Q, 0, 1, E, 0.55);
+addNote(b + Q + E, 0, 0, H, 0.6, true);
+
+b += 3;
+addHarmonic(b, 0, 7, 5);
+
+// Round to beat 32
+b = 32;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// II. THE CALL (32-64 beats) — Melody emerges
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'The Call';
+
+addPad(b, padAm, 16);
+addBass(b, 4, 0, 4); // A bass
+
+// Main theme statement - the caravan's call
+// Phrase A
+addNote(b, 0, 0, E, 0.7);
+addNote(b + E, 0, 1, E, 0.65);
+addNote(b + Q, 0, 3, Q, 0.7);
+addNote(b + H, 0, 5, DQ, 0.75, true);
+
+b += 4;
+addBass(b, 5, 0, 4); // E bass
+
+// Phrase B - descending answer
+addNote(b, 0, 5, E, 0.7);
+addNote(b + E, 0, 3, E, 0.65);
+addNote(b + Q, 0, 1, E, 0.6);
+addNote(b + Q + E, 0, 0, Q, 0.65);
+addNote(b + H + E, 1, 3, DQ, 0.7, true);
+
+b += 4;
+addBass(b, 5, 1, 4); // F bass - Phrygian color
+
+// Phrase C - reaching higher
+addNote(b, 0, 5, E, 0.7);
+addNote(b + E, 0, 7, E, 0.75);
+addNote(b + Q, 0, 8, Q, 0.8);
+addNote(b + H, 0, 7, E, 0.75);
+addNote(b + H + E, 0, 5, DQ, 0.7, true);
+
+b += 4;
+addBass(b, 5, 0, 4);
+addPad(b, padE, 8);
+
+// Phrase D - resolution
+addNote(b, 0, 5, E, 0.65);
+addNote(b + E, 0, 3, E, 0.6);
+addNote(b + Q, 0, 1, E, 0.55);
+addNote(b + Q + E, 0, 0, H, 0.6, true);
+
+b += 4;
+// Second theme variation with bass movement
+addBass(b, 4, 0, 2);
+addNote(b, 2, 2, E, 0.5);
+addNote(b + E, 1, 1, E, 0.55);
+addNote(b + Q, 0, 0, Q, 0.6);
+
+b += 2;
+addBass(b, 5, 3, 2); // G bass
+addNote(b, 0, 3, E, 0.65);
+addNote(b + E, 0, 5, Q, 0.7);
+addNote(b + Q + E, 0, 3, E, 0.65);
+
+b += 2;
+addBass(b, 5, 1, 2); // F bass
+addNote(b, 0, 1, E, 0.6);
+addNote(b + E, 0, 3, E, 0.65);
+addNote(b + Q, 0, 1, Q, 0.6);
+
+b += 2;
+addBass(b, 5, 0, 2); // E bass
+addNote(b, 0, 0, H, 0.7, true);
+
+b += 2;
+// More elaborate melodic run
+addBass(b, 4, 0, 4);
+addNote(b, 0, 0, S, 0.6);
+addNote(b + S, 0, 1, S, 0.6);
+addNote(b + E, 0, 3, S, 0.65);
+addNote(b + E + S, 0, 5, S, 0.65);
+addNote(b + Q, 0, 7, E, 0.7);
+addNote(b + Q + E, 0, 8, Q, 0.75, true);
+
+b += 2;
+addNote(b, 0, 7, E, 0.7);
+addNote(b + E, 0, 5, E, 0.65);
+addNote(b + Q, 0, 3, E, 0.6);
+addNote(b + Q + E, 0, 1, E, 0.55);
+addNote(b + H, 0, 0, Q, 0.6, true);
+
+// Complete to beat 64
+b = 64;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// III. GATHERING (64-104 beats) — Rhythm builds, chords enter
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'Gathering';
+
+addPad(b, padAm, 20);
+
+// First chord enters - gentle arpeggio
+addBass(b, 4, 0, 4);
+arpeggio(b, chords.Am, 0.15, 0.5);
+
+b += 4;
+addBass(b, 5, 3, 4);
+arpeggio(b, chords.G, 0.15, 0.5);
+
+b += 4;
+addBass(b, 5, 1, 4);
+arpeggio(b, chords.F, 0.15, 0.55);
+
+b += 4;
+addBass(b, 5, 0, 4);
+arpeggio(b, chords.E7b9, 0.15, 0.55);
+
+b += 4;
+// Now with light strumming
+addBass(b, 4, 0, 2);
+golpeChord(b, chords.Am, 0.6);
+b += 2;
+addNote(b, 0, 0, E, 0.55);
+addNote(b + E, 0, 3, E, 0.6);
+addNote(b + Q, 0, 5, Q, 0.65, true);
+
+b += 2;
+addBass(b, 5, 3, 2);
+golpeChord(b, chords.G, 0.6);
+b += 2;
+addNote(b, 0, 7, E, 0.65);
+addNote(b + E, 0, 5, E, 0.6);
+addNote(b + Q, 0, 3, Q, 0.55);
+
+b += 2;
+addBass(b, 5, 1, 2);
+golpeChord(b, chords.F, 0.65);
+b += 2;
+addNote(b, 0, 1, E, 0.6);
+addNote(b + E, 0, 3, E, 0.65);
+addNote(b + Q, 0, 5, Q, 0.7, true);
+
+b += 2;
+addBass(b, 5, 0, 4);
+golpeChord(b, chords.E7b9, 0.7);
+
+b += 4;
+// Building to rasgueado section
+addPad(b, padE, 12);
+
+// Rhythmic acceleration
+addBass(b, 4, 0, 2);
+golpeChord(b, chords.Am, 0.7);
+golpeChord(b + Q + E, chords.Am, 0.55);
+
+b += 2;
+addBass(b, 5, 3, 2);
+golpeChord(b, chords.G, 0.7);
+golpeChord(b + Q + E, chords.G, 0.55);
+
+b += 2;
+addBass(b, 5, 1, 2);
+golpeChord(b, chords.F, 0.75);
+golpeChord(b + Q + E, chords.F, 0.6);
+
+b += 2;
+addBass(b, 5, 0, 2);
+rasgueado(b, chords.E7b9, 0.02, 0.8);
+
+b += 2;
+
+// Final gathering push
+addBass(b, 4, 0, 1);
+golpeChord(b, chords.Am, 0.75);
+b += 1;
+golpeChord(b, chords.Am, 0.6);
+b += 1;
+addBass(b, 5, 3, 1);
+golpeChord(b, chords.G, 0.75);
+b += 1;
+golpeChord(b, chords.G, 0.6);
+b += 1;
+addBass(b, 5, 1, 1);
+golpeChord(b, chords.F, 0.8);
+b += 1;
+golpeChord(b, chords.F, 0.65);
+b += 1;
+addBass(b, 5, 0, 2);
+rasgueado(b, chords.E7b9, 0.015, 0.9);
+
+b = 104;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IV. THE JOURNEY (104-152 beats) — Full motion, rasgueado fire
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'The Journey';
+
+// Full rasgueado patterns - the caravan in motion
+for (let cycle = 0; cycle < 3; cycle++) {
+    addPad(b, cycle % 2 === 0 ? padAm : padE, 16);
+    
+    // Am
+    addBass(b, 4, 0, 2);
+    rasgueado(b, chords.Am, 0.015, 0.9);
+    b += 1;
+    rasgueado(b, chords.Am, 0.02, 0.7);
+    b += 1;
+    rasgueado(b, chords.Am, 0.015, 0.85);
+    b += 1;
+    // Melodic fill
+    addNote(b, 0, 5, S, 0.75);
+    addNote(b + S, 0, 7, S, 0.8);
+    addNote(b + E, 0, 8, E, 0.85);
+    b += 1;
+    
+    // G
+    addBass(b, 5, 3, 2);
+    rasgueado(b, chords.G, 0.015, 0.9);
+    b += 1;
+    rasgueado(b, chords.G, 0.02, 0.7);
+    b += 1;
+    rasgueado(b, chords.G, 0.015, 0.85);
+    b += 1;
+    addNote(b, 0, 7, S, 0.75);
+    addNote(b + S, 0, 5, S, 0.7);
+    addNote(b + E, 0, 3, E, 0.75);
+    b += 1;
+    
+    // F
+    addBass(b, 5, 1, 2);
+    rasgueado(b, chords.F, 0.015, 0.9);
+    b += 1;
+    rasgueado(b, chords.F, 0.02, 0.7);
+    b += 1;
+    rasgueado(b, chords.F, 0.015, 0.85);
+    b += 1;
+    addNote(b, 0, 1, S, 0.7);
+    addNote(b + S, 0, 3, S, 0.75);
+    addNote(b + E, 0, 5, E, 0.8);
+    b += 1;
+    
+    // E7b9 - the Phrygian resolution
+    addBass(b, 5, 0, 4);
+    rasgueado(b, chords.E7b9, 0.012, 0.95);
+    b += 1;
+    rasgueado(b, chords.E7b9, 0.015, 0.8);
+    b += 1;
+    rasgueado(b, chords.E7b9, 0.012, 0.9);
+    b += 1;
+    
+    // Turnaround lick
+    if (cycle < 2) {
+        addNote(b, 0, 0, S, 0.7);
+        addNote(b + S, 0, 1, S, 0.75);
+        addNote(b + E, 0, 3, S, 0.8);
+        addNote(b + E + S, 0, 5, E, 0.85);
+        b += 1;
+    } else {
+        // Final cycle - dramatic run up
+        addNote(b, 4, 0, S, 0.7);
+        addNote(b + S, 4, 2, S, 0.72);
+        addNote(b + E, 4, 3, S, 0.74);
+        addNote(b + E + S, 3, 0, S, 0.76);
+        addNote(b + Q, 3, 2, S, 0.78);
+        addNote(b + Q + S, 2, 0, S, 0.8);
+        addNote(b + Q + E, 2, 1, S, 0.82);
+        addNote(b + Q + E + S, 1, 0, E, 0.85);
+        b += 1;
+    }
+}
+
+b = 152;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V. OASIS (152-184 beats) — Gentle respite, tremolo dreams
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'Oasis';
+
+addPad(b, [82.41, 164.81, 246.94], 16); // E chord pad
+
+// Tremolo melody over sustained bass - peaceful
+addBass(b, 5, 0, 8);
+tremolo(b, 0, 12, 3, 0.06, 0.45);
+addNote(b, 2, 9, 3, 0.4); // Harmony
+
+b += 4;
+addBass(b, 4, 0, 4);
+tremolo(b, 0, 10, 3, 0.06, 0.45);
+addNote(b, 2, 7, 3, 0.38);
+
+b += 4;
+addBass(b, 5, 3, 4);
+tremolo(b, 0, 8, 3, 0.06, 0.45);
+addNote(b, 2, 5, 3, 0.38);
+
+b += 4;
+addBass(b, 5, 1, 4);
+tremolo(b, 0, 7, 3, 0.06, 0.45);
+addNote(b, 2, 4, 3, 0.38);
+
+b += 4;
+// Second tremolo phrase - building again
+addPad(b, padAm, 16);
+addBass(b, 5, 0, 4);
+tremolo(b, 0, 12, 3.5, 0.055, 0.5);
+addHarmonic(b + 1, 1, 12, 4);
+
+b += 4;
+addBass(b, 4, 2, 4);
+tremolo(b, 1, 13, 3.5, 0.055, 0.5);
+
+b += 4;
+addBass(b, 4, 3, 4);
+tremolo(b, 1, 15, 3.5, 0.055, 0.55);
+
+b += 4;
+addBass(b, 5, 0, 4);
+tremolo(b, 0, 12, 3.5, 0.05, 0.6);
+
+b += 4;
+b = 184;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VI. SANDSTORM (184-224 beats) — Intense picado fury
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'Sandstorm';
+
+addPad(b, padE, 20);
+
+// Ascending fury - E Phrygian Dominant scale blaze
+addBass(b, 5, 0, 2);
+
+// Wave 1 - Building
+addNote(b, 5, 0, S, 0.65); addNote(b + S, 5, 1, S, 0.67);
+addNote(b + E, 5, 4, S, 0.7); addNote(b + E + S, 4, 0, S, 0.72);
+addNote(b + Q, 4, 2, S, 0.74); addNote(b + Q + S, 4, 3, S, 0.76);
+addNote(b + Q + E, 4, 5, S, 0.78); addNote(b + Q + E + S, 3, 2, S, 0.8);
+
+b += 2;
+addNote(b, 3, 4, S, 0.8); addNote(b + S, 3, 5, S, 0.8);
+addNote(b + E, 2, 2, S, 0.82); addNote(b + E + S, 2, 4, S, 0.83);
+addNote(b + Q, 2, 5, S, 0.84); addNote(b + Q + S, 1, 2, S, 0.85);
+addNote(b + Q + E, 1, 4, S, 0.86); addNote(b + Q + E + S, 1, 5, S, 0.87);
+
+b += 2;
+addBass(b, 4, 0, 2);
+addNote(b, 0, 3, S, 0.88); addNote(b + S, 0, 5, S, 0.88);
+addNote(b + E, 0, 7, S, 0.89); addNote(b + E + S, 0, 8, S, 0.9);
+addNote(b + Q, 0, 10, S, 0.9); addNote(b + Q + S, 0, 12, E, 0.92, true);
+
+b += 2;
+// Descending response
+addNote(b, 0, 12, S, 0.9); addNote(b + S, 0, 10, S, 0.88);
+addNote(b + E, 0, 8, S, 0.86); addNote(b + E + S, 0, 7, S, 0.84);
+addNote(b + Q, 0, 5, S, 0.82); addNote(b + Q + S, 0, 3, S, 0.8);
+addNote(b + Q + E, 0, 1, S, 0.78); addNote(b + Q + E + S, 0, 0, E, 0.8, true);
+
+b += 2;
+// Wave 2 - Intensify
+addBass(b, 5, 0, 4);
+addPad(b, padF, 8);
+
+// Chromatic madness
+for (let i = 0; i < 16; i++) {
+    const fret = i;
+    const str = fret < 5 ? 5 : fret < 10 ? 4 : fret < 14 ? 3 : 2;
+    const adjustedFret = fret < 5 ? fret : fret < 10 ? fret - 5 : fret < 14 ? fret - 10 + 2 : fret - 14 + 2;
+    addNote(b + i * S, str, adjustedFret, S, 0.75 + i * 0.015);
+}
+
+b += 4;
+// Descend
+for (let i = 0; i < 16; i++) {
+    const fret = 15 - i;
+    const str = fret > 10 ? 2 : fret > 5 ? 3 : fret > 0 ? 4 : 5;
+    const adjustedFret = fret > 10 ? fret - 10 + 2 : fret > 5 ? fret - 5 + 2 : fret;
+    addNote(b + i * S, str, adjustedFret, S, 0.9 - i * 0.01);
+}
+
+b += 4;
+addBass(b, 5, 1, 2);
+rasgueado(b, chords.F, 0.01, 0.95);
+
+b += 2;
+addBass(b, 5, 0, 2);
+rasgueado(b, chords.E7b9, 0.008, 1.0);
+
+b += 2;
+// Sequence patterns
+addBass(b, 4, 0, 4);
+
+// Pattern 1: 3-note sequences ascending
+addNote(b, 0, 0, S, 0.8); addNote(b + S, 0, 1, S, 0.82); addNote(b + E, 0, 3, S, 0.84);
+addNote(b + E + S, 0, 1, S, 0.8); addNote(b + Q, 0, 3, S, 0.82); addNote(b + Q + S, 0, 5, S, 0.84);
+addNote(b + Q + E, 0, 3, S, 0.8); addNote(b + Q + E + S, 0, 5, S, 0.82);
+
+b += 2;
+addNote(b, 0, 7, S, 0.84); addNote(b + S, 0, 5, S, 0.82); addNote(b + E, 0, 7, S, 0.85);
+addNote(b + E + S, 0, 8, S, 0.87); addNote(b + Q, 0, 7, S, 0.85); addNote(b + Q + S, 0, 8, S, 0.87);
+addNote(b + Q + E, 0, 10, S, 0.89); addNote(b + Q + E + S, 0, 12, E, 0.92, true);
+
+b += 2;
+// Tremolo climax
+addBass(b, 5, 0, 4);
+tremolo(b, 0, 12, 2, 0.04, 0.8);
+
+b += 2;
+tremolo(b, 0, 15, 2, 0.04, 0.85);
+
+b += 2;
+// Final sandstorm push
+addBass(b, 5, 0, 2);
+rasgueado(b, chords.E7b9, 0.008, 1.0);
+rasgueado(b + Q, chords.E7b9, 0.01, 0.9);
+rasgueado(b + Q + E, chords.E7b9, 0.008, 0.95);
+rasgueado(b + H, chords.E7b9, 0.01, 0.85);
+
+b += 2;
+addBass(b, 5, 1, 2);
+rasgueado(b, chords.F, 0.008, 1.0);
+rasgueado(b + Q, chords.F, 0.01, 0.9);
+rasgueado(b + Q + E, chords.Fmaj7, 0.008, 0.95);
+
+b += 2;
+addBass(b, 5, 0, 4);
+rasgueado(b, chords.E7b9, 0.006, 1.0);
+
+b += 4;
+b = 224;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VII. STARLIGHT (224-280 beats) — Soaring melody, emotional peak
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'Starlight';
+
+addPad(b, [82.41, 123.47, 164.81, 246.94], 28); // Full E chord
+
+// The most beautiful melody - this is where souls weep
+addBass(b, 5, 0, 8);
+addHarmonic(b, 0, 12, 6);
+
+// Soaring phrase 1
+addNote(b + 1, 0, 12, E, 0.7);
+addNote(b + 1 + E, 0, 15, DQ, 0.8, true);
+addNote(b + 3, 0, 12, E, 0.75);
+addNote(b + 3 + E, 1, 13, Q, 0.7);
+addNote(b + 4 + E, 0, 12, H, 0.75, true);
+
+b += 8;
+addBass(b, 4, 0, 4);
+
+// Phrase 2 - yearning
+addNote(b, 0, 12, E, 0.75);
+addNote(b + E, 0, 10, E, 0.7);
+addNote(b + Q, 0, 8, E, 0.72);
+addNote(b + Q + E, 0, 7, DQ, 0.75, true);
+addNote(b + 2 + E, 1, 10, E, 0.7);
+addNote(b + 3, 1, 8, H, 0.72, true);
+
+b += 4;
+addBass(b, 5, 3, 4);
+addNote(b, 0, 7, E, 0.7);
+addNote(b + E, 0, 8, E, 0.72);
+addNote(b + Q, 0, 10, DQ, 0.78, true);
+addNote(b + 2, 0, 8, Q, 0.75);
+addNote(b + 3, 0, 7, Q, 0.7, true);
+
+b += 4;
+addBass(b, 5, 1, 4);
+// Phrase 3 - reaching for the stars
+addNote(b, 0, 8, E, 0.75);
+addNote(b + E, 0, 10, E, 0.78);
+addNote(b + Q, 0, 12, E, 0.8);
+addNote(b + Q + E, 0, 15, DQ, 0.85, true);
+addNote(b + 2 + E, 0, 17, Q, 0.9, true); // The peak
+addNote(b + 3 + E, 0, 15, E, 0.85);
+
+b += 4;
+addBass(b, 5, 0, 8);
+addPad(b, padE, 16);
+
+// Phrase 4 - the most tender moment
+addNote(b, 0, 15, E, 0.82);
+addNote(b + E, 0, 12, E, 0.78);
+addNote(b + Q, 0, 10, Q, 0.75, true);
+addNote(b + H, 0, 8, E, 0.72);
+addNote(b + H + E, 0, 7, DQ, 0.75, true);
+
+b += 4;
+// Harmony enters
+addNote(b, 0, 7, E, 0.7);
+addNote(b, 2, 4, E, 0.5); // Harmony
+addNote(b + E, 0, 5, E, 0.68);
+addNote(b + E, 2, 2, E, 0.48);
+addNote(b + Q, 0, 3, Q, 0.72);
+addNote(b + Q, 2, 0, Q, 0.5);
+addNote(b + H, 0, 1, E, 0.7);
+addNote(b + H + E, 0, 0, H, 0.75, true);
+
+b += 4;
+// Second starlight statement - fuller
+addBass(b, 5, 0, 4);
+arpeggio(b, chords.Em, 0.1, 0.5);
+addNote(b + 1, 0, 12, E, 0.75);
+addNote(b + 1 + E, 0, 15, Q, 0.82, true);
+addNote(b + 2 + E, 0, 17, E, 0.88);
+addNote(b + 3, 0, 15, Q, 0.85, true);
+
+b += 4;
+addBass(b, 5, 3, 4);
+arpeggio(b, chords.G, 0.1, 0.5);
+addNote(b + 1, 0, 15, E, 0.8);
+addNote(b + 1 + E, 0, 12, E, 0.78);
+addNote(b + 2, 0, 10, E, 0.75);
+addNote(b + 2 + E, 0, 12, Q, 0.8, true);
+
+b += 4;
+addBass(b, 5, 1, 4);
+arpeggio(b, chords.Fmaj7, 0.1, 0.55);
+addNote(b + 1, 0, 13, E, 0.82);
+addNote(b + 1 + E, 0, 12, E, 0.8);
+addNote(b + 2, 0, 10, E, 0.78);
+addNote(b + 2 + E, 0, 8, Q, 0.75, true);
+
+b += 4;
+addBass(b, 5, 0, 8);
+arpeggio(b, chords.E7b9, 0.12, 0.6);
+addNote(b + 1, 0, 7, E, 0.75);
+addNote(b + 1 + E, 0, 8, E, 0.78);
+addNote(b + 2, 0, 10, E, 0.8);
+addNote(b + 2 + E, 0, 12, H, 0.85, true);
+
+b += 4;
+// Final starlight phrase - the most beautiful moment
+addPad(b, [82.41, 123.47, 164.81, 246.94, 329.63], 12);
+addHarmonic(b, 0, 12, 8);
+addHarmonic(b + 2, 1, 12, 6);
+
+addNote(b + 1, 0, 12, Q, 0.7, true);
+addNote(b + 2 + E, 0, 15, H, 0.85, true);
+addNote(b + 5, 0, 12, DH, 0.8, true);
+
+b = 280;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VIII. HOMECOMING (280-330 beats) — Resolution, peace
+// ═══════════════════════════════════════════════════════════════════════════
+currentSection = 'Homecoming';
+
+addPad(b, padE, 24);
+
+// Gentle return - echoing the opening
+addBass(b, 5, 0, 8);
+addNote(b, 0, 12, H, 0.5, true);
+addHarmonic(b + 2, 0, 12, 6);
+
+b += 4;
+addNote(b, 0, 10, E, 0.5);
+addNote(b + E, 0, 8, E, 0.48);
+addNote(b + Q, 0, 7, H, 0.5, true);
+
+b += 4;
+addBass(b, 4, 0, 4);
+addNote(b, 0, 5, E, 0.48);
+addNote(b + E, 0, 3, E, 0.46);
+addNote(b + Q, 0, 1, Q, 0.48);
+addNote(b + H, 0, 0, H, 0.5, true);
+
+b += 4;
+// Final chord progressions - peaceful
+addBass(b, 5, 0, 4);
+arpeggio(b, chords.Em, 0.2, 0.4);
+
+b += 4;
+addBass(b, 4, 0, 4);
+arpeggio(b, chords.Am7, 0.2, 0.38);
+
+b += 4;
+addBass(b, 5, 3, 4);
+arpeggio(b, [[5,3], [4,2], [3,0], [2,0], [1,0]], 0.2, 0.38);
+
+b += 4;
+addBass(b, 5, 0, 8);
+arpeggio(b, chords.Em, 0.25, 0.35);
+addHarmonic(b + 2, 0, 12, 6);
+
+b += 4;
+// The final whisper
+addPad(b, [82.41, 164.81], 16);
+
+addNote(b, 0, 0, H, 0.4, true);
+b += 3;
+addNote(b, 1, 0, H, 0.35);
+b += 3;
+addNote(b, 0, 0, W, 0.3, true);
+addHarmonic(b, 0, 12, 8);
+
+b += 6;
+// Final harmonic
+addHarmonic(b, 0, 7, 10);
+addHarmonic(b + 2, 0, 12, 10);
+
+b += 8;
+addBass(b, 5, 0, 8);
+addNote(b, 0, 0, W + H, 0.25, true);
+addPad(b, [82.41], 8);
+
+const LOOP_LENGTH = b + 6;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEQUENCER
+// ═══════════════════════════════════════════════════════════════════════════
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+let nextBassIdx = 0;
+let nextPadIdx = 0;
+let nextHarmIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = elapsed * (CONFIG.BPM / 60);
+    
+    // No loop - play once through
+    if (currentBeat >= LOOP_LENGTH) {
+        AudioEngine.isPlaying = false;
+        setTimeout(() => {
+            document.getElementById('overlay').classList.remove('hidden');
+        }, 2000);
+        return;
+    }
+    
+    const beatDuration = 60 / CONFIG.BPM;
+    
+    // Schedule notes
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.15) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * beatDuration);
+        AudioEngine.playString(note.string, note.fret, playTime, note.duration * beatDuration, note.velocity, note.vibrato);
+        triggerVisual(note);
+        updateSection(note.section);
+        nextNoteIdx++;
+    }
+    
+    // Schedule bass
+    while (nextBassIdx < BASS.length && BASS[nextBassIdx].beat <= currentBeat + 0.15) {
+        const bass = BASS[nextBassIdx];
+        const playTime = startTime + (bass.beat * beatDuration);
+        AudioEngine.playBass(bass.string, bass.fret, playTime, bass.duration * beatDuration);
+        nextBassIdx++;
+    }
+    
+    // Schedule pads
+    while (nextPadIdx < PADS.length && PADS[nextPadIdx].beat <= currentBeat + 0.15) {
+        const pad = PADS[nextPadIdx];
+        const playTime = startTime + (pad.beat * beatDuration);
+        AudioEngine.playPad(pad.freqs, playTime, pad.duration * beatDuration);
+        nextPadIdx++;
+    }
+    
+    // Schedule harmonics
+    while (nextHarmIdx < HARMONICS.length && HARMONICS[nextHarmIdx].beat <= currentBeat + 0.15) {
+        const harm = HARMONICS[nextHarmIdx];
+        const playTime = startTime + (harm.beat * beatDuration);
+        AudioEngine.playHarmonic(harm.string, harm.fret, playTime, harm.duration * beatDuration);
+        nextHarmIdx++;
+    }
+    
+    updateTimeDisplay();
+    requestAnimationFrame(scheduler);
+}
+
+let displayedSection = '';
+function updateSection(section) {
+    if (section !== displayedSection) {
+        displayedSection = section;
+        const el = document.getElementById('section-display');
+        el.textContent = section;
+        el.style.opacity = '1';
+    }
+}
+
+function updateTimeDisplay() {
+    const totalSeconds = (LOOP_LENGTH * 60) / CONFIG.BPM;
+    const currentSeconds = (currentBeat * 60) / CONFIG.BPM;
+    
+    const formatTime = (s) => {
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec.toString().padStart(2, '0')}`;
+    };
+    
+    document.getElementById('time-display').textContent = 
+        `${formatTime(currentSeconds)} / ${formatTime(totalSeconds)}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUAL ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+const particles = [];
+const stars = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+    initStars();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function initStars() {
+    stars.length = 0;
+    for (let i = 0; i < 150; i++) {
+        stars.push({
+            x: Math.random() * w,
+            y: Math.random() * h * 0.6,
+            size: Math.random() * 1.5 + 0.5,
+            twinkle: Math.random() * Math.PI * 2,
+            speed: Math.random() * 0.02 + 0.01
+        });
+    }
+}
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        life: 1.0,
+        born: performance.now()
+    });
+    
+    // Spawn particles
+    const y = h / 2 + (note.string - 2.5) * 35;
+    for (let i = 0; i < 3; i++) {
+        particles.push({
+            x: w * 0.18,
+            y: y,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            life: 1.0,
+            size: Math.random() * 3 + 2
+        });
+    }
+}
+
+function draw() {
+    // Desert night gradient background
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, '#0a0510');
+    gradient.addColorStop(0.4, '#0f0a15');
+    gradient.addColorStop(0.7, '#1a0f10');
+    gradient.addColorStop(1, '#100808');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+    
+    // Draw stars
+    stars.forEach(star => {
+        star.twinkle += star.speed;
+        const alpha = 0.3 + Math.sin(star.twinkle) * 0.3;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 230, 200, ${alpha})`;
+        ctx.fill();
+    });
+    
+    // Draw dunes silhouette
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.85);
+    for (let x = 0; x <= w; x += 50) {
+        const y = h * 0.85 + Math.sin(x * 0.003 + currentBeat * 0.01) * 30 + Math.sin(x * 0.007) * 20;
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
+    ctx.fillStyle = '#0a0505';
+    ctx.fill();
+    
+    const STAFF_Y = h / 2;
+    const SPACING = 35;
+    const HIT_X = w * 0.18;
+    const pixelsPerBeat = 140;
+    
+    // Draw string lines with gradient
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        
+        const strGradient = ctx.createLinearGradient(0, y, w, y);
+        strGradient.addColorStop(0, 'rgba(80, 50, 20, 0)');
+        strGradient.addColorStop(0.1, 'rgba(80, 50, 20, 0.5)');
+        strGradient.addColorStop(0.9, 'rgba(80, 50, 20, 0.5)');
+        strGradient.addColorStop(1, 'rgba(80, 50, 20, 0)');
+        
+        ctx.strokeStyle = strGradient;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#553322';
+        ctx.font = '13px "Cormorant Garamond"';
+        ctx.fillText(name, 15, y + 4);
+    });
+    
+    // Hit line with intense glow
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = '#ffd700';
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 120);
+    ctx.lineTo(HIT_X, STAFF_Y + 120);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Draw incoming notes
+    ctx.font = 'bold 11px "Cormorant Garamond"';
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -2 || dist > 12) return;
+        
+        const x = HIT_X + (dist * pixelsPerBeat);
+        const y = STAFF_Y + (note.string - 2.5) * SPACING;
+        
+        if (x > -20 && x < w + 20) {
+            // Glow for approaching notes
+            if (dist < 1 && dist > -0.5) {
+                ctx.shadowBlur = 15 * (1 - Math.abs(dist));
+                ctx.shadowColor = '#ffd700';
+            }
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            
+            const noteGrad = ctx.createRadialGradient(x, y, 0, x, y, 10);
+            noteGrad.addColorStop(0, '#2a1a08');
+            noteGrad.addColorStop(1, '#1a0a02');
+            ctx.fillStyle = noteGrad;
+            ctx.fill();
+            
+            ctx.strokeStyle = `rgba(255, 215, 0, ${0.4 + (1 - dist/12) * 0.6})`;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            ctx.fillStyle = '#ffd700';
+            const txt = note.fret.toString();
+            ctx.fillText(txt, x - (txt.length > 1 ? 6 : 3), y + 4);
+        }
+    });
+    
+    // Hit animations
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string - 2.5) * SPACING;
+        
+        // Multiple expanding rings
+        for (let ring = 0; ring < 3; ring++) {
+            const radius = 12 + ((1 - n.life) * (40 + ring * 20));
+            const alpha = n.life * (1 - ring * 0.3) * 0.8;
+            
+            ctx.beginPath();
+            ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 140, 0, ${alpha})`;
+            ctx.lineWidth = 2 - ring * 0.5;
+            ctx.stroke();
+        }
+        
+        // Center burst
+        if (n.life > 0.6) {
+            const burstSize = (1 - n.life) * 20 + 5;
+            ctx.beginPath();
+            ctx.arc(HIT_X, y, burstSize, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 215, 0, ${(n.life - 0.6) * 2})`;
+            ctx.fill();
+        }
+        
+        n.life -= 0.03;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+    
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 180, 50, ${p.life * 0.6})`;
+        ctx.fill();
+        
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    
+    // Progress arc (bottom center)
+    const progress = currentBeat / LOOP_LENGTH;
+    const arcRadius = 30;
+    const arcX = w / 2;
+    const arcY = h - 50;
+    
+    ctx.beginPath();
+    ctx.arc(arcX, arcY, arcRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(80, 50, 20, 0.3)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.arc(arcX, arcY, arcRadius, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) {
+        AudioEngine.init().then(() => {
+            togglePlay();
+        });
+    } else {
+        togglePlay();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (AudioEngine.ctx) togglePlay();
+    }
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        // Reset if near end
+        if (currentBeat >= LOOP_LENGTH - 5) {
+            currentBeat = 0;
+            nextNoteIdx = 0;
+            nextBassIdx = 0;
+            nextPadIdx = 0;
+            nextHarmIdx = 0;
+        }
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+</script>
+</body>
+</html>
