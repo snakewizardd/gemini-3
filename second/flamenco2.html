@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MALAGUEÑA // VIRTUOSO</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Rye&family=Courier+New:wght@700&display=swap');
+
+    :root {
+        --bg: #1a0505;
+        --gold: #ffcc00;
+        --red: #ff0000;
+        --rose: #e6005c;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Rye', cursive;
+        color: var(--gold);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(26, 5, 5, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 5rem;
+        margin: 0;
+        color: var(--red);
+        text-shadow: 2px 2px 0px var(--gold);
+        letter-spacing: 5px;
+        text-align: center;
+    }
+
+    p {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        margin-top: 20px;
+        font-size: 1.2rem;
+        color: var(--gold);
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--gold);
+        border-left: 3px solid var(--red);
+        padding-left: 10px;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>MALAGUEÑA</h1>
+    <p>[ CLICK TO BAILE ]</p>
+    <p style="font-size: 0.8rem; color: #aaa; margin-top: 2rem;">MOUSE Y = HALL REVERB // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    STYLE: FLAMENCO PURO<br>
+    BPM: 160
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * FLAMENCO VIRTUOSO ENGINE
+ * Nylon Physics + Malagueña Tab
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 160, // High speed
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.6;
+
+        // Spanish Hall Reverb
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(2.5, 2.0);
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.3;
+
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 1.0, slideTo = null) => {
+        if (!AudioEngine.ctx) return;
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Nylon Tone: Sine + Triangle
+        osc1.type = 'sine'; 
+        osc2.type = 'triangle'; 
+        
+        let targetFreq = freq;
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+        }
+
+        // Filter: Sharp Attack, Warm Decay
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3000, t);
+        filter.frequency.exponentialRampToValueAtTime(800, t + 0.15); 
+        filter.Q.value = 0.5;
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.7, t + 0.01); // Fast Pluck
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.6;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.4;
+
+        osc1.connect(osc1Gain); osc1Gain.connect(filter);
+        osc2.connect(osc2Gain); osc2Gain.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+    
+    // Rasgueado Strum (Fast Strum)
+    playStrum: (notes, time) => {
+        notes.forEach((n, i) => {
+            // Slight delay between strings for strum effect
+            AudioEngine.playString(n[0], n[1], time + (i * 0.015), 1.5);
+        });
+    },
+
+    setReverb: (val) => {
+        if(AudioEngine.reverbGain) AudioEngine.reverbGain.gain.setTargetAtTime(val, AudioEngine.ctx.currentTime, 0.1);
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null) {
+    TAB.push({ beat, string, fret, type, target });
+}
+function addChord(beat, notes) {
+    // notes: [[string, fret], ...]
+    // For rasgueado, we trigger a special type handled by scheduler? 
+    // Or just add separate notes with micro-timing. 
+    // Let's add them as a chord block and let scheduler handle strum timing if needed, 
+    // or just add them here.
+    notes.forEach((n, i) => {
+        // Simulate strum here
+        addNote(beat + (i*0.01), n[0], n[1], 'strum');
+    });
+}
+
+// -- BUILD MALAGUEÑA --
+let b = 0.0;
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+
+// Part 1: The Theme (Em - D - C - B7)
+// Bass Melody + High Open E Pedal
+// Em
+addNote(b, 5, 0); addNote(b, 0, 0); b+=Q;
+addNote(b, 0, 0); b+=S; addNote(b, 0, 2); b+=S; addNote(b, 0, 3); b+=S; addNote(b, 0, 2); b+=S;
+addNote(b, 0, 5); b+=S; addNote(b, 0, 3); b+=S; addNote(b, 0, 2); b+=S; addNote(b, 0, 3); b+=S;
+addNote(b, 0, 0); b+=Q;
+
+// D
+addNote(b, 3, 0); addNote(b, 0, 2); b+=Q;
+addNote(b, 0, 0); b+=S; addNote(b, 0, 2); b+=S; addNote(b, 0, 0); b+=S; addNote(b, 1, 3); b+=S;
+addNote(b, 0, 2); b+=S; addNote(b, 0, 0); b+=S; addNote(b, 1, 3); b+=S; addNote(b, 2, 2); b+=S;
+addNote(b, 0, 2); addNote(b, 1, 3); b+=Q;
+
+// C
+addNote(b, 4, 3); addNote(b, 0, 0); b+=Q;
+addNote(b, 0, 0); b+=S; addNote(b, 0, 2); b+=S; addNote(b, 0, 5); b+=S; addNote(b, 0, 3); b+=S;
+addNote(b, 0, 2); b+=S; addNote(b, 0, 0); b+=S; addNote(b, 1, 4); b+=S; addNote(b, 1, 1); b+=S;
+addNote(b, 0, 0); b+=Q;
+
+// B7 (Rasgueado)
+addChord(b, [[4,2], [3,1], [2,2], [1,0], [0,2]]); b+=Q;
+addNote(b, 1, 0); b+=S; addNote(b, 1, 4); b+=S; addNote(b, 1, 0); b+=S; addNote(b, 2, 2); b+=S;
+addNote(b, 3, 4); b+=S; addNote(b, 3, 1); b+=S; addNote(b, 4, 2); b+=S; addNote(b, 5, 2); b+=S;
+addChord(b, [[5,2], [4,2], [3,1], [2,2], [1,0], [0,2]]); b+=Q;
+
+// Part 2: Tremolo / Arpeggio Section (Am)
+// Bass A - High E tremolo (simulated with fast notes)
+b += 1.0; // Pause
+addNote(b, 4, 0); addNote(b, 2, 2); addNote(b, 1, 1); b+=E;
+addNote(b, 0, 0); b+=S; addNote(b, 0, 0); b+=S; addNote(b, 0, 0); b+=S; addNote(b, 0, 0); b+=S;
+addNote(b, 0, 1); b+=S; addNote(b, 0, 1); b+=S; addNote(b, 0, 3); b+=S; addNote(b, 0, 3); b+=S;
+addNote(b, 0, 5); b+=S; addNote(b, 0, 5); b+=S; addNote(b, 0, 3); b+=S; addNote(b, 0, 1); b+=S;
+addNote(b, 0, 0); b+=Q;
+
+// Part 3: Scales (Phrygian Dominant)
+b += 1.0;
+// E string run: 0 1 3 4 5 7 8 10 12 13 12 10 8 7 5 4 1 0
+const run = [0,1,3,4,5,7,8,10,12,13,12,10,8,7,5,4,1,0];
+run.forEach(f => {
+    addNote(b, 0, f); b+=S;
+});
+addChord(b, [[5,0], [4,2], [3,2], [2,1], [1,0], [0,0]]); b+=2.0; // E Major Finale
+
+const LOOP_LENGTH = b;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 1.5, note.target);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2, 
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30; 
+    const HIT_X = w * 0.2; 
+
+    // Staff
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#b30000';
+    ctx.font = "16px 'Courier New'";
+    ctx.fillStyle = '#ffcc00';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Notes
+    const pixelsPerBeat = 200; 
+    
+    ctx.font = "24px 'Rye'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH; 
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            
+            ctx.fillStyle = '#ffcc00'; 
+            let txt = note.fret;
+            
+            ctx.beginPath();
+            ctx.arc(x, y - 5, 14, 0, Math.PI*2);
+            ctx.fillStyle = '#330000';
+            ctx.fill();
+            ctx.strokeStyle = '#ffcc00'; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#ffcc00'; 
+            ctx.fillText(txt, x - 8, y + 4);
+        }
+    });
+
+    // Roses/Sparks
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 15 + ((1 - n.life) * 50);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y - 5, radius, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(255, 0, 0, ${n.life})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        n.life -= 0.05;
+        if(n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setReverb(y * 0.8);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

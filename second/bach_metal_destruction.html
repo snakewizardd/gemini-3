@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BACH // TOCCATA DEVASTATION</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=JetBrains+Mono&display=swap');
+
+    :root {
+        --void: #050505;
+        --blood: #8b0000;
+        --fire: #ff2200;
+        --chrome: #888;
+    }
+
+    body {
+        margin: 0;
+        background: var(--void);
+        overflow: hidden;
+        font-family: 'Orbitron', sans-serif;
+        color: var(--chrome);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(5, 5, 5, 0.97);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 3.5rem;
+        margin: 0;
+        color: var(--fire);
+        text-shadow: 0 0 30px var(--blood);
+        letter-spacing: 8px;
+    }
+
+    p {
+        font-family: 'JetBrains Mono', monospace;
+        margin-top: 15px;
+        font-size: 1rem;
+        color: var(--chrome);
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--fire);
+        border-left: 2px solid var(--blood);
+        padding-left: 10px;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>BACH DESTRUCTION</h1>
+    <p>Toccata & Fugue in D Minor</p>
+    <p style="font-size: 0.8rem; color: #444; margin-top: 2rem;">[ CLICK TO SHRED ]</p>
+</div>
+
+<div id="hud">
+    BWV 565 • D MINOR<br>
+    BPM: 220 • GAIN: MAXIMUM
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * BACH METAL ENGINE
+ * Toccata & Fugue + Bourrée fragments at 220 BPM
+ * EXACT proven architecture - just with distortion
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 220,
+    STRINGS: [64, 59, 55, 50, 45, 40],
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE (EXACT pattern + distortion) ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    drive: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4;
+
+        // HIGH GAIN DISTORTION
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(400);
+        AudioEngine.drive.oversample = '4x';
+
+        // Reverb
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(1.0, 4.0);
+        
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.15;
+
+        AudioEngine.drive.connect(AudioEngine.master);
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = amount;
+        const n = 44100;
+        const curve = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            let x = i * 2 / n - 1;
+            curve[i] = Math.tanh(k * x);
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 0.4) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Metal tone: Sawtooth + Square
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        osc2.detune.value = 5;
+
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3500;
+        filter.Q.value = 1;
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.5, t + 0.005);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        const osc1Gain = AudioEngine.ctx.createGain(); 
+        osc1Gain.gain.value = 0.5;
+        const osc2Gain = AudioEngine.ctx.createGain(); 
+        osc2Gain.gain.value = 0.3;
+
+        osc1.connect(osc1Gain); 
+        osc1Gain.connect(filter);
+        osc2.connect(osc2Gain); 
+        osc2Gain.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.drive);
+
+        osc1.start(t); 
+        osc1.stop(t + duration);
+        osc2.start(t); 
+        osc2.stop(t + duration);
+    },
+
+    setReverb: (val) => {
+        if (AudioEngine.reverbGain) {
+            AudioEngine.reverbGain.gain.setTargetAtTime(val, AudioEngine.ctx.currentTime, 0.1);
+        }
+    }
+};
+
+// --- TAB DATA ---
+const TAB = [];
+function addNote(beat, string, fret) {
+    TAB.push({ beat, string, fret });
+}
+
+const S = 0.25;  // Sixteenth at 220 BPM = FAST
+const E = 0.5;
+const Q = 1.0;
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════
+// TOCCATA & FUGUE IN D MINOR - Opening + BOURRÉE Shred Fusion
+// ═══════════════════════════════════════════════════════════════
+
+// TOCCATA OPENING - The famous mordent
+// A G# A - pause - G F# E D C# D
+addNote(b, 0, 5); b += S;
+addNote(b, 0, 4); b += S;
+addNote(b, 0, 5); b += E;
+b += E; // pause
+addNote(b, 0, 3); b += S;
+addNote(b, 0, 2); b += S;
+addNote(b, 0, 0); b += S;
+addNote(b, 1, 3); b += S;
+addNote(b, 1, 2); b += S;
+addNote(b, 1, 3); b += Q;
+
+// Repeat octave lower with bass
+addNote(b, 1, 5); addNote(b, 4, 0); b += S;
+addNote(b, 1, 4); b += S;
+addNote(b, 1, 5); b += E;
+b += E;
+addNote(b, 1, 3); b += S;
+addNote(b, 1, 2); b += S;
+addNote(b, 1, 0); b += S;
+addNote(b, 2, 4); addNote(b, 5, 0); b += S;
+addNote(b, 2, 2); b += S;
+addNote(b, 2, 4); b += Q;
+
+// DESCENDING FURY - D minor scale shred
+for (let oct = 0; oct < 3; oct++) {
+    addNote(b, 0, 10 - oct*3); b += S;
+    addNote(b, 0, 8 - oct*3); b += S;
+    addNote(b, 0, 7 - oct*3); b += S;
+    addNote(b, 0, 5 - oct*3); b += S;
+    addNote(b, 1, 8 - oct*3); b += S;
+    addNote(b, 1, 6 - oct*3); b += S;
+    addNote(b, 1, 5 - oct*3); b += S;
+    addNote(b, 1, 3 - oct*3); b += S;
+}
+
+// POWER CHORD STABS - Dm - Bb - Gm - A
+addNote(b, 4, 5); addNote(b, 3, 7); addNote(b, 2, 7); b += E;
+b += S;
+addNote(b, 4, 5); addNote(b, 3, 7); addNote(b, 2, 7); b += S;
+addNote(b, 4, 5); addNote(b, 3, 7); addNote(b, 2, 7); b += E;
+
+addNote(b, 4, 1); addNote(b, 3, 3); addNote(b, 2, 3); b += E;
+b += S;
+addNote(b, 4, 1); addNote(b, 3, 3); addNote(b, 2, 3); b += S;
+addNote(b, 4, 1); addNote(b, 3, 3); addNote(b, 2, 3); b += E;
+
+addNote(b, 5, 3); addNote(b, 4, 5); addNote(b, 3, 5); b += E;
+b += S;
+addNote(b, 5, 3); addNote(b, 4, 5); addNote(b, 3, 5); b += S;
+addNote(b, 5, 3); addNote(b, 4, 5); addNote(b, 3, 5); b += E;
+
+addNote(b, 4, 0); addNote(b, 3, 2); addNote(b, 2, 2); b += Q;
+
+// FUGUE THEME - Dm at warp speed
+// D E F G A Bb A G F E D
+addNote(b, 3, 0); addNote(b, 5, 10); b += S;
+addNote(b, 3, 2); b += S;
+addNote(b, 3, 3); b += S;
+addNote(b, 3, 5); b += S;
+addNote(b, 3, 7); b += S;
+addNote(b, 3, 8); b += S;
+addNote(b, 3, 7); b += S;
+addNote(b, 3, 5); b += S;
+addNote(b, 3, 3); b += S;
+addNote(b, 3, 2); b += S;
+addNote(b, 3, 0); b += E;
+
+// Theme in bass
+addNote(b, 5, 10); b += S;
+addNote(b, 5, 12); b += S;
+addNote(b, 4, 3); b += S;
+addNote(b, 4, 5); b += S;
+addNote(b, 4, 7); b += S;
+addNote(b, 4, 8); b += S;
+addNote(b, 4, 7); b += S;
+addNote(b, 4, 5); b += S;
+addNote(b, 4, 3); b += S;
+addNote(b, 5, 12); b += S;
+addNote(b, 5, 10); b += E;
+
+// BOURRÉE FRAGMENT - Shredded
+addNote(b, 0, 0); addNote(b, 5, 3); b += S;
+addNote(b, 0, 2); addNote(b, 5, 2); b += S;
+addNote(b, 0, 3); addNote(b, 5, 0); b += S;
+addNote(b, 0, 2); b += S;
+addNote(b, 0, 0); b += S;
+addNote(b, 4, 0); b += S;
+addNote(b, 1, 4); addNote(b, 4, 2); b += S;
+addNote(b, 4, 0); b += S;
+addNote(b, 0, 0); b += S;
+addNote(b, 0, 2); b += S;
+
+addNote(b, 0, 0); addNote(b, 5, 3); b += S;
+addNote(b, 1, 0); b += S;
+addNote(b, 1, 2); addNote(b, 5, 2); b += S;
+addNote(b, 1, 4); b += S;
+addNote(b, 5, 0); b += S;
+addNote(b, 0, 0); b += S;
+addNote(b, 1, 3); addNote(b, 5, 2); b += S;
+addNote(b, 1, 1); b += S;
+
+// SWEEP ARPEGGIO - Dm shape
+addNote(b, 0, 13); b += S;
+addNote(b, 1, 13); b += S;
+addNote(b, 2, 14); b += S;
+addNote(b, 3, 12); b += S;
+addNote(b, 4, 12); b += S;
+addNote(b, 3, 12); b += S;
+addNote(b, 2, 14); b += S;
+addNote(b, 1, 13); b += S;
+
+// Am shape
+addNote(b, 0, 12); b += S;
+addNote(b, 1, 12); b += S;
+addNote(b, 2, 12); b += S;
+addNote(b, 3, 14); b += S;
+addNote(b, 4, 12); b += S;
+addNote(b, 3, 14); b += S;
+addNote(b, 2, 12); b += S;
+addNote(b, 1, 12); b += S;
+
+// E diminished - the tension
+addNote(b, 0, 11); b += S;
+addNote(b, 1, 11); b += S;
+addNote(b, 2, 11); b += S;
+addNote(b, 3, 12); b += S;
+addNote(b, 4, 10); b += S;
+addNote(b, 3, 12); b += S;
+addNote(b, 2, 11); b += S;
+addNote(b, 1, 11); b += S;
+
+// TOCCATA THEME RETURNS - Double time
+addNote(b, 0, 5); b += S;
+addNote(b, 0, 4); b += S;
+addNote(b, 0, 5); addNote(b, 2, 7); b += S;
+addNote(b, 0, 4); b += S;
+addNote(b, 0, 5); b += S;
+addNote(b, 0, 3); b += S;
+addNote(b, 0, 2); b += S;
+addNote(b, 0, 0); b += S;
+addNote(b, 1, 3); addNote(b, 3, 0); b += S;
+addNote(b, 1, 2); b += S;
+addNote(b, 1, 3); b += E;
+
+// CHROMATIC DESCENT OF DOOM
+for (let i = 15; i >= 0; i--) {
+    addNote(b, 0, i); 
+    if (i % 4 === 0) addNote(b, 4, i); 
+    b += S;
+}
+
+// PEDAL TONE FURY - Low E drone with melody
+for (let rep = 0; rep < 2; rep++) {
+    addNote(b, 5, 0); addNote(b, 0, 12); b += S;
+    addNote(b, 0, 10); b += S;
+    addNote(b, 5, 0); addNote(b, 0, 8); b += S;
+    addNote(b, 0, 10); b += S;
+    addNote(b, 5, 0); addNote(b, 0, 7); b += S;
+    addNote(b, 0, 8); b += S;
+    addNote(b, 5, 0); addNote(b, 0, 5); b += S;
+    addNote(b, 0, 7); b += S;
+}
+
+// HARMONIZED THIRDS - Bach style, metal speed
+addNote(b, 0, 5); addNote(b, 1, 5); b += S;
+addNote(b, 0, 7); addNote(b, 1, 6); b += S;
+addNote(b, 0, 8); addNote(b, 1, 8); b += S;
+addNote(b, 0, 10); addNote(b, 1, 10); b += S;
+addNote(b, 0, 12); addNote(b, 1, 10); b += S;
+addNote(b, 0, 13); addNote(b, 1, 12); b += S;
+addNote(b, 0, 15); addNote(b, 1, 13); b += S;
+addNote(b, 0, 17); addNote(b, 1, 15); b += S;
+
+// Descend
+addNote(b, 0, 15); addNote(b, 1, 13); b += S;
+addNote(b, 0, 13); addNote(b, 1, 12); b += S;
+addNote(b, 0, 12); addNote(b, 1, 10); b += S;
+addNote(b, 0, 10); addNote(b, 1, 10); b += S;
+addNote(b, 0, 8); addNote(b, 1, 8); b += S;
+addNote(b, 0, 7); addNote(b, 1, 6); b += S;
+addNote(b, 0, 5); addNote(b, 1, 5); b += S;
+addNote(b, 0, 3); addNote(b, 1, 3); b += S;
+
+// FUGUE COUNTERPOINT CHAOS
+// Two voices at once - pure Bach
+addNote(b, 0, 10); addNote(b, 3, 0); b += S;
+addNote(b, 0, 8); addNote(b, 3, 2); b += S;
+addNote(b, 0, 10); addNote(b, 3, 3); b += S;
+addNote(b, 0, 12); addNote(b, 3, 5); b += S;
+addNote(b, 1, 10); addNote(b, 3, 7); b += S;
+addNote(b, 1, 8); addNote(b, 3, 5); b += S;
+addNote(b, 1, 10); addNote(b, 3, 3); b += S;
+addNote(b, 1, 12); addNote(b, 3, 2); b += S;
+
+addNote(b, 0, 8); addNote(b, 3, 0); b += S;
+addNote(b, 0, 10); addNote(b, 3, 2); b += S;
+addNote(b, 0, 12); addNote(b, 3, 3); b += S;
+addNote(b, 0, 13); addNote(b, 3, 5); b += S;
+addNote(b, 0, 12); addNote(b, 3, 7); b += S;
+addNote(b, 0, 10); addNote(b, 3, 8); b += S;
+addNote(b, 0, 8); addNote(b, 3, 7); b += S;
+addNote(b, 0, 7); addNote(b, 3, 5); b += S;
+
+// 32nd NOTE RUN - Pure insanity
+const T = 0.125; // 32nd notes
+for (let i = 0; i < 24; i++) {
+    addNote(b, 0, (i % 12) + 5); b += T;
+}
+
+// BREAKDOWN - Palm mute style chug on Dm
+for (let i = 0; i < 8; i++) {
+    addNote(b, 5, 10); addNote(b, 4, 12); b += S;
+    b += S; // rest for chunk
+}
+
+// FINAL TOCCATA STATEMENT
+addNote(b, 0, 5); addNote(b, 4, 0); b += S;
+addNote(b, 0, 4); b += S;
+addNote(b, 0, 5); b += Q;
+
+addNote(b, 0, 3); addNote(b, 3, 0); b += S;
+addNote(b, 0, 2); b += S;
+addNote(b, 0, 0); b += S;
+addNote(b, 1, 3); addNote(b, 5, 10); b += S;
+addNote(b, 1, 2); b += S;
+
+// THE FINAL CHORD - Dm
+addNote(b, 5, 10); addNote(b, 4, 12); addNote(b, 3, 12); addNote(b, 2, 10); addNote(b, 1, 10); addNote(b, 0, 10); b += Q;
+b += Q;
+
+// MORE SHRED - Circle of fifths
+// Dm -> Gm -> Cm -> F -> Bb -> Eb -> A -> Dm
+addNote(b, 3, 0); b += S; addNote(b, 3, 3); b += S; addNote(b, 3, 5); b += S; addNote(b, 3, 7); b += S;
+addNote(b, 3, 5); b += S; addNote(b, 3, 8); b += S; addNote(b, 3, 10); b += S; addNote(b, 3, 12); b += S;
+addNote(b, 2, 8); b += S; addNote(b, 2, 11); b += S; addNote(b, 2, 13); b += S; addNote(b, 2, 15); b += S;
+addNote(b, 2, 13); b += S; addNote(b, 2, 10); b += S; addNote(b, 2, 8); b += S; addNote(b, 2, 6); b += S;
+
+// Repeat theme FASTER
+addNote(b, 0, 5); b += T;
+addNote(b, 0, 4); b += T;
+addNote(b, 0, 5); b += T;
+addNote(b, 0, 7); b += T;
+addNote(b, 0, 5); b += T;
+addNote(b, 0, 4); b += T;
+addNote(b, 0, 5); b += E;
+
+addNote(b, 0, 3); b += T;
+addNote(b, 0, 2); b += T;
+addNote(b, 0, 0); b += T;
+addNote(b, 1, 3); b += T;
+addNote(b, 1, 2); b += T;
+addNote(b, 1, 3); b += Q;
+
+// CLIMAX - All strings blazing
+addNote(b, 0, 17); addNote(b, 1, 17); b += S;
+addNote(b, 0, 15); addNote(b, 1, 15); b += S;
+addNote(b, 0, 13); addNote(b, 1, 13); addNote(b, 2, 14); b += S;
+addNote(b, 0, 12); addNote(b, 1, 12); addNote(b, 2, 12); b += S;
+addNote(b, 0, 10); addNote(b, 1, 10); addNote(b, 2, 11); addNote(b, 3, 12); b += S;
+addNote(b, 0, 8); addNote(b, 1, 8); addNote(b, 2, 9); addNote(b, 3, 10); b += S;
+addNote(b, 0, 7); addNote(b, 1, 6); addNote(b, 2, 7); addNote(b, 3, 7); addNote(b, 4, 5); b += S;
+addNote(b, 0, 5); addNote(b, 1, 5); addNote(b, 2, 5); addNote(b, 3, 5); addNote(b, 4, 3); addNote(b, 5, 5); b += E;
+
+// FINAL CHORD - Let it ring
+addNote(b, 5, 10); addNote(b, 4, 12); addNote(b, 3, 12); addNote(b, 2, 10); addNote(b, 1, 10); addNote(b, 0, 10); b += Q;
+
+const LOOP_LENGTH = b + 2;
+
+// --- SEQUENCER (EXACT pattern) ---
+let currentBeat = -1.0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60));
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 0.3);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE (EXACT pattern) ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        x: w * 0.2,
+        life: 1.0,
+        born: Date.now()
+    });
+}
+
+function draw() {
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.15)';
+    ctx.fillRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 30;
+    const HIT_X = w * 0.2;
+
+    // Staff
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#1a0000';
+    ctx.font = "14px 'JetBrains Mono'";
+    ctx.fillStyle = '#8b0000';
+
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 10, y + 5);
+    });
+
+    // Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ff2200';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ff2200';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Notes
+    const pixelsPerBeat = 200;
+
+    ctx.font = "14px 'JetBrains Mono'";
+    TAB.forEach(note => {
+        let noteBeat = note.beat;
+        let dist = noteBeat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH;
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#050505';
+            ctx.fill();
+            ctx.strokeStyle = '#ff2200';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ff6644';
+            ctx.fillText(note.fret, x - (note.fret >= 10 ? 7 : 3), y + 4);
+        }
+    });
+
+    // Ripples
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+
+        const radius = 12 + ((1 - n.life) * 50);
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 34, 0, ${n.life})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        n.life -= 0.06;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS (EXACT pattern) ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setReverb(y * 0.3);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GREENSLEEVES // TAB ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Courier+New:wght@700&display=swap');
+    :root {
+        --bg: #1a1005;
+        --wood: #8d6e63;
+        --string: #d7ccc8;
+        --accent: #ffb74d;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Cinzel', serif;
+        color: var(--string);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(26, 16, 5, 0.95);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-size: 4rem;
+        margin: 0;
+        color: var(--accent);
+        text-shadow: 0 0 10px rgba(255, 183, 77, 0.3);
+    }
+
+    p {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+        color: var(--wood);
+    }
+
+    .hidden { opacity: 0; pointer-events: none; }
+
+    #hud {
+        position: absolute;
+        bottom: 20px; left: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--accent);
+        border-left: 2px solid var(--wood);
+        padding-left: 10px;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>GREENSLEEVES</h1>
+    <p>[ CLICK TO PLAY CLASSICAL ]</p>
+</div>
+
+<div id="hud">
+    TUNING: E A D G B e<br>
+    STYLE: POLYPHONIC FINGERSTYLE
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * GREENSLEEVES ENGINE
+ * Classical Physics + Tab Transcription
+ */
+
+const CONFIG = {
+    BPM: 80, // Andante
+    STRINGS: [64, 59, 55, 50, 45, 40], 
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41], 
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.6;
+
+        // Hall Reverb
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * 3.0;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        for (let i = 0; i < length; i++) {
+            const decay = Math.pow(1 - i / length, 3);
+            impulse.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay;
+            impulse.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay;
+        }
+        AudioEngine.reverb.buffer = impulse;
+        
+        const verbMix = AudioEngine.ctx.createGain();
+        verbMix.gain.value = 0.3;
+
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(verbMix);
+        verbMix.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    playString: (stringIdx, fret, time, duration = 2.5) => {
+        if (!AudioEngine.ctx) return;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        osc1.type = 'triangle'; // Warmth
+        osc2.type = 'sine';     // Fundamental
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2000, time);
+        filter.frequency.exponentialRampToValueAtTime(500, time + 0.2); 
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.5, time + 0.02);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+
+        osc1.start(time); osc1.stop(time + duration);
+        osc2.start(time); osc2.stop(time + duration);
+    }
+};
+
+// --- TAB TRANSCRIPTION ---
+const TAB = [];
+function addNote(beat, string, fret) {
+    TAB.push({ beat, string, fret });
+}
+
+let b = 0.0;
+const E = 0.5; // Eighth note
+const Q = 1.0; // Quarter note
+
+// [Intro / Main Theme]
+// Pickup: e-0 2 | Bass: 3 2
+addNote(b, 0, 0); addNote(b, 5, 3); b+=E;
+addNote(b, 0, 2); addNote(b, 5, 2); b+=E;
+
+// Bar 1: 3 2 0 | 0 2
+addNote(b, 0, 3); addNote(b, 5, 0); b+=E; // e-3 E-0
+addNote(b, 0, 2); b+=E;
+addNote(b, 0, 0); b+=E;
+addNote(b, 4, 0); addNote(b, 0, 0); b+=E; // A-0 e-0
+addNote(b, 4, 2); addNote(b, 0, 2); b+=E; // A-2 e-2
+
+// Bar 2: B-4 2 0 | 2 4
+addNote(b, 1, 4); addNote(b, 4, 0); b+=E; // B-4 A-0
+addNote(b, 5, 3); addNote(b, 1, 0); b+=E; // E-3 B-0
+addNote(b, 5, 2); addNote(b, 1, 2); b+=E; // E-2 B-2
+addNote(b, 5, 0); addNote(b, 1, 4); b+=E; // E-0 B-4
+addNote(b, 5, 2); b+=E;
+
+// Bar 3: e-0 3 | 1 0
+addNote(b, 0, 3); addNote(b, 1, 1); b+=E; // e-3 B-1 (implied 3 1 based on ending?)
+// Wait, following strict tab: e-0 3 1
+addNote(b, 0, 0); addNote(b, 5, 3); b+=E;
+addNote(b, 2, 2); b+=E;
+addNote(b, 2, 0); b+=E;
+addNote(b, 0, 0); b+=E;
+addNote(b, 0, 2); b+=E;
+
+// Bar 4: 3 2 0 | 0 2
+addNote(b, 0, 3); addNote(b, 5, 3); b+=E;
+addNote(b, 4, 2); addNote(b, 0, 2); b+=E;
+addNote(b, 0, 0); b+=E;
+addNote(b, 5, 0); b+=E;
+addNote(b, 5, 2); addNote(b, 0, 0); b+=E;
+addNote(b, 5, 3); addNote(b, 0, 2); b+=E;
+addNote(b, 5, 2); b+=E;
+
+// Bar 5: 0 B-4 3 1
+addNote(b, 0, 0); addNote(b, 5, 0); b+=E;
+addNote(b, 1, 4); b+=E;
+addNote(b, 1, 3); b+=E;
+addNote(b, 1, 1); b+=E;
+
+// [Ending / High Part]
+// e-3 0
+addNote(b, 0, 3); addNote(b, 5, 3); b+=E;
+addNote(b, 5, 2); b+=E;
+addNote(b, 0, 0); b+=E;
+addNote(b, 5, 3); b+=E; 
+
+// e-0 B-3 1
+addNote(b, 0, 0); addNote(b, 4, 3); b+=E;
+addNote(b, 1, 3); addNote(b, 5, 4); b+=E;
+addNote(b, 1, 1); b+=E;
+
+// Walkdown
+addNote(b, 2, 2); addNote(b, 3, 2); b+=E;
+addNote(b, 4, 0); b+=E;
+addNote(b, 2, 1); b+=E; 
+addNote(b, 3, 2); b+=E; 
+
+addNote(b, 1, 0); b+=E; 
+addNote(b, 1, 1); b+=E;
+addNote(b, 1, 0); b+=E;
+
+// Arpeggio G
+addNote(b, 2, 2); addNote(b, 4, 2); b+=E;
+addNote(b, 4, 0); b+=E;
+addNote(b, 2, 2); b+=E;
+addNote(b, 1, 3); b+=E;
+addNote(b, 2, 2); b+=E;
+
+// High run (e-5 2 0)
+addNote(b, 0, 5); addNote(b, 4, 0); b+=E;
+addNote(b, 0, 2); addNote(b, 4, 4); b+=E;
+addNote(b, 0, 0); b+=E;
+addNote(b, 4, 1); b+=E;
+
+// e-7 9 7 5
+addNote(b, 0, 7); addNote(b, 4, 2); b+=E;
+addNote(b, 0, 9); addNote(b, 4, 7); b+=E;
+addNote(b, 0, 7); b+=E;
+addNote(b, 0, 5); b+=E;
+
+// Final Chord E minor
+addNote(b, 5, 0); addNote(b, 4, 2); addNote(b, 3, 2); addNote(b, 2, 0); addNote(b, 1, 0); addNote(b, 0, 0);
+b+=4.0;
+
+const LOOP_LENGTH = b;
+
+// --- SEQUENCER ---
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60));
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUALS ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() { w=cvs.width=window.innerWidth; h=cvs.height=window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({ ...note, x: w * 0.2, life: 1.0 });
+}
+
+function draw() {
+    ctx.clearRect(0, 0, w, h);
+    const STAFF_Y = h / 2;
+    const SPACING = 30;
+    const HIT_X = w * 0.2;
+
+    // Draw Strings
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.lineWidth = 1 + (i * 0.5); // Thicker low strings
+        ctx.strokeStyle = '#8d6e63';
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        ctx.fillStyle = '#d7ccc8'; ctx.font = "16px Courier New"; ctx.fillText(name, 10, y + 5);
+    });
+
+    // Draw Notes
+    const pixelsPerBeat = 100;
+    ctx.font = "20px Cinzel";
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH;
+        const x = HIT_X + (dist * pixelsPerBeat);
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+            ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI*2);
+            ctx.fillStyle = '#1a1005'; ctx.fill();
+            ctx.strokeStyle = '#ffb74d'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = '#ffb74d'; ctx.fillText(note.fret, x-5, y+6);
+        }
+    });
+
+    // Active Notes
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        const r = 12 + ((1-n.life)*30);
+        ctx.beginPath(); ctx.arc(HIT_X, y, r, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(255, 183, 77, ${n.life})`;
+        ctx.stroke();
+        n.life -= 0.05;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    // Hit Line
+    ctx.beginPath(); ctx.moveTo(HIT_X, STAFF_Y - 100); ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ffb74d'; ctx.lineWidth = 2; ctx.stroke();
+
+    requestAnimationFrame(draw);
+}
+
+// --- INIT ---
+document.addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime;
+        scheduler();
+        draw();
+    }
+});
+</script>
+</body>
+</html>

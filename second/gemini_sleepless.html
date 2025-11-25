@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLEEPLESS NIGHTS // JAZZ ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+    :root {
+        --void: #0a0a0f;
+        --midnight: #1a1a2e;
+        --purple: #4a0080;
+        --neon-blue: #0066cc;
+        --silver: #c0c0c0;
+        --gold: #ffd700;
+    }
+
+    body {
+        margin: 0;
+        background: radial-gradient(circle at center, var(--midnight), var(--void));
+        overflow: hidden;
+        font-family: 'Cinzel', serif;
+        color: var(--silver);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(10, 10, 15, 0.95);
+        z-index: 10;
+        transition: opacity 0.8s ease-out;
+        backdrop-filter: blur(5px);
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif;
+        font-size: 4rem;
+        margin: 0;
+        color: var(--silver);
+        text-shadow: 0 0 20px var(--neon-blue);
+        letter-spacing: 5px;
+        text-align: center;
+    }
+
+    p {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: bold;
+        margin-top: 20px;
+        font-size: 1rem;
+        color: var(--purple);
+        letter-spacing: 2px;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 30px;
+        left: 30px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--silver);
+        border-left: 3px solid var(--purple);
+        padding-left: 15px;
+        text-shadow: 0 0 5px rgba(0,0,0,0.8);
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>SLEEPLESS NIGHTS</h1>
+    <p>[ CLICK TO ENTER THE CITY ]</p>
+    <p style="font-size: 0.7rem; color: #666; margin-top: 2rem;">MOUSE Y = AMBIENCE // SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TONE: HOLLOW BODY JAZZ<br>
+    BPM: 85 (Swing Feel)
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * SLEEPLESS NIGHTS ENGINE
+ * Jazz Physics + Tab Parser
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 85,
+    STRINGS: [64, 59, 55, 50, 45, 40], // Standard E A D G B E
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.6;
+
+        // Jazz Club Reverb (Small, Dense)
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(1.5, 3.0);
+        
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.25;
+
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            // Smooth exponential decay
+            const env = Math.pow(1 - i / length, decay);
+            L[i] = (Math.random() * 2 - 1) * env;
+            R[i] = (Math.random() * 2 - 1) * env;
+        }
+        return impulse;
+    },
+
+    // Jazz Tone: Warm, Round, "Thuddy"
+    playString: (stringIdx, fret, time, duration = 2.0, slideTo = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        
+        // Mix: Dominant Sine for body, Triangle for string definition
+        osc1.type = 'sine'; 
+        osc2.type = 'triangle'; 
+        
+        let targetFreq = freq;
+        if (slideTo !== null) {
+            targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.2); // Slow slide
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.2);
+        } else {
+            osc1.frequency.value = freq;
+            osc2.frequency.value = freq;
+        }
+
+        // Filter: Very warm (Tone knob rolled off)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, t); // Start dark
+        filter.frequency.linearRampToValueAtTime(600, t + 0.1); 
+        filter.Q.value = 0;
+
+        // Envelope: Fast attack, smooth decay
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.5, t + 0.015); // Thud attack
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration); 
+
+        // Mix
+        const osc1Gain = AudioEngine.ctx.createGain(); osc1Gain.gain.value = 0.8;
+        const osc2Gain = AudioEngine.ctx.createGain(); osc2Gain.gain.value = 0.2;
+
+        osc1.connect(osc1Gain); osc1Gain.connect(filter);
+        osc2.connect(osc2Gain); osc2Gain.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+    },
+
+    setReverb: (val) => {
+        if(AudioEngine.reverbGain) {
+            AudioEngine.reverbGain.gain.setTargetAtTime(val * 0.8, AudioEngine.ctx.currentTime, 0.1);
+        }
+    }
+};
+
+// --- TAB DATA PARSER ---
+const TAB = [];
+function addNote(beat, string, fret, type = 'pluck', target = null) {
+    TAB.push({ beat, string, fret, type, target });
+}
+function addChord(beat, notes) {
+    // Add slight strum delay for jazz feel
+    notes.forEach((n, i) => {
+        addNote(beat + (i * 0.02), n[0], n[1], 'strum');
+    });
+}
+
+// -- BUILD THE SONG "SLEEPLESS NIGHTS" --
+let b = 0.0;
+const Q = 1.0; 
+const E = 0.5; 
+const S = 0.25;
+
+// CHORDS (Jazz Voicings)
+// Fmaj7: x 8 10 9 10 x (Root on A string 8)
+const Fmaj7 = [[4,8], [3,10], [2,9], [1,10]];
+// Am7: 5 x 5 5 5 x
+const Am7 = [[5,5], [3,5], [2,5], [1,5]];
+// Dm7: x 5 7 5 6 x
+const Dm7 = [[4,5], [3,7], [2,5], [1,6]];
+// Gm7: 3 x 3 3 3 x
+const Gm7 = [[5,3], [3,3], [2,3], [1,3]];
+// C7: x 3 5 3 5 x
+const C7 = [[4,3], [3,5], [2,3], [1,5]];
+
+// === INTRO ===
+// Vamp on Fmaj7 -> Am7
+for(let i=0; i<2; i++) {
+    // Fmaj7
+    addChord(b, Fmaj7); b += 1.5;
+    addChord(b, Fmaj7); b += 0.5;
+    addChord(b, Fmaj7); b += 1.0;
+    
+    // Lick: A-G-F-D
+    addNote(b, 2, 2); b += E;
+    addNote(b, 2, 0); b += E;
+    
+    // Am7
+    addChord(b, Am7); b += 1.5;
+    addChord(b, Am7); b += 0.5;
+    addChord(b, Am7); b += 1.0;
+    
+    // Lick: C-D-E
+    addNote(b, 3, 10); b += E;
+    addNote(b, 3, 12); b += E;
+}
+
+// === VERSE ===
+// Fmaj7 / / / | Am7 / / / | Dm7 / / / | Gm7 / C7 /
+addChord(b, Fmaj7); b += Q;
+addNote(b, 2, 9); b += Q; // Melody A
+addNote(b, 2, 10); b += Q; // Melody Bb
+addNote(b, 2, 12); b += Q; // Melody C
+
+addChord(b, Am7); b += 2.0;
+addNote(b, 1, 5); b += E; // Melody E
+addNote(b, 1, 8); b += E; // Melody G
+addNote(b, 1, 5); b += Q; // Melody E
+
+addChord(b, Dm7); b += 2.0;
+// Bluesy slide
+addNote(b, 2, 5, 'slide', 7); b += Q;
+addNote(b, 2, 5); b += Q;
+
+addChord(b, Gm7); b += 2.0;
+addChord(b, C7); b += 2.0;
+
+// Turnaround
+addChord(b, Fmaj7); b += 4.0;
+
+const LOOP_LENGTH = b;
+
+// --- SEQUENCER ---
+let currentBeat = -1.0; 
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = (elapsed * (CONFIG.BPM / 60)); 
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0; 
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(note.string, note.fret, playTime, 2.5, note.target);
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const trails = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    // Position based on string/fret
+    const x = (note.fret / 15) * (w * 0.8) + (w * 0.1);
+    const y = (note.string / 6) * (h * 0.6) + (h * 0.2);
+    
+    trails.push({
+        x: x, y: y,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2 - 1, // Float up
+        life: 1.0,
+        hue: 240 + Math.random() * 40 // Blue/Purple range
+    });
+}
+
+function draw() {
+    // Clear with trail
+    ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw Strings
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    for(let i=0; i<6; i++) {
+        const y = (i / 6) * (h * 0.6) + (h * 0.2);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+    }
+
+    // Draw Particles (City Lights)
+    for (let i = trails.length - 1; i >= 0; i--) {
+        const t = trails[i];
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 4 * t.life, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${t.hue}, 80%, 60%, ${t.life})`;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        t.x += t.vx;
+        t.y += t.vy;
+        t.life -= 0.015; // Slow fade
+
+        if (t.life <= 0) trails.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') togglePlay();
+});
+
+document.addEventListener('click', () => {
+    if(!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = e.clientY / window.innerHeight;
+    AudioEngine.setReverb(y);
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        if (startTime === 0) startTime = AudioEngine.ctx.currentTime;
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw(); 
+
+</script>
+</body>
+</html>

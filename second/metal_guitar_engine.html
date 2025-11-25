@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANNIHILATOR // DROP D DEVASTATION</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Orbitron:wght@900&display=swap');
+
+    :root {
+        --void: #050505;
+        --blood: #8b0000;
+        --fire: #ff4500;
+        --chrome: #c0c0c0;
+        --neon: #00ff88;
+    }
+
+    body {
+        margin: 0;
+        background: var(--void);
+        overflow: hidden;
+        font-family: 'Russo One', sans-serif;
+        color: var(--chrome);
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(5, 5, 5, 0.97);
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 4rem;
+        margin: 0;
+        color: var(--fire);
+        text-shadow: 0 0 30px var(--blood), 0 0 60px var(--blood);
+        letter-spacing: 8px;
+        text-transform: uppercase;
+    }
+
+    p {
+        font-weight: bold;
+        margin-top: 15px;
+        font-size: 1.1rem;
+        color: var(--chrome);
+        text-transform: uppercase;
+        letter-spacing: 3px;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--neon);
+        text-shadow: 0 0 5px var(--neon);
+        border-left: 2px solid var(--fire);
+        padding-left: 10px;
+    }
+
+    #section {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 24px;
+        color: var(--fire);
+        text-shadow: 0 0 10px var(--blood);
+        z-index: 5;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>ANNIHILATOR</h1>
+    <p>[ DROP D DEVASTATION ]</p>
+    <p style="font-size: 0.9rem; color: #666; margin-top: 2rem;">CLICK TO UNLEASH // MOUSE Y = GAIN</p>
+</div>
+
+<div id="hud">
+    TUNING: DROP D<br>
+    BPM: 160<br>
+    GAIN: MAXIMUM
+</div>
+
+<div id="section">INTRO</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * ANNIHILATOR ENGINE
+ * Drop D Metal Physics + Multicompositional Riff/Solo
+ * 
+ * STRUCTURE:
+ * - INTRO: Chromatic power chord devastation
+ * - VERSE RIFF: Palm-muted gallop + open string chaos
+ * - PRE-CHORUS: Harmonic minor climb
+ * - SOLO: Sweep arpeggios + legato shred + tremolo picking
+ * - BREAKDOWN: Djent-style staccato + chugs
+ */
+
+// --- CONFIGURATION ---
+const CONFIG = {
+    BPM: 160,
+    // DROP D TUNING: D A D G B e
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 73.42], // e B G D A D(low)
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'D']
+};
+
+// --- AUDIO ENGINE ---
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    preGain: null,
+    drive1: null,
+    drive2: null,
+    cabinet: null,
+    reverb: null,
+    delay: null,
+    delayGain: null,
+    isPlaying: false,
+    gainAmount: 0.8,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4;
+
+        // PRE-GAIN (Boost before distortion)
+        AudioEngine.preGain = AudioEngine.ctx.createGain();
+        AudioEngine.preGain.gain.value = 2.0;
+
+        // DUAL STAGE HIGH GAIN (Mesa Boogie style)
+        AudioEngine.drive1 = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive1.curve = AudioEngine.makeDistortionCurve(600);
+        AudioEngine.drive1.oversample = '4x';
+
+        AudioEngine.drive2 = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive2.curve = AudioEngine.makeDistortionCurve(400);
+        AudioEngine.drive2.oversample = '4x';
+
+        // CABINET SIM (4x12 with tight low end)
+        AudioEngine.cabinet = AudioEngine.ctx.createBiquadFilter();
+        AudioEngine.cabinet.type = 'lowpass';
+        AudioEngine.cabinet.frequency.value = 5000;
+        AudioEngine.cabinet.Q.value = 0.7;
+
+        // Tight Low Cut (removes mud)
+        const hipass = AudioEngine.ctx.createBiquadFilter();
+        hipass.type = 'highpass';
+        hipass.frequency.value = 80;
+
+        // MID BOOST (Metal scoop killer)
+        const midBoost = AudioEngine.ctx.createBiquadFilter();
+        midBoost.type = 'peaking';
+        midBoost.frequency.value = 800;
+        midBoost.gain.value = 3;
+        midBoost.Q.value = 1.0;
+
+        // ROOM REVERB (Tight)
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(0.8, 4.0);
+        const verbMix = AudioEngine.ctx.createGain();
+        verbMix.gain.value = 0.15;
+
+        // SLAPBACK DELAY
+        AudioEngine.delay = AudioEngine.ctx.createDelay(1.0);
+        AudioEngine.delay.delayTime.value = 0.12;
+        AudioEngine.delayGain = AudioEngine.ctx.createGain();
+        AudioEngine.delayGain.gain.value = 0.2;
+
+        // CHAIN: preGain -> drive1 -> drive2 -> hipass -> midBoost -> cabinet -> master
+        AudioEngine.preGain.connect(AudioEngine.drive1);
+        AudioEngine.drive1.connect(AudioEngine.drive2);
+        AudioEngine.drive2.connect(hipass);
+        hipass.connect(midBoost);
+        midBoost.connect(AudioEngine.cabinet);
+        AudioEngine.cabinet.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(verbMix);
+        verbMix.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+
+        AudioEngine.master.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(AudioEngine.delayGain);
+        AudioEngine.delayGain.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = amount;
+        const n = 44100;
+        const curve = new Float32Array(n);
+        for (let i = 0; i < n; ++i) {
+            let x = i * 2 / n - 1;
+            // Asymmetric clipping for tube-like harmonics
+            curve[i] = Math.tanh(k * x) * 0.9 + Math.tanh(k * x * 0.5) * 0.1;
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    // Main note function with all techniques
+    playString: (stringIdx, fret, time, duration = 0.5, technique = null, target = null) => {
+        if (!AudioEngine.ctx) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        // OSCILLATOR SETUP - Sawtooth + Square for thick metal tone
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        const osc3 = AudioEngine.ctx.createOscillator(); // Sub octave
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc3.type = 'sine';
+
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        osc2.detune.value = 5; // Slight detune for thickness
+        osc3.frequency.value = freq * 0.5; // Sub octave
+
+        // TECHNIQUE HANDLING
+        if (technique === 'pm') {
+            // Palm Mute - aggressive filter + short decay
+            const pmFilter = AudioEngine.ctx.createBiquadFilter();
+            pmFilter.type = 'lowpass';
+            pmFilter.frequency.value = 400;
+            pmFilter.Q.value = 3;
+
+            const pmAmp = AudioEngine.ctx.createGain();
+            pmAmp.gain.setValueAtTime(0, t);
+            pmAmp.gain.linearRampToValueAtTime(0.8, t + 0.005);
+            pmAmp.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+            const mix = AudioEngine.ctx.createGain();
+            mix.gain.value = 0.6;
+
+            osc1.connect(mix);
+            osc2.connect(mix);
+            osc3.connect(mix);
+            mix.connect(pmFilter);
+            pmFilter.connect(pmAmp);
+            pmAmp.connect(AudioEngine.preGain);
+
+            osc1.start(t); osc1.stop(t + 0.2);
+            osc2.start(t); osc2.stop(t + 0.2);
+            osc3.start(t); osc3.stop(t + 0.2);
+            return;
+        }
+
+        if (technique === 'slide' && target !== null) {
+            const targetFreq = baseFreq * Math.pow(2, target / 12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+            osc3.frequency.setValueAtTime(freq * 0.5, t);
+            osc3.frequency.linearRampToValueAtTime(targetFreq * 0.5, t + 0.1);
+        }
+
+        if (technique === 'bend') {
+            // Whole step bend
+            const bendTarget = freq * Math.pow(2, 2/12);
+            osc1.frequency.setValueAtTime(freq, t);
+            osc1.frequency.linearRampToValueAtTime(bendTarget, t + 0.2);
+            osc2.frequency.setValueAtTime(freq, t);
+            osc2.frequency.linearRampToValueAtTime(bendTarget, t + 0.2);
+        }
+
+        if (technique === 'vib') {
+            // Fast vibrato
+            const vib = AudioEngine.ctx.createOscillator();
+            vib.frequency.value = 6;
+            const vibGain = AudioEngine.ctx.createGain();
+            vibGain.gain.value = freq * 0.015;
+            vib.connect(vibGain);
+            vibGain.connect(osc1.frequency);
+            vibGain.connect(osc2.frequency);
+            vib.start(t);
+            vib.stop(t + duration);
+        }
+
+        if (technique === 'trem') {
+            // Tremolo picking simulation - rapid retriggering amp
+            const tremAmp = AudioEngine.ctx.createGain();
+            const tremRate = 20; // 20 Hz tremolo
+            for (let i = 0; i < duration * tremRate; i++) {
+                const trigTime = t + i / tremRate;
+                tremAmp.gain.setValueAtTime(0.7, trigTime);
+                tremAmp.gain.linearRampToValueAtTime(0.3, trigTime + 0.02);
+            }
+            
+            const mix = AudioEngine.ctx.createGain();
+            mix.gain.value = 0.5;
+
+            osc1.connect(mix);
+            osc2.connect(mix);
+            mix.connect(tremAmp);
+            tremAmp.connect(AudioEngine.preGain);
+
+            osc1.start(t); osc1.stop(t + duration);
+            osc2.start(t); osc2.stop(t + duration);
+            return;
+        }
+
+        // Standard envelope
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.7, t + 0.008);
+        amp.gain.exponentialRampToValueAtTime(0.3, t + 0.1);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        // Mix oscillators
+        const mix = AudioEngine.ctx.createGain();
+        mix.gain.value = 0.4;
+        
+        const osc1g = AudioEngine.ctx.createGain(); osc1g.gain.value = 0.5;
+        const osc2g = AudioEngine.ctx.createGain(); osc2g.gain.value = 0.3;
+        const osc3g = AudioEngine.ctx.createGain(); osc3g.gain.value = 0.2;
+
+        osc1.connect(osc1g); osc1g.connect(mix);
+        osc2.connect(osc2g); osc2g.connect(mix);
+        osc3.connect(osc3g); osc3g.connect(mix);
+        mix.connect(amp);
+        amp.connect(AudioEngine.preGain);
+
+        osc1.start(t); osc1.stop(t + duration);
+        osc2.start(t); osc2.stop(t + duration);
+        osc3.start(t); osc3.stop(t + duration);
+    },
+
+    // Power chord helper
+    playPowerChord: (rootFret, time, duration = 0.3, technique = null) => {
+        // Drop D power chord shape: same fret on strings 5, 4 (D and A)
+        AudioEngine.playString(5, rootFret, time, duration, technique);
+        AudioEngine.playString(4, rootFret, time + 0.005, duration, technique);
+        AudioEngine.playString(3, rootFret + 2, time + 0.01, duration, technique); // 5th on D string
+    },
+
+    // Dead note / chug
+    playChug: (time) => {
+        if (!AudioEngine.ctx) return;
+        const t = time;
+        
+        const noise = AudioEngine.ctx.createBufferSource();
+        const noiseBuffer = AudioEngine.ctx.createBuffer(1, 4410, AudioEngine.ctx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < 4410; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        noise.buffer = noiseBuffer;
+
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 150;
+        filter.Q.value = 5;
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.6, t + 0.005);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        noise.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.preGain);
+
+        noise.start(t);
+        noise.stop(t + 0.1);
+    },
+
+    setGain: (val) => {
+        AudioEngine.gainAmount = val;
+        if (AudioEngine.preGain) {
+            AudioEngine.preGain.gain.setTargetAtTime(1.5 + val * 2, AudioEngine.ctx.currentTime, 0.1);
+        }
+    }
+};
+
+// --- TAB/COMPOSITION ---
+const TAB = [];
+let currentSection = 'INTRO';
+
+function addNote(beat, string, fret, technique = null, target = null) {
+    TAB.push({ beat, string, fret, technique, target, section: currentSection });
+}
+
+function addPowerChord(beat, rootFret, technique = null) {
+    TAB.push({ beat, type: 'power', fret: rootFret, technique, section: currentSection });
+}
+
+function addChug(beat) {
+    TAB.push({ beat, type: 'chug', section: currentSection });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPOSITION - DROP D METAL DEVASTATION
+// ═══════════════════════════════════════════════════════════════
+
+let b = 0;
+const S = 0.125;  // Sixteenth
+const E = 0.25;   // Eighth
+const Q = 0.5;    // Quarter
+const H = 1.0;    // Half
+
+// ─── INTRO: CHROMATIC POWER CHORD DESCENT ───────────────────
+currentSection = 'INTRO';
+
+// Measure 1-2: Open D power chord hits
+for (let i = 0; i < 4; i++) {
+    addPowerChord(b, 0, 'pm'); b += E;
+    addChug(b); b += E;
+    addPowerChord(b, 0, 'pm'); b += S;
+    addChug(b); b += S;
+    addPowerChord(b, 0); b += E;
+}
+
+// Measure 3-4: Chromatic descent D -> C# -> C -> B
+addPowerChord(b, 0); b += Q;
+addPowerChord(b, 0, 'pm'); b += E;
+addChug(b); b += E;
+
+// Chromatic run
+[11, 10, 9, 8].forEach(fret => {
+    addPowerChord(b, fret, 'pm'); b += S;
+    addChug(b); b += S;
+});
+
+// Land on low E (fret 2 in drop D = E)
+addPowerChord(b, 2); b += H;
+
+// ─── VERSE RIFF: GALLOP + PEDAL TONE ────────────────────────
+currentSection = 'VERSE';
+
+// Classic thrash gallop pattern
+for (let rep = 0; rep < 2; rep++) {
+    // E pedal gallop
+    addNote(b, 5, 2, 'pm'); b += S;
+    addNote(b, 5, 2, 'pm'); b += S;
+    addNote(b, 5, 2, 'pm'); b += E;
+    
+    addNote(b, 5, 2, 'pm'); b += S;
+    addNote(b, 5, 2, 'pm'); b += S;
+    addNote(b, 5, 2, 'pm'); b += E;
+    
+    // Accented power chord
+    addPowerChord(b, 5); b += E; // A power chord
+    addChug(b); b += E;
+    
+    // Chromatic climb
+    addNote(b, 5, 2, 'pm'); b += S;
+    addNote(b, 5, 3, 'pm'); b += S;
+    addNote(b, 5, 4, 'pm'); b += S;
+    addNote(b, 5, 5, 'pm'); b += S;
+    
+    // G power chord stab
+    addPowerChord(b, 5); b += E;
+    addChug(b); b += E;
+}
+
+// Variation with open string pull-offs
+addNote(b, 5, 0); b += S;
+addNote(b, 4, 0); b += S;
+addNote(b, 5, 3); b += S;
+addNote(b, 5, 0); b += S;
+addNote(b, 4, 0); b += S;
+addNote(b, 5, 5); b += S;
+addNote(b, 5, 0); b += S;
+addNote(b, 4, 0); b += S;
+
+// ─── PRE-CHORUS: HARMONIC MINOR CLIMB ───────────────────────
+currentSection = 'PRE-CHORUS';
+
+// E Harmonic Minor scale run up the D string
+const harmMinor = [0, 2, 3, 5, 7, 8, 11, 12]; // E F# G A B C D# E
+harmMinor.forEach((fret, i) => {
+    addNote(b, 3, fret); b += S;
+    if (i % 4 === 3) {
+        // Accent every 4th note
+        addNote(b, 3, fret, 'vib'); b += S;
+    }
+});
+
+// Descend with palm muting
+harmMinor.slice().reverse().forEach(fret => {
+    addNote(b, 3, fret, 'pm'); b += S;
+});
+
+// ─── SOLO SECTION: SHRED TIME ───────────────────────────────
+currentSection = 'SOLO';
+
+// Opening bend
+addNote(b, 1, 15, 'bend'); b += Q;
+addNote(b, 1, 15, 'vib'); b += Q;
+
+// Fast alternate picking run on high E
+const shredRun = [12, 15, 12, 14, 12, 15, 12, 14, 12, 13, 12, 15, 17, 15, 17, 19];
+shredRun.forEach(fret => {
+    addNote(b, 0, fret); b += S;
+});
+
+// Sweep arpeggio (Am shape)
+// Down sweep
+addNote(b, 0, 17); b += S;
+addNote(b, 1, 17); b += S;
+addNote(b, 2, 14); b += S;
+addNote(b, 3, 14); b += S;
+addNote(b, 4, 12); b += S;
+// Up sweep
+addNote(b, 3, 14); b += S;
+addNote(b, 2, 14); b += S;
+addNote(b, 1, 17); b += S;
+addNote(b, 0, 17); b += S;
+
+// Legato phrase
+const legatoPhrase = [12, 14, 15, 17, 15, 14, 12, 14];
+legatoPhrase.forEach(fret => {
+    addNote(b, 1, fret); b += S;
+});
+
+// Tremolo picked climax
+addNote(b, 0, 19, 'trem'); b += H;
+addNote(b, 0, 17, 'trem'); b += H;
+
+// Dive into breakdown
+addNote(b, 0, 12, 'slide', 0); b += Q;
+
+// ─── BREAKDOWN: DJENT STACCATO ──────────────────────────────
+currentSection = 'BREAKDOWN';
+
+// Syncopated chugs
+const breakdownRhythm = [1,0,0,1,0,1,1,0, 1,0,0,1,0,0,1,1];
+breakdownRhythm.forEach(hit => {
+    if (hit) {
+        addPowerChord(b, 0, 'pm');
+    } else {
+        addChug(b);
+    }
+    b += S;
+});
+
+// Repeat with variation
+breakdownRhythm.forEach((hit, i) => {
+    if (hit) {
+        // Every 4th hit is open
+        if (i % 4 === 0) {
+            addPowerChord(b, 0);
+        } else {
+            addPowerChord(b, 0, 'pm');
+        }
+    } else {
+        addChug(b);
+    }
+    b += S;
+});
+
+// Final chromatic descent to open D
+[7, 6, 5, 4, 3, 2, 1, 0].forEach(fret => {
+    addPowerChord(b, fret, 'pm'); b += S;
+});
+
+// FINAL HIT
+addPowerChord(b, 0); b += H;
+addNote(b, 5, 0); // Let ring
+
+const LOOP_LENGTH = b + 2;
+
+// --- SEQUENCER ---
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = elapsed * (CONFIG.BPM / 60);
+
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.15) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            
+            // Update section display
+            if (note.section !== currentSection) {
+                currentSection = note.section;
+                document.getElementById('section').innerText = currentSection;
+            }
+
+            if (note.type === 'power') {
+                AudioEngine.playPowerChord(note.fret, playTime, 0.4, note.technique);
+            } else if (note.type === 'chug') {
+                AudioEngine.playChug(playTime);
+            } else {
+                AudioEngine.playString(note.string, note.fret, playTime, 0.5, note.technique, note.target);
+            }
+            
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// --- VISUAL ENGINE ---
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+const particles = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    activeNotes.push({
+        ...note,
+        life: 1.0
+    });
+    
+    // Spawn particles for power chords and solo notes
+    if (note.type === 'power' || note.section === 'SOLO') {
+        for (let i = 0; i < 10; i++) {
+            particles.push({
+                x: w * 0.2,
+                y: h / 2 + (note.string || 3) * 25 - 75,
+                vx: (Math.random() - 0.5) * 15,
+                vy: (Math.random() - 0.5) * 10,
+                life: 1.0,
+                hue: note.section === 'SOLO' ? 120 : 0 // Green for solo, red otherwise
+            });
+        }
+    }
+}
+
+function draw() {
+    // Dark trail effect
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.15)';
+    ctx.fillRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 25;
+    const HIT_X = w * 0.2;
+
+    // Draw staff lines
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#1a1a1a';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+    });
+
+    // String names
+    ctx.font = "14px 'Russo One'";
+    ctx.fillStyle = '#333';
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.fillText(name, 10, y + 4);
+    });
+
+    // Hit line with glow
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 100);
+    ctx.lineTo(HIT_X, STAFF_Y + 100);
+    ctx.strokeStyle = '#ff4500';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff4500';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Draw incoming notes
+    const pixelsPerBeat = 180;
+    
+    ctx.font = "18px 'Orbitron'";
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH;
+
+        const x = HIT_X + (dist * pixelsPerBeat);
+        
+        if (x > 0 && x < w) {
+            let y = STAFF_Y;
+            let txt = '';
+            let color = '#ff4500';
+            
+            if (note.type === 'power') {
+                // Power chord spans 3 strings
+                y = STAFF_Y + (4 * SPACING) - (2.5 * SPACING);
+                txt = note.fret;
+                color = '#8b0000';
+                
+                // Draw chord bracket
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x - 15, y - SPACING);
+                ctx.lineTo(x - 15, y + SPACING);
+                ctx.stroke();
+            } else if (note.type === 'chug') {
+                y = STAFF_Y + (4 * SPACING) - (2.5 * SPACING);
+                txt = 'X';
+                color = '#444';
+            } else {
+                y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+                txt = note.fret;
+                
+                // Color by section
+                if (note.section === 'SOLO') color = '#00ff88';
+                else if (note.section === 'BREAKDOWN') color = '#8b0000';
+                else if (note.technique === 'pm') color = '#666';
+            }
+            
+            // Note circle
+            ctx.beginPath();
+            ctx.arc(x, y, 12, 0, Math.PI * 2);
+            ctx.fillStyle = '#050505';
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Note text
+            ctx.fillStyle = color;
+            ctx.fillText(txt, x - 6, y + 5);
+            
+            // Technique indicator
+            if (note.technique) {
+                ctx.font = "10px 'Russo One'";
+                ctx.fillStyle = '#666';
+                let techTxt = '';
+                if (note.technique === 'pm') techTxt = 'PM';
+                else if (note.technique === 'bend') techTxt = 'B';
+                else if (note.technique === 'vib') techTxt = '~';
+                else if (note.technique === 'slide') techTxt = '/';
+                else if (note.technique === 'trem') techTxt = 'TR';
+                ctx.fillText(techTxt, x - 6, y + 22);
+                ctx.font = "18px 'Orbitron'";
+            }
+        }
+    });
+
+    // Draw hit explosions
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        let y = STAFF_Y;
+        
+        if (n.type === 'power' || n.type === 'chug') {
+            y = STAFF_Y + (4 * SPACING) - (2.5 * SPACING);
+        } else if (n.string !== undefined) {
+            y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        }
+        
+        const radius = 15 + ((1 - n.life) * 60);
+        const hue = n.section === 'SOLO' ? 140 : (n.section === 'BREAKDOWN' ? 0 : 20);
+        
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${n.life})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        n.life -= 0.06;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    // Draw particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 50%, ${p.life})`;
+        ctx.fill();
+        
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.3; // Gravity
+        p.life -= 0.03;
+        
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Section indicator pulse
+    const sectionEl = document.getElementById('section');
+    if (activeNotes.length > 0) {
+        sectionEl.style.textShadow = `0 0 ${20 + activeNotes.length * 5}px #8b0000`;
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// --- INPUTS ---
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) {
+        AudioEngine.init();
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime;
+        scheduler();
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!AudioEngine.ctx) return;
+    const y = 1 - (e.clientY / window.innerHeight);
+    AudioEngine.setGain(y);
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (AudioEngine.isPlaying) {
+            AudioEngine.isPlaying = false;
+            document.getElementById('overlay').classList.remove('hidden');
+        } else if (AudioEngine.ctx) {
+            AudioEngine.isPlaying = true;
+            document.getElementById('overlay').classList.add('hidden');
+            startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+            scheduler();
+        }
+    }
+});
+
+draw();
+
+</script>
+</body>
+</html>
