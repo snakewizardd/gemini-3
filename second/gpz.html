@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Virtuoso Automaton: DDA x Strings</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #08080c; 
+        color: #a0a0b0; 
+        font-family: 'Space Mono', monospace; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; 
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%; 
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(8,8,12,0.95);
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        z-index: 100;
+        cursor: pointer;
+        transition: opacity 0.5s;
+    }
+
+    .btn {
+        border: 1px solid #00d4aa;
+        color: #00d4aa;
+        padding: 20px 40px;
+        font-size: 24px;
+        font-family: inherit;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(0,212,170,0.1); box-shadow: 0 0 20px rgba(0,212,170,0.3); }
+
+    #ui {
+        position: absolute; top: 20px; left: 20px;
+        pointer-events: none;
+    }
+
+    .stat { margin-bottom: 5px; font-size: 14px; }
+    .val { color: #fff; font-weight: bold; }
+    .highlight { color: #00d4aa; }
+    .warn { color: #ffaa00; }
+    .danger { color: #ff4466; }
+
+    #readout {
+        position: absolute; bottom: 40px; width: 100%;
+        text-align: center; font-style: italic; opacity: 0.7;
+        font-size: 18px; pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="btn">INITIALIZE SYSTEM</div>
+    <p style="margin-top: 20px; font-size: 12px; opacity: 0.6">CLICK TO ACTIVATE AUDIO CONTEXT</p>
+</div>
+
+<div id="ui">
+    <div class="stat">Fₙ = P₀ · kFₙ₋₁ + m(T + R)</div>
+    <div style="margin: 10px 0; border-bottom: 1px solid #333"></div>
+    <div class="stat">k (INERTIA): <span id="val-k" class="val">0.00</span></div>
+    <div class="stat">m (PRESSURE): <span id="val-m" class="val">0.00</span></div>
+    <div class="stat">STATE: <span id="val-state" class="val highlight">IDLE</span></div>
+</div>
+
+<div id="readout">Waiting for Signal (T)...</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. CONFIGURATION (Technical Reference Part II)
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    // Open C Tuning (Low and Heavy): C G C G C E
+    BASE_FREQS: [130.81, 196.00, 261.63, 392.00, 523.25, 659.25], 
+    STRING_NAMES: ['C', 'G', 'C', 'G', 'C', 'e'],
+    SCALE: [0, 2, 4, 7, 9, 12] // Major Pentatonic Intervals
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (Technical Reference Part III)
+// ═══════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    delay: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        // Master Bus
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.5;
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+
+        // Reverb (Impulse Response)
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * 2.0;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        for (let i = 0; i < length; i++) {
+            const decay = Math.pow(1 - i / length, 2);
+            impulse.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay;
+            impulse.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay;
+        }
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = impulse;
+        
+        const revMix = AudioEngine.ctx.createGain();
+        revMix.gain.value = 0.4;
+        AudioEngine.reverb.connect(revMix);
+        revMix.connect(AudioEngine.master);
+
+        // Delay (Echo)
+        AudioEngine.delay = AudioEngine.ctx.createDelay();
+        AudioEngine.delay.delayTime.value = 0.25;
+        const fb = AudioEngine.ctx.createGain();
+        fb.gain.value = 0.3;
+        AudioEngine.delay.connect(fb);
+        fb.connect(AudioEngine.delay);
+        const delMix = AudioEngine.ctx.createGain();
+        delMix.gain.value = 0.2;
+        AudioEngine.delay.connect(delMix);
+        delMix.connect(AudioEngine.master);
+    },
+
+    // High Gain / Metal Recipe (Ref Part III.2)
+    playTone: (stringIdx, fret, intensity) => {
+        if (!AudioEngine.ctx) return;
+        const t = AudioEngine.ctx.currentTime;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+
+        // OSCILLATORS
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc2.detune.value = 5;
+
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+
+        // FILTER (Lowpass Gate)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        // Velocity (intensity) opens the filter
+        filter.frequency.setValueAtTime(500 + (intensity * 4000), t);
+        filter.Q.value = 2;
+
+        // ENVELOPE
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.3 * intensity, t + 0.005);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+
+        // ROUTING
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+        amp.connect(AudioEngine.reverb); // Send to verb
+        amp.connect(AudioEngine.delay);  // Send to delay
+
+        osc1.start(t);
+        osc2.start(t);
+        osc1.stop(t + 0.6);
+        osc2.stop(t + 0.6);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE DDA AGENT (The Musician)
+// ═══════════════════════════════════════════════════════════════
+const Agent = {
+    // State
+    pos: 0,      // Current Fret Position (Float)
+    vel: 0,      // Momentum
+    k: 0.9,      // Inertia (Viscosity)
+    m: 0.1,      // Pressure (Sensitivity)
+    p0: 0,       // Identity (Rest position)
+    
+    // Memory
+    lastPluckTime: 0,
+    history: [],
+
+    update: (targetFret, intensity) => {
+        // 1. IDENTITY (P0)
+        // The hand wants to rest at fret 0 or 5 naturally
+        let p0 = (targetFret > 7) ? 12 : (targetFret > 3 ? 5 : 0);
+
+        // 2. SIGNAL (T)
+        // The user's mouse defines the Target Note
+        let T = targetFret - Agent.pos;
+
+        // 3. REFLECTION (R)
+        // The "Music Theory" force.
+        // It pushes the hand towards valid scale degrees.
+        // If we are at 3.2, and scale has 3.0 and 5.0, R pushes to 3.0
+        let nearestScaleNote = Math.round(Agent.pos);
+        // (Simple quantization logic for demonstration)
+        // If "Panic" (High Intensity), R becomes noise/chromatic
+        let R = 0;
+        if (intensity < 0.8) {
+            let error = nearestScaleNote - Agent.pos;
+            R = error * 2.0; // Strong correction
+        } else {
+            R = (Math.random() - 0.5) * 5; // Chaos/Shredding
+        }
+
+        // 4. PARAMETER MODULATION
+        // k (Inertia) drops when moving fast (intensity) to allow agility
+        // m (Pressure) rises with intensity
+        Agent.k = 0.95 - (intensity * 0.4); 
+        Agent.m = 0.05 + (intensity * 0.4);
+
+        // 5. THE EQUATION: Fn = k*Fn-1 + m(T + R)
+        let Fn = (Agent.vel * Agent.k) + ((T + R) * Agent.m);
+        
+        Agent.vel = Fn;
+        Agent.pos += Agent.vel;
+
+        // PHYSICS BOUNDS
+        if (Agent.pos < 0) { Agent.pos = 0; Agent.vel *= -0.5; }
+        if (Agent.pos > 24) { Agent.pos = 24; Agent.vel *= -0.5; }
+
+        // PLUCKING LOGIC
+        // We pluck if velocity changes direction OR if we cross a grid line fast enough
+        let now = Date.now();
+        let speed = Math.abs(Agent.vel);
+        
+        // Strumming logic:
+        // High speed = trills/tremolo
+        // Low speed = deliberate notes
+        let cooldown = (1.0 - intensity) * 400 + 50; 
+        
+        if (now - Agent.lastPluckTime > cooldown && speed > 0.05) {
+            // Find string based on height (approximated here by cycling or random for texture)
+            // In a real guitar, vertical mouse would map strings.
+            // Here, we map Fret (X) to Pitch, and Intensity (Y) to String selection complexity.
+            
+            let fret = Math.abs(Math.round(Agent.pos));
+            // Choose string based on pitch range
+            let sIdx = Math.floor(Math.random() * 3); // Low strings
+            if (fret > 12) sIdx = 3 + Math.floor(Math.random() * 3); // High strings
+            
+            AudioEngine.playTone(sIdx, fret, intensity);
+            
+            // Visual feedback
+            Visuals.triggerHit(sIdx, fret);
+            Agent.lastPluckTime = now;
+        }
+
+        Agent.history.push(Agent.pos);
+        if (Agent.history.length > 50) Agent.history.shift();
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUAL ENGINE (Drawing the Math)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h;
+let hits = []; // Visual ripples
+
+window.addEventListener('resize', () => {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+});
+w = canvas.width = window.innerWidth;
+h = canvas.height = window.innerHeight;
+
+const Visuals = {
+    triggerHit: (string, fret) => {
+        hits.push({
+            s: string, f: fret, life: 1.0
+        });
+    },
+
+    draw: () => {
+        // Clear
+        ctx.fillStyle = 'rgba(8, 8, 12, 0.3)';
+        ctx.fillRect(0, 0, w, h);
+
+        const FRET_W = w / 24;
+        const STR_H = h / 6;
+
+        // Draw Fretboard
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 1;
+        for (let i=0; i<=24; i++) {
+            let x = i * FRET_W;
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+            // Inlays
+            if ([3,5,7,9,12,15,17,19,21,24].includes(i)) {
+                ctx.fillStyle = '#1a1a20';
+                ctx.fillRect(x - FRET_W, 0, FRET_W, h);
+            }
+        }
+
+        // Draw Strings
+        for (let i=0; i<6; i++) {
+            let y = (i * STR_H) + (STR_H/2);
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y);
+            ctx.strokeStyle = '#444'; ctx.lineWidth = 1 + i*0.5; ctx.stroke();
+        }
+
+        // Draw Agent (The Hand)
+        let ax = Agent.pos * FRET_W;
+        let ay = h / 2;
+        
+        // Agent Trail
+        ctx.beginPath();
+        if (Agent.history.length > 1) {
+            for (let i=0; i<Agent.history.length; i++) {
+                let hx = Agent.history[i] * FRET_W;
+                ctx.lineTo(hx, ay + Math.sin(i)*10); // Simple waveform visual
+            }
+        }
+        ctx.strokeStyle = Agent.m > 0.5 ? '#ff4466' : '#00d4aa';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Agent Cursor
+        ctx.beginPath();
+        ctx.arc(ax, ay, 10 + (Agent.m * 20), 0, Math.PI*2);
+        ctx.fillStyle = Agent.m > 0.5 ? '#ff4466' : '#00d4aa';
+        ctx.shadowBlur = 20; ctx.shadowColor = ctx.fillStyle;
+        ctx.fill(); ctx.shadowBlur = 0;
+
+        // Draw Ghost Target (User Mouse)
+        let tx = (mouse.x / w) * 24 * FRET_W;
+        ctx.beginPath();
+        ctx.arc(tx, mouse.y, 5, 0, Math.PI*2);
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+
+        // Draw Hits
+        for (let i=hits.length-1; i>=0; i--) {
+            let hit = hits[i];
+            let hx = (hit.f * FRET_W) - (FRET_W/2); // Center of fret
+            let hy = (hit.s * STR_H) + (STR_H/2);
+            
+            ctx.beginPath();
+            ctx.arc(hx, hy, 20 * (1-hit.life) + 5, 0, Math.PI*2);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${hit.life})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            hit.life -= 0.05;
+            if (hit.life <= 0) hits.splice(i, 1);
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. INPUT & LOOP
+// ═══════════════════════════════════════════════════════════════
+let mouse = { x: w/2, y: h/2 };
+
+// Initialize Button
+document.getElementById('overlay').addEventListener('click', () => {
+    AudioEngine.init().then(() => {
+        // Resume just in case
+        if (AudioEngine.ctx.state === 'suspended') AudioEngine.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 500);
+        loop();
+    });
+});
+
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+
+function loop() {
+    // Input normalization
+    let targetFret = (mouse.x / w) * 24;
+    
+    // Intensity is horizontal speed + vertical position? 
+    // Let's make Intensity based on X-velocity of mouse for expression
+    // Or simpler: Y position controls intensity
+    let intensity = 1.0 - (mouse.y / h); // Top = High Intensity, Bottom = Low
+    
+    Agent.update(targetFret, intensity);
+    Visuals.draw();
+    
+    // UI Update
+    document.getElementById('val-k').innerText = Agent.k.toFixed(2);
+    document.getElementById('val-m').innerText = Agent.m.toFixed(2);
+    
+    let stateEl = document.getElementById('val-state');
+    let readout = document.getElementById('readout');
+    
+    if (intensity < 0.3) {
+        stateEl.innerText = "FLOW"; stateEl.className = "val highlight";
+        readout.innerText = "Harmonic Resonance";
+    } else if (intensity < 0.7) {
+        stateEl.innerText = "STRAIN"; stateEl.className = "val warn";
+        readout.innerText = "Building Tension";
+    } else {
+        stateEl.innerText = "PANIC"; stateEl.className = "val danger";
+        readout.innerText = "Chromatic Dissolution";
+    }
+
+    requestAnimationFrame(loop);
+}
+
+</script>
+</body>
+</html>

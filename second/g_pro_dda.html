@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Singular Automata // Raycast Iteration</title>
+<style>
+    body { background: #050508; color: #a0a0b0; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+    canvas { background: #0b0b10; border: 1px solid #1a1a24; box-shadow: 0 0 30px rgba(0,0,0,0.8); cursor: crosshair; }
+    
+    .hud-container {
+        width: 900px;
+        display: flex;
+        justify-content: space-between;
+        margin-top: 15px;
+        padding: 10px;
+        background: #0b0b10;
+        border: 1px solid #1a1a24;
+    }
+    
+    .metric-group { display: flex; flex-direction: column; gap: 4px; }
+    .label { font-size: 11px; opacity: 0.6; letter-spacing: 1px; }
+    .val { font-size: 16px; font-weight: bold; color: #e0e0f0; }
+    
+    .bar-bg { width: 100px; height: 4px; background: #222; margin-top: 4px; }
+    .bar-fill { height: 100%; transition: width 0.1s; }
+    
+    .accent { color: #00d4aa; }
+    .warn { color: #ffaa00; }
+    .danger { color: #ff4466; }
+    
+    .legend {
+        margin-top: 10px;
+        font-size: 12px;
+        display: flex;
+        gap: 20px;
+        opacity: 0.7;
+    }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="hud-container">
+    <div class="metric-group">
+        <span class="label">EQUATION STATE</span>
+        <span class="val" id="ui-state">SEEKING</span>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">k (INERTIA/MEMORY)</span>
+        <span class="val accent" id="ui-k">0.92</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-k" style="background:#00d4aa; width:92%"></div></div>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">m (PRESSURE/GAIN)</span>
+        <span class="val warn" id="ui-m">0.30</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-m" style="background:#ffaa00; width:30%"></div></div>
+    </div>
+
+    <div class="metric-group">
+        <span class="label">ENTROPY (FRUSTRATION)</span>
+        <span class="val danger" id="ui-f">0.00</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-f" style="background:#ff4466; width:0%"></div></div>
+    </div>
+</div>
+
+<canvas id="sim" width="900" height="500"></canvas>
+
+<div class="legend">
+    <span><div class="dot" style="background:#fff"></div>Target Vector (T)</span>
+    <span><div class="dot" style="background:#ff4466"></div>Reflection Vector (R)</span>
+    <span><div class="dot" style="background:#00d4aa"></div>Velocity (F)</span>
+    <span><div class="dot" style="background:#444"></div>Rays</span>
+</div>
+
+<script>
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+
+// --- VECTOR MATH ---
+const Vec = {
+    add: (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y }),
+    sub: (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y }),
+    mult: (v, s) => ({ x: v.x * s, y: v.y * s }),
+    mag: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+    norm: (v) => {
+        let m = Math.sqrt(v.x * v.x + v.y * v.y);
+        return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m};
+    },
+    dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y,
+    cross: (v1, v2) => v1.x * v2.y - v1.y * v2.x // 2D cross product magnitude
+};
+
+// --- DDA CONSTANTS ---
+const BASE_K = 0.94; // High inertia (stable)
+const BASE_M = 0.40; // Moderate pressure
+const FRUSTRATION_DECAY = 0.005;
+const FRUSTRATION_GROWTH = 0.02;
+
+// --- WORLD ---
+let goal = { x: 800, y: 250 };
+const obstacles = [
+    { x: 400, y: 100, w: 50, h: 300 }, // The Wall
+    { x: 200, y: 0, w: 50, h: 150 },   // Upper blocker
+    { x: 200, y: 350, w: 50, h: 150 }  // Lower blocker
+];
+
+// --- AGENT ---
+class Agent {
+    constructor() {
+        this.pos = { x: 100, y: 250 };
+        this.vel = { x: 0, y: 0 };  // This is F_n-1
+        this.acc = { x: 0, y: 0 };
+        
+        // DDA Internal State
+        this.k = BASE_K;
+        this.m = BASE_M;
+        this.frustration = 0;
+        this.radius = 12;
+        
+        // Raycasting Sensors
+        this.rays = [];
+        for(let i=-60; i<=60; i+=20) this.rays.push(i * (Math.PI/180));
+    }
+
+    sense(obstacles) {
+        let sensation = { x: 0, y: 0 }; // Accumulated Repulsion (R)
+        let hitCount = 0;
+
+        // Cast rays
+        this.sensorData = this.rays.map(angle => {
+            // Rotate ray by velocity angle to look forward
+            let velAngle = Math.atan2(this.vel.y, this.vel.x);
+            let rayAngle = velAngle + angle;
+            
+            let dir = { x: Math.cos(rayAngle), y: Math.sin(rayAngle) };
+            let closest = null;
+            let minDist = 120; // Sight range
+
+            // Check walls
+            obstacles.forEach(obs => {
+                // Ray vs AABB intersection (Simplified)
+                // We check 4 lines of the rect
+                let lines = [
+                    {p1:{x:obs.x, y:obs.y}, p2:{x:obs.x+obs.w, y:obs.y}},
+                    {p1:{x:obs.x+obs.w, y:obs.y}, p2:{x:obs.x+obs.w, y:obs.y+obs.h}},
+                    {p1:{x:obs.x+obs.w, y:obs.y+obs.h}, p2:{x:obs.x, y:obs.y+obs.h}},
+                    {p1:{x:obs.x, y:obs.y+obs.h}, p2:{x:obs.x, y:obs.y}}
+                ];
+
+                lines.forEach(line => {
+                    const den = (line.p1.x - line.p2.x) * (this.pos.y - (this.pos.y + dir.y)) - (line.p1.y - line.p2.y) * (this.pos.x - (this.pos.x + dir.x));
+                    if (den == 0) return;
+                    
+                    const t = ((line.p1.x - this.pos.x) * (this.pos.y - (this.pos.y + dir.y)) - (line.p1.y - this.pos.y) * (this.pos.x - (this.pos.x + dir.x))) / den;
+                    const u = -((line.p1.x - line.p2.x) * (line.p1.y - this.pos.y) - (line.p1.y - line.p2.y) * (line.p1.x - this.pos.x)) / den;
+
+                    if (t > 0 && t < 1 && u > 0) {
+                        let dist = Math.sqrt(Math.pow(u * dir.x, 2) + Math.pow(u * dir.y, 2));
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closest = { x: this.pos.x + u * dir.x, y: this.pos.y + u * dir.y, dist: dist };
+                        }
+                    }
+                });
+            });
+
+            if (closest) {
+                // R magnitude inversely proportional to distance (strong repulsion close up)
+                let strength = (120 - closest.dist) / 120;
+                sensation.x -= dir.x * strength;
+                sensation.y -= dir.y * strength;
+                hitCount++;
+                return closest;
+            }
+            return null;
+        });
+
+        // Normalize accumulated repulsion
+        if (hitCount > 0) sensation = Vec.norm(sensation);
+        return sensation;
+    }
+
+    update() {
+        // --- 1. COMPUTE VECTORS (The Input) ---
+        
+        // T (Target): Vector to goal
+        let T = Vec.sub(goal, this.pos);
+        let distToGoal = Vec.mag(T);
+        T = Vec.norm(T);
+
+        // R (Reflection): Sensor data
+        let R = this.sense(obstacles);
+        
+        // --- 2. DYNAMIC STATE ADJUSTMENT (The "Soul") ---
+        
+        // Frustration Logic:
+        // If I want to move (High M) but am moving slowly (Low V), I am frustrated.
+        let speed = Vec.mag(this.vel);
+        let goalProgress = Vec.dot(this.vel, T); // Are we actually moving towards goal?
+        
+        if (speed < 1.5 || goalProgress < 0.2) {
+            // Stuck or going wrong way
+            this.frustration = Math.min(1.0, this.frustration + FRUSTRATION_GROWTH);
+        } else {
+            // Moving well
+            this.frustration = Math.max(0, this.frustration - FRUSTRATION_DECAY);
+        }
+
+        // PARAMETER MODULATION
+        // Phase 1: Calm (High K, Low M) - Flow
+        // Phase 2: Annoyed (Lower K, Higher M) - Jittery
+        // Phase 3: Panicked/Determined (Low K, Very High M, Lateral Thinking)
+        
+        if (this.frustration < 0.4) {
+            // Stable State
+            this.k = BASE_K;
+            this.m = BASE_M;
+            document.getElementById('ui-state').innerText = "SEEKING (FLOW)";
+            document.getElementById('ui-state').className = "val accent";
+        } else if (this.frustration < 0.8) {
+            // Agitated State - Lose inertia, gain sensitivity
+            this.k = BASE_K * 0.7; // Become twitchy
+            this.m = BASE_M * 1.5; // React stronger to walls
+            document.getElementById('ui-state').innerText = "OBSTRUCTED (AGITATION)";
+            document.getElementById('ui-state').className = "val warn";
+        } else {
+            // Critical State - Lateral Thinking
+            this.k = BASE_K * 0.4; // Minimal memory of past (don't keep hitting wall)
+            this.m = BASE_M * 2.5; // Maximum pressure
+            
+            // MODIFY R: The Tangential Shift
+            // Instead of just avoiding (R), we add a Cross Product vector to slide
+            // Which way? The way that gets us closer to T.
+            let tangent = { x: -R.y, y: R.x }; // Rotate R 90 degrees
+            if (Vec.dot(tangent, T) < 0) {
+                tangent = { x: R.y, y: -R.x }; // Rotate other way
+            }
+            
+            // Blend standard repulsion with lateral escape
+            R = Vec.add(Vec.mult(R, 0.5), Vec.mult(tangent, 2.0));
+            
+            document.getElementById('ui-state').innerText = "FRUSTRATED (LATERAL SOLVE)";
+            document.getElementById('ui-state').className = "val danger";
+        }
+
+        // --- 3. THE EQUATION: F_n = k*F_n-1 + m(T + R) ---
+        
+        let externalForce = Vec.add(T, Vec.mult(R, 2.5)); // R is weighted higher for survival
+        
+        let Fx = this.k * this.vel.x + this.m * externalForce.x;
+        let Fy = this.k * this.vel.y + this.m * externalForce.y;
+
+        this.vel = { x: Fx, y: Fy };
+        
+        // Apply Physics limits
+        let maxSpeed = 6 + (this.frustration * 2); // Adrenaline boost
+        if (Vec.mag(this.vel) > maxSpeed) {
+            this.vel = Vec.mult(Vec.norm(this.vel), maxSpeed);
+        }
+
+        this.pos = Vec.add(this.pos, this.vel);
+
+        // Hard Physics Collision (Last resort)
+        this.resolveCollisions(obstacles);
+        
+        // Debug Viz Data
+        this.debugT = T;
+        this.debugR = R;
+    }
+
+    resolveCollisions(obstacles) {
+        obstacles.forEach(obs => {
+            // Simple AABB clamp
+            let cx = Math.max(obs.x, Math.min(this.pos.x, obs.x + obs.w));
+            let cy = Math.max(obs.y, Math.min(this.pos.y, obs.y + obs.h));
+            let dist = Math.sqrt(Math.pow(this.pos.x - cx, 2) + Math.pow(this.pos.y - cy, 2));
+            
+            if (dist < this.radius) {
+                let overlap = this.radius - dist;
+                let nx = (this.pos.x - cx) / dist;
+                let ny = (this.pos.y - cy) / dist;
+                if(dist === 0) { nx=1; ny=0; } // degenerate case
+                
+                this.pos.x += nx * overlap;
+                this.pos.y += ny * overlap;
+                // Friction
+                this.vel.x *= 0.8;
+                this.vel.y *= 0.8;
+            }
+        });
+    }
+
+    draw() {
+        // Draw Rays
+        this.sensorData.forEach((hit, i) => {
+            if (!hit) return;
+            ctx.beginPath();
+            ctx.moveTo(this.pos.x, this.pos.y);
+            ctx.lineTo(hit.x, hit.y);
+            ctx.strokeStyle = `rgba(255, 68, 102, ${0.2 + (this.frustration*0.5)})`;
+            ctx.stroke();
+            ctx.fillStyle = '#ff4466';
+            ctx.fillRect(hit.x-2, hit.y-2, 4, 4);
+        });
+
+        // Draw Agent Body
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI * 2);
+        // Color shifts from Blue (Calm) to Purple (Agitated) to White/Hot (Frustrated)
+        let r = Math.min(255, this.frustration * 255 + 50);
+        let g = Math.min(255, (1-this.frustration) * 200 + 50);
+        let b = Math.min(255, (1-this.frustration) * 255 + 200);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.shadowBlur = 10 + this.frustration * 20;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Draw Vectors (The Thinking)
+        // T (White)
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x, this.pos.y);
+        ctx.lineTo(this.pos.x + this.debugT.x * 40, this.pos.y + this.debugT.y * 40);
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // R (Red) - Shows lateral thinking clearly
+        if (this.debugR) {
+            ctx.beginPath();
+            ctx.moveTo(this.pos.x, this.pos.y);
+            ctx.lineTo(this.pos.x + this.debugR.x * 40, this.pos.y + this.debugR.y * 40);
+            ctx.strokeStyle = "#ff4466";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        // F (Green/Teal) - Result
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x, this.pos.y);
+        ctx.lineTo(this.pos.x + this.vel.x * 5, this.pos.y + this.vel.y * 5); // Scaled down
+        ctx.strokeStyle = "#00d4aa";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+}
+
+// --- MAIN LOOP ---
+const agent = new Agent();
+
+function loop() {
+    ctx.clearRect(0, 0, 900, 500);
+
+    // Draw Obstacles
+    ctx.fillStyle = "#111";
+    ctx.strokeStyle = "#222";
+    obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+    });
+
+    // Draw Goal
+    ctx.beginPath();
+    ctx.arc(goal.x, goal.y, 8, 0, Math.PI*2);
+    ctx.fillStyle = "#fff";
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#fff";
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Draw Goal tether (T visualization)
+    ctx.beginPath();
+    ctx.moveTo(agent.pos.x, agent.pos.y);
+    ctx.lineTo(goal.x, goal.y);
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    agent.update();
+    agent.draw();
+
+    // Update UI
+    document.getElementById('ui-k').innerText = agent.k.toFixed(2);
+    document.getElementById('bar-k').style.width = (agent.k * 100) + "%";
+    
+    document.getElementById('ui-m').innerText = agent.m.toFixed(2);
+    document.getElementById('bar-m').style.width = (agent.m * 50) + "%"; // Scale for viz
+    
+    document.getElementById('ui-f').innerText = agent.frustration.toFixed(2);
+    document.getElementById('bar-f').style.width = (agent.frustration * 100) + "%";
+
+    requestAnimationFrame(loop);
+}
+
+// Interactions
+cvs.addEventListener('mousedown', e => {
+    let rect = cvs.getBoundingClientRect();
+    goal.x = e.clientX - rect.left;
+    goal.y = e.clientY - rect.top;
+});
+
+window.addEventListener('keydown', e => {
+    if(e.code === 'Space') {
+        agent.pos = {x: 100, y: 250};
+        agent.vel = {x: 0, y: 0};
+        agent.frustration = 0;
+    }
+});
+
+loop();
+
+</script>
+</body>
+</html>

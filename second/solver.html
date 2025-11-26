@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA v8: Solver Optimization</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #020203;
+    color: #888;
+    font-family: 'IBM Plex Mono', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+header {
+    padding: 15px 30px;
+    background: #08080c;
+    border-bottom: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+.math-display {
+    color: #00ff88;
+    font-size: 13px;
+    background: rgba(0, 255, 136, 0.05);
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+main {
+    flex: 1;
+    position: relative;
+    background: #050505;
+}
+
+canvas { display: block; width: 100%; height: 100%; }
+
+.hud {
+    position: absolute; top: 20px; right: 20px;
+    width: 280px;
+    background: rgba(10, 10, 14, 0.85);
+    backdrop-filter: blur(4px);
+    border: 1px solid #333;
+    padding: 15px;
+    pointer-events: none;
+    font-size: 11px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.hud-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+.val { color: #fff; font-weight: 600; }
+.sub-text { font-size: 10px; color: #555; margin-top: 5px; line-height: 1.4em;}
+
+#controls {
+    position: absolute; bottom: 30px; left: 30px;
+    display: flex; gap: 10px;
+}
+
+button {
+    background: #111;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+button:hover { border-color: #00ff88; color: #fff; background: #1a1a1a; box-shadow: 0 0 10px rgba(0,255,136,0.2); }
+
+</style>
+</head>
+<body>
+
+<header>
+    <div class="math-display">Solver: J(path) = (Alive ? Dist : Infinity) + Smoothness</div>
+</header>
+
+<main>
+    <canvas id="sim-canvas"></canvas>
+    
+    <div class="hud">
+        <div style="color:#00ff88; margin-bottom:12px; font-weight:bold; letter-spacing:1px;">EVOLUTIONARY CONTROL</div>
+        <div class="hud-row"><span>Generations:</span> <span id="val-gen" class="val">0</span></div>
+        <div class="hud-row"><span>Horizon:</span> <span class="val">100 steps</span></div>
+        <div class="hud-row"><span>Temperature:</span> <span id="val-temp" class="val">0.0%</span></div>
+        <div class="hud-row"><span>Status:</span> <span id="val-status" class="val" style="color:#00ff88">SOLVING</span></div>
+        
+        <div class="sub-text">
+            <span style="color:#00ff88">White</span>: Optimal Timeline<br>
+            <span style="color:#444">Green</span>: Alternate Futures<br>
+            Solving U-Traps requires looking ahead and prioritizing survival over distance.
+        </div>
+    </div>
+
+    <div id="controls">
+        <button onclick="resetSim()">Reset Scenario</button>
+        <button onclick="togglePause()">Pause / Resume</button>
+    </div>
+</main>
+
+<script>
+// ═════════════════════════════════════════════════════════════════════════
+// CONSTANTS & CONFIG
+// ═════════════════════════════════════════════════════════════════════════
+const GRID = 20;
+const POPULATION = 150; // More thoughts
+const HORIZON = 100;    // Look further ahead
+const BASE_MUTATION = 0.3; 
+
+// Physics Constants (Snappier than before)
+const K = 0.85; // Less inertia, sharper turns
+const M = 0.60; // Higher command authority
+
+let W, H;
+let ctx;
+let paused = false;
+let generation = 0;
+let stuckCounter = 0; // Boredom mechanic
+
+// World State
+let obstacles = [];
+let goal = {x:0, y:0};
+let agent = {x:0, y:0, vx:0, vy:0};
+let lastAgentPos = {x:0, y:0};
+
+// The Mind
+// Best Sequence of R Vectors (Reflections/Intentions)
+let bestPlan = new Array(HORIZON).fill(0).map(() => ({x:0, y:0}));
+
+// ═════════════════════════════════════════════════════════════════════════
+// DDA PHYSICS ENGINE
+// ═════════════════════════════════════════════════════════════════════════
+
+function dda_step(pos, vel, r_bias) {
+    // T: Vector to Goal (The "Desire")
+    const dx = goal.x - pos.x;
+    const dy = goal.y - pos.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const T = { x: dx/dist, y: dy/dist };
+
+    // F = k*v + m(T + R)
+    // R is the evolutionary "free will" allowing it to deviate from T
+    const Fx = K * vel.x + M * (T.x + r_bias.x);
+    const Fy = K * vel.y + M * (T.y + r_bias.y);
+
+    // Hard Speed Cap (prevents tunneling through walls)
+    const speed = Math.sqrt(Fx*Fx + Fy*Fy);
+    const maxSpeed = 0.9 * GRID; 
+    let outX = Fx, outY = Fy;
+    
+    if(speed > maxSpeed) {
+        outX = (Fx/speed)*maxSpeed;
+        outY = (Fy/speed)*maxSpeed;
+    }
+
+    return { x: outX, y: outY };
+}
+
+function check_collision(x, y) {
+    // Boundary
+    if(x < 0 || x >= W || y < 0 || y >= H) return true;
+    
+    // Grid Collision (Optimization: check corners of agent bounding box)
+    // Agent radius approx 5px
+    const margin = 4;
+    const checkPts = [
+        {x: x, y: y}, 
+        {x: x+margin, y: y}, {x: x-margin, y: y},
+        {x: x, y: y+margin}, {x: x, y: y-margin}
+    ];
+
+    for(let p of checkPts) {
+        const gx = Math.floor(p.x/GRID);
+        const gy = Math.floor(p.y/GRID);
+        // O(N) is fine for small N, otherwise use a grid map
+        for(let o of obstacles) {
+            if(o.x === gx && o.y === gy) return true;
+        }
+    }
+    return false;
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// EVOLUTIONARY OPTIMIZER (The Solver)
+// ═════════════════════════════════════════════════════════════════════════
+
+function optimize_thoughts() {
+    let candidates = [];
+    
+    // 1. Calculate Dynamic "Temperature" (Panic Mode)
+    // If agent is stuck, increase mutation drastic-ness
+    const distMoved = Math.hypot(agent.x - lastAgentPos.x, agent.y - lastAgentPos.y);
+    if(distMoved < 2.0) stuckCounter++;
+    else stuckCounter = Math.max(0, stuckCounter - 1);
+    
+    // Cap panic at 50 frames
+    const panicFactor = Math.min(stuckCounter / 50, 1.0); 
+    const currentMutationRate = BASE_MUTATION + (panicFactor * 2.0); // Up to 3x mutation
+    
+    document.getElementById('val-temp').innerText = (panicFactor*100).toFixed(0) + "%";
+    document.getElementById('val-status').innerText = panicFactor > 0.5 ? "PANIC SEARCH" : "OPTIMIZING";
+    document.getElementById('val-status').style.color = panicFactor > 0.5 ? "#ff3333" : "#00ff88";
+
+    // 2. Generate Candidates
+    for(let i=0; i<POPULATION; i++) {
+        // Elitism: Index 0 is a clean copy of the previous best plan
+        let plan = bestPlan.map(v => ({...v}));
+        
+        if(i > 0) {
+            // COHERENT MUTATION (Block Mutation)
+            // Instead of jittering every step, we apply force over a duration.
+            // This creates smooth curves rather than jagged noise.
+            
+            const numMutations = 1 + Math.floor(Math.random() * (2 + panicFactor * 5));
+            
+            for(let m=0; m<numMutations; m++) {
+                const startTime = Math.floor(Math.random() * (HORIZON - 10));
+                const duration = 5 + Math.floor(Math.random() * 20); // 5 to 25 steps
+                const angle = Math.random() * Math.PI * 2;
+                const mag = currentMutationRate * (1 + Math.random()); // Variable strength
+                
+                const forceX = Math.cos(angle) * mag;
+                const forceY = Math.sin(angle) * mag;
+
+                // Apply this force to a block of time
+                for(let t = startTime; t < Math.min(HORIZON, startTime + duration); t++) {
+                    // Decaying influence over the duration for smoothness
+                    plan[t].x += forceX;
+                    plan[t].y += forceY;
+                }
+            }
+        }
+        candidates.push({ plan: plan, cost: 0, path: [], dead: false, deadAt: 0 });
+    }
+
+    // 3. Simulate Candidates
+    for(let cand of candidates) {
+        let curr = {x: agent.x, y: agent.y};
+        let vel = {x: agent.vx, y: agent.vy};
+        
+        cand.path.push({...curr});
+
+        for(let t=0; t<HORIZON; t++) {
+            const R = cand.plan[t];
+            const force = dda_step(curr, vel, R);
+            curr.x += force.x;
+            curr.y += force.y;
+            vel = force;
+
+            cand.path.push({...curr});
+
+            // Check Collision
+            if(check_collision(curr.x, curr.y)) {
+                cand.dead = true;
+                cand.deadAt = t;
+                break; 
+            }
+            
+            // Goal check
+            const d = Math.hypot(goal.x - curr.x, goal.y - curr.y);
+            if(d < GRID/2) {
+                // Reached goal
+                cand.cost = -1000 + t; // Super low cost, prefer faster arrival
+                break;
+            }
+        }
+
+        // 4. Calculate Cost
+        if(cand.cost === 0) { // Not reached goal yet
+            const finalPos = cand.path[cand.path.length-1];
+            const distToGoal = Math.hypot(goal.x - finalPos.x, goal.y - finalPos.y);
+            
+            if(cand.dead) {
+                // If dead, cost is infinite. 
+                // But to differentiate, we prefer dying later and closer to goal.
+                cand.cost = 100000 - cand.deadAt + distToGoal;
+            } else {
+                // Alive. Cost is distance.
+                cand.cost = distToGoal;
+                
+                // Heuristic: Reward distance from start (exploration) if panic is high
+                if(panicFactor > 0.2) {
+                    const distFromStart = Math.hypot(finalPos.x - agent.x, finalPos.y - agent.y);
+                    cand.cost -= (distFromStart * 0.5);
+                }
+            }
+        }
+    }
+
+    // 5. Selection
+    candidates.sort((a, b) => a.cost - b.cost);
+    const winner = candidates[0];
+
+    // 6. Update Memory (Model Predictive Control)
+    // Shift plan left, append 0 at end, but blend with winner
+    // Blending (0.2) ensures we don't snap too hard to a new crazy plan if it's unstable
+    bestPlan = winner.plan.map(v => ({ x: v.x, y: v.y }));
+    
+    return { winner: winner, all: candidates };
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ═════════════════════════════════════════════════════════════════════════
+
+function update() {
+    if(paused) return;
+
+    // 1. Plan
+    const thoughts = optimize_thoughts();
+    generation++;
+    document.getElementById('val-gen').innerText = generation;
+
+    // 2. Act
+    // Execute first step of best plan
+    const R_opt = bestPlan[0];
+    const force = dda_step(agent, {x:agent.vx, y:agent.vy}, R_opt);
+    
+    agent.vx = force.x;
+    agent.vy = force.y;
+    agent.x += agent.vx;
+    agent.y += agent.vy;
+
+    // Update position tracker for stuck detection
+    lastAgentPos = {x: agent.x, y: agent.y};
+
+    // 3. Reality Check
+    if(check_collision(agent.x, agent.y)) {
+        // Bounce
+        agent.x -= agent.vx * 1.5;
+        agent.vx *= -0.5; 
+        agent.vy *= -0.5;
+        // Hard Reset Memory on crash
+        bestPlan = new Array(HORIZON).fill(0).map(() => ({x:0, y:0}));
+        stuckCounter += 20; 
+    }
+
+    // Shift Memory (Receding Horizon)
+    bestPlan.shift();
+    bestPlan.push({x:0, y:0}); // New future is blank slate
+
+    render(thoughts);
+    requestAnimationFrame(update);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// RENDERER
+// ═════════════════════════════════════════════════════════════════════════
+
+function render(thoughts) {
+    // Clear & Fade
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0,0,W,H);
+
+    // Draw Grid (Subtle)
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let x=0; x<W; x+=GRID) { ctx.moveTo(x,0); ctx.lineTo(x,H); }
+    for(let y=0; y<H; y+=GRID) { ctx.moveTo(0,y); ctx.lineTo(W,y); }
+    ctx.stroke();
+
+    // Obstacles
+    ctx.fillStyle = '#222';
+    ctx.shadowBlur = 0;
+    for(let o of obstacles) {
+        ctx.fillRect(o.x*GRID, o.y*GRID, GRID, GRID);
+        ctx.strokeStyle = '#333';
+        ctx.strokeRect(o.x*GRID, o.y*GRID, GRID, GRID);
+    }
+
+    // Goal
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#00ff88';
+    ctx.fillStyle = '#00ff88';
+    ctx.beginPath(); 
+    ctx.arc(goal.x, goal.y, 6, 0, Math.PI*2); 
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // THOUGHT CLOUD
+    // Draw dead paths dark red, alive paths green
+    for(let i=1; i<thoughts.all.length; i+=2) { 
+        const cand = thoughts.all[i];
+        if(!cand.path.length) continue;
+        
+        ctx.lineWidth = 1;
+        if(cand.dead) ctx.strokeStyle = 'rgba(255, 50, 50, 0.05)';
+        else ctx.strokeStyle = 'rgba(0, 255, 136, 0.08)';
+        
+        ctx.beginPath();
+        ctx.moveTo(cand.path[0].x, cand.path[0].y);
+        for(let p of cand.path) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    }
+
+    // CHOSEN TIMELINE
+    const best = thoughts.winner.path;
+    if(best.length) {
+        // Outer Glow
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(best[0].x, best[0].y);
+        for(let p of best) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+
+        // Core
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(best[0].x, best[0].y);
+        for(let p of best) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    }
+
+    // Agent
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(agent.x, agent.y, 4, 0, Math.PI*2); ctx.fill();
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SETUP
+// ═════════════════════════════════════════════════════════════════════════
+
+function init() {
+    const cvs = document.getElementById('sim-canvas');
+    ctx = cvs.getContext('2d');
+    W = cvs.width = cvs.parentElement.offsetWidth;
+    H = cvs.height = cvs.parentElement.offsetHeight;
+
+    resetSim();
+    update();
+}
+
+function resetSim() {
+    obstacles = [];
+    const cx = Math.floor((W/2)/GRID);
+    const cy = Math.floor((H/2)/GRID);
+    
+    // Create a Complex Trap (The "G" Trap)
+    // A box with the opening facing AWAY from the goal
+    // Goal is to the Right. Opening is to the Left.
+    
+    const trapX = cx - 5;
+    const trapY = cy;
+    
+    // Top wall
+    for(let x=trapX-5; x<=trapX+5; x++) obstacles.push({x:x, y:trapY-5});
+    // Bottom wall
+    for(let x=trapX-5; x<=trapX+5; x++) obstacles.push({x:x, y:trapY+5});
+    // Right wall (Blocking direct path to goal)
+    for(let y=trapY-5; y<=trapY+5; y++) obstacles.push({x:trapX+5, y:y});
+    // Little hook on left top
+    for(let y=trapY-5; y<=trapY-2; y++) obstacles.push({x:trapX-5, y:y});
+
+    // Agent Inside
+    agent.x = trapX*GRID;
+    agent.y = trapY*GRID;
+    agent.vx = 0; agent.vy = 0;
+
+    // Goal Outside Right
+    goal.x = (trapX+15)*GRID;
+    goal.y = trapY*GRID;
+
+    bestPlan = new Array(HORIZON).fill(0).map(() => ({x:0, y:0}));
+    generation = 0;
+    stuckCounter = 0;
+}
+
+function togglePause() { paused = !paused; if(!paused) update(); }
+
+window.onload = init;
+window.onresize = init;
+
+</script>
+</body>
+</html>

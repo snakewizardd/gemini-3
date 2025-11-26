@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA v5: The Olfactory Solver</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg: #050508;
+    --panel: #0a0a10;
+    --border: #1a1a24;
+    --text: #888899;
+    --accent: #00f2ff;
+    --danger: #ff0055;
+    --fog: #15151a;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* UI HEADER */
+header {
+    height: 60px;
+    padding: 0 30px;
+    background: rgba(5, 5, 8, 0.95);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+.metrics {
+    display: flex;
+    gap: 30px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+}
+
+.metric b { color: #fff; font-size: 16px; margin-right: 5px; }
+.metric span { text-transform: uppercase; opacity: 0.6; }
+
+/* MAIN GRID */
+main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--border);
+    position: relative;
+}
+
+.viewport {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+}
+
+.label {
+    position: absolute;
+    top: 20px; left: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+canvas { width: 100%; height: 100%; display: block; }
+
+/* CONTROLS */
+#controls {
+    position: absolute;
+    bottom: 30px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel);
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+}
+
+button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text);
+    padding: 8px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    transition: all 0.2s;
+}
+
+button:hover { color: #fff; border-color: var(--accent); }
+button.active { background: var(--accent); color: #000; }
+
+</style>
+</head>
+<body>
+
+<header>
+    <div style="font-weight: 600; color: #fff;">DDA v5: OLFACTORY GHOST</div>
+    <div class="metrics">
+        <div class="metric"><b id="m-state" style="color:var(--accent)">SCANNING</b><span>State</span></div>
+        <div class="metric"><b id="m-conf">100%</b><span>Confidence</span></div>
+    </div>
+</header>
+
+<main>
+    <div class="viewport">
+        <div class="label" style="color: #888">REALITY (TRUTH)</div>
+        <canvas id="cvs-real"></canvas>
+    </div>
+    <div class="viewport">
+        <div class="label" style="color: var(--accent)">INTERNAL MODEL (BELIEF)</div>
+        <canvas id="cvs-mind"></canvas>
+    </div>
+</main>
+
+<div id="controls">
+    <button onclick="sim.reset()">NEW MAZE</button>
+    <button onclick="sim.toggleDebug()">TOGGLE SCENT</button>
+    <button onclick="sim.paused = !sim.paused">PAUSE</button>
+</div>
+
+<script>
+// ═════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═════════════════════════════════════════════════════════════════════════
+const GRID_W = 40;
+const GRID_H = 30;
+const LIDAR_RAYS = 90;
+const LIDAR_DIST = 180;
+const FOV = Math.PI * 1.2;
+
+// ═════════════════════════════════════════════════════════════════════════
+// MAZE GENERATION (Recursive Backtracker)
+// ═════════════════════════════════════════════════════════════════════════
+class Maze {
+    constructor(w, h) {
+        this.w = w; this.h = h;
+        this.grid = new Int8Array(w * h).fill(1); // 1 = Wall
+        this.generate(1, 1);
+        
+        // Sparsify (remove some walls to make it organic)
+        for(let i=0; i<w*h*0.1; i++) {
+            const x = 1 + Math.floor(Math.random()*(w-2));
+            const y = 1 + Math.floor(Math.random()*(h-2));
+            this.grid[y*w+x] = 0;
+        }
+    }
+
+    generate(cx, cy) {
+        this.grid[cy * this.w + cx] = 0;
+        const dirs = [[0,-2], [0,2], [-2,0], [2,0]].sort(() => Math.random() - 0.5);
+        
+        for(let [dx, dy] of dirs) {
+            const nx = cx + dx, ny = cy + dy;
+            if(nx > 0 && nx < this.w-1 && ny > 0 && ny < this.h-1 && this.grid[ny*this.w+nx] === 1) {
+                this.grid[(cy+dy/2)*this.w + (cx+dx/2)] = 0;
+                this.generate(nx, ny);
+            }
+        }
+    }
+
+    isWall(x, y) {
+        if(x < 0 || x >= this.w || y < 0 || y >= this.h) return true;
+        return this.grid[y * this.w + x] === 1;
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// THE SCENT MAP (Flood Fill Gradient)
+// ═════════════════════════════════════════════════════════════════════════
+class ScentMap {
+    constructor(w, h) {
+        this.w = w; this.h = h;
+        this.values = new Float32Array(w * h).fill(0);
+    }
+
+    // This is the Brain's pathfinder. It runs on BELIEF, not Reality.
+    compute(beliefGrid, goal) {
+        // Initialize: 0 = far/blocked, High Number = Goal
+        this.values.fill(0);
+        const q = [{x: goal.x, y: goal.y, v: 1000}];
+        const visited = new Uint8Array(this.w * this.h).fill(0);
+        
+        // Start at goal
+        visited[goal.y * this.w + goal.x] = 1;
+        this.values[goal.y * this.w + goal.x] = 1000;
+
+        let head = 0;
+        while(head < q.length) {
+            const cur = q[head++];
+            
+            // Standard neighbors
+            const neighbors = [[0,1],[0,-1],[1,0],[-1,0]];
+            for(let [dx, dy] of neighbors) {
+                const nx = cur.x + dx; 
+                const ny = cur.y + dy;
+                
+                if(nx >= 0 && nx < this.w && ny >= 0 && ny < this.h) {
+                    const idx = ny * this.w + nx;
+                    if(visited[idx]) continue;
+                    
+                    // CHECK BELIEF
+                    const belief = beliefGrid[idx]; // 0=Empty, 0.5=Fog, 1=Wall
+                    
+                    // The core logic: Scent passes through Empty(0) easily, Fog(0.5) with drag, Wall(1) blocked
+                    let penalty = 1;
+                    if(belief > 0.8) continue; // Blocked by perceived wall
+                    if(belief > 0.3) penalty = 10; // Fog is "expensive" to smell through (resistance)
+
+                    const nextV = cur.v - penalty;
+                    if(nextV > 0) {
+                        visited[idx] = 1;
+                        this.values[idx] = nextV;
+                        q.push({x: nx, y: ny, v: nextV});
+                    }
+                }
+            }
+        }
+    }
+
+    getGradient(x, y) {
+        // Sample surrounding scent values to find direction
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        if(ix<1 || ix>=this.w-1 || iy<1 || iy>=this.h-1) return {x:0, y:0};
+
+        const vL = this.values[iy * this.w + (ix-1)];
+        const vR = this.values[iy * this.w + (ix+1)];
+        const vU = this.values[(iy-1) * this.w + ix];
+        const vD = this.values[(iy+1) * this.w + ix];
+
+        return { x: vR - vL, y: vD - vU };
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// AGENT
+// ═════════════════════════════════════════════════════════════════════════
+class Agent {
+    constructor(x, y) {
+        this.pos = {x, y};
+        this.angle = 0;
+        this.vel = {x: 0, y: 0};
+        
+        // Belief: 0=Empty, 0.5=Fog, 1=Wall
+        this.belief = new Float32Array(GRID_W * GRID_H).fill(0.5);
+        this.scent = new ScentMap(GRID_W, GRID_H);
+        
+        this.confidence = 1.0;
+        this.ghosts = [];
+    }
+
+    perceive(world, scaleX, scaleY) {
+        // LIDAR
+        for(let i=0; i<LIDAR_RAYS; i++) {
+            const rayAngle = this.angle - (FOV/2) + (FOV/LIDAR_RAYS)*i;
+            const dx = Math.cos(rayAngle);
+            const dy = Math.sin(rayAngle);
+            
+            let dist = 0;
+            while(dist < LIDAR_DIST) {
+                dist += 4; // Precision step
+                const rx = this.pos.x + dx*dist;
+                const ry = this.pos.y + dy*dist;
+                
+                const gx = Math.floor(rx/scaleX);
+                const gy = Math.floor(ry/scaleY);
+
+                if(gx<0 || gx>=GRID_W || gy<0 || gy>=GRID_H) break;
+
+                const idx = gy*GRID_W + gx;
+                
+                // Real World Check
+                if(world.isWall(gx, gy)) {
+                    // We found a wall. Update Belief to 1.
+                    // If we previously thought it was empty (0), this is a SHOCK.
+                    if(this.belief[idx] < 0.2) this.confidence -= 0.2; 
+                    this.belief[idx] = 1;
+                    break;
+                } else {
+                    // Empty space. Clear the fog.
+                    this.belief[idx] = 0;
+                }
+            }
+        }
+        // Recover confidence
+        this.confidence = Math.min(1.0, this.confidence + 0.01);
+    }
+
+    think(goal, scaleX, scaleY) {
+        // 1. Update Scent Map based on current Belief
+        // We calculate "Expected Utility" of every cell
+        this.scent.compute(this.belief, goal);
+
+        // 2. Spawn Ghosts to sample the gradient
+        this.ghosts = [];
+        const gx = Math.floor(this.pos.x / scaleX);
+        const gy = Math.floor(this.pos.y / scaleY);
+        
+        // Get local gradient at agent position
+        const grad = this.scent.getGradient(gx, gy);
+        
+        // Visualize Ghosts riding the gradient
+        // If gradient is strong, we know where to go.
+        // If gradient is zero, we are confused or stuck.
+        
+        const mag = Math.hypot(grad.x, grad.y);
+        
+        // Desired Velocity Vector
+        let targetVx = 0, targetVy = 0;
+
+        if(mag > 0.1) {
+            targetVx = (grad.x / mag);
+            targetVy = (grad.y / mag);
+        } else {
+            // Stuck/No Scent? Explore randomly to find scent
+            targetVx = (Math.random()-0.5);
+            targetVy = (Math.random()-0.5);
+        }
+
+        // 3. Movement Physics (Smooth Turn)
+        // If the target cell is FOG (0.5), we slow down (Cautious Approach)
+        const lookAheadX = gx + Math.sign(targetVx);
+        const lookAheadY = gy + Math.sign(targetVy);
+        const idx = lookAheadY * GRID_W + lookAheadX;
+        
+        let speed = 2.0;
+        if(idx >= 0 && idx < this.belief.length) {
+            if(this.belief[idx] > 0.4) speed = 0.5; // Slow down for Fog/Walls
+        }
+
+        // Apply force
+        this.vel.x += (targetVx * speed - this.vel.x) * 0.1;
+        this.vel.y += (targetVy * speed - this.vel.y) * 0.1;
+        
+        // Update Angle (Face movement)
+        if(Math.hypot(this.vel.x, this.vel.y) > 0.1) {
+            this.angle = Math.atan2(this.vel.y, this.vel.x);
+        }
+
+        // Generate visual ghosts for the UI
+        for(let i=0; i<10; i++) {
+            let simX = this.pos.x;
+            let simY = this.pos.y;
+            let trace = [{x:simX, y:simY}];
+            let gVx = this.vel.x + (Math.random()-0.5)*2;
+            let gVy = this.vel.y + (Math.random()-0.5)*2;
+            
+            for(let t=0; t<15; t++) {
+                // Ghost reads scent map
+                const sgx = Math.floor(simX/scaleX);
+                const sgy = Math.floor(simY/scaleY);
+                const sGrad = this.scent.getGradient(sgx, sgy);
+                
+                gVx += sGrad.x * 0.5;
+                gVy += sGrad.y * 0.5;
+                // Drag
+                gVx *= 0.8; gVy *= 0.8;
+                
+                simX += gVx * 5; 
+                simY += gVy * 5;
+                trace.push({x:simX, y:simY});
+            }
+            this.ghosts.push(trace);
+        }
+
+        return { speed };
+    }
+
+    move(world, scaleX, scaleY) {
+        const nextX = this.pos.x + this.vel.x;
+        const nextY = this.pos.y + this.vel.y;
+        
+        // Physics Collision (Reality Check)
+        const rad = 6;
+        const checkPoints = [[rad,0],[-rad,0],[0,rad],[0,-rad]];
+        let collision = false;
+        
+        for(let p of checkPoints) {
+            const cx = Math.floor((nextX + p[0])/scaleX);
+            const cy = Math.floor((nextY + p[1])/scaleY);
+            if(world.isWall(cx, cy)) collision = true;
+        }
+
+        if(!collision) {
+            this.pos.x = nextX;
+            this.pos.y = nextY;
+        } else {
+            // Bounce
+            this.vel.x *= -0.5;
+            this.vel.y *= -0.5;
+            this.confidence -= 0.1; // Ouch
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SIMULATION
+// ═════════════════════════════════════════════════════════════════════════
+const sim = {
+    paused: false,
+    debug: false,
+    
+    init() {
+        this.cReal = document.getElementById('cvs-real');
+        this.ctxReal = this.cReal.getContext('2d');
+        this.cMind = document.getElementById('cvs-mind');
+        this.ctxMind = this.cMind.getContext('2d');
+        this.reset();
+        this.loop();
+    },
+
+    reset() {
+        const rect = this.cReal.parentElement.getBoundingClientRect();
+        this.w = rect.width; this.h = rect.height;
+        this.cReal.width = this.w; this.cReal.height = this.h;
+        this.cMind.width = this.w; this.cMind.height = this.h;
+        this.scaleX = this.w / GRID_W;
+        this.scaleY = this.h / GRID_H;
+
+        this.maze = new Maze(GRID_W, GRID_H);
+        this.goal = {x: GRID_W-2, y: GRID_H-2};
+        this.agent = new Agent(this.scaleX * 1.5, this.scaleY * 1.5);
+    },
+    
+    toggleDebug() { this.debug = !this.debug; },
+
+    loop() {
+        if(!this.paused) {
+            this.agent.perceive(this.maze, this.scaleX, this.scaleY);
+            const status = this.agent.think(this.goal, this.scaleX, this.scaleY);
+            this.agent.move(this.maze, this.scaleX, this.scaleY);
+            
+            // UI Updates
+            const state = status.speed < 1 ? "CAUTIOUS SCAN" : "MOVING";
+            document.getElementById('m-state').innerText = state;
+            document.getElementById('m-state').style.color = status.speed < 1 ? "#ffaa00" : "#00f2ff";
+            document.getElementById('m-conf').innerText = Math.floor(this.agent.confidence*100) + "%";
+        }
+        
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    },
+
+    draw() {
+        // --- REALITY ---
+        const cr = this.ctxReal;
+        cr.fillStyle = '#050508'; cr.fillRect(0,0,this.w,this.h);
+        
+        // Walls
+        cr.fillStyle = '#fff';
+        for(let y=0; y<GRID_H; y++) {
+            for(let x=0; x<GRID_W; x++) {
+                if(this.maze.grid[y*GRID_W+x]) cr.fillRect(x*this.scaleX, y*this.scaleY, this.scaleX+1, this.scaleY+1);
+            }
+        }
+        
+        // Goal
+        cr.fillStyle = '#0f0';
+        cr.beginPath(); cr.arc((this.goal.x+0.5)*this.scaleX, (this.goal.y+0.5)*this.scaleY, 6, 0, Math.PI*2); cr.fill();
+        
+        // Agent
+        cr.fillStyle = '#ff0055';
+        cr.beginPath(); cr.arc(this.agent.pos.x, this.agent.pos.y, 5, 0, Math.PI*2); cr.fill();
+
+        // --- MIND ---
+        const cm = this.ctxMind;
+        cm.fillStyle = '#000'; cm.fillRect(0,0,this.w,this.h);
+        
+        for(let y=0; y<GRID_H; y++) {
+            for(let x=0; x<GRID_W; x++) {
+                const b = this.agent.belief[y*GRID_W+x];
+                const px = x*this.scaleX, py = y*this.scaleY;
+                
+                if(b > 0.8) { // Wall
+                    cm.fillStyle = '#ff0055'; 
+                    cm.fillRect(px,py,this.scaleX,this.scaleY);
+                } else if (b > 0.2) { // Fog
+                    cm.fillStyle = '#111116';
+                    cm.fillRect(px,py,this.scaleX,this.scaleY);
+                    
+                    // Visualize Scent in Fog if Debug
+                    if(this.debug) {
+                        const s = this.agent.scent.values[y*GRID_W+x];
+                        if(s > 0) {
+                            cm.fillStyle = `rgba(0, 242, 255, ${s/1000})`;
+                            cm.fillRect(px,py,this.scaleX,this.scaleY);
+                        }
+                    }
+                } else { // Empty (Known)
+                    const s = this.agent.scent.values[y*GRID_W+x];
+                    // Draw Scent Trail
+                    if(this.debug) cm.fillStyle = `rgba(0, 255, 100, ${s/800})`;
+                    else cm.fillStyle = '#000';
+                    cm.fillRect(px,py,this.scaleX,this.scaleY);
+                }
+            }
+        }
+
+        // Draw Lidar Cone
+        cm.fillStyle = `rgba(0, 242, 255, 0.05)`;
+        cm.beginPath();
+        cm.moveTo(this.agent.pos.x, this.agent.pos.y);
+        cm.arc(this.agent.pos.x, this.agent.pos.y, LIDAR_DIST, this.agent.angle-FOV/2, this.agent.angle+FOV/2);
+        cm.fill();
+
+        // Draw Ghosts
+        this.agent.ghosts.forEach(g => {
+            cm.strokeStyle = 'rgba(0, 242, 255, 0.3)';
+            cm.beginPath();
+            g.forEach((p,i) => i==0 ? cm.moveTo(p.x, p.y) : cm.lineTo(p.x, p.y));
+            cm.stroke();
+        });
+
+        // Draw Agent
+        cm.fillStyle = '#00f2ff';
+        cm.beginPath(); cm.arc(this.agent.pos.x, this.agent.pos.y, 4, 0, Math.PI*2); cm.fill();
+    }
+};
+
+window.onload = () => sim.init();
+window.onresize = () => sim.reset();
+
+</script>
+</body>
+</html>

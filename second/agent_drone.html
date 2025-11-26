@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Singular Automata</title>
+<style>
+    body { background: #111; color: #aaa; font-family: monospace; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+    canvas { background: #000; border: 1px solid #333; margin-top: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+    .hud { width: 800px; display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; }
+    .val { color: #fff; font-weight: bold; }
+    .red { color: #ff4444; } .blue { color: #4488ff; }
+</style>
+</head>
+<body>
+
+<div class="hud">
+    <div>F = k·V + m(T + R)</div>
+    <div>Frustration: <span id="val-frust" class="val">0.00</span></div>
+    <div>State: <span id="val-state" class="val blue">SEEKING</span></div>
+</div>
+
+<canvas id="sim" width="800" height="500"></canvas>
+<div style="margin-top:10px; font-size:12px; opacity:0.6">
+    Click canvas to move Goal. Spacebar to reset Agent.
+</div>
+
+<script>
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+
+// --- DDA CONFIG ---
+const AGENT_RAD = 10;
+const K = 0.94; // Inertia (Friction)
+const M = 0.50; // Pressure (Response to forces)
+
+// --- STATE ---
+let goal = { x: 700, y: 250 };
+let wall = { x: 400, y: 100, w: 50, h: 300 }; // The Obstacle
+
+let agent = {
+    x: 100, y: 250,
+    vx: 0, vy: 0,
+    frustration: 0
+};
+
+// --- DDA ENGINE ---
+function update() {
+    // 1. T (Target Vector)
+    let dx = goal.x - agent.x;
+    let dy = goal.y - agent.y;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+    // Normalize T
+    let Tx = dist > 0 ? dx/dist : 0;
+    let Ty = dist > 0 ? dy/dist : 0;
+
+    // 2. R (Repulsion Vector) - THE DYNAMIC PART
+    let Rx = 0, Ry = 0;
+    
+    // Simple AABB Collision Logic to find "Normal"
+    // Calculate nearest point on rectangle
+    let cx = Math.max(wall.x, Math.min(agent.x, wall.x + wall.w));
+    let cy = Math.max(wall.y, Math.min(agent.y, wall.y + wall.h));
+    let cdx = agent.x - cx;
+    let cdy = agent.y - cy;
+    let cdist = Math.sqrt(cdx*cdx + cdy*cdy);
+
+    if (cdist < 60) { // Sensing range
+        // Standard Repulsion (Normal Vector)
+        let nx = cdx / cdist;
+        let ny = cdy / cdist;
+        
+        // Dynamic Adjustment:
+        // If frustrated, rotate the normal vector to find a tangent
+        // Cross product with Up vector to decide Left/Right slide
+        // Ideally, slide towards the goal side
+        
+        // Slide Logic: Rotate Normal by 90deg
+        // Which way? Check dot product with Target to slide TOWARDS goal
+        let slideX = -ny;
+        let slideY = nx;
+        
+        // Dot product to check alignment
+        if (slideX*Tx + slideY*Ty < 0) {
+            slideX = ny; 
+            slideY = -nx;
+        }
+
+        // BLEND: R = Normal * (1-frust) + Tangent * (frust)
+        let f = agent.frustration;
+        Rx = (nx * (1-f) + slideX * f) * 2.5; // Multiplier for strength
+        Ry = (ny * (1-f) + slideY * f) * 2.5;
+        
+        // Frustration Logic:
+        // If we are close to wall and slow, get frustrated
+        let speed = Math.sqrt(agent.vx*agent.vx + agent.vy*agent.vy);
+        if (speed < 1.0) {
+            agent.frustration = Math.min(1.0, agent.frustration + 0.02);
+        }
+    } else {
+        // Calm down if no wall
+        agent.frustration = Math.max(0, agent.frustration - 0.01);
+    }
+
+    // 3. THE EQUATION: F = k*V + m*(T + R)
+    let Fx = K * agent.vx + M * (Tx + Rx);
+    let Fy = K * agent.vy + M * (Ty + Ry);
+
+    // Apply Force
+    agent.vx = Fx;
+    agent.vy = Fy;
+    
+    // Move
+    agent.x += agent.vx;
+    agent.y += agent.vy;
+
+    // Hard Collision (Physics)
+    if (cdist < AGENT_RAD) {
+        // Push out
+        let overlap = AGENT_RAD - cdist;
+        let nx = cdx / (cdist || 1);
+        let ny = cdy / (cdist || 1);
+        agent.x += nx * overlap;
+        agent.y += ny * overlap;
+        // Kill velocity into wall
+        agent.vx *= 0.5;
+        agent.vy *= 0.5;
+    }
+}
+
+// --- RENDER ---
+function draw() {
+    ctx.clearRect(0,0,800,500);
+
+    // Draw Wall
+    ctx.fillStyle = "#444";
+    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+    ctx.strokeStyle = "#888";
+    ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+
+    // Draw Goal
+    ctx.fillStyle = "#4f4";
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, 8, 0, Math.PI*2); ctx.fill();
+
+    // Draw Agent
+    // Color depends on Frustration
+    let r = Math.floor(agent.frustration * 255);
+    let g = Math.floor(100 - agent.frustration * 100);
+    let b = Math.floor((1-agent.frustration) * 255);
+    let color = `rgb(${r},${g},${b})`;
+    
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = color;
+    ctx.beginPath(); ctx.arc(agent.x, agent.y, AGENT_RAD, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Visualization of R vector (The "Thought")
+    // Let's re-calc local R for viz
+    let cx = Math.max(wall.x, Math.min(agent.x, wall.x + wall.w));
+    let cy = Math.max(wall.y, Math.min(agent.y, wall.y + wall.h));
+    let dist = Math.hypot(agent.x-cx, agent.y-cy);
+    if(dist < 80) {
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(agent.x, agent.y);
+        // Reconstruct the logic for visualization
+        let nx = (agent.x-cx)/dist, ny = (agent.y-cy)/dist;
+        let Tx = (goal.x-agent.x), Ty = (goal.y-agent.y); // loose norm
+        let slideX = -ny, slideY = nx;
+        if (slideX*Tx + slideY*Ty < 0) { slideX = ny; slideY = -nx; }
+        let f = agent.frustration;
+        let rx = (nx*(1-f) + slideX*f) * 40;
+        let ry = (ny*(1-f) + slideY*f) * 40;
+        
+        ctx.lineTo(agent.x + rx, agent.y + ry);
+        ctx.stroke();
+        
+        // Draw the "Normal" ghost line to show the shift
+        ctx.strokeStyle = "#444";
+        ctx.beginPath(); ctx.moveTo(agent.x, agent.y); ctx.lineTo(agent.x+nx*40, agent.y+ny*40); ctx.stroke();
+    }
+
+    // HUD Updates
+    document.getElementById('val-frust').innerText = agent.frustration.toFixed(2);
+    let stateEl = document.getElementById('val-state');
+    if(agent.frustration > 0.8) { stateEl.innerText = "FRUSTRATED (SLIDING)"; stateEl.className = "val red"; }
+    else if(agent.frustration > 0.3) { stateEl.innerText = "OBSTRUCTED"; stateEl.className = "val"; }
+    else { stateEl.innerText = "SEEKING"; stateEl.className = "val blue"; }
+
+    requestAnimationFrame(() => { update(); draw(); });
+}
+
+// --- INPUTS ---
+cvs.addEventListener('mousedown', e => {
+    let rect = cvs.getBoundingClientRect();
+    goal.x = e.clientX - rect.left;
+    goal.y = e.clientY - rect.top;
+});
+window.addEventListener('keydown', e => {
+    if(e.code === 'Space') {
+        agent.x = 50; agent.y = 250; agent.vx = 20; agent.vy = 0; agent.frustration = 0;
+    }
+});
+
+draw(); // Start Loop
+</script>
+</body>
+</html>

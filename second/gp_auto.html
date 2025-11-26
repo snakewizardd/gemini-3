@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Anatomy of Holding Together</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,400&family=Montserrat:wght@200&display=swap');
+
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #020204;
+        font-family: 'Cormorant Garamond', serif;
+        color: #ddd;
+    }
+
+    #ui {
+        position: absolute;
+        top: 40px;
+        left: 40px;
+        pointer-events: none;
+        width: 300px;
+    }
+
+    h1 {
+        font-weight: 300;
+        font-size: 28px;
+        color: #fff;
+        margin: 0 0 5px 0;
+        letter-spacing: 0.05em;
+        text-shadow: 0 0 20px rgba(255,255,255,0.1);
+    }
+    
+    .subtitle {
+        font-family: 'Montserrat', sans-serif;
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+    }
+
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        font-size: 18px;
+    }
+    
+    .val { font-style: italic; opacity: 0.8; }
+    
+    #readout {
+        position: absolute;
+        bottom: 60px;
+        width: 100%;
+        text-align: center;
+        font-size: 24px;
+        font-style: italic;
+        opacity: 0.7;
+        pointer-events: none;
+        transition: color 0.5s, text-shadow 0.5s;
+    }
+
+    .stress-low { color: #00d4aa; text-shadow: 0 0 10px #00d4aa; }
+    .stress-med { color: #ffaa00; text-shadow: 0 0 10px #ffaa00; }
+    .stress-high { color: #ff4466; text-shadow: 0 0 20px #ff4466; }
+    .stress-break { color: #fff; text-shadow: 0 0 30px #fff; letter-spacing: 0.5em; }
+
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>The Anatomy of Holding Together</h1>
+    <div class="subtitle">A Soft-Body Physics of the Soul</div>
+    
+    <div class="stat-row"><span class="label">Identity (P₀)</span><span class="val" id="val-p0">INTACT</span></div>
+    <div class="stat-row"><span class="label">Tension (m)</span><span class="val" id="val-m">0.00</span></div>
+    <div class="stat-row"><span class="label">Rigidity (k)</span><span class="val" id="val-k">0.00</span></div>
+</div>
+
+<div id="readout" class="stress-low">"I maintain my shape."</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+let mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
+let time = 0;
+
+// --- DDA CONFIGURATION ---
+// The "Self" is a ring of nodes connected by springs.
+const RADIUS = 80;
+const NODES = 24;
+const BASE_K = 0.92; // Default Inertia (Viscosity of the flesh)
+const BASE_M = 0.05; // Default Sensitivity (Elasticity)
+
+class Node {
+    constructor(angle, center) {
+        this.angleOffset = angle;
+        // P0: The "Ideal" position relative to center
+        this.idealRelX = Math.cos(angle) * RADIUS;
+        this.idealRelY = Math.sin(angle) * RADIUS;
+        
+        // Actual Position
+        this.pos = { x: center.x + this.idealRelX, y: center.y + this.idealRelY };
+        this.vel = { x: 0, y: 0 };
+        
+        // DDA Internal State
+        this.k = BASE_K;
+        this.m = BASE_M;
+        this.stress = 0;
+    }
+
+    update(centerX, centerY, targetVel) {
+        // 1. CALCULATE T (The Signal)
+        // For a structural node, T is the vector towards its "Ideal Identity" (P0)
+        // But P0 is moving because the user is dragging the center!
+        let P0x = centerX + this.idealRelX;
+        let P0y = centerY + this.idealRelY;
+        
+        let Tx = P0x - this.pos.x;
+        let Ty = P0y - this.pos.y;
+        
+        // 2. CALCULATE R (Reflection/Entropy)
+        // R is the chaotic vibration of the biological material
+        // It increases when the system moves fast (Panic/Adrenaline)
+        let noiseScale = Math.min(10, Math.abs(targetVel.x) + Math.abs(targetVel.y));
+        let Rx = (Math.random() - 0.5) * noiseScale;
+        let Ry = (Math.random() - 0.5) * noiseScale;
+
+        // 3. DDA PARAMETER MODULATION (The Physics of Stress)
+        let distFromIdentity = Math.sqrt(Tx*Tx + Ty*Ty);
+        this.stress = distFromIdentity;
+
+        if (this.stress < 20) {
+            // FLOW: Shape is held easily.
+            this.k = 0.85; // Flexible
+            this.m = 0.15; // Responsive
+        } else if (this.stress < 60) {
+            // STRAIN: Shape is distorting.
+            // We stiffen up (Trauma response).
+            this.k = 0.96; // Rigid
+            this.m = 0.40; // High urgency to return
+        } else {
+            // BREAKING POINT: Identity is tearing.
+            // Viscosity fails. We become chaotic.
+            this.k = 0.60; // Loss of control
+            this.m = 0.02; // Can't find the way back (Dissolution)
+        }
+
+        // 4. THE EQUATION: F_n = k*F_n-1 + m(T + R)
+        let F_prev_x = this.vel.x * this.k;
+        let F_prev_y = this.vel.y * this.k;
+        
+        let Signal_x = (Tx + Rx) * this.m;
+        let Signal_y = (Ty + Ry) * this.m;
+        
+        this.vel.x = F_prev_x + Signal_x;
+        this.vel.y = F_prev_y + Signal_y;
+        
+        // Update Position
+        this.pos.x += this.vel.x;
+        this.pos.y += this.vel.y;
+    }
+}
+
+class Organism {
+    constructor() {
+        this.center = { x: window.innerWidth/2, y: window.innerHeight/2 };
+        this.vel = { x: 0, y: 0 };
+        this.nodes = [];
+        
+        for (let i = 0; i < NODES; i++) {
+            let angle = (i / NODES) * Math.PI * 2;
+            this.nodes.push(new Node(angle, this.center));
+        }
+    }
+
+    update() {
+        // Move the abstract center towards mouse (The Soul's Desire)
+        // This pulls the P0 anchors, creating tension in the nodes
+        let dx = mouse.x - this.center.x;
+        let dy = mouse.y - this.center.y;
+        
+        // Simple easing for the center (The Will)
+        this.vel.x = dx * 0.05;
+        this.vel.y = dy * 0.05;
+        this.center.x += this.vel.x;
+        this.center.y += this.vel.y;
+
+        let totalStress = 0;
+        let maxK = 0;
+
+        // Update every cell of the body
+        this.nodes.forEach(node => {
+            node.update(this.center.x, this.center.y, this.vel);
+            totalStress += node.stress;
+            if(node.k > maxK) maxK = node.k;
+        });
+
+        this.avgStress = totalStress / NODES;
+        this.maxRigidity = maxK;
+        
+        this.updateUI();
+    }
+
+    updateUI() {
+        let readout = document.getElementById('readout');
+        let uiM = document.getElementById('val-m');
+        let uiK = document.getElementById('val-k');
+        let uiP0 = document.getElementById('val-p0');
+
+        uiM.innerText = (this.avgStress / 100).toFixed(2);
+        uiK.innerText = this.maxRigidity.toFixed(2);
+
+        if (this.avgStress < 15) {
+            readout.innerText = '"I am whole."';
+            readout.className = 'stress-low';
+            uiP0.innerText = "INTACT";
+            uiP0.style.color = "#00d4aa";
+        } else if (this.avgStress < 40) {
+            readout.innerText = '"I am stretching to accommodate the world."';
+            readout.className = 'stress-med';
+            uiP0.innerText = "DISTORTED";
+            uiP0.style.color = "#ffaa00";
+        } else if (this.avgStress < 100) {
+            readout.innerText = '"The center cannot hold."';
+            readout.className = 'stress-high';
+            uiP0.innerText = "FRACTURING";
+            uiP0.style.color = "#ff4466";
+        } else {
+            readout.innerText = 'D I S S O L U T I O N';
+            readout.className = 'stress-break';
+            uiP0.innerText = "LOST";
+            uiP0.style.color = "#fff";
+        }
+    }
+
+    draw() {
+        // 1. Draw The Connections (The Tension)
+        ctx.beginPath();
+        // If stressed, draw the skeleton (The Structural Reality)
+        if (this.avgStress > 20) {
+            this.nodes.forEach(n => {
+                ctx.moveTo(this.center.x, this.center.y);
+                ctx.lineTo(n.pos.x, n.pos.y);
+            });
+            let opacity = Math.min(1, (this.avgStress - 20) / 100);
+            ctx.strokeStyle = `rgba(255, 68, 102, ${opacity})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // 2. Draw The Skin (The Form)
+        ctx.beginPath();
+        // Cardinal Spline / Catmull-Rom for organic skin
+        let first = this.nodes[0];
+        let last = this.nodes[NODES-1];
+        
+        ctx.moveTo((first.pos.x + last.pos.x)/2, (first.pos.y + last.pos.y)/2);
+        
+        for (let i = 0; i < NODES; i++) {
+            let n1 = this.nodes[i];
+            let n2 = this.nodes[(i + 1) % NODES];
+            let midX = (n1.pos.x + n2.pos.x) / 2;
+            let midY = (n1.pos.y + n2.pos.y) / 2;
+            ctx.quadraticCurveTo(n1.pos.x, n1.pos.y, midX, midY);
+        }
+        
+        ctx.closePath();
+
+        // Color shifts based on state
+        let r, g, b;
+        if (this.avgStress < 20) { // Flow (Teal)
+            r=0; g=212; b=170;
+        } else if (this.avgStress < 60) { // Strain (Orange)
+            r=255; g=170; b=0;
+        } else { // Trauma (Red/White)
+            r=255; g=68; b=102;
+            // Flicker if breaking
+            if (this.avgStress > 100 && Math.random() > 0.5) { r=255; g=255; b=255; }
+        }
+
+        ctx.fillStyle = `rgba(${r},${g},${b}, 0.1)`; // Fill opacity
+        ctx.strokeStyle = `rgb(${r},${g},${b})`;
+        ctx.lineWidth = 2;
+        
+        // Add glow
+        ctx.shadowBlur = 30 + this.avgStress; // Glow increases with stress (Heat)
+        ctx.shadowColor = ctx.strokeStyle;
+        
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // 3. Draw The Core (Identity P0)
+        // This is the ghost of where we *should* be
+        /*
+        ctx.beginPath();
+        ctx.arc(this.center.x, this.center.y, 4, 0, Math.PI*2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        */
+    }
+}
+
+let organism;
+
+function init() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    organism = new Organism();
+}
+
+function loop() {
+    // Motion Blur background
+    ctx.fillStyle = 'rgba(2, 2, 4, 0.2)'; 
+    ctx.fillRect(0, 0, width, height);
+    
+    time += 0.01;
+    
+    organism.update();
+    organism.draw();
+
+    // Draw Mouse Target (The Lure)
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI*2);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.stroke();
+
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', init);
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+
+init();
+loop();
+</script>
+</body>
+</html>

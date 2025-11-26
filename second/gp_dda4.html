@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Singular Automata // Predator Update</title>
+<style>
+    body { background: #050508; color: #a0a0b0; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+    canvas { background: #0b0b10; border: 1px solid #1a1a24; box-shadow: 0 0 30px rgba(0,0,0,0.8); cursor: crosshair; }
+    
+    .hud-container {
+        width: 900px; display: flex; justify-content: space-between; margin-top: 15px; padding: 10px;
+        background: #0b0b10; border: 1px solid #1a1a24;
+    }
+    
+    .metric-group { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .label { font-size: 11px; opacity: 0.6; letter-spacing: 1px; }
+    .val { font-size: 16px; font-weight: bold; color: #e0e0f0; }
+    
+    .bar-bg { width: 100%; height: 4px; background: #222; margin-top: 4px; }
+    .bar-fill { height: 100%; transition: width 0.1s, background 0.2s; }
+    
+    .accent { color: #00d4aa; } /* Flow */
+    .warn { color: #ffaa00; }   /* Caution */
+    .danger { color: #ff4466; } /* Predatory/Risk */
+    .panic { color: #cc00ff; }  /* Locked Escape */
+    
+    .legend { margin-top: 10px; font-size: 12px; display: flex; gap: 20px; opacity: 0.7; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="hud-container">
+    <div class="metric-group">
+        <span class="label">STATE</span>
+        <span class="val" id="ui-state">SEEKING</span>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">k (INERTIA)</span>
+        <span class="val accent" id="ui-k">0.90</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-k" style="background:#00d4aa; width:90%"></div></div>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">m (DRIVE)</span>
+        <span class="val warn" id="ui-m">0.45</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-m" style="background:#ffaa00; width:45%"></div></div>
+    </div>
+
+    <div class="metric-group">
+        <span class="label">ENTROPY</span>
+        <span class="val danger" id="ui-f">0.00</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-f" style="background:#ff4466; width:0%"></div></div>
+    </div>
+
+    <div class="metric-group">
+        <span class="label">CONFIDENCE</span>
+        <span class="val" id="ui-r" style="color:#00d4aa">100%</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-r" style="background:#00d4aa; width:100%"></div></div>
+    </div>
+</div>
+
+<canvas id="sim" width="900" height="500"></canvas>
+
+<div class="legend">
+    <span><div class="dot" style="background:#fff"></div>Goal (T)</span>
+    <span><div class="dot" style="background:#ff4466"></div>Fear (R)</span>
+    <span><div class="dot" style="background:#00d4aa"></div>Velocity</span>
+</div>
+
+<script>
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+
+// --- VECTOR MATH ---
+const Vec = {
+    add: (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y }),
+    sub: (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y }),
+    mult: (v, s) => ({ x: v.x * s, y: v.y * s }),
+    mag: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+    norm: (v) => {
+        let m = Math.sqrt(v.x * v.x + v.y * v.y);
+        return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m};
+    },
+    dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y,
+    dist: (v1, v2) => Math.sqrt(Math.pow(v1.x-v2.x,2) + Math.pow(v1.y-v2.y,2))
+};
+
+// --- CONFIG ---
+const BASE_K = 0.94; // Slippery/Smooth
+const BASE_M = 0.50; // Responsive
+const SENSOR_RANGE = 100; // Reduced from 140 to let it get closer
+
+// --- WORLD ---
+let goal = { x: 800, y: 250 };
+const obstacles = [
+    { x: 400, y: 150, w: 50, h: 200 }, // Center Pillar
+    { x: 200, y: 0, w: 50, h: 200 },   // Top Gate
+    { x: 200, y: 300, w: 50, h: 200 }, // Bottom Gate
+    { x: 600, y: 100, w: 30, h: 300 }  // The "Goalkeeper"
+];
+
+// --- AGENT ---
+class Agent {
+    constructor() {
+        this.reset();
+    }
+    
+    reset() {
+        this.pos = { x: 100, y: 250 };
+        this.vel = { x: 0, y: 0 };
+        this.k = BASE_K;
+        this.m = BASE_M;
+        this.frustration = 0;
+        this.radius = 12;
+        this.lateralLock = null;
+        
+        this.rays = [];
+        for(let i=-110; i<=110; i+=10) this.rays.push(i * (Math.PI/180));
+        
+        this.debugT = {x:0,y:0};
+        this.debugR = {x:0,y:0};
+        this.confidence = 1.0;
+    }
+
+    sense(obstacles) {
+        let sensation = { x: 0, y: 0 };
+        let minD = SENSOR_RANGE;
+        this.hits = [];
+
+        this.rays.forEach(angle => {
+            let heading = Vec.mag(this.vel) > 0.5 ? Math.atan2(this.vel.y, this.vel.x) : Math.atan2(goal.y-this.pos.y, goal.x-this.pos.x);
+            let rayAngle = heading + angle;
+            let dir = { x: Math.cos(rayAngle), y: Math.sin(rayAngle) };
+            
+            let closest = null;
+            let minDist = SENSOR_RANGE;
+
+            obstacles.forEach(obs => {
+                let lines = [
+                    {x1:obs.x, y1:obs.y, x2:obs.x, y2:obs.y+obs.h},
+                    {x1:obs.x+obs.w, y1:obs.y, x2:obs.x+obs.w, y2:obs.y+obs.h},
+                    {x1:obs.x, y1:obs.y, x2:obs.x+obs.w, y2:obs.y},
+                    {x1:obs.x, y1:obs.y+obs.h, x2:obs.x+obs.w, y2:obs.y+obs.h}
+                ];
+
+                lines.forEach(l => {
+                    const den = (l.x1-l.x2)*(this.pos.y-(this.pos.y+dir.y)) - (l.y1-l.y2)*(this.pos.x-(this.pos.x+dir.x));
+                    if(den === 0) return;
+                    const t = ((l.x1-this.pos.x)*(this.pos.y-(this.pos.y+dir.y)) - (l.y1-this.pos.y)*(this.pos.x-(this.pos.x+dir.x))) / den;
+                    const u = -((l.x1-l.x2)*(l.y1-this.pos.y) - (l.y1-l.y2)*(l.x1-this.pos.x)) / den;
+                    
+                    if (t > 0 && t < 1 && u > 0 && u < minDist) {
+                        minDist = u;
+                        closest = { x: this.pos.x + u*dir.x, y: this.pos.y + u*dir.y, dist: u };
+                    }
+                });
+            });
+
+            if (closest) {
+                if(closest.dist < minD) minD = closest.dist;
+                this.hits.push(closest);
+                
+                // EXPONENTIAL FEAR CURVE
+                // Previously power of 2. Now power of 3.
+                // Effect: Fear is 0.001 at 90% range, but 1.0 at 0% range.
+                // It allows the agent to get much closer before R kicks in.
+                let force = Math.pow((SENSOR_RANGE - closest.dist) / SENSOR_RANGE, 3); 
+                sensation.x -= dir.x * force;
+                sensation.y -= dir.y * force;
+            }
+        });
+
+        if (Vec.mag(sensation) > 0) sensation = Vec.norm(sensation);
+        return { vec: sensation, dist: minD };
+    }
+
+    update() {
+        // --- 1. ANALYSIS ---
+        let T_raw = Vec.sub(goal, this.pos);
+        let distToGoal = Vec.mag(T_raw);
+        let T = Vec.norm(T_raw);
+        
+        let sensorData = this.sense(obstacles);
+        let R = sensorData.vec;
+        let distToWall = sensorData.dist;
+
+        // --- 2. PREDATORY LOGIC (CONFIDENCE) ---
+        // If the goal is closer than the nearest wall, we have "Predatory Advantage".
+        // We ignore the wall because we will hit the goal first.
+        let predatoryAdvantage = (distToGoal < distToWall) ? 1.0 : 0.0;
+        
+        // Base confidence is high if moving fast or if we have advantage
+        this.confidence = Math.max(0.0, 1.0 - this.frustration);
+        if (predatoryAdvantage) this.confidence = 1.0; 
+        
+        // --- 3. FRUSTRATION MANAGEMENT ---
+        let speed = Vec.mag(this.vel);
+        let progress = Vec.dot(this.vel, T);
+        
+        // Only get frustrated if:
+        // 1. We are NOT in predatory mode
+        // 2. We are close to a wall
+        // 3. We are stopped OR moving the wrong way
+        let blocked = distToWall < 50 && !predatoryAdvantage;
+        let stalled = speed < 1.0 && progress < 0.2;
+        
+        if (blocked && stalled) {
+            this.frustration = Math.min(1.0, this.frustration + 0.02);
+        } else {
+            // If we are moving (even laterally), cool down.
+            // This prevents "Overheating" while running along a wall.
+            let cooling = (speed > 2.0) ? 0.02 : 0.005;
+            this.frustration = Math.max(0, this.frustration - cooling);
+        }
+
+        // --- 4. STATE SWITCHING ---
+        let T_final = T;
+        let stateText = "SEEKING";
+        let stateClass = "accent";
+        
+        // Escape Lock
+        if (this.lateralLock) {
+            T_final = this.lateralLock;
+            stateText = "LOCKED ESCAPE";
+            stateClass = "panic";
+            
+            // Release lock if we have a clear shot OR Predatory Advantage
+            if ((distToWall > 60 && Vec.dot(this.vel, T) > 0.4) || predatoryAdvantage) {
+                this.lateralLock = null;
+            }
+        }
+        // Trigger Panic
+        else if (this.frustration > 0.75) {
+            // Find Tangent
+            let t1 = { x: -R.y, y: R.x };
+            let t2 = { x: R.y, y: -R.x };
+            this.lateralLock = (Vec.dot(t1, T) > Vec.dot(t2, T)) ? t1 : t2;
+            
+            // Burst of energy
+            this.vel = Vec.add(this.vel, Vec.mult(this.lateralLock, 3));
+        }
+        else if (this.frustration > 0.3) {
+            stateText = "OBSTRUCTED";
+            stateClass = "warn";
+        }
+        
+        if (predatoryAdvantage) {
+            stateText = "PREDATORY";
+            stateClass = "danger"; // Red for attack mode
+        }
+
+        // --- 5. DDA PARAMETERS ---
+        // Predatory mode = Very High m, Normal k (Precision)
+        if (predatoryAdvantage) {
+            this.k = 0.90;
+            this.m = 0.80; // High gain to snap to target
+        } else {
+            // Normal DDA scaling
+            this.k = BASE_K - (this.frustration * 0.2); 
+            this.m = BASE_M + (this.frustration * 0.5);
+        }
+
+        // --- 6. THE EQUATION ---
+        // R is suppressed by Confidence.
+        // If Confidence is 1.0 (Predatory), R becomes 0.
+        let R_weighted = Vec.mult(R, 2.5 * (1.0 - this.confidence));
+        
+        let Force = Vec.add(T_final, R_weighted);
+        
+        let Fx = this.k * this.vel.x + this.m * Force.x;
+        let Fy = this.k * this.vel.y + this.m * Force.y;
+        
+        this.vel = { x: Fx, y: Fy };
+        
+        // Speed Limits
+        let maxSpeed = 6 + (this.frustration * 3);
+        if (predatoryAdvantage) maxSpeed = 9; // Sprint to goal
+        if (Vec.mag(this.vel) > maxSpeed) this.vel = Vec.mult(Vec.norm(this.vel), maxSpeed);
+        
+        this.pos = Vec.add(this.pos, this.vel);
+        
+        // Goal Capture (Reset Goal)
+        if (distToGoal < 20) {
+            goal.x = 50 + Math.random() * 800;
+            goal.y = 50 + Math.random() * 400;
+            // Ensure goal isn't inside a wall (simple check)
+            obstacles.forEach(o => {
+                if(goal.x > o.x && goal.x < o.x+o.w && goal.y > o.y && goal.y < o.y+o.h) {
+                    goal.x = 450; goal.y = 250;
+                }
+            });
+            this.frustration = 0; // Success clears mind
+        }
+        
+        this.resolveCollisions(obstacles);
+        
+        // Debug
+        this.debugT = T_final;
+        this.debugR = R_weighted;
+    }
+
+    resolveCollisions(obstacles) {
+        obstacles.forEach(obs => {
+            let cx = Math.max(obs.x, Math.min(this.pos.x, obs.x + obs.w));
+            let cy = Math.max(obs.y, Math.min(this.pos.y, obs.y + obs.h));
+            let dist = Math.hypot(this.pos.x - cx, this.pos.y - cy);
+            if (dist < this.radius) {
+                let overlap = this.radius - dist;
+                let nx = (this.pos.x - cx) / (dist || 1);
+                let ny = (this.pos.y - cy) / (dist || 1);
+                this.pos.x += nx * overlap;
+                this.pos.y += ny * overlap;
+                this.vel.x *= 0.6; this.vel.y *= 0.6;
+            }
+        });
+        if(this.pos.x < 0) this.pos.x = 0; if(this.pos.y < 0) this.pos.y = 0;
+        if(this.pos.y > 500) this.pos.y = 500; if(this.pos.x > 900) this.pos.x = 900;
+    }
+
+    draw() {
+        // Rays (Subtle)
+        this.hits.forEach(hit => {
+            ctx.strokeStyle = `rgba(255, 68, 102, 0.15)`;
+            ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y); ctx.lineTo(hit.x, hit.y); ctx.stroke();
+        });
+
+        // Body
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2);
+        
+        // Color Logic
+        let r,g,b;
+        if (this.confidence === 1.0) { // Predatory
+            r=255; g=50; b=50; // Hot Red
+        } else if (this.lateralLock) {
+            r=200; g=0; b=255; // Panic Purple
+        } else {
+            // Calm Blue to Frustrated Yellow
+            r = Math.floor(this.frustration * 255);
+            g = Math.floor((1-this.frustration)*200 + 200);
+            b = Math.floor((1-this.frustration)*255 + 50);
+        }
+        
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.shadowBlur = 10; ctx.shadowColor = ctx.fillStyle;
+        ctx.fill(); ctx.shadowBlur = 0;
+        
+        // Debug T (White)
+        ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y);
+        ctx.lineTo(this.pos.x + this.debugT.x*40, this.pos.y + this.debugT.y*40);
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+        
+        // Debug R (Red) - Visible only when fear is active
+        if (Vec.mag(this.debugR) > 0.1) {
+            ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y);
+            ctx.lineTo(this.pos.x + this.debugR.x*40, this.pos.y + this.debugR.y*40);
+            ctx.strokeStyle = "#ff4466"; ctx.lineWidth = 2; ctx.stroke();
+        }
+
+        // HUD Updates
+        let stateEl = document.getElementById('ui-state');
+        if(this.confidence === 1.0) { stateEl.innerText = "PREDATORY"; stateEl.className = "val danger"; }
+        else if(this.lateralLock) { stateEl.innerText = "ESCAPE LOCK"; stateEl.className = "val panic"; }
+        else if(this.frustration > 0.3) { stateEl.innerText = "CAUTIOUS"; stateEl.className = "val warn"; }
+        else { stateEl.innerText = "FLOW"; stateEl.className = "val accent"; }
+        
+        document.getElementById('ui-k').innerText = this.k.toFixed(2);
+        document.getElementById('bar-k').style.width = (this.k * 100) + "%";
+        document.getElementById('ui-m').innerText = this.m.toFixed(2);
+        document.getElementById('bar-m').style.width = (this.m * 50) + "%";
+        document.getElementById('ui-f').innerText = this.frustration.toFixed(2);
+        document.getElementById('bar-f').style.width = (this.frustration * 100) + "%";
+        document.getElementById('ui-r').innerText = Math.round(this.confidence * 100) + "%";
+        document.getElementById('bar-r').style.width = (this.confidence * 100) + "%";
+    }
+}
+
+// --- MAIN LOOP ---
+const agent = new Agent();
+
+function loop() {
+    ctx.clearRect(0, 0, 900, 500);
+
+    // Obstacles
+    ctx.fillStyle = "#111"; ctx.strokeStyle = "#333";
+    obstacles.forEach(obs => { ctx.fillRect(obs.x, obs.y, obs.w, obs.h); ctx.strokeRect(obs.x, obs.y, obs.w, obs.h); });
+
+    // Goal
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, 8, 0, Math.PI*2);
+    ctx.fillStyle = "#fff"; ctx.shadowColor="#fff"; ctx.shadowBlur=10; ctx.fill(); ctx.shadowBlur=0;
+    
+    // Ghost Line
+    ctx.beginPath(); ctx.moveTo(agent.pos.x, agent.pos.y); ctx.lineTo(goal.x, goal.y);
+    ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+
+    agent.update();
+    agent.draw();
+    requestAnimationFrame(loop);
+}
+
+cvs.addEventListener('mousedown', e => {
+    let rect = cvs.getBoundingClientRect();
+    goal.x = e.clientX - rect.left; goal.y = e.clientY - rect.top;
+});
+window.addEventListener('keydown', e => { if(e.code === 'Space') agent.reset(); });
+
+loop();
+</script>
+</body>
+</html>

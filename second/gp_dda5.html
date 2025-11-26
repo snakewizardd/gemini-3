@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Singular Automata // Gap Seeker</title>
+<style>
+    body { background: #050508; color: #a0a0b0; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+    canvas { background: #0b0b10; border: 1px solid #1a1a24; box-shadow: 0 0 30px rgba(0,0,0,0.8); cursor: crosshair; }
+    
+    .hud-container {
+        width: 900px; display: flex; justify-content: space-between; margin-top: 15px; padding: 10px;
+        background: #0b0b10; border: 1px solid #1a1a24;
+    }
+    
+    .metric-group { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .label { font-size: 11px; opacity: 0.6; letter-spacing: 1px; }
+    .val { font-size: 16px; font-weight: bold; color: #e0e0f0; }
+    
+    .bar-bg { width: 100%; height: 4px; background: #222; margin-top: 4px; }
+    .bar-fill { height: 100%; transition: width 0.1s, background 0.2s; }
+    
+    .accent { color: #00d4aa; } 
+    .warn { color: #ffaa00; }   
+    .solve { color: #0099ff; }  
+    
+    .legend { margin-top: 10px; font-size: 12px; display: flex; gap: 20px; opacity: 0.7; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="hud-container">
+    <div class="metric-group">
+        <span class="label">STATE</span>
+        <span class="val" id="ui-state">SEEKING</span>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">k (INERTIA)</span>
+        <span class="val accent" id="ui-k">0.94</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-k" style="background:#00d4aa; width:94%"></div></div>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">m (DRIVE)</span>
+        <span class="val warn" id="ui-m">0.50</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-m" style="background:#ffaa00; width:50%"></div></div>
+    </div>
+
+    <div class="metric-group">
+        <span class="label">ENTROPY</span>
+        <span class="val danger" id="ui-f">0.00</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-f" style="background:#ff4466; width:0%"></div></div>
+    </div>
+</div>
+
+<canvas id="sim" width="900" height="500"></canvas>
+
+<div class="legend">
+    <span><div class="dot" style="background:#fff"></div>Goal (T)</span>
+    <span><div class="dot" style="background:#0099ff"></div>Gap Solution (R->T)</span>
+    <span><div class="dot" style="background:#00d4aa"></div>Velocity</span>
+</div>
+
+<script>
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+
+const Vec = {
+    add: (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y }),
+    sub: (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y }),
+    mult: (v, s) => ({ x: v.x * s, y: v.y * s }),
+    mag: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+    norm: (v) => { let m = Math.sqrt(v.x * v.x + v.y * v.y); return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m}; },
+    dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y,
+    dist: (v1, v2) => Math.sqrt(Math.pow(v1.x-v2.x,2) + Math.pow(v1.y-v2.y,2))
+};
+
+// --- CONFIG ---
+const BASE_K = 0.94; 
+const BASE_M = 0.45;
+const SENSOR_RANGE = 200; // Increased to "See" across the room
+
+// --- WORLD ---
+let goal = { x: 800, y: 250 };
+const obstacles = [
+    { x: 380, y: 100, w: 40, h: 300 }, // Center Wall
+    { x: 200, y: 0, w: 40, h: 200 },   // Top Gate
+    { x: 200, y: 300, w: 40, h: 200 }, // Bottom Gate
+    { x: 600, y: 100, w: 40, h: 300 }  // Goalkeeper
+];
+
+class Agent {
+    constructor() { this.reset(); }
+    
+    reset() {
+        this.pos = { x: 100, y: 250 };
+        this.vel = { x: 0, y: 0 };
+        this.k = BASE_K; this.m = BASE_M;
+        this.frustration = 0;
+        this.radius = 12;
+        
+        // "Gap" State
+        this.gapTarget = null; 
+        
+        // 360 degree vision for solving
+        this.rays = [];
+        for(let i=0; i<360; i+=10) this.rays.push(i * (Math.PI/180));
+    }
+
+    scan(obstacles) {
+        let maxDist = 0;
+        let bestDir = {x:0, y:0};
+        let repulsions = {x:0, y:0};
+        let minDist = SENSOR_RANGE;
+
+        this.hits = [];
+
+        this.rays.forEach(angle => {
+            let dir = { x: Math.cos(angle), y: Math.sin(angle) };
+            let dist = SENSOR_RANGE;
+            let hit = false;
+
+            obstacles.forEach(obs => {
+                // Simplified Ray AABB
+                let lines = [
+                    {x1:obs.x, y1:obs.y, x2:obs.x, y2:obs.y+obs.h},
+                    {x1:obs.x+obs.w, y1:obs.y, x2:obs.x+obs.w, y2:obs.y+obs.h},
+                    {x1:obs.x, y1:obs.y, x2:obs.x+obs.w, y2:obs.y},
+                    {x1:obs.x, y1:obs.y+obs.h, x2:obs.x+obs.w, y2:obs.y+obs.h}
+                ];
+
+                lines.forEach(l => {
+                    const den = (l.x1-l.x2)*(this.pos.y-(this.pos.y+dir.y)) - (l.y1-l.y2)*(this.pos.x-(this.pos.x+dir.x));
+                    if(den !== 0) {
+                        const t = ((l.x1-this.pos.x)*(this.pos.y-(this.pos.y+dir.y)) - (l.y1-this.pos.y)*(this.pos.x-(this.pos.x+dir.x))) / den;
+                        const u = -((l.x1-l.x2)*(l.y1-this.pos.y) - (l.y1-l.y2)*(l.x1-this.pos.x)) / den;
+                        if (t > 0 && t < 1 && u > 0 && u < dist) {
+                            dist = u;
+                            hit = true;
+                        }
+                    }
+                });
+            });
+
+            if(hit) {
+                this.hits.push({x: this.pos.x + dir.x*dist, y: this.pos.y + dir.y*dist});
+                // Standard Fear Calc
+                if(dist < 50) {
+                    let force = Math.pow((50-dist)/50, 2);
+                    repulsions.x -= dir.x * force;
+                    repulsions.y -= dir.y * force;
+                }
+            } else {
+                // Ray hit nothing (End of world or sensor limit)
+                this.hits.push({x: this.pos.x + dir.x*dist, y: this.pos.y + dir.y*dist});
+            }
+
+            // GAP FINDING: Track the direction with the most space
+            // Weight towards Goal to prevent going backwards unless necessary
+            let goalBias = Vec.dot(dir, Vec.norm(Vec.sub(goal, this.pos)));
+            let weightedDist = dist + (goalBias * 30); // Slight bias to forward gaps
+            
+            if(weightedDist > maxDist) {
+                maxDist = weightedDist;
+                bestDir = dir;
+            }
+            if(dist < minDist) minDist = dist;
+        });
+
+        if(Vec.mag(repulsions) > 0) repulsions = Vec.norm(repulsions);
+        return { R: repulsions, gap: bestDir, distToWall: minDist };
+    }
+
+    update() {
+        // --- 1. SCAN ---
+        let scanData = this.scan(obstacles);
+        let T_real = Vec.norm(Vec.sub(goal, this.pos));
+        let distToGoal = Vec.dist(this.pos, goal);
+        
+        // --- 2. FRUSTRATION (STALL DETECTION) ---
+        let speed = Vec.mag(this.vel);
+        let progress = Vec.dot(this.vel, T_real);
+        
+        // Stalled: Low speed OR moving away from goal while blocked
+        let stalled = (speed < 1.0) || (scanData.distToWall < 40 && progress < 0.1);
+        
+        if (stalled && !this.gapTarget) {
+            this.frustration = Math.min(1.0, this.frustration + 0.03); // Heat up fast
+        } else if (this.gapTarget) {
+            // Cool down slowly while solving
+            this.frustration = Math.max(0, this.frustration - 0.01);
+        } else {
+            // Rapid cooling if moving free
+            this.frustration = Math.max(0, this.frustration - 0.05);
+        }
+
+        // --- 3. THE "AHA!" MOMENT (MODE SWITCH) ---
+        // If frustration peaks, we stop caring about the Goal and care about the Gap.
+        if (this.frustration > 0.8 && !this.gapTarget) {
+            this.gapTarget = scanData.gap; // Lock onto the open space
+        }
+        
+        // Release the Gap Target if:
+        // 1. Frustration is gone (We are calm)
+        // 2. We have a clear shot to the goal (Gap is no longer needed)
+        // 3. We are moving fast in the Gap direction (Success)
+        let clearShot = scanData.distToWall > 100;
+        let gapSuccess = this.gapTarget && Vec.dot(this.vel, this.gapTarget) > 0.8 && speed > 3;
+        
+        if ((this.frustration <= 0) || (clearShot && Vec.dot(T_real, this.vel) > 0.5)) {
+            this.gapTarget = null;
+        }
+
+        // --- 4. DDA PARAMETERS ---
+        let T_final = T_real;
+        let R_weight = 1.0;
+        
+        let stateText = "FLOW";
+        let stateClass = "accent";
+
+        if (this.gapTarget) {
+            // SOLVING MODE
+            T_final = this.gapTarget; // Override Goal with Gap
+            this.k = 0.90; // Precise
+            this.m = 0.80; // High Drive
+            R_weight = 0.5; // Suppress fear to get through tight gaps
+            
+            stateText = "GAP SEEKING";
+            stateClass = "solve";
+        } else if (this.frustration > 0.3) {
+            // FRUSTRATED MODE
+            stateText = "STALLED";
+            stateClass = "warn";
+            this.k = 0.80; // Jittery
+            this.m = 0.60;
+            // Add noise to shake loose
+            T_final = Vec.add(T_final, {x: (Math.random()-0.5)*0.5, y: (Math.random()-0.5)*0.5});
+        } else {
+            // FLOW MODE
+            this.k = BASE_K;
+            this.m = BASE_M;
+        }
+
+        // --- 5. THE EQUATION ---
+        // F = k*V + m*(T + R)
+        
+        let R = Vec.mult(scanData.R, 2.5 * R_weight);
+        let Force = Vec.add(T_final, R);
+        
+        let Fx = this.k * this.vel.x + this.m * Force.x;
+        let Fy = this.k * this.vel.y + this.m * Force.y;
+        
+        this.vel = { x: Fx, y: Fy };
+        
+        // Physics
+        let maxS = this.gapTarget ? 7 : 5;
+        if(Vec.mag(this.vel) > maxS) this.vel = Vec.mult(Vec.norm(this.vel), maxS);
+        this.pos = Vec.add(this.pos, this.vel);
+        
+        if(distToGoal < 20) {
+            // Respawn Goal
+            goal.x = 50 + Math.random()*800; goal.y = 50 + Math.random()*400;
+            obstacles.forEach(o=>{ if(goal.x>o.x && goal.x<o.x+o.w && goal.y>o.y && goal.y<o.y+o.h) goal.x=450; });
+            this.frustration = 0;
+            this.gapTarget = null;
+        }
+        
+        this.resolveCollisions(obstacles);
+        
+        // Debug
+        this.debugGap = this.gapTarget;
+    }
+
+    resolveCollisions(obstacles) {
+        obstacles.forEach(obs => {
+            let cx = Math.max(obs.x, Math.min(this.pos.x, obs.x + obs.w));
+            let cy = Math.max(obs.y, Math.min(this.pos.y, obs.y + obs.h));
+            let dist = Math.hypot(this.pos.x-cx, this.pos.y-cy);
+            if (dist < this.radius) {
+                let overlap = this.radius - dist;
+                let nx = (this.pos.x-cx)/(dist||1); let ny = (this.pos.y-cy)/(dist||1);
+                this.pos.x += nx*overlap; this.pos.y += ny*overlap;
+                this.vel.x *= 0.5; this.vel.y *= 0.5;
+            }
+        });
+        if(this.pos.x<0) this.pos.x=0; if(this.pos.y<0) this.pos.y=0;
+        if(this.pos.x>900) this.pos.x=900; if(this.pos.y>500) this.pos.y=500;
+    }
+
+    draw() {
+        // Rays
+        this.hits.forEach(hit => {
+            ctx.fillStyle = "rgba(100,100,100,0.1)"; ctx.fillRect(hit.x, hit.y, 2, 2);
+        });
+
+        // Body
+        ctx.beginPath(); ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2);
+        
+        let color = "#00d4aa";
+        if(this.gapTarget) color = "#0099ff";
+        else if(this.frustration > 0.5) color = "#ffaa00";
+        
+        ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 15; ctx.fill(); ctx.shadowBlur = 0;
+
+        // Gap Vector Viz
+        if(this.debugGap) {
+            ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y);
+            ctx.lineTo(this.pos.x + this.debugGap.x*100, this.pos.y + this.debugGap.y*100);
+            ctx.strokeStyle = "#0099ff"; ctx.lineWidth = 3; ctx.stroke();
+            
+            ctx.font = "10px monospace"; ctx.fillStyle = "#0099ff";
+            ctx.fillText("SOLUTION FOUND", this.pos.x+15, this.pos.y-15);
+        }
+
+        // UI
+        let sEl = document.getElementById('ui-state');
+        if(this.gapTarget) { sEl.innerText = "SOLVING (GAP SEEK)"; sEl.className = "val solve"; }
+        else if(this.frustration > 0.5) { sEl.innerText = "STALLED"; sEl.className = "val warn"; }
+        else { sEl.innerText = "FLOW"; sEl.className = "val accent"; }
+        
+        document.getElementById('ui-f').innerText = this.frustration.toFixed(2);
+        document.getElementById('bar-f').style.width = (this.frustration*100)+"%";
+    }
+}
+
+const agent = new Agent();
+function loop() {
+    ctx.clearRect(0,0,900,500);
+    ctx.fillStyle="#111"; ctx.strokeStyle="#333";
+    obstacles.forEach(o=>{ ctx.fillRect(o.x,o.y,o.w,o.h); ctx.strokeRect(o.x,o.y,o.w,o.h); });
+    
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, 8, 0, Math.PI*2);
+    ctx.fillStyle="#fff"; ctx.shadowColor="#fff"; ctx.shadowBlur=10; ctx.fill(); ctx.shadowBlur=0;
+    
+    // Tether
+    ctx.beginPath(); ctx.moveTo(agent.pos.x, agent.pos.y); ctx.lineTo(goal.x, goal.y);
+    ctx.strokeStyle="rgba(255,255,255,0.05)"; ctx.stroke();
+
+    agent.update();
+    agent.draw();
+    requestAnimationFrame(loop);
+}
+
+cvs.addEventListener('mousedown', e => {
+    let r = cvs.getBoundingClientRect(); goal.x = e.clientX-r.left; goal.y = e.clientY-r.top;
+});
+window.addEventListener('keydown', e => { if(e.code==='Space') agent.reset(); });
+loop();
+</script>
+</body>
+</html>

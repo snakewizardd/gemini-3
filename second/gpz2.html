@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Infinite Soloist</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@300&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #000; 
+        color: #0ff; 
+        font-family: 'Roboto Mono', monospace; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+    }
+
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.9);
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 0.5s;
+    }
+
+    .btn {
+        border: 2px solid #0ff; color: #0ff; padding: 20px 50px;
+        font-size: 24px; font-family: 'Orbitron', sans-serif; letter-spacing: 4px;
+        background: transparent; cursor: pointer; text-shadow: 0 0 10px #0ff;
+        box-shadow: 0 0 20px rgba(0,255,255,0.2);
+        transition: all 0.2s;
+    }
+    .btn:hover { background: #0ff; color: #000; box-shadow: 0 0 50px #0ff; }
+
+    #ui {
+        position: absolute; top: 20px; left: 20px; pointer-events: none;
+    }
+
+    .hud-text { font-size: 12px; margin-bottom: 5px; text-shadow: 0 0 5px #0ff; }
+    .mode-indicator { 
+        font-family: 'Orbitron', sans-serif; font-size: 24px; 
+        color: #fff; margin-bottom: 10px; text-shadow: 0 0 10px #fff;
+    }
+    
+    .shred-active { color: #f0f; text-shadow: 0 0 20px #f0f; animation: pulse 0.1s infinite alternate; }
+    
+    @keyframes pulse { from { opacity: 0.8; } to { opacity: 1; text-shadow: 0 0 30px #f0f; } }
+
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="btn">IGNITE SOLO</div>
+    <p style="margin-top: 20px; color: #666">[ WARNING: AUDIO MAY BE LOUD ]</p>
+</div>
+
+<div id="ui">
+    <div id="mode-text" class="mode-indicator">AWAITING INPUT</div>
+    <div class="hud-text">Note: <span id="val-note">--</span></div>
+    <div class="hud-text">Velocity (m): <span id="val-m">0.00</span></div>
+    <div class="hud-text">Inertia (k): <span id="val-k">0.00</span></div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. CONFIGURATION (Standard Tuning for the Tab)
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    // E A D G B e
+    BASE_FREQS: [82.41, 110.00, 146.83, 196.00, 246.94, 329.63], 
+    STRING_NAMES: ['E', 'A', 'D', 'G', 'B', 'e'],
+    BPM: 130 // Tempo for the solo
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (The High Gain Stack)
+// ═══════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null, master: null, reverb: null, delay: null, drive: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4;
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+
+        // DISTORTION (The "Sick" part)
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        function makeDistortionCurve(amount) {
+            let k = typeof amount === 'number' ? amount : 50,
+                n_samples = 44100, curve = new Float32Array(n_samples), deg = Math.PI / 180, i = 0, x;
+            for ( ; i < n_samples; ++i ) {
+                x = i * 2 / n_samples - 1;
+                curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
+            }
+            return curve;
+        }
+        AudioEngine.drive.curve = makeDistortionCurve(400); // Heavy drive
+        AudioEngine.drive.oversample = '4x';
+
+        // DELAY (For the epic feel)
+        AudioEngine.delay = AudioEngine.ctx.createDelay();
+        AudioEngine.delay.delayTime.value = 0.35; // Dotted 8th-ish
+        const fb = AudioEngine.ctx.createGain(); fb.gain.value = 0.4;
+        const filter = AudioEngine.ctx.createBiquadFilter(); filter.frequency.value = 2000; // Dark repeats
+        AudioEngine.delay.connect(fb); fb.connect(filter); filter.connect(AudioEngine.delay);
+        const delMix = AudioEngine.ctx.createGain(); delMix.gain.value = 0.25;
+        AudioEngine.delay.connect(delMix);
+        delMix.connect(AudioEngine.master);
+
+        // ROUTING
+        AudioEngine.drive.connect(AudioEngine.master);
+        AudioEngine.drive.connect(AudioEngine.delay);
+    },
+
+    playTone: (stringIdx, fret, type = 'pick') => {
+        if (!AudioEngine.ctx) return;
+        const t = AudioEngine.ctx.currentTime;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+
+        // Dual Oscillator for thickness
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc2.detune.value = 4; // Chorus-y
+
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+
+        // VIBRATO LFO (if sustained)
+        if (type === 'vib') {
+            const lfo = AudioEngine.ctx.createOscillator();
+            lfo.frequency.value = 6; // 6Hz vib
+            const lfoGain = AudioEngine.ctx.createGain();
+            lfoGain.gain.value = 6; // Pitch depth
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc1.frequency);
+            lfoGain.connect(osc2.frequency);
+            lfo.start(t);
+            lfo.stop(t + 2.0);
+        }
+
+        // FILTER (Wah/Tone simulation)
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, t);
+        filter.frequency.linearRampToValueAtTime(3500, t + 0.1); // Attack bite
+        filter.Q.value = 3;
+
+        // ENVELOPE
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        
+        // Legato vs Pick attack
+        const attackTime = (type === 'hammer' || type === 'pull') ? 0.005 : 0.01;
+        amp.gain.linearRampToValueAtTime(0.5, t + attackTime);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + (type === 'vib' ? 2.0 : 0.8));
+
+        osc1.connect(filter); osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.drive); // Send to distortion
+
+        osc1.start(t); osc2.start(t);
+        osc1.stop(t + 3.0); osc2.stop(t + 3.0);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE TRANSCRIPTION (Solo 1)
+// ═══════════════════════════════════════════════════════════════
+const TAB = [];
+const S = 0.25; // 16th
+const E = 0.5;  // 8th
+const Q = 1.0;  // Quarter
+let b = 0;
+
+function n(beat, string, fret, type='pick') {
+    TAB.push({ beat, string, fret, type });
+}
+
+// -- BAR 1 --
+// D-9, 11, 12 (Run)
+n(b, 2, 9); b+=S;
+n(b, 2, 11); b+=S;
+n(b, 2, 12); b+=S;
+// G-12~ (Vib)
+n(b, 3, 12, 'vib'); b+=E+S; // Sustain
+// D-9, 11
+n(b, 2, 9); b+=S;
+n(b, 2, 11); b+=S;
+// G-11, 11~
+n(b, 3, 11); b+=S;
+n(b, 3, 11, 'vib'); b+=Q;
+
+// -- BAR 2 --
+// G-9~
+n(b, 3, 9, 'vib'); b+=E;
+// D-9, A-10, A-12 (Slide down feel)
+n(b, 2, 9); b+=S;
+n(b, 1, 12); b+=S; // A string 12
+n(b, 1, 10); b+=S; // A string 10
+// A-9, 11
+n(b, 1, 9); b+=S;
+n(b, 1, 11); b+=S;
+// D-8, 12~
+n(b, 2, 8); b+=S;
+n(b, 2, 12, 'vib'); b+=E;
+// D-11h12p11
+n(b, 2, 11, 'hammer'); b+=S/3; // Triplet feel trill
+n(b, 2, 12, 'hammer'); b+=S/3;
+n(b, 2, 11, 'pull'); b+=S/3;
+// 9, 8, 9
+n(b, 2, 9); b+=S;
+n(b, 2, 8); b+=S;
+n(b, 2, 9); b+=S;
+
+// -- BAR 3 --
+// Slide /9-11 (D)
+n(b, 2, 9, 'slide'); b+=S;
+n(b, 2, 11); b+=S;
+// 9, 11
+n(b, 2, 9); b+=S;
+n(b, 2, 11); b+=S;
+// G-12~
+n(b, 3, 12, 'vib'); b+=E;
+// 11h12p11-9
+n(b, 3, 11, 'hammer'); b+=S/3;
+n(b, 3, 12, 'hammer'); b+=S/3;
+n(b, 3, 11, 'pull'); b+=S/3;
+n(b, 3, 9); b+=S;
+// B-10, 10
+n(b, 4, 10); b+=S;
+n(b, 4, 10); b+=S;
+// G-12h14p... (Fast run)
+n(b, 3, 12); b+=S;
+n(b, 3, 14, 'hammer'); b+=S;
+n(b, 3, 11); b+=S; 
+n(b, 3, 11); b+=S;
+n(b, 3, 9); b+=S;
+n(b, 2, 12); b+=S;
+
+// -- BAR 4 & 5 (End of Written Tab) --
+// A-12, D-10h12...
+n(b, 1, 12); b+=S;
+n(b, 2, 10); b+=S;
+n(b, 2, 12); b+=S;
+n(b, 3, 9); b+=E;
+// 7h9p7-6
+n(b, 3, 7); b+=S/3;
+n(b, 3, 9, 'hammer'); b+=S/3;
+n(b, 3, 7, 'pull'); b+=S/3;
+n(b, 3, 6); b+=S;
+
+// Finale of fixed solo
+n(b, 3, 9); b+=S;
+n(b, 3, 10, 'hammer'); b+=S;
+n(b, 3, 9, 'pull'); b+=S;
+n(b, 3, 9); b+=S;
+n(b, 2, 12); b+=S;
+n(b, 2, 9); b+=S;
+n(b, 2, 12); b+=S;
+n(b, 1, 9); b+=S;
+n(b, 1, 12); b+=S;
+n(b, 1, 9); b+=S;
+n(b, 0, 12); b+=S; // Low E-12
+n(b, 0, 10); b+=S;
+n(b, 0, 7, 'vib'); b+=Q;
+
+const FIXED_LENGTH = b;
+
+// ═══════════════════════════════════════════════════════════════
+// 4. THE GENERATIVE AGENT (Math-Shredder)
+// ═══════════════════════════════════════════════════════════════
+// B Natural Minor / Blues Hybrid Scale Map
+const SCALE_MAP = {
+    0: [0, 2, 3, 5, 7, 8, 10, 12], // E string
+    1: [0, 2, 4, 5, 7, 9, 10, 12], // A string (B minor context)
+    2: [0, 2, 4, 5, 7, 9, 11, 12], // D string
+    3: [0, 2, 4, 6, 7, 9, 11, 12], // G string
+    4: [0, 2, 3, 5, 7, 8, 10, 12], // B string
+    5: [0, 2, 3, 5, 7, 8, 10, 12]  // e string
+};
+
+const Agent = {
+    // Physics State
+    posFret: 7, 
+    posString: 3, 
+    vel: 0, 
+    k: 0.9, 
+    m: 0.1,
+    
+    // Musical State
+    shredIntensity: 0, // 0 = Melodic, 1 = Shred
+    noteQueue: [],
+
+    generateNext: (currentBeat) => {
+        // 1. DETERMINE INTENSITY (Oscillates over time)
+        // Sine wave modulation of shred desire
+        Agent.shredIntensity = (Math.sin(currentBeat * 0.1) + 1) / 2;
+        
+        // 2. DDA PARAMETERS
+        // High Intensity = High Pressure (m), Low Viscosity (k) -> Fast, erratic
+        // Low Intensity = Low Pressure, High Viscosity -> Slow, deliberate
+        Agent.m = 0.1 + (Agent.shredIntensity * 0.8);
+        Agent.k = 0.95 - (Agent.shredIntensity * 0.6);
+
+        // 3. MOVE AGENT (The Hand)
+        // Target is random valid note nearby, weighted by Intensity
+        let range = Agent.shredIntensity > 0.8 ? 7 : 3; // How far to jump
+        let dir = Math.random() > 0.5 ? 1 : -1;
+        
+        Agent.posFret += (dir * Math.floor(Math.random() * range));
+        
+        // Constraint to neck
+        if (Agent.posFret < 2) Agent.posFret = 2;
+        if (Agent.posFret > 19) Agent.posFret = 19;
+
+        // Change string occasionally
+        if (Math.random() > 0.7) {
+            Agent.posString += Math.random() > 0.5 ? 1 : -1;
+            if (Agent.posString < 0) Agent.posString = 0;
+            if (Agent.posString > 5) Agent.posString = 5;
+        }
+
+        // Snap to Scale
+        let validFrets = SCALE_MAP[Agent.posString];
+        // Find closest valid fret
+        let bestFret = validFrets[0];
+        let minDiff = 100;
+        validFrets.forEach(f => {
+            // Check octaves (add 12)
+            [f, f+12].forEach(vf => {
+                let diff = Math.abs(vf - Agent.posFret);
+                if (diff < minDiff) { minDiff = diff; bestFret = vf; }
+            });
+        });
+        Agent.posFret = bestFret;
+
+        // 4. GENERATE RHYTHM
+        // Shred = 16th notes or triplets. Melodic = Quarters/Eighths
+        let duration = S;
+        let technique = 'pick';
+        
+        if (Agent.shredIntensity > 0.8) {
+            duration = S / 1.5; // Fast runs
+            technique = Math.random() > 0.3 ? 'hammer' : 'pick';
+        } else if (Agent.shredIntensity < 0.3) {
+            duration = Math.random() > 0.5 ? Q : E;
+            technique = 'vib';
+        }
+
+        // Queue the note
+        TAB.push({ 
+            beat: currentBeat + duration, // Append to end
+            string: Agent.posString, 
+            fret: Agent.posFret, 
+            type: technique 
+        });
+
+        return duration; // Return how much time we added
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. SEQUENCER
+// ═══════════════════════════════════════════════════════════════
+let startTime = 0;
+let nextNoteIdx = 0;
+let isPlaying = false;
+let generativeBeat = FIXED_LENGTH; // Start generating after fixed tab
+
+function scheduler() {
+    if (!isPlaying) return;
+    const currentTime = AudioEngine.ctx.currentTime;
+    const currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+
+    // GENERATIVE INJECTION
+    // Keep a buffer of notes ahead
+    if (TAB[TAB.length-1].beat < currentBeat + 4.0) {
+        let addedTime = Agent.generateNext(generativeBeat);
+        generativeBeat += addedTime;
+    }
+
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.1) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        const delay = Math.max(0, (playTime - currentTime) * 1000);
+        
+        setTimeout(() => {
+            AudioEngine.playTone(note.string, note.fret, note.type);
+            Visuals.triggerHit(note.string, note.fret, note.type);
+            
+            // UI Updates
+            document.getElementById('val-note').innerText = CONFIG.STRING_NAMES[note.string] + '-' + note.fret;
+            document.getElementById('mode-text').innerText = 
+                currentBeat > FIXED_LENGTH ? "INFINITE SHRED::MATH" : "PLAYING::TAB";
+            
+            if (currentBeat > FIXED_LENGTH) {
+                let mt = document.getElementById('mode-text');
+                mt.classList.add('shred-active');
+                document.getElementById('val-m').innerText = Agent.m.toFixed(2);
+                document.getElementById('val-k').innerText = Agent.k.toFixed(2);
+            }
+        }, delay);
+        
+        nextNoteIdx++;
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. VISUAL ENGINE
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w = window.innerWidth, h = window.innerHeight;
+let hits = [];
+
+window.addEventListener('resize', () => { w=window.innerWidth; h=window.innerHeight; cvs.width=w; cvs.height=h; });
+cvs.width=w; cvs.height=h;
+
+const Visuals = {
+    triggerHit: (s, f, type) => hits.push({s, f, type, life: 1.0}),
+    draw: () => {
+        // CRT Trail
+        ctx.fillStyle = 'rgba(0, 5, 10, 0.2)'; ctx.fillRect(0, 0, w, h);
+        
+        const STR_H = h / 7;
+        const FRET_W = w / 22;
+
+        // Draw Strings
+        for (let i=0; i<6; i++) {
+            let y = (i+1)*STR_H;
+            ctx.beginPath(); 
+            // Vibrate string if hit recently
+            let vib = hits.some(h => h.s === i && h.life > 0.8) ? (Math.random()-0.5)*5 : 0;
+            ctx.moveTo(0, y+vib); ctx.lineTo(w, y+vib);
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 1 + i*0.5; ctx.stroke();
+        }
+
+        // Draw Hits
+        for(let i=hits.length-1; i>=0; i--) {
+            let hit = hits[i];
+            let x = hit.f * FRET_W;
+            let y = (hit.s+1) * STR_H;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 10 + (hit.type==='vib'?20:0) + (1-hit.life)*50, 0, Math.PI*2);
+            let color = hit.type === 'hammer' ? '255,0,255' : '0,255,255';
+            ctx.strokeStyle = `rgba(${color}, ${hit.life})`;
+            ctx.lineWidth = 2; ctx.stroke();
+            
+            // Fret number
+            ctx.fillStyle = `rgba(255,255,255,${hit.life})`;
+            ctx.font = '20px monospace';
+            ctx.fillText(hit.f, x-5, y-15);
+
+            hit.life -= 0.04;
+            if(hit.life <= 0) hits.splice(i,1);
+        }
+    }
+};
+
+function renderLoop() {
+    Visuals.draw();
+    requestAnimationFrame(renderLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 7. INIT
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('overlay').addEventListener('click', () => {
+    AudioEngine.init().then(() => {
+        if (AudioEngine.ctx.state === 'suspended') AudioEngine.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 500);
+        
+        isPlaying = true;
+        startTime = AudioEngine.ctx.currentTime + 0.1;
+        scheduler();
+        renderLoop();
+    });
+});
+
+</script>
+</body>
+</html>

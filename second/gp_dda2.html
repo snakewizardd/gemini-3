@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Singular Automata // Hysteresis Update</title>
+<style>
+    body { background: #050508; color: #a0a0b0; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+    canvas { background: #0b0b10; border: 1px solid #1a1a24; box-shadow: 0 0 30px rgba(0,0,0,0.8); cursor: crosshair; }
+    
+    .hud-container {
+        width: 900px;
+        display: flex;
+        justify-content: space-between;
+        margin-top: 15px;
+        padding: 10px;
+        background: #0b0b10;
+        border: 1px solid #1a1a24;
+    }
+    
+    .metric-group { display: flex; flex-direction: column; gap: 4px; }
+    .label { font-size: 11px; opacity: 0.6; letter-spacing: 1px; }
+    .val { font-size: 16px; font-weight: bold; color: #e0e0f0; }
+    
+    .bar-bg { width: 100px; height: 4px; background: #222; margin-top: 4px; }
+    .bar-fill { height: 100%; transition: width 0.1s; }
+    
+    .accent { color: #00d4aa; }
+    .warn { color: #ffaa00; }
+    .danger { color: #ff4466; }
+    
+    .legend {
+        margin-top: 10px;
+        font-size: 12px;
+        display: flex;
+        gap: 20px;
+        opacity: 0.7;
+    }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="hud-container">
+    <div class="metric-group">
+        <span class="label">EQUATION STATE</span>
+        <span class="val" id="ui-state">SEEKING</span>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">k (INERTIA)</span>
+        <span class="val accent" id="ui-k">0.92</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-k" style="background:#00d4aa; width:92%"></div></div>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">m (PRESSURE)</span>
+        <span class="val warn" id="ui-m">0.30</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-m" style="background:#ffaa00; width:30%"></div></div>
+    </div>
+
+    <div class="metric-group">
+        <span class="label">ENTROPY (LOCKED)</span>
+        <span class="val danger" id="ui-f">0.00</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-f" style="background:#ff4466; width:0%"></div></div>
+    </div>
+</div>
+
+<canvas id="sim" width="900" height="500"></canvas>
+
+<div class="legend">
+    <span><div class="dot" style="background:#fff"></div>Target Vector (T)</span>
+    <span><div class="dot" style="background:#ff4466"></div>Sensors (R)</span>
+    <span><div class="dot" style="background:#00d4aa"></div>Velocity</span>
+    <span><div class="dot" style="background:#777"></div>Lateral Lock</span>
+</div>
+
+<script>
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+
+// --- VECTOR MATH ---
+const Vec = {
+    add: (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y }),
+    sub: (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y }),
+    mult: (v, s) => ({ x: v.x * s, y: v.y * s }),
+    mag: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+    norm: (v) => {
+        let m = Math.sqrt(v.x * v.x + v.y * v.y);
+        return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m};
+    },
+    dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y,
+    dist: (v1, v2) => Math.sqrt(Math.pow(v1.x-v2.x,2) + Math.pow(v1.y-v2.y,2))
+};
+
+// --- CONFIG ---
+const BASE_K = 0.94;
+const BASE_M = 0.45;
+
+// --- WORLD ---
+let goal = { x: 800, y: 250 };
+// A more challenging "Room" setup to test scaling vs wall
+const obstacles = [
+    { x: 400, y: 50, w: 40, h: 400 }, // THE BIG WALL (Center Room)
+    { x: 200, y: 0, w: 40, h: 180 },   // Top Corridor
+    { x: 200, y: 320, w: 40, h: 180 }  // Bottom Corridor
+];
+
+// --- AGENT ---
+class Agent {
+    constructor() {
+        this.reset();
+    }
+    
+    reset() {
+        this.pos = { x: 80, y: 250 };
+        this.vel = { x: 0, y: 0 };
+        this.k = BASE_K;
+        this.m = BASE_M;
+        this.frustration = 0;
+        this.radius = 12;
+        
+        // HYSTERESIS STATE
+        // If true, we ignore the goal and run perpendicular until clear
+        this.lateralLock = null; // { x: -1 or 1, y: ... } (Direction of escape)
+        
+        // Raycasting
+        this.rays = [];
+        for(let i=-70; i<=70; i+=15) this.rays.push(i * (Math.PI/180));
+        
+        this.debugT = {x:0,y:0};
+    }
+
+    sense(obstacles) {
+        let sensation = { x: 0, y: 0 };
+        let closestDist = 999;
+        
+        this.sensorData = this.rays.map(angle => {
+            let velAngle = Math.atan2(this.vel.y, this.vel.x);
+            // If moving very slow, assume facing target for sensor purposes
+            if(Vec.mag(this.vel) < 1) velAngle = Math.atan2(goal.y-this.pos.y, goal.x-this.pos.x);
+            
+            let rayAngle = velAngle + angle;
+            let dir = { x: Math.cos(rayAngle), y: Math.sin(rayAngle) };
+            
+            let closest = null;
+            let minDist = 140; // Detection Range
+
+            obstacles.forEach(obs => {
+                // Ray-Rect intersection
+                let lines = [
+                    {x1:obs.x, y1:obs.y, x2:obs.x, y2:obs.y+obs.h}, // Left
+                    {x1:obs.x+obs.w, y1:obs.y, x2:obs.x+obs.w, y2:obs.y+obs.h}, // Right
+                    {x1:obs.x, y1:obs.y, x2:obs.x+obs.w, y2:obs.y}, // Top
+                    {x1:obs.x, y1:obs.y+obs.h, x2:obs.x+obs.w, y2:obs.y+obs.h} // Bottom
+                ];
+
+                lines.forEach(l => {
+                    const x1=l.x1, y1=l.y1, x2=l.x2, y2=l.y2;
+                    const x3=this.pos.x, y3=this.pos.y, x4=this.pos.x+dir.x, y4=this.pos.y+dir.y;
+                    
+                    const den = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+                    if(den == 0) return;
+                    
+                    const t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / den;
+                    const u = -((x1-x2)*(y1-y3) - (y1-y2)*(x1-x3)) / den;
+                    
+                    if (t > 0 && t < 1 && u > 0) {
+                        let d = u; // distance
+                        if (d < minDist) {
+                            minDist = d;
+                            closest = { x: this.pos.x + u*dir.x, y: this.pos.y + u*dir.y, dist: d };
+                        }
+                    }
+                });
+            });
+
+            if (closest) {
+                if(closest.dist < closestDist) closestDist = closest.dist;
+                // Repulsion force R
+                let strength = Math.pow((140 - closest.dist) / 140, 2); // Quadratic falloff
+                sensation.x -= dir.x * strength;
+                sensation.y -= dir.y * strength;
+            }
+            return closest;
+        });
+        
+        // Normalize R and weight it
+        if (Vec.mag(sensation) > 0) sensation = Vec.norm(sensation);
+        return { vec: sensation, dist: closestDist };
+    }
+
+    update() {
+        // --- 1. SENSING ---
+        let T_real = Vec.norm(Vec.sub(goal, this.pos));
+        let sensorResult = this.sense(obstacles);
+        let R = sensorResult.vec;
+        let distToWall = sensorResult.dist;
+        
+        // --- 2. FRUSTRATION DYNAMICS ---
+        // How much progress are we making towards goal?
+        let progress = Vec.dot(this.vel, T_real);
+        let speed = Vec.mag(this.vel);
+        
+        // If we are locked, we only relax if we have a CLEAR SHOT at the goal
+        // i.e., no wall immediately in front
+        let clearShot = distToWall > 120; 
+
+        if (this.lateralLock) {
+            // IN LOCKED MODE:
+            // We stay frustrated until we have a clear shot OR we hit a map boundary
+            if (clearShot && Vec.dot(this.vel, T_real) > 0.5) {
+                // We see the goal and are moving toward it. Release Lock.
+                this.frustration -= 0.05;
+                if(this.frustration <= 0) {
+                    this.lateralLock = null;
+                    this.frustration = 0;
+                }
+            } else {
+                // Maintain high frustration to keep moving
+                this.frustration = Math.min(1.0, this.frustration + 0.01);
+            }
+        } else {
+            // IN SEEK MODE:
+            // If stopped or blocked, get angry
+            if (distToWall < 60 && progress < 1.0) {
+                this.frustration += 0.015;
+            } else {
+                this.frustration = Math.max(0, this.frustration - 0.01);
+            }
+            
+            // Trigger Lock
+            if (this.frustration > 0.90) {
+                // Decide direction once and STICK TO IT
+                // Cross product to find Tangent
+                let t1 = { x: -R.y, y: R.x };
+                let t2 = { x: R.y, y: -R.x };
+                
+                // Which tangent is closer to goal vector?
+                if (Vec.dot(t1, T_real) > Vec.dot(t2, T_real)) {
+                    this.lateralLock = t1;
+                } else {
+                    this.lateralLock = t2;
+                }
+            }
+        }
+        
+        // --- 3. PARAMETER & T-TRANSFORM ---
+        let T_effective = T_real;
+        
+        if (this.lateralLock) {
+            // TRANSFORM T:
+            // Ignore the real goal. The goal is now the ESCAPE VECTOR.
+            T_effective = this.lateralLock;
+            
+            // Phase 3: High pressure, Low inertia
+            this.k = 0.85; // Low friction to turn fast
+            this.m = 0.80; // High drive
+            
+            document.getElementById('ui-state').innerText = "LATERAL SOLVE (LOCKED)";
+            document.getElementById('ui-state').className = "val danger";
+        } 
+        else if (this.frustration > 0.3) {
+            // Phase 2: Agitated
+            this.k = 0.90;
+            this.m = 0.60;
+            document.getElementById('ui-state').innerText = "OBSTRUCTED";
+            document.getElementById('ui-state').className = "val warn";
+        } 
+        else {
+            // Phase 1: Flow
+            this.k = 0.94;
+            this.m = 0.45;
+            document.getElementById('ui-state').innerText = "SEEKING";
+            document.getElementById('ui-state').className = "val accent";
+        }
+
+        this.debugT = T_effective;
+
+        // --- 4. THE EQUATION ---
+        // F = k*V + m*(T_effective + R)
+        
+        // R is amplified if we are close to wall to prevent clipping
+        let R_force = Vec.mult(R, 3.5); 
+        
+        let Force = Vec.add(T_effective, R_force);
+        
+        let Fx = this.k * this.vel.x + this.m * Force.x;
+        let Fy = this.k * this.vel.y + this.m * Force.y;
+        
+        this.vel = { x: Fx, y: Fy };
+        
+        // Speed Cap
+        let maxS = this.lateralLock ? 7 : 5;
+        if(Vec.mag(this.vel) > maxS) this.vel = Vec.mult(Vec.norm(this.vel), maxS);
+        
+        this.pos = Vec.add(this.pos, this.vel);
+        
+        // --- 5. PHYSICS CLAMP ---
+        this.resolveCollisions(obstacles);
+    }
+
+    resolveCollisions(obstacles) {
+        obstacles.forEach(obs => {
+            let cx = Math.max(obs.x, Math.min(this.pos.x, obs.x + obs.w));
+            let cy = Math.max(obs.y, Math.min(this.pos.y, obs.y + obs.h));
+            let dist = Math.sqrt(Math.pow(this.pos.x - cx, 2) + Math.pow(this.pos.y - cy, 2));
+            
+            if (dist < this.radius) {
+                let overlap = this.radius - dist;
+                let nx = (this.pos.x - cx) / (dist || 1);
+                let ny = (this.pos.y - cy) / (dist || 1);
+                this.pos.x += nx * overlap;
+                this.pos.y += ny * overlap;
+                this.vel.x *= 0.5; // Bump friction
+                this.vel.y *= 0.5;
+            }
+        });
+        
+        // Screen bounds
+        if(this.pos.x < 0) this.pos.x = 0;
+        if(this.pos.y < 0) this.pos.y = 0;
+        if(this.pos.y > 500) this.pos.y = 500;
+    }
+
+    draw() {
+        // Rays
+        this.sensorData.forEach(hit => {
+            if(!hit) return;
+            ctx.strokeStyle = `rgba(255, 68, 102, ${0.1 + (this.frustration*0.3)})`;
+            ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y); ctx.lineTo(hit.x, hit.y); ctx.stroke();
+        });
+
+        // Body
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2);
+        let color = this.lateralLock ? '#ff4466' : (this.frustration > 0.3 ? '#ffaa00' : '#00d4aa');
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        // Debug Vectors
+        // T (Effective)
+        ctx.beginPath();
+        ctx.moveTo(this.pos.x, this.pos.y);
+        ctx.lineTo(this.pos.x + this.debugT.x*40, this.pos.y + this.debugT.y*40);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+
+// --- MAIN LOOP ---
+const agent = new Agent();
+
+function loop() {
+    ctx.clearRect(0, 0, 900, 500);
+
+    // Obstacles
+    ctx.fillStyle = "#111";
+    ctx.strokeStyle = "#333";
+    obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+    });
+
+    // Goal
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, 8, 0, Math.PI*2);
+    ctx.fillStyle = "#fff"; ctx.fill();
+    
+    // Ghost Line
+    ctx.beginPath(); ctx.moveTo(agent.pos.x, agent.pos.y); ctx.lineTo(goal.x, goal.y);
+    ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+
+    agent.update();
+    agent.draw();
+
+    // UI Updates
+    document.getElementById('ui-k').innerText = agent.k.toFixed(2);
+    document.getElementById('bar-k').style.width = (agent.k * 100) + "%";
+    document.getElementById('ui-m').innerText = agent.m.toFixed(2);
+    document.getElementById('bar-m').style.width = (agent.m * 50) + "%";
+    document.getElementById('ui-f').innerText = agent.frustration.toFixed(2);
+    document.getElementById('bar-f').style.width = (agent.frustration * 100) + "%";
+    
+    // Locked Indicator
+    let fBar = document.getElementById('bar-f');
+    if(agent.lateralLock) fBar.style.background = "#fff";
+    else fBar.style.background = "#ff4466";
+
+    requestAnimationFrame(loop);
+}
+
+// Inputs
+cvs.addEventListener('mousedown', e => {
+    let rect = cvs.getBoundingClientRect();
+    goal.x = e.clientX - rect.left;
+    goal.y = e.clientY - rect.top;
+});
+window.addEventListener('keydown', e => { if(e.code === 'Space') agent.reset(); });
+
+loop();
+</script>
+</body>
+</html>

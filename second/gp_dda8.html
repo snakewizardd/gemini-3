@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Liturgy of the Loop: DDA Generative</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=IM+Fell+English:ital@0;1&display=swap');
+
+    body { 
+        margin: 0; 
+        overflow: hidden; 
+        background: #050505; 
+        color: #888;
+        font-family: 'IM Fell English', serif;
+    }
+
+    canvas { display: block; }
+
+    #ui {
+        position: absolute;
+        bottom: 40px;
+        left: 40px;
+        pointer-events: none;
+        max-width: 400px;
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif;
+        font-size: 24px;
+        color: #fff;
+        margin: 0 0 10px 0;
+        letter-spacing: 0.1em;
+        text-shadow: 0 0 20px rgba(255,255,255,0.2);
+    }
+
+    .equation {
+        font-family: 'Cinzel', serif;
+        font-size: 16px;
+        color: #444;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #222;
+        padding-bottom: 10px;
+        display: inline-block;
+    }
+
+    .stat {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 16px;
+        text-shadow: 0 1px 2px #000;
+    }
+
+    .label { color: #666; font-style: italic; }
+    .val { color: #aaa; font-weight: bold; font-family: 'Courier New', monospace; }
+    
+    .state-indicator {
+        margin-top: 20px;
+        font-size: 20px;
+        color: #fff;
+        transition: color 1s;
+    }
+
+    /* Dynamic Colors for States */
+    .state-flow { color: #00d4aa; text-shadow: 0 0 15px #00d4aa; }
+    .state-inertia { color: #888; text-shadow: 0 0 10px #fff; }
+    .state-panic { color: #ff4466; text-shadow: 0 0 15px #ff4466; }
+    .state-grace { color: #cc00ff; text-shadow: 0 0 20px #cc00ff; }
+
+    #verse {
+        position: absolute;
+        top: 40px;
+        right: 40px;
+        text-align: right;
+        opacity: 0.6;
+        font-style: italic;
+        max-width: 300px;
+        line-height: 1.6;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>The Liturgy of the Loop</h1>
+    <div class="equation">Fₙ = P₀ · kFₙ₋₁ + m(T + R)</div>
+    
+    <div class="stat">
+        <span class="label">Viscosity (k) — The Past</span>
+        <span class="val" id="val-k">0.00</span>
+    </div>
+    <div class="stat">
+        <span class="label">Pressure (m) — The Urgency</span>
+        <span class="val" id="val-m">0.00</span>
+    </div>
+    <div class="stat">
+        <span class="label">Reflection (R) — The Subconscious</span>
+        <span class="val" id="val-r">0.00</span>
+    </div>
+    
+    <div id="state-text" class="state-indicator state-flow">STATE: FLOW</div>
+</div>
+
+<div id="verse">
+    "We confess that we are heavy with the past..."
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * THE DYNAMIC DECISION ALGORITHM: GENERATIVE IMPLEMENTATION
+ * * Instead of a maze, we model the "Physics of the Soul".
+ * The agent (Pilgrim) moves through a continuous field of "Reflection" (Perlin Noise).
+ * The user acts as "The Signal" (T).
+ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+let time = 0;
+
+// --- PERLIN NOISE (The Subconscious/Reflection R) ---
+// Simplified noise function for generating the internal vector field
+const noise = (function() {
+    const p = new Uint8Array(512);
+    const permutation = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+    for (let i=0; i < 256 ; i++) p[256+i] = p[i] = permutation[i];
+    function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    function lerp(t, a, b) { return a + t * (b - a); }
+    function grad(hash, x, y, z) {
+        const h = hash & 15;
+        const u = h<8 ? x : y, v = h<4 ? y : h==12||h==14 ? x : z;
+        return ((h&1) == 0 ? u : -u) + ((h&2) == 0 ? v : -v);
+    }
+    return {
+        perlin: function(x, y, z) {
+            const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+            x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+            const u = fade(x), v = fade(y), w = fade(z);
+            const A = p[X]+Y, AA = p[A]+Z, AB = p[A+1]+Z, B = p[X+1]+Y, BA = p[B]+Z, BB = p[B+1]+Z;
+            return lerp(w, lerp(v, lerp(u, grad(p[AA], x, y, z), grad(p[BA], x-1, y, z)), lerp(u, grad(p[AB], x, y-1, z), grad(p[BB], x-1, y-1, z))), lerp(v, lerp(u, grad(p[AA+1], x, y, z-1), grad(p[BA+1], x-1, y, z-1)), lerp(u, grad(p[AB+1], x, y-1, z-1), grad(p[BB+1], x-1, y-1, z-1))));
+        }
+    };
+})();
+
+// --- VECTORS ---
+class Vec {
+    constructor(x, y) { this.x = x; this.y = y; }
+    add(v) { this.x += v.x; this.y += v.y; return this; }
+    sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+    mult(s) { this.x *= s; this.y *= s; return this; }
+    mag() { return Math.sqrt(this.x*this.x + this.y*this.y); }
+    normalize() {
+        let m = this.mag();
+        if (m !== 0) { this.x /= m; this.y /= m; }
+        return this;
+    }
+    copy() { return new Vec(this.x, this.y); }
+    static sub(v1, v2) { return new Vec(v1.x - v2.x, v1.y - v2.y); }
+}
+
+// --- THE PILGRIM (Agent) ---
+class Pilgrim {
+    constructor() {
+        this.pos = new Vec(window.innerWidth/2, window.innerHeight/2);
+        this.vel = new Vec(0, 0); // F_n-1
+        
+        // DDA PARAMS
+        this.k = 0.9;  // Inertia/Viscosity
+        this.m = 0.5;  // Pressure/Gain
+        this.P0 = 1.0; // Identity strength
+        
+        this.history = [];
+        this.maxHistory = 200;
+        this.state = 'FLOW';
+        this.color = '#00d4aa';
+    }
+
+    update(target) {
+        // 1. CALCULATE T (Signal)
+        // Vector to target
+        let T = Vec.sub(target, this.pos);
+        let dist = T.mag();
+        T.normalize(); // Pure direction
+        
+        // 2. CALCULATE R (Reflection)
+        // Sample the Perlin Noise field at current position
+        // This is the "Subconscious" drift
+        let angle = noise.perlin(this.pos.x * 0.002, this.pos.y * 0.002, time * 0.1) * Math.PI * 4;
+        let R = new Vec(Math.cos(angle), Math.sin(angle));
+        
+        // 3. DYNAMIC PARAMETER ADJUSTMENT (The Metaphysics)
+        
+        // Harmony: How well does my velocity align with the target?
+        let alignment = (this.vel.x * T.x + this.vel.y * T.y) / (this.vel.mag() || 1);
+        
+        // DYNAMICS:
+        if (alignment > 0.8) {
+            // FLOW STATE: Aligned.
+            // Low resistance (k), Moderate pressure (m)
+            this.state = 'FLOW';
+            this.targetK = 0.85; 
+            this.targetM = 0.5;
+            this.color = '#00d4aa';
+            document.getElementById('verse').innerText = "Where the Internal Force meets the External Force in dance.";
+        } else if (dist < 100) {
+            // ARRIVAL / GRACE: Close to target.
+            // High resistance to stop jittering.
+            this.state = 'GRACE';
+            this.targetK = 0.50; // Let go of past momentum
+            this.targetM = 0.1; // Lower pressure
+            this.color = '#cc00ff';
+            document.getElementById('verse').innerText = "Grant us the Grace to lower our resistance.";
+        } else if (alignment < -0.5) {
+            // CONFLICT / INERTIA: Moving away from target.
+            // Viscosity spikes. We are "heavy with the past".
+            this.state = 'INERTIA';
+            this.targetK = 0.98; // Very hard to turn
+            this.targetM = 0.8; // High pressure to correct
+            this.color = '#888';
+            document.getElementById('verse').innerText = "We carry the burden of the previous moment.";
+        } else {
+            // SEARCHING / PANIC
+            // If we are moving fast but not aligned, pressure rises
+            this.state = 'PANIC';
+            this.targetK = 0.90;
+            this.targetM = 1.2; // High Gain (Desperate)
+            this.color = '#ff4466';
+            document.getElementById('verse').innerText = "Save us from the Panic, where the World becomes a deafening scream.";
+        }
+
+        // Smooth transition of parameters (Liturgy of adaptation)
+        this.k += (this.targetK - this.k) * 0.05;
+        this.m += (this.targetM - this.m) * 0.05;
+
+        // 4. THE EQUATION: F_n = k*F_n-1 + m(T + R)
+        
+        // Internal Force (Momentum)
+        let Internal = this.vel.copy().mult(this.k);
+        
+        // External Force (Signal + Reflection)
+        // R is weighted less than T, but it's always there
+        let CombinedSignal = T.copy().add(R.mult(0.5)); 
+        let External = CombinedSignal.mult(this.m);
+        
+        // New Velocity
+        let Fn = Internal.add(External);
+        
+        // Physics limit (Speed cap)
+        let speed = Fn.mag();
+        if (speed > 8) Fn.normalize().mult(8);
+        
+        this.vel = Fn;
+        this.pos.add(this.vel);
+        
+        // Trail Logic
+        this.history.push({x: this.pos.x, y: this.pos.y, k: this.k, m: this.m, state: this.state});
+        if (this.history.length > this.maxHistory) this.history.shift();
+
+        // Screen Wrap (The Infinite Void)
+        if(this.pos.x < 0) this.pos.x = width;
+        if(this.pos.x > width) this.pos.x = 0;
+        if(this.pos.y < 0) this.pos.y = height;
+        if(this.pos.y > height) this.pos.y = 0;
+    }
+
+    draw() {
+        if (this.history.length < 2) return;
+
+        // Draw The Trail (History)
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // We draw segments differently based on the 'k' (viscosity) at that moment
+        for (let i = 0; i < this.history.length - 1; i++) {
+            let p1 = this.history[i];
+            let p2 = this.history[i+1];
+            
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            
+            // Width represents 'm' (Pressure) - Thicker = More Urgent
+            ctx.lineWidth = Math.max(1, p1.m * 6);
+            
+            // Opacity fades into past
+            let alpha = (i / this.history.length);
+            
+            // Color mapping
+            let col = '#00d4aa'; // Flow
+            if (p1.state === 'INERTIA') col = '#666666';
+            if (p1.state === 'PANIC') col = '#ff4466';
+            if (p1.state === 'GRACE') col = '#cc00ff';
+            
+            ctx.strokeStyle = col;
+            ctx.globalAlpha = alpha;
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Draw Head (The "I AM")
+        ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y, 4, 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = this.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+// --- SETUP ---
+let pilgrim;
+let target = new Vec(0,0);
+let mouse = new Vec(0,0);
+
+function init() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    pilgrim = new Pilgrim();
+    target = new Vec(width/2, height/2);
+}
+
+// --- MAIN LOOP ---
+function loop() {
+    // Fade background (Trail retention)
+    ctx.fillStyle = 'rgba(5, 5, 8, 0.2)'; // Dark void with slight trails
+    ctx.fillRect(0, 0, width, height);
+    
+    time += 0.05;
+
+    // Update Target (T)
+    // T smoothly follows mouse
+    target.x += (mouse.x - target.x) * 0.1;
+    target.y += (mouse.y - target.y) * 0.1;
+
+    // Draw Target Signal
+    ctx.beginPath();
+    ctx.arc(target.x, target.y, 20 + Math.sin(time)*5, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Visualize the "Reflection" Field (Subconscious Background)
+    // We draw faint lines indicating the R vector field
+    /*
+    ctx.beginPath();
+    for (let x = 0; x < width; x += 100) {
+        for (let y = 0; y < height; y += 100) {
+             let angle = noise.perlin(x * 0.002, y * 0.002, time * 0.1) * Math.PI * 4;
+             ctx.moveTo(x, y);
+             ctx.lineTo(x + Math.cos(angle)*20, y + Math.sin(angle)*20);
+        }
+    }
+    ctx.strokeStyle = 'rgba(50, 50, 70, 0.1)';
+    ctx.stroke();
+    */
+
+    // Update Pilgrim
+    pilgrim.update(target);
+    pilgrim.draw();
+
+    // UI Updates
+    document.getElementById('val-k').innerText = pilgrim.k.toFixed(3);
+    document.getElementById('val-m').innerText = pilgrim.m.toFixed(3);
+    
+    // Estimate R magnitude for UI
+    let angle = noise.perlin(pilgrim.pos.x * 0.002, pilgrim.pos.y * 0.002, time * 0.1) * Math.PI * 4;
+    document.getElementById('val-r').innerText = Math.abs(Math.sin(angle)).toFixed(3); // Approximation of turbulence
+
+    let stateEl = document.getElementById('state-text');
+    stateEl.innerText = "STATE: " + pilgrim.state;
+    stateEl.className = "state-indicator state-" + pilgrim.state.toLowerCase();
+
+    requestAnimationFrame(loop);
+}
+
+// --- INPUTS ---
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+window.addEventListener('resize', init);
+
+init();
+loop();
+
+</script>
+</body>
+</html>

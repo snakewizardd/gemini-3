@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Singular Automata // Epiphany Restoration</title>
+<style>
+    body { background: #050508; color: #a0a0b0; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+    canvas { background: #0b0b10; border: 1px solid #1a1a24; box-shadow: 0 0 30px rgba(0,0,0,0.8); cursor: crosshair; }
+    
+    .hud-container {
+        width: 900px; display: flex; justify-content: space-between; margin-top: 15px; padding: 10px;
+        background: #0b0b10; border: 1px solid #1a1a24;
+    }
+    
+    .metric-group { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .label { font-size: 11px; opacity: 0.6; letter-spacing: 1px; }
+    .val { font-size: 16px; font-weight: bold; color: #e0e0f0; }
+    
+    .bar-bg { width: 100%; height: 4px; background: #222; margin-top: 4px; }
+    .bar-fill { height: 100%; transition: width 0.1s, background 0.2s; }
+    
+    .accent { color: #00d4aa; } 
+    .warn { color: #ffaa00; }   
+    .epiphany { color: #cc00ff; text-shadow: 0 0 10px #cc00ff; }  
+    
+    .legend { margin-top: 10px; font-size: 12px; display: flex; gap: 20px; opacity: 0.7; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="hud-container">
+    <div class="metric-group">
+        <span class="label">STATE</span>
+        <span class="val" id="ui-state">SEEKING</span>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">k (MEMORY)</span>
+        <span class="val accent" id="ui-k">0.94</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-k" style="background:#00d4aa; width:94%"></div></div>
+    </div>
+    
+    <div class="metric-group">
+        <span class="label">m (PRESSURE)</span>
+        <span class="val warn" id="ui-m">0.50</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-m" style="background:#ffaa00; width:50%"></div></div>
+    </div>
+
+    <div class="metric-group">
+        <span class="label">ENTROPY</span>
+        <span class="val danger" id="ui-f">0.00</span>
+        <div class="bar-bg"><div class="bar-fill" id="bar-f" style="background:#ff4466; width:0%"></div></div>
+    </div>
+</div>
+
+<canvas id="sim" width="900" height="500"></canvas>
+
+<div class="legend">
+    <span><div class="dot" style="background:#fff"></div>Goal (T)</span>
+    <span><div class="dot" style="background:#cc00ff"></div>Epiphany (New Path)</span>
+    <span><div class="dot" style="background:#00d4aa"></div>Velocity</span>
+</div>
+
+<script>
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+const W = 900, H = 500;
+
+const Vec = {
+    add: (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y }),
+    sub: (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y }),
+    mult: (v, s) => ({ x: v.x * s, y: v.y * s }),
+    mag: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+    norm: (v) => { let m = Math.sqrt(v.x * v.x + v.y * v.y); return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m}; },
+    dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y,
+    dist: (v1, v2) => Math.sqrt(Math.pow(v1.x-v2.x,2) + Math.pow(v1.y-v2.y,2))
+};
+
+// --- CONFIG ---
+const BASE_K = 0.94; 
+const BASE_M = 0.45;
+const SENSOR_RANGE = 250; 
+
+// --- WORLD ---
+let goal = { x: 800, y: 250 };
+const obstacles = [
+    { x: 350, y: 100, w: 40, h: 300 }, // Center Wall
+    { x: 200, y: 0, w: 40, h: 200 },   // Top Gate
+    { x: 200, y: 300, w: 40, h: 200 }, // Bottom Gate
+    { x: 600, y: 100, w: 40, h: 300 }  // Goalkeeper
+];
+
+// Screen Borders + Obstacles
+function getLines(obstacles) {
+    let lines = [];
+    obstacles.forEach(o => {
+        lines.push({x1:o.x, y1:o.y, x2:o.x, y2:o.y+o.h});
+        lines.push({x1:o.x+o.w, y1:o.y, x2:o.x+o.w, y2:o.y+o.h});
+        lines.push({x1:o.x, y1:o.y, x2:o.x+o.w, y2:o.y});
+        lines.push({x1:o.x, y1:o.y+o.h, x2:o.x+o.w, y2:o.y+o.h});
+    });
+    // The Cage (Hard Limits)
+    lines.push({x1:0, y1:0, x2:W, y2:0}); 
+    lines.push({x1:0, y1:H, x2:W, y2:H});
+    lines.push({x1:0, y1:0, x2:0, y2:H});
+    lines.push({x1:W, y1:0, x2:W, y2:H});
+    return lines;
+}
+
+class Agent {
+    constructor() { this.reset(); }
+    
+    reset() {
+        this.pos = { x: 100, y: 250 };
+        this.vel = { x: 0, y: 0 };
+        this.k = BASE_K; this.m = BASE_M;
+        this.frustration = 0;
+        this.radius = 12;
+        this.epiphanyTarget = null; 
+        
+        this.rays = [];
+        for(let i=0; i<360; i+=12) this.rays.push(i * (Math.PI/180));
+    }
+
+    scan(obstacles) {
+        let maxDist = -1;
+        let bestDir = {x:0, y:0};
+        let repulsions = {x:0, y:0};
+        let minDist = SENSOR_RANGE;
+        
+        let lines = getLines(obstacles);
+        this.hits = [];
+
+        this.rays.forEach(angle => {
+            let dir = { x: Math.cos(angle), y: Math.sin(angle) };
+            let dist = SENSOR_RANGE;
+            
+            lines.forEach(l => {
+                const den = (l.x1-l.x2)*(this.pos.y-(this.pos.y+dir.y)) - (l.y1-l.y2)*(this.pos.x-(this.pos.x+dir.x));
+                if(den !== 0) {
+                    const t = ((l.x1-this.pos.x)*(this.pos.y-(this.pos.y+dir.y)) - (l.y1-this.pos.y)*(this.pos.x-(this.pos.x+dir.x))) / den;
+                    const u = -((l.x1-l.x2)*(l.y1-this.pos.y) - (l.y1-l.y2)*(l.x1-this.pos.x)) / den;
+                    if (t > 0 && t < 1 && u > 0 && u < dist) dist = u;
+                }
+            });
+
+            this.hits.push({x: this.pos.x + dir.x*dist, y: this.pos.y + dir.y*dist});
+
+            // Fear (Repulsion) - Only close range
+            if(dist < 50) {
+                let force = Math.pow((50-dist)/50, 3);
+                repulsions.x -= dir.x * force;
+                repulsions.y -= dir.y * force;
+            }
+
+            // Brainstorming Score (Finding the deepest gap)
+            // We favor finding SPACE over finding the GOAL when scanning
+            if (dist > maxDist) {
+                maxDist = dist;
+                bestDir = dir;
+            }
+            if(dist < minDist) minDist = dist;
+        });
+
+        if(Vec.mag(repulsions) > 0) repulsions = Vec.norm(repulsions);
+        return { R: repulsions, gap: bestDir, distToWall: minDist, maxSpace: maxDist };
+    }
+
+    update() {
+        let scanData = this.scan(obstacles);
+        let T_real = Vec.norm(Vec.sub(goal, this.pos));
+        let distToGoal = Vec.dist(this.pos, goal);
+        
+        // --- ENTROPY BUILDUP ---
+        let speed = Vec.mag(this.vel);
+        let progress = Vec.dot(this.vel, T_real);
+        
+        // Frustration triggers if stuck OR if trapped in a local minimum (moving but not advancing)
+        let stuck = (speed < 1.0) || (scanData.distToWall < 60 && progress < 0.1);
+        
+        if (stuck && !this.epiphanyTarget) {
+            this.frustration = Math.min(1.0, this.frustration + 0.02);
+        } else if (this.epiphanyTarget) {
+            // While executing an epiphany, we cool down ONLY if moving fast
+            if (speed > 2.0) this.frustration = Math.max(0, this.frustration - 0.005);
+        } else {
+            this.frustration = Math.max(0, this.frustration - 0.05);
+        }
+
+        // --- THE BRAINSTORM (Phase Transition) ---
+        // When entropy (frustration) hits critical mass, we snap to the Best Gap.
+        if (this.frustration > 0.9 && !this.epiphanyTarget) {
+            this.epiphanyTarget = scanData.gap; // LOCK ON
+        }
+        
+        // Release the Epiphany if:
+        // 1. We are calm again (Entropy < 0)
+        // 2. We have a clear shot at the REAL goal
+        let clearShot = scanData.distToWall > 100;
+        let seesGoal = Vec.dot(T_real, this.vel) > 0.5;
+        
+        if (this.frustration <= 0 || (clearShot && seesGoal)) {
+            this.epiphanyTarget = null;
+        }
+
+        // --- DYNAMICS ---
+        let T_final = T_real;
+        let R_weight = 1.0;
+        let stateText = "FLOW";
+        let stateClass = "accent";
+
+        if (this.epiphanyTarget) {
+            // EPIPHANY MODE: Ignore Goal, Ignore Fear, Pursue Idea
+            T_final = this.epiphanyTarget; 
+            this.k = 0.90; // Precise
+            this.m = 0.90; // MAX DRIVE
+            R_weight = 0.2; // Suppress fear almost entirely
+            stateText = "EPIPHANY";
+            stateClass = "epiphany";
+        } else if (this.frustration > 0.4) {
+            // BRAINSTORMING MODE (Vibrating)
+            stateText = "BRAINSTORMING";
+            stateClass = "warn";
+            this.k = 0.80; // High frequency shaking
+            this.m = 0.60;
+            // Add chaos to T to simulate searching
+            T_final = Vec.add(T_final, {x: (Math.random()-0.5), y: (Math.random()-0.5)});
+        } else {
+            this.k = BASE_K;
+            this.m = BASE_M;
+        }
+
+        // --- EQUATION ---
+        let R = Vec.mult(scanData.R, 3.0 * R_weight);
+        let Force = Vec.add(T_final, R);
+        
+        let Fx = this.k * this.vel.x + this.m * Force.x;
+        let Fy = this.k * this.vel.y + this.m * Force.y;
+        
+        this.vel = { x: Fx, y: Fy };
+        
+        // Physics Caps
+        let maxS = this.epiphanyTarget ? 8 : 6;
+        if(Vec.mag(this.vel) > maxS) this.vel = Vec.mult(Vec.norm(this.vel), maxS);
+        this.pos = Vec.add(this.pos, this.vel);
+        
+        // Goal
+        if(distToGoal < 20) {
+            goal.x = 50 + Math.random()*800; goal.y = 50 + Math.random()*400;
+            // Prevent spawning inside walls
+            obstacles.forEach(o=>{ if(goal.x>o.x && goal.x<o.x+o.w && goal.y>o.y && goal.y<o.y+o.h) goal.x=450; });
+            this.frustration = 0; this.epiphanyTarget = null;
+        }
+        
+        this.resolveCollisions(obstacles);
+        this.debugTarget = this.epiphanyTarget;
+    }
+
+    resolveCollisions(obstacles) {
+        // Walls
+        obstacles.forEach(obs => {
+            let cx = Math.max(obs.x, Math.min(this.pos.x, obs.x + obs.w));
+            let cy = Math.max(obs.y, Math.min(this.pos.y, obs.y + obs.h));
+            let dist = Math.hypot(this.pos.x-cx, this.pos.y-cy);
+            if (dist < this.radius) {
+                let overlap = this.radius - dist;
+                let nx = (this.pos.x-cx)/(dist||1); let ny = (this.pos.y-cy)/(dist||1);
+                this.pos.x += nx*overlap; this.pos.y += ny*overlap;
+                this.vel.x *= 0.5; this.vel.y *= 0.5;
+            }
+        });
+        // Cage
+        if(this.pos.x < this.radius) { this.pos.x = this.radius; this.vel.x *= -0.5; }
+        if(this.pos.y < this.radius) { this.pos.y = this.radius; this.vel.y *= -0.5; }
+        if(this.pos.x > W-this.radius) { this.pos.x = W-this.radius; this.vel.x *= -0.5; }
+        if(this.pos.y > H-this.radius) { this.pos.y = H-this.radius; this.vel.y *= -0.5; }
+    }
+
+    draw() {
+        // Rays (Brainstorming Viz)
+        // Show scanning rays more intensely as frustration rises
+        if (this.frustration > 0.1) {
+            this.hits.forEach(hit => {
+                ctx.fillStyle = `rgba(200, 0, 255, ${this.frustration * 0.2})`; 
+                ctx.fillRect(hit.x, hit.y, 2, 2);
+            });
+        }
+
+        // Agent
+        ctx.beginPath(); ctx.arc(this.pos.x, this.pos.y, this.radius, 0, Math.PI*2);
+        let color = this.epiphanyTarget ? "#cc00ff" : (this.frustration > 0.5 ? "#ffaa00" : "#00d4aa");
+        ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 15; ctx.fill(); ctx.shadowBlur = 0;
+
+        // Epiphany Line
+        if(this.debugTarget) {
+            ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y);
+            ctx.lineTo(this.pos.x + this.debugTarget.x*200, this.pos.y + this.debugTarget.y*200);
+            ctx.strokeStyle = "#cc00ff"; ctx.lineWidth = 4; ctx.stroke();
+            
+            ctx.fillStyle = "#fff"; ctx.font = "12px monospace";
+            ctx.fillText("!!!", this.pos.x+10, this.pos.y-10);
+        }
+
+        // HUD
+        let sEl = document.getElementById('ui-state');
+        if(this.epiphanyTarget) { sEl.innerText = "EPIPHANY"; sEl.className = "val epiphany"; }
+        else if(this.frustration > 0.5) { sEl.innerText = "BRAINSTORMING"; sEl.className = "val warn"; }
+        else { sEl.innerText = "FLOW"; sEl.className = "val accent"; }
+        
+        document.getElementById('ui-f').innerText = this.frustration.toFixed(2);
+        document.getElementById('bar-f').style.width = (this.frustration*100)+"%";
+    }
+}
+
+const agent = new Agent();
+function loop() {
+    ctx.clearRect(0,0,900,500);
+    ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.strokeRect(0,0,900,500);
+    
+    ctx.fillStyle="#111"; ctx.strokeStyle="#333";
+    obstacles.forEach(o=>{ ctx.fillRect(o.x,o.y,o.w,o.h); ctx.strokeRect(o.x,o.y,o.w,o.h); });
+    
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, 8, 0, Math.PI*2);
+    ctx.fillStyle="#fff"; ctx.shadowColor="#fff"; ctx.shadowBlur=10; ctx.fill(); ctx.shadowBlur=0;
+    
+    ctx.beginPath(); ctx.moveTo(agent.pos.x, agent.pos.y); ctx.lineTo(goal.x, goal.y);
+    ctx.strokeStyle="rgba(255,255,255,0.05)"; ctx.stroke();
+
+    agent.update();
+    agent.draw();
+    requestAnimationFrame(loop);
+}
+
+cvs.addEventListener('mousedown', e => {
+    let r = cvs.getBoundingClientRect(); goal.x = e.clientX-r.left; goal.y = e.clientY-r.top;
+});
+window.addEventListener('keydown', e => { if(e.code==='Space') agent.reset(); });
+loop();
+</script>
+</body>
+</html>

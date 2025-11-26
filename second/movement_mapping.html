@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA v4: The Hallucination Engine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg: #030305;
+    --panel: #0a0a10;
+    --border: #1a1a24;
+    --text: #888899;
+    --truth: #ffffff;
+    --hallucination: #00f2ff;
+    --surprise: #ff0055;
+    --lidar: rgba(0, 242, 255, 0.1);
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+header {
+    padding: 15px 30px;
+    background: rgba(5, 5, 8, 0.95);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+h1 {
+    font-size: 16px;
+    letter-spacing: 0.1em;
+    color: #fff;
+    font-weight: 400;
+}
+
+.hud {
+    display: flex;
+    gap: 40px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+}
+
+.hud-item b { display: block; font-size: 18px; margin-bottom: 2px; }
+.hud-item span { text-transform: uppercase; opacity: 0.6; }
+
+main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--border);
+}
+
+.viewport {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+}
+
+.label {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.label.truth { background: rgba(255,255,255,0.1); color: var(--truth); }
+.label.mind { background: rgba(0, 242, 255, 0.1); color: var(--hallucination); }
+
+canvas { width: 100%; height: 100%; display: block; }
+
+#controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+}
+
+button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+button:hover { border-color: var(--hallucination); color: #fff; }
+
+.flash-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--surprise);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+}
+
+</style>
+</head>
+<body>
+
+<header>
+    <h1>DDA v4: THE HALLUCINATION ENGINE</h1>
+    <div class="hud">
+        <div class="hud-item" style="color: var(--hallucination)">
+            <b id="val-entropy">0.00</b>
+            <span>Map Entropy</span>
+        </div>
+        <div class="hud-item" style="color: var(--surprise)">
+            <b id="val-surprise">0.00</b>
+            <span>Free Energy (Surprise)</span>
+        </div>
+        <div class="hud-item" style="color: #fff">
+            <b id="val-dopamine">100%</b>
+            <span>Precision (Confidence)</span>
+        </div>
+    </div>
+</header>
+
+<main>
+    <!-- REALITY -->
+    <div class="viewport">
+        <div class="label truth">OBJECTIVE REALITY (HIDDEN)</div>
+        <canvas id="cvs-real"></canvas>
+    </div>
+
+    <!-- HALLUCINATION -->
+    <div class="viewport">
+        <div class="label mind">INTERNAL MODEL (BELIEF)</div>
+        <div class="flash-overlay" id="surprise-flash"></div>
+        <canvas id="cvs-mind"></canvas>
+    </div>
+</main>
+
+<div id="controls">
+    <button onclick="sim.reset()">REGENERATE WORLD</button>
+    <button onclick="sim.toggleDebug()">TOGGLE LIDAR RAYS</button>
+</div>
+
+<script>
+// ═════════════════════════════════════════════════════════════════════════
+// CONSTANTS & MATH
+// ═════════════════════════════════════════════════════════════════════════
+const GRID_SIZE = 40;
+const TILE = 20; // Will be dynamic based on screen
+const LIDAR_RAYS = 64;
+const LIDAR_RANGE = 250;
+const FOV = Math.PI * 1.5;
+
+// ═════════════════════════════════════════════════════════════════════════
+// THE BELIEF MATRIX (The Brain)
+// ═════════════════════════════════════════════════════════════════════════
+class BeliefMatrix {
+    constructor(w, h) {
+        this.w = w;
+        this.h = h;
+        // 0.5 = Unknown (High Entropy), 0.0 = Empty, 1.0 = Wall
+        this.grid = new Float32Array(w * h).fill(0.5); 
+        this.entropy = 0;
+    }
+
+    get(x, y) {
+        if (x < 0 || x >= this.w || y < 0 || y >= this.h) return 1.0; // Borders are walls
+        return this.grid[y * this.w + x];
+    }
+
+    update(x, y, value) {
+        if (x < 0 || x >= this.w || y < 0 || y >= this.h) return false;
+        const idx = y * this.w + x;
+        const oldVal = this.grid[idx];
+        
+        // Bayesian update (simplified): Move towards observation
+        // If we see '0' (Empty), drift towards 0. If '1', drift to 1.
+        const learnRate = 0.3; 
+        this.grid[idx] = oldVal + (value - oldVal) * learnRate;
+        
+        // Return "Surprise" magnitude (how wrong were we?)
+        return Math.abs(value - oldVal);
+    }
+
+    calculateTotalEntropy() {
+        let e = 0;
+        for(let i=0; i<this.grid.length; i++) {
+            // Shannon Entropy: Highest when p=0.5
+            const p = this.grid[i];
+            // Simple variance proxy for entropy
+            e += 1 - Math.abs((p - 0.5) * 2); 
+        }
+        return e / this.grid.length;
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// THE AGENT (Hierarchical Predictive Coding)
+// ═════════════════════════════════════════════════════════════════════════
+class Agent {
+    constructor(x, y, belief) {
+        this.pos = {x, y};
+        this.angle = 0;
+        this.belief = belief;
+        
+        // Mental State
+        this.surprise = 0;
+        this.dopamine = 1.0; // Confidence/Precision
+        
+        // Ghosts
+        this.ghosts = [];
+        this.bestTarget = {x, y};
+    }
+
+    scan(realWorld) {
+        let localSurprise = 0;
+
+        // LIDAR SENSORS (Sensory Layer)
+        for (let i = 0; i < LIDAR_RAYS; i++) {
+            const theta = this.angle - (FOV/2) + (FOV/LIDAR_RAYS) * i;
+            const dx = Math.cos(theta);
+            const dy = Math.sin(theta);
+            
+            let dist = 0;
+            let hit = false;
+            
+            // Raymarch
+            while(dist < LIDAR_RANGE) {
+                dist += 5; // Step size
+                const rx = this.pos.x + dx * dist;
+                const ry = this.pos.y + dy * dist;
+                
+                // Map to Grid Coords
+                const gx = Math.floor(rx / sim.scaleX);
+                const gy = Math.floor(ry / sim.scaleY);
+
+                // Check Reality
+                const isWall = realWorld.isWall(gx, gy);
+                
+                if (isWall) {
+                    // SENSORY PREDICTION ERROR
+                    // We update our belief map. If we thought it was empty (0) and it's a wall (1), HUGE surprise.
+                    localSurprise += this.belief.update(gx, gy, 1.0);
+                    hit = true;
+                    break;
+                } else {
+                    // Update belief that this space is empty
+                    this.belief.update(gx, gy, 0.0);
+                }
+            }
+        }
+        
+        // Decay surprise, add new shock
+        this.surprise = this.surprise * 0.8 + localSurprise * 0.5;
+        
+        // Dopamine Modulation: High surprise = Low Dopamine (Confusion)
+        // We recover confidence slowly
+        const targetDopamine = Math.max(0.1, 1.0 - this.surprise * 5);
+        this.dopamine += (targetDopamine - this.dopamine) * 0.1;
+    }
+
+    think(goal) {
+        // GHOST LAYER (Planning)
+        // Ghosts navigate the BELIEF MAP, not reality.
+        
+        this.ghosts = [];
+        let bestScore = -Infinity;
+        let bestMove = {x:0, y:0};
+
+        const NUM_GHOSTS = 40;
+        const LOOKAHEAD = 10;
+
+        for(let i=0; i<NUM_GHOSTS; i++) {
+            let gx = this.pos.x;
+            let gy = this.pos.y;
+            let score = 0;
+            
+            // Initial random direction weighted by goal
+            let dir = Math.atan2(goal.y - gy, goal.x - gx);
+            dir += (Math.random() - 0.5) * (3.0 * (1.1 - this.dopamine)); // Low dopamine = erratic panic ghosts
+
+            for(let t=0; t<LOOKAHEAD; t++) {
+                const vx = Math.cos(dir) * 8;
+                const vy = Math.sin(dir) * 8;
+                gx += vx;
+                gy += vy;
+                
+                const gridX = Math.floor(gx / sim.scaleX);
+                const gridY = Math.floor(gy / sim.scaleY);
+                
+                // Query Internal Model
+                const pWall = this.belief.get(gridX, gridY);
+                
+                // Epistemic Drive: We like p=0.5 (Unknown) areas if we are curious?
+                // Actually, for navigation, we hate walls (p=1).
+                
+                if(pWall > 0.6) {
+                    score -= 100; // Predicted collision
+                    break;
+                }
+                
+                // Pragmatic Value: Distance to goal
+                const dist = Math.hypot(goal.x - gx, goal.y - gy);
+                score -= dist * 0.1;
+
+                // Exploration Bonus (Simplified Epistemic)
+                // If p is 0.5, we are somewhat drawn to it to resolve entropy
+                if(pWall > 0.4 && pWall < 0.6) score += 5;
+            }
+            
+            // Visualize
+            this.ghosts.push({x: gx, y: gy, score}); // Just end point for simplicity in drawing
+
+            if(score > bestScore) {
+                bestScore = score;
+                bestMove = {x: Math.cos(dir), y: Math.sin(dir)};
+            }
+        }
+
+        // Move Agent
+        // Velocity scales with Dopamine (Confidence). If confused, we slow down.
+        const speed = 3 * this.dopamine;
+        
+        // Basic physics check against REALITY (The body can't walk through walls even if the mind thinks it can)
+        const nextX = this.pos.x + bestMove.x * speed;
+        const nextY = this.pos.y + bestMove.y * speed;
+        
+        const gX = Math.floor(nextX / sim.scaleX);
+        const gY = Math.floor(nextY / sim.scaleY);
+        
+        if(!sim.world.isWall(gX, gY)) {
+            this.pos.x = nextX;
+            this.pos.y = nextY;
+            // Update facing angle for Lidar
+            this.angle = Math.atan2(bestMove.y, bestMove.x);
+        } else {
+            // Physical collision (Unexpected)
+            this.surprise += 0.5; // Bump!
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ═════════════════════════════════════════════════════════════════════════
+class Simulation {
+    constructor() {
+        this.cvsReal = document.getElementById('cvs-real');
+        this.ctxReal = this.cvsReal.getContext('2d');
+        this.cvsMind = document.getElementById('cvs-mind');
+        this.ctxMind = this.cvsMind.getContext('2d');
+        
+        this.resize();
+        this.world = null;
+        this.agent = null;
+        this.debugLidar = true;
+        
+        this.reset();
+        this.loop = this.loop.bind(this);
+        requestAnimationFrame(this.loop);
+    }
+
+    resize() {
+        const p = this.cvsReal.parentElement;
+        this.w = p.offsetWidth;
+        this.h = p.offsetHeight;
+        this.cvsReal.width = this.w;
+        this.cvsReal.height = this.h;
+        this.cvsMind.width = this.w;
+        this.cvsMind.height = this.h;
+        
+        this.scaleX = this.w / GRID_SIZE;
+        this.scaleY = this.h / GRID_SIZE;
+    }
+
+    reset() {
+        // Generate World (Cellular Automata Cave)
+        this.world = {
+            grid: [],
+            isWall: function(x,y) { 
+                if(x<0||x>=GRID_SIZE||y<0||y>=GRID_SIZE) return true;
+                return this.grid[y*GRID_SIZE+x] === 1;
+            }
+        };
+        
+        // Random Noise
+        for(let i=0; i<GRID_SIZE*GRID_SIZE; i++) {
+            this.world.grid.push(Math.random() < 0.4 ? 1 : 0);
+        }
+        
+        // Smoothing
+        for(let k=0; k<4; k++) {
+            const newGrid = [...this.world.grid];
+            for(let y=0; y<GRID_SIZE; y++) {
+                for(let x=0; x<GRID_SIZE; x++) {
+                    let n = 0;
+                    for(let dy=-1; dy<=1; dy++) {
+                        for(let dx=-1; dx<=1; dx++) {
+                            const nx=x+dx, ny=y+dy;
+                            if(nx>=0 && nx<GRID_SIZE && ny>=0 && ny<GRID_SIZE) {
+                                if(this.world.grid[ny*GRID_SIZE+nx]) n++;
+                            } else { n++; }
+                        }
+                    }
+                    if(n > 4) newGrid[y*GRID_SIZE+x] = 1;
+                    else if(n < 4) newGrid[y*GRID_SIZE+x] = 0;
+                }
+            }
+            this.world.grid = newGrid;
+        }
+
+        // Find open spot for agent and goal
+        let ax, ay, gx, gy;
+        do { ax = Math.floor(Math.random()*GRID_SIZE); ay = Math.floor(Math.random()*GRID_SIZE); } 
+        while(this.world.grid[ay*GRID_SIZE+ax]);
+        
+        do { gx = Math.floor(Math.random()*GRID_SIZE); gy = Math.floor(Math.random()*GRID_SIZE); } 
+        while(this.world.grid[gy*GRID_SIZE+gx] || Math.abs(gx-ax) < 10);
+        
+        this.goal = {x: gx * this.scaleX + this.scaleX/2, y: gy * this.scaleY + this.scaleY/2};
+        
+        // Init Agent with EMPTY belief matrix
+        const belief = new BeliefMatrix(GRID_SIZE, GRID_SIZE);
+        this.agent = new Agent(ax * this.scaleX, ay * this.scaleY, belief);
+    }
+
+    toggleDebug() { this.debugLidar = !this.debugLidar; }
+
+    update() {
+        this.agent.scan(this.world);
+        this.agent.think(this.goal);
+
+        // Update UI
+        document.getElementById('val-entropy').innerText = this.agent.belief.calculateTotalEntropy().toFixed(2);
+        document.getElementById('val-surprise').innerText = this.agent.surprise.toFixed(3);
+        document.getElementById('val-dopamine').innerText = Math.floor(this.agent.dopamine * 100) + "%";
+        
+        const flash = document.getElementById('surprise-flash');
+        flash.style.opacity = Math.min(0.8, this.agent.surprise * 2);
+    }
+
+    draw() {
+        // 1. DRAW REALITY
+        const cr = this.ctxReal;
+        cr.fillStyle = '#000';
+        cr.fillRect(0,0,this.w,this.h);
+        
+        // Walls
+        cr.fillStyle = '#fff';
+        for(let y=0; y<GRID_SIZE; y++) {
+            for(let x=0; x<GRID_SIZE; x++) {
+                if(this.world.grid[y*GRID_SIZE+x]) {
+                    cr.fillRect(x*this.scaleX, y*this.scaleY, this.scaleX, this.scaleY);
+                }
+            }
+        }
+        
+        // Goal
+        cr.fillStyle = '#0f0';
+        cr.beginPath(); cr.arc(this.goal.x, this.goal.y, 8, 0, Math.PI*2); cr.fill();
+
+        // Agent Body
+        cr.fillStyle = '#ff0055';
+        cr.beginPath(); cr.arc(this.agent.pos.x, this.agent.pos.y, 6, 0, Math.PI*2); cr.fill();
+
+        // 2. DRAW HALLUCINATION (BELIEF)
+        const cm = this.ctxMind;
+        cm.fillStyle = '#030305';
+        cm.fillRect(0,0,this.w,this.h);
+        
+        for(let y=0; y<GRID_SIZE; y++) {
+            for(let x=0; x<GRID_SIZE; x++) {
+                const p = this.agent.belief.get(x,y);
+                const px = x*this.scaleX, py = y*this.scaleY;
+                
+                // Visualization: 
+                // 0.5 = Dark Grey (Fog)
+                // 1.0 = Red (Wall)
+                // 0.0 = Black (Empty)
+                
+                if(p > 0.6) {
+                    // Believed Wall
+                    const alpha = (p - 0.5) * 2;
+                    cm.fillStyle = `rgba(255, 0, 85, ${alpha})`;
+                    cm.fillRect(px, py, this.scaleX, this.scaleY);
+                } else if (p < 0.4) {
+                    // Believed Empty (Safe)
+                    // We draw nothing (black), or maybe faint blue grid
+                    cm.strokeStyle = `rgba(0, 242, 255, 0.1)`;
+                    cm.strokeRect(px, py, this.scaleX, this.scaleY);
+                } else {
+                    // Fog (Entropy)
+                    cm.fillStyle = `rgba(30, 30, 40, 1)`;
+                    cm.fillRect(px, py, this.scaleX, this.scaleY);
+                    
+                    // Draw little question marks or noise for style? No, clean is better.
+                }
+            }
+        }
+        
+        // Draw Ghosts (The thought process)
+        this.agent.ghosts.forEach(g => {
+            cm.strokeStyle = 'rgba(0, 242, 255, 0.2)';
+            cm.beginPath();
+            cm.moveTo(this.agent.pos.x, this.agent.pos.y);
+            cm.lineTo(g.x, g.y);
+            cm.stroke();
+        });
+
+        // Draw Lidar on Mind View (Perception)
+        if(this.debugLidar) {
+            cm.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            for (let i = 0; i < LIDAR_RAYS; i++) {
+                const theta = this.agent.angle - (FOV/2) + (FOV/LIDAR_RAYS) * i;
+                cm.beginPath();
+                cm.moveTo(this.agent.pos.x, this.agent.pos.y);
+                cm.lineTo(this.agent.pos.x + Math.cos(theta)*100, this.agent.pos.y + Math.sin(theta)*100);
+                cm.stroke();
+            }
+        }
+        
+        // Draw Agent in Mind
+        cm.fillStyle = '#00f2ff';
+        cm.beginPath(); cm.arc(this.agent.pos.x, this.agent.pos.y, 6, 0, Math.PI*2); cm.fill();
+        
+        // Draw Goal in Mind (Assume agent knows where goal is relative to self)
+        cm.fillStyle = 'rgba(0, 255, 0, 0.5)';
+        cm.beginPath(); cm.arc(this.goal.x, this.goal.y, 8, 0, Math.PI*2); cm.fill();
+    }
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(this.loop);
+    }
+}
+
+const sim = new Simulation();
+window.onresize = () => sim.resize();
+
+</script>
+</body>
+</html>
