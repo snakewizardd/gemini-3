@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Theseus Protocol</title>
+<style>
+    body { background: #000; margin: 0; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; }
+    
+    #ui {
+        position: absolute; top: 20px; left: 20px;
+        color: #0f0; font-weight: bold;
+        background: rgba(0, 20, 0, 0.8);
+        padding: 10px; border: 1px solid #0f0;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <div>THESEUS PROTOCOL</div>
+    <div id="status" style="color:#fff">CALCULATING FLOW...</div>
+</div>
+
+<canvas id="sim"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE DDA DECISION ENGINE
+// ═══════════════════════════════════════════════════════════════
+const Brain = {
+    P0: { x: 1, y: 1 }, // Target Direction (Bottom Right)
+    k: 0.5,             // Inertia (Momentum bias)
+    lastDir: { x: 0, y: 0 },
+
+    decide: function(x, y, validMoves, heatMap, w, h) {
+        let bestDir = null;
+        let lowestPressure = 999999;
+
+        // 1. Calculate Global Pull (P0)
+        // Normalized vector to exit
+        const dx = (w - 1) - x;
+        const dy = (h - 1) - y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const p0x = dist > 0 ? dx/dist : 0;
+        const p0y = dist > 0 ? dy/dist : 0;
+
+        // Evaluate all valid moves
+        for (let move of validMoves) {
+            const nx = x + move.x;
+            const ny = y + move.y;
+            
+            // A. PRESSURE (m)
+            // The heat of the target tile.
+            // High heat = We've been there = High Pressure to avoid.
+            const tileHeat = heatMap[ny][nx];
+            
+            // B. ALIGNMENT (P0)
+            // Dot product with goal vector. Higher is better.
+            // We invert it because we are minimizing "Cost/Pressure"
+            const alignment = (move.x * p0x) + (move.y * p0y);
+            const goalCost = 1.0 - alignment; // 0.0 = Perfect alignment, 2.0 = Opposite
+            
+            // C. INERTIA (k)
+            // Did we just come from the opposite direction?
+            // We prefer to keep going straight.
+            let inertiaCost = 0;
+            if (this.lastDir.x !== 0 || this.lastDir.y !== 0) {
+                if (move.x === this.lastDir.x && move.y === this.lastDir.y) inertiaCost = -0.5; // Bonus for straight
+                else if (move.x === -this.lastDir.x && move.y === -this.lastDir.y) inertiaCost = 2.0; // Penalty for U-turn
+            }
+
+            // THE EQUATION
+            // Total Pressure = Heat + (Goal * Weight) + Inertia
+            // If Heat is 0 (Unvisited), it dominates.
+            // If all Heat > 0, Goal & Inertia break ties.
+            
+            const totalPressure = (tileHeat * 10.0) + (goalCost * 2.0) + (inertiaCost * this.k);
+
+            if (totalPressure < lowestPressure) {
+                lowestPressure = totalPressure;
+                bestDir = move;
+            }
+        }
+
+        if (bestDir) {
+            this.lastDir = bestDir;
+        }
+        return bestDir;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. MAZE GENERATION (Recursive Backtracker)
+// ═══════════════════════════════════════════════════════════════
+const TILE = 20;
+let COLS, ROWS;
+let Grid = []; // 1 = Wall, 0 = Path
+let Heat = []; // How many times visited
+
+function initMaze() {
+    Grid = [];
+    Heat = [];
+    for(let y=0; y<ROWS; y++) {
+        let r = [];
+        let h = [];
+        for(let x=0; x<COLS; x++) {
+            r.push(1); // Walls everywhere
+            h.push(0);
+        }
+        Grid.push(r);
+        Heat.push(h);
+    }
+
+    // Carve
+    let stack = [{x: 1, y: 1}];
+    Grid[1][1] = 0;
+
+    while(stack.length > 0) {
+        let cur = stack[stack.length-1];
+        let neighbors = [];
+        // Check 2 steps away
+        [[0,-2],[0,2],[-2,0],[2,0]].forEach(d => {
+            let nx = cur.x + d[0];
+            let ny = cur.y + d[1];
+            if(nx > 0 && nx < COLS-1 && ny > 0 && ny < ROWS-1 && Grid[ny][nx] === 1) {
+                neighbors.push({x:nx, y:ny, dx:d[0]/2, dy:d[1]/2});
+            }
+        });
+
+        if(neighbors.length > 0) {
+            let next = neighbors[Math.floor(Math.random()*neighbors.length)];
+            Grid[next.y][next.x] = 0; // Cell
+            Grid[cur.y + next.dy][cur.x + next.dx] = 0; // Wall between
+            stack.push({x: next.x, y: next.y});
+        } else {
+            stack.pop();
+        }
+    }
+    
+    // Ensure Exit
+    Grid[ROWS-2][COLS-2] = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. AGENT RUNTIME
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+
+let ax = 1, ay = 1; // Agent Pos
+let path = [{x:1, y:1}];
+let solved = false;
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    COLS = Math.floor(canvas.width / TILE);
+    ROWS = Math.floor(canvas.height / TILE);
+    if(COLS % 2 === 0) COLS--; 
+    if(ROWS % 2 === 0) ROWS--;
+    reset();
+}
+window.addEventListener('resize', resize);
+
+function reset() {
+    initMaze();
+    ax = 1; ay = 1;
+    Brain.lastDir = {x:0, y:0};
+    path = [{x:1, y:1}];
+    solved = false;
+    // Warm start heat
+    Heat[1][1] = 1;
+}
+
+function step() {
+    if (solved) {
+        if (Math.random() < 0.05) reset(); // Auto restart
+        return;
+    }
+
+    // 1. Get Valid Moves
+    let moves = [];
+    [[0,-1],[0,1],[-1,0],[1,0]].forEach(d => {
+        if (Grid[ay+d[1]][ax+d[0]] === 0) moves.push({x:d[0], y:d[1]});
+    });
+
+    // 2. Brain Decide
+    // This is where DDA happens
+    let move = Brain.decide(ax, ay, moves, Heat, COLS, ROWS);
+
+    // 3. Apply
+    if (move) {
+        ax += move.x;
+        ay += move.y;
+        
+        // Increase Heat (Pressure)
+        // We add more heat if we are backtracking to really force us out of dead ends
+        Heat[ay][ax] += 1;
+        path.push({x:ax, y:ay});
+        
+        // Win?
+        if (ax === COLS-2 && ay === ROWS-2) {
+            solved = true;
+            document.getElementById('status').innerText = "OPTIMAL PATH FOUND";
+        }
+    } else {
+        // Should never happen in a perfect maze unless boxed in
+        reset();
+    }
+}
+
+function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Maze & Heat
+    for(let y=0; y<ROWS; y++) {
+        for(let x=0; x<COLS; x++) {
+            if (Grid[y][x] === 1) {
+                // Wall
+                ctx.fillStyle = '#111';
+                ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+            } else {
+                // Path - Color by Heat (Pressure)
+                // Black = Unvisited (Fresh Air)
+                // Red = High Heat (Dead End / Backtracked)
+                const h = Heat[y][x];
+                if (h > 0) {
+                    // Visualize the "Pressure"
+                    const intensity = Math.min(1, h * 0.3);
+                    ctx.fillStyle = `rgba(255, 0, 0, ${intensity * 0.6})`;
+                    ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
+                }
+            }
+        }
+    }
+
+    // Draw Path
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    // Only draw the "Flow" - optimize visuals by only drawing last 50 or effective path?
+    // Let's draw the full history to show the struggle
+    for(let i=0; i<path.length; i++) {
+        const p = path[i];
+        const px = p.x * TILE + TILE/2;
+        const py = p.y * TILE + TILE/2;
+        if (i===0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Draw Agent
+    const px = ax * TILE + TILE/2;
+    const py = ay * TILE + TILE/2;
+    
+    ctx.fillStyle = '#fff';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#fff';
+    ctx.beginPath(); ctx.arc(px, py, TILE/3, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Goal
+    ctx.fillStyle = '#00f';
+    ctx.fillRect((COLS-2)*TILE, (ROWS-2)*TILE, TILE, TILE);
+}
+
+function loop() {
+    // Speed: 5 steps per frame
+    for(let i=0; i<5; i++) step();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+resize();
+loop();
+
+</script>
+</body>
+</html>
