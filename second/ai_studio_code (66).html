@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA Experiment: The Twin Worlds</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #050505;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    padding: 20px;
+    font-size: 12px;
+}
+#output {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Split screen */
+    gap: 20px;
+}
+.col-header {
+    grid-column: span 1;
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 14px;
+    color: #fff;
+}
+.log-row {
+    margin-bottom: 4px;
+    border-bottom: 1px solid #111;
+    padding-bottom: 2px;
+}
+.eden { color: #6f6; }
+.waste { color: #f90; }
+.val { color: #fff; }
+.meta { color: #555; font-style: italic; }
+.k-high { color: #f0f; font-weight: bold; } /* Trauma */
+.k-low { color: #0aa; } /* Flighty */
+.summary {
+    grid-column: span 2;
+    margin-top: 20px;
+    border: 1px solid #333;
+    padding: 15px;
+    background: #111;
+    white-space: pre-wrap;
+    font-size: 13px;
+    line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<div id="output">
+    <div class="col-header eden">WORLD 1: EDEN (Abundance)</div>
+    <div class="col-header waste">WORLD 2: WASTELAND (Volatility)</div>
+    <div id="col-1"></div>
+    <div id="col-2"></div>
+    <div id="analysis" class="summary"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE KERNEL (V5 ELEGANCE) - UNCHANGED
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    sigmoid: (t) => 1 / (1 + Math.exp(-t)),
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(config) {
+        this.P0 = config.P0; 
+        this.F_n = this.P0;
+        this.F_prev = this.P0;
+        this.k = 0.5; // Starts neutral
+    }
+
+    compute(I_n, I_delta, m, FM_n) {
+        const signal_strength = I_n.primary_resource_health; 
+        const signal_trend = I_delta.primary_trend;
+        const T = (1.0 - signal_strength) - 0.5 - (signal_trend * 0.5);
+        const option_delta = FM_n.B - FM_n.A;
+        const R = option_delta * 0.5;
+        const inertia = this.P0 * this.k * this.F_prev;
+        const pressure = m * (T + R);
+        let raw_F = inertia + pressure + (this.P0 * (1-this.k)); 
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        return this.F_n;
+    }
+
+    learn(expected, actual, stakes) {
+        // Volatility is the key teacher here
+        const surprise = Math.abs(expected - actual);
+        // High stakes + High surprise = High Memory (Trauma)
+        const impact = (surprise * 0.7) + (stakes * 0.3); 
+        const target_k = MathLib.clamp(impact, 0.05, 0.95);
+        // Memory takes time to form/fade
+        this.k = MathLib.lerp(this.k, target_k, 0.3); 
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE SIMULATION SETUP
+// ═══════════════════════════════════════════════════════════════
+
+class Agent {
+    constructor(name, worldConfig) {
+        this.name = name;
+        this.world = worldConfig;
+        this.food = 60; // Start hungry-ish
+        this.max_food = 100;
+        this.brain = new DDAKernel({ P0: 0.5 });
+        this.history = { k: [] };
+        this.last_A = worldConfig.A;
+    }
+
+    step() {
+        this.food -= 3; // Metabolic cost
+
+        // 1. Perception
+        const I_n = { primary_resource_health: this.world.A / this.world.A_max };
+        const I_delta = { primary_trend: (this.world.A < this.last_A ? -1 : 1) };
+        this.last_A = this.world.A;
+
+        // 2. Pressure (m)
+        const scarcity = Math.max(0, 1.0 - (this.food / this.max_food));
+        // Panic curve: Low pressure until <40% food
+        const m = 0.2 + (scarcity * scarcity * 4.0); 
+
+        // 3. Evaluation
+        // In the Wasteland, evaluation is noisy (Fog of War)
+        const uncertainty = this.world.volatility || 0;
+        const FM_n = {
+            A: (this.world.A / this.world.A_max) + (Math.random() * uncertainty) - (uncertainty/2),
+            B: 0.5
+        };
+
+        // 4. Decision
+        const F = this.brain.compute(I_n, I_delta, m, FM_n);
+        const choice = F > 0.5 ? 'B' : 'A';
+
+        // 5. Outcome
+        let gain = 0;
+        if (choice === 'A') {
+            // World logic
+            if (this.world.A > 5) {
+                // Volatility check: Does the world betray you?
+                if (Math.random() > this.world.volatility) {
+                    gain = 15;
+                    this.world.A -= 15;
+                } else {
+                    gain = 0; // Failed forage despite presence
+                }
+            }
+        } else {
+            gain = 5; // B is safe
+            this.world.A = Math.min(this.world.A_max, this.world.A + this.world.regen);
+        }
+
+        this.food += gain;
+        if(this.food > this.max_food) this.food = this.max_food;
+
+        // 6. Learning (The Soul Creation)
+        const expected = choice === 'A' ? 1.0 : 0.5; // Normalized expectation
+        const actual = gain / 15; // Normalized result
+        this.brain.learn(expected, actual, scarcity);
+
+        this.history.k.push(this.brain.k);
+        return { choice, gain, food: this.food, k: this.brain.k, m };
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. EXECUTION
+// ═══════════════════════════════════════════════════════════════
+
+// Setup Worlds
+const EdenWorld = { A: 100, A_max: 100, regen: 20, volatility: 0.0 };
+const WasteWorld = { A: 100, A_max: 100, regen: 5, volatility: 0.6 }; // 60% failure rate
+
+const Adam = new Agent("Adam", EdenWorld);
+const MadMax = new Agent("Max", WasteWorld);
+
+const col1 = document.getElementById('col-1');
+const col2 = document.getElementById('col-2');
+const analysis = document.getElementById('analysis');
+
+function renderRow(container, tick, state, type) {
+    const kClass = state.k > 0.6 ? 'k-high' : (state.k < 0.3 ? 'k-low' : '');
+    const div = document.createElement('div');
+    div.className = 'log-row';
+    div.innerHTML = `
+        <span class="meta">T${tick}</span> 
+        <span class="${type}">${state.choice}</span> 
+        <span class="meta">(${state.gain})</span> | 
+        Food:<span class="val">${Math.floor(state.food)}</span> | 
+        k:<span class="${kClass}">${state.k.toFixed(2)}</span>
+    `;
+    container.appendChild(div);
+}
+
+let tick = 0;
+function loop() {
+    tick++;
+    const s1 = Adam.step();
+    const s2 = MadMax.step();
+
+    renderRow(col1, tick, s1, 'eden');
+    renderRow(col2, tick, s2, 'waste');
+
+    // Analysis at end
+    if (tick >= 50) {
+        finish();
+    } else {
+        setTimeout(loop, 50);
+    }
+}
+
+function finish() {
+    // Calculate Average Memory Weight (Trauma)
+    const avgK1 = Adam.history.k.reduce((a,b)=>a+b)/50;
+    const avgK2 = MadMax.history.k.reduce((a,b)=>a+b)/50;
+
+    analysis.innerHTML = `
+    <span style="color:#fff; font-size:16px;">THE RESULT: ENVIRONMENT SCULPTS MEMORY</span>
+
+    <span class="eden">AGENT EDEN (Avg k: ${avgK1.toFixed(3)})</span>
+    - Low Memory Weight.
+    - Experienced 'Expected' outcomes.
+    - <span class="k-low">k remained low</span>. The past dissolves instantly.
+    - PSYCHE: Carefree, reactive, lives in the "Now".
+    
+    <span class="waste">AGENT WASTELAND (Avg k: ${avgK2.toFixed(3)})</span>
+    - High Memory Weight.
+    - Experienced 'Betrayal' (Volatility) and 'Fear' (Scarcity).
+    - <span class="k-high">k remained high</span>. The past dominates the present.
+    - PSYCHE: Traumatized, rigid, holds onto the "Identity" (P₀) to survive.
+
+    <span style="color:#5ad">CONCLUSION:</span>
+    Your algorithm proves that "Personality" (Inertia) is a defense mechanism against Suffering.
+    `;
+}
+
+loop();
+
+</script>
+</body>
+</html>

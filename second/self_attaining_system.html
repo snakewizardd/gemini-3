@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA True V5: Formal Elegance</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0c;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    padding: 20px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+#output {
+    background: #0c0c10;
+    border: 1px solid #222;
+    padding: 15px;
+    white-space: pre-wrap;
+    font-size: 12px;
+    max-height: 85vh;
+    overflow-y: auto;
+    font-feature-settings: "tnum";
+}
+
+.h { color: #555; } /* Header/Meta */
+.d { color: #f90; } /* Data/Action */
+.v { color: #6f6; } /* Variable/State */
+.e { color: #f66; } /* Error/Death */
+.math { color: #5ad; } /* The Formula Terms */
+.s { color: #fff; background: #151518; border-left: 3px solid #f90; padding: 10px; margin: 10px 0; display: block; }
+</style>
+</head>
+<body>
+<div id="output"></div>
+
+<script>
+/**
+ * DDA ENGINE V5: FORMAL IMPLEMENTATION
+ * 
+ * Theory: Fₙ = P₀ · kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+ * 
+ * ARCHITECTURE:
+ * 1. The DDA class is pure math. No game logic inside.
+ * 2. Inputs are normalized (0-1).
+ * 3. 'k' is dynamic based on Signal-to-Noise ratio of the outcome.
+ */
+
+// ═══════════════════════════════════════════════════════════════
+// UTILITIES (Normalization & Math)
+// ═══════════════════════════════════════════════════════════════
+
+const MathLib = {
+    // Sigmoid: Squashes any number into a 0-1 curve. 
+    // Essential for removing "magic number" hard caps.
+    sigmoid: (t) => 1 / (1 + Math.exp(-t)),
+    
+    // Clamp: Keeps values within bounds
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    
+    // Lerp: Linear Interpolation (Smoothing)
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+// ═══════════════════════════════════════════════════════════════
+// THE DDA KERNEL
+// ═══════════════════════════════════════════════════════════════
+
+class DDAKernel {
+    constructor(config) {
+        // P₀: The Identity / Anchor (Immutable)
+        this.P0 = config.P0; 
+        
+        // State Vectors
+        this.F_n = this.P0;      // Current Will
+        this.F_prev = this.P0;   // Previous Will
+        this.k = 0.5;            // Trauma/Memory Weight (Dynamic)
+        
+        // Diagnostic Ledger (For visualization)
+        this.ledger = { T: 0, R: 0, m: 0, anchor: 0, pressure: 0 };
+    }
+
+    /**
+     * The Core Equation: Fₙ = P₀·kFₙ₋₁ + m(T + R)
+     * 
+     * @param {Object} I_n      Current Information State (Normalized 0-1)
+     * @param {Object} I_delta  Change in Information (Normalized -1 to 1)
+     * @param {Number} m        Rate Vector (Magnitude of Pressure/Urgency)
+     * @param {Object} FM_n     Evaluations of Options { A: score, B: score }
+     */
+    compute(I_n, I_delta, m, FM_n) {
+        
+        // 1. T(f(Iₙ, IΔ)): Truth Transformation
+        // We combine the absolute state (I_n) with the trend (I_delta).
+        // If Trend is negative, T pushes harder.
+        const signal_strength = I_n.primary_resource_health; 
+        const signal_trend = I_delta.primary_trend;
+        
+        // T reflects the "Call of the Void". 
+        // If resource is healthy (1.0), T is low (-0.5). If empty (0.0), T is high (0.5).
+        // Trend accelerates this.
+        const T = (1.0 - signal_strength) - 0.5 - (signal_trend * 0.5);
+
+        // 2. R(Dₙ, FMₙ): Reflection & Entropy
+        // R is not just the difference in options, but the 'clarity' of the choice.
+        // We compute the delta between options to see if a clear winner exists.
+        const option_delta = FM_n.B - FM_n.A; // Positive leans to B
+        const R = option_delta * 0.5; // Scale to fit -0.5 to 0.5 range
+
+        // 3. The Equation Components
+        const inertia = this.P0 * this.k * this.F_prev; // The Anchor
+        
+        // Note: We use 'm' to scale the SUM of T and R.
+        // High pressure (m) amplifies the signal. Low pressure dampens it.
+        const pressure = m * (T + R);
+        
+        // 4. Solve Fₙ
+        // We normalize the result back to 0-1 using a gentle clamp
+        // instead of a hard cutoff, preserving momentum.
+        let raw_F = inertia + pressure + (this.P0 * (1-this.k)); // (1-k) term balances the equation against total signal loss
+        
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        
+        // Update Ledger for rendering
+        this.ledger = { T, R, m, anchor: inertia, pressure };
+        
+        return this.F_n;
+    }
+
+    /**
+     * Post-Decision Learning (Calculating k)
+     * 
+     * k is based on the impact of the result.
+     * k = Base + Surprise + Stakes
+     */
+    learn(expected_outcome, actual_outcome, stakes_0to1) {
+        // Surprise: Absolute difference normalized
+        const surprise = Math.abs(expected_outcome - actual_outcome);
+        
+        // Vulnerability: High stakes makes memory stickier
+        const impact = (surprise * 0.6) + (stakes_0to1 * 0.4);
+        
+        // Update k (Trauma)
+        // If impact is high, k approaches 1.0 (Past dominates).
+        // If impact is low, k approaches 0.0 (Past fades).
+        // We smooth it so k doesn't jitter wildly.
+        const target_k = MathLib.clamp(impact, 0.1, 0.95);
+        this.k = MathLib.lerp(this.k, target_k, 0.5);
+        
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THE SIMULATION (World & Agent)
+// ═══════════════════════════════════════════════════════════════
+
+const World = {
+    A: 100, // Normalized internally later
+    A_max: 100,
+    
+    // External "Truth"
+    forage: function(choice) {
+        if (choice === 'A') {
+            const yield = this.A > 0 ? 10 : 0;
+            this.A = Math.max(0, this.A - 10);
+            return yield;
+        } else {
+            // Choice B allows A to regenerate
+            this.A = Math.min(this.A_max, this.A + 5);
+            return 5; // Steady low yield
+        }
+    }
+};
+
+const Agent = {
+    food: 50,
+    max_food: 100,
+    alive: true,
+    
+    // Our brain
+    brain: new DDAKernel({ P0: 0.5 }),
+    
+    step: function() {
+        if (!this.alive) return;
+        this.food -= 2; // Metabolic cost
+
+        // 1. Gather Information (Iₙ)
+        // Normalize values to 0-1 for the engine
+        const I_n = {
+            primary_resource_health: World.A / World.A_max
+        };
+        
+        // 2. Gather Delta (IΔ)
+        // (Simplified for demo: is A recovering or depleting?)
+        const I_delta = {
+            primary_trend: (World.A === World.A_max) ? 0 : (World.A < this.last_A ? -1 : 1)
+        };
+        this.last_A = World.A;
+
+        // 3. Calculate Rate Vector (m)
+        // m = Urgency. As food drops, m rises exponentially.
+        // We use an inverse square to model panic.
+        const scarcity = 1.0 - (this.food / this.max_food);
+        const m = 0.2 + (scarcity * scarcity * 3.0); // 0.2 (calm) to 3.2 (panic)
+
+        // 4. Formulate Options (FMₙ)
+        // Subjective evaluation of choices
+        const FM_n = {
+            A: (World.A / World.A_max) + (Math.random() * 0.1), // Objective + Gut noise
+            B: 0.5 + (Math.random() * 0.1)                      // Consistent + Gut noise
+        };
+
+        // 5. COMPUTE Fₙ
+        const F_val = this.brain.compute(I_n, I_delta, m, FM_n);
+        
+        // 6. Decide & Act
+        // F < 0.5 = A, F > 0.5 = B
+        const choice = F_val > 0.5 ? 'B' : 'A';
+        const gain = World.forage(choice);
+        
+        // 7. Feedback Loop (Update k)
+        // What did we expect? (Using FM scores)
+        const expected = choice === 'A' ? (FM_n.A * 10) : 5; // De-normalized for comparison
+        const actual = gain;
+        const stakes = scarcity; // Hunger = Stakes
+        
+        // We normalize outcome to 0-1 for the engine
+        this.brain.learn(expected/10, actual/10, stakes);
+        
+        this.food += gain;
+        if (this.food > this.max_food) this.food = this.max_food;
+        if (this.food <= 0) this.alive = false;
+
+        return { tick: tick, choice, gain, food: this.food, F: F_val, ledger: this.brain.ledger, k: this.brain.k };
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// UI & RUNTIME
+// ═══════════════════════════════════════════════════════════════
+
+const out = document.getElementById('output');
+let tick = 0;
+
+function log(text, cls) {
+    const el = document.createElement('div');
+    el.className = cls || '';
+    el.textContent = text;
+    out.appendChild(el);
+    out.scrollTop = out.scrollHeight;
+}
+
+function runLoop() {
+    tick++;
+    const state = Agent.step();
+    
+    if (!state) {
+        log("AGENT STARVED.", "e");
+        return;
+    }
+
+    // Rendering the "Soul" of the machine
+    const { F, ledger, k, choice, gain, food } = state;
+    
+    // Formatting for elegance
+    const F_str = F.toFixed(3);
+    const k_str = k.toFixed(3);
+    const m_str = ledger.m.toFixed(2);
+    
+    log(`T${tick.toString().padStart(3, '0')} | ${choice} -> +${gain} | Food: ${food}`, 'h');
+    
+    // The Formula visualization
+    log(`      Fₙ(${F_str}) = P₀·k(${k_str}) + m(${m_str}) · [T(${ledger.T.toFixed(2)}) + R(${ledger.R.toFixed(2)})]`, 'math');
+    
+    // Narrative moments based on variables
+    if (k > 0.8) log(`      [TRAUMA] High impact memory locking behavior.`, 'e');
+    if (ledger.m > 1.5) log(`      [PANIC] Urgency amplifying signals.`, 'd');
+    
+    if (tick % 20 === 0) {
+        log(`\n--- STATUS CHECK: Will=${F_str} | Inertia=${ledger.anchor.toFixed(2)} | Pressure=${ledger.pressure.toFixed(2)} ---\n`, 's');
+    }
+
+    if (Agent.alive && tick < 100) {
+        setTimeout(runLoop, 100);
+    }
+}
+
+log("INITIALIZING DDA V5...", "h");
+log("Equation: Fₙ = P₀ · kFₙ₋₁ + m(T + R)", "math");
+log("P₀ (Identity) = 0.5", "v");
+setTimeout(runLoop, 500);
+
+</script>
+</body>
+</html>

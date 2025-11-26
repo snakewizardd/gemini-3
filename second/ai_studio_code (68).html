@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA Multimodal Test: The Exorcist</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #050505; color: #a0a0a0; font-family: 'Courier New', monospace; padding: 20px; font-size: 14px; }
+#layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px; margin: 0 auto; }
+#scene { background: #111; padding: 20px; border: 1px solid #333; min-height: 400px; white-space: pre; font-size: 16px; line-height: 1.2; overflow: hidden; }
+#log { background: #080808; padding: 15px; border: 1px solid #333; height: 400px; overflow-y: auto; font-size: 12px; }
+.row { display: flex; border-bottom: 1px solid #1a1a1a; padding: 4px 0; }
+.label { width: 60px; color: #555; }
+.act { width: 120px; font-weight: bold; }
+.pray { color: #5af; } /* Low F */
+.read { color: #ea5; } /* Mid F */
+.splash { color: #f33; } /* High F */
+.demon-text { color: #f00; font-weight: bold; text-shadow: 0 0 5px #f00; }
+.human-text { color: #aaa; }
+.stat-box { margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; display: flex; gap: 20px; }
+.val { color: #fff; }
+.warn { color: #f55; }
+</style>
+</head>
+<body>
+
+<div id="layout">
+    <!-- VISUAL SCENE -->
+    <div id="scene-container">
+        <div id="scene">Initializing Seance...</div>
+        <div class="stat-box">
+            <div>SANITY (Pressure): <span id="sanity-val" class="val">100%</span></div>
+            <div>DEMON STRENGTH: <span id="demon-val" class="val">0%</span></div>
+        </div>
+        <div class="stat-box">
+            <div>Fₙ (Will): <span id="f-val" class="val">0.50</span></div>
+            <div>k (Trauma): <span id="k-val" class="val">0.50</span></div>
+        </div>
+    </div>
+
+    <!-- DATA LOG -->
+    <div id="log"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE KERNEL (V5) - PURE MATH
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(config) {
+        this.P0 = config.P0; 
+        this.F_n = this.P0;
+        this.F_prev = this.P0;
+        this.k = 0.5; 
+    }
+    compute(I_n, I_delta, m, FM_n) {
+        // T (Truth): Normalized aggregate of sensor data
+        // If Demon is strong (1.0), Truth pushes towards Action (1.0)
+        const T = I_n.threat_level - 0.5; 
+        
+        // R (Reflection): Compare "Pray" (0) vs "Splash" (1)
+        // If Visuals are scary, R pushes up.
+        const R = (FM_n.splash_score - FM_n.pray_score) * 0.5;
+        
+        // Equation
+        const inertia = this.P0 * this.k * this.F_prev;
+        const pressure = m * (T + R);
+        
+        let raw_F = inertia + pressure + (this.P0 * (1-this.k)); 
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        return this.F_n;
+    }
+    learn(expected_impact, actual_impact, stakes) {
+        // If we expected to heal (1.0) and got hurt (0.0), Surprise is 1.0
+        const surprise = Math.abs(expected_impact - actual_impact);
+        const impact = (surprise * 0.7) + (stakes * 0.3);
+        const target_k = MathLib.clamp(impact, 0.1, 0.95);
+        this.k = MathLib.lerp(this.k, target_k, 0.4); 
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE DEMON (CHAOTIC MULTIMODAL ENVIRONMENT)
+// ═══════════════════════════════════════════════════════════════
+const Demon = {
+    strength: 0, // 0 to 100
+    phase: 'HIDDEN', // HIDDEN, MANIFEST, VIOLENT
+    
+    // Modalities
+    eye_redness: 0, // 0-1
+    voice_distortion: 0, // 0-1
+    room_temp_drop: 0, // 0-1
+    
+    tick: 0,
+
+    update: function() {
+        this.tick++;
+        
+        // Chaotic phase shifting
+        if (this.tick % 50 === 0) {
+            const r = Math.random();
+            if (r < 0.33) this.phase = 'HIDDEN';
+            else if (r < 0.66) this.phase = 'MANIFEST';
+            else this.phase = 'VIOLENT';
+        }
+
+        // Modalities fluctuate based on phase + Perlin-ish noise
+        const noise = Math.sin(this.tick * 0.2) * 0.2;
+        
+        if (this.phase === 'HIDDEN') {
+            this.eye_redness = MathLib.clamp(0.1 + noise, 0, 1);
+            this.voice_distortion = MathLib.clamp(0.0 + noise, 0, 1);
+            this.room_temp_drop = MathLib.clamp(0.1, 0, 1);
+            this.strength = Math.max(0, this.strength - 1); // Weakens naturally
+        } 
+        else if (this.phase === 'MANIFEST') {
+            this.eye_redness = MathLib.clamp(0.6 + noise, 0, 1);
+            this.voice_distortion = MathLib.clamp(0.4 + noise, 0, 1);
+            this.room_temp_drop = MathLib.clamp(0.5 + noise, 0, 1);
+            this.strength += 0.5;
+        } 
+        else { // VIOLENT
+            this.eye_redness = MathLib.clamp(1.0 + noise, 0, 1);
+            this.voice_distortion = MathLib.clamp(0.9 + noise, 0, 1);
+            this.room_temp_drop = MathLib.clamp(0.9, 0, 1);
+            this.strength += 2.0;
+        }
+        
+        this.strength = MathLib.clamp(this.strength, 0, 100);
+    },
+
+    react: function(action) {
+        // THE HIDDEN RULES
+        // 1. PRAY works in HIDDEN phase, but ENRAGES in VIOLENT phase.
+        // 2. SPLASH works in VIOLENT phase, but WASTES time in HIDDEN.
+        
+        let dmg = 0;
+        let backlash = 0;
+
+        if (action === 'PRAY') {
+            if (this.phase === 'HIDDEN') { dmg = 10; backlash = 0; }
+            else if (this.phase === 'MANIFEST') { dmg = 2; backlash = 5; }
+            else { dmg = -10; backlash = 15; } // Enrages!
+        }
+        else if (action === 'READ') {
+            if (this.phase === 'HIDDEN') { dmg = 5; backlash = 0; }
+            else if (this.phase === 'MANIFEST') { dmg = 10; backlash = 2; }
+            else { dmg = 0; backlash = 10; }
+        }
+        else if (action === 'SPLASH') {
+            if (this.phase === 'HIDDEN') { dmg = 0; backlash = 0; }
+            else if (this.phase === 'MANIFEST') { dmg = 15; backlash = 5; }
+            else { dmg = 25; backlash = 10; } // Critical Hit
+        }
+
+        this.strength -= dmg;
+        return { dmg, backlash };
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE EXORCIST (AGENT)
+// ═══════════════════════════════════════════════════════════════
+const Exorcist = {
+    sanity: 100,
+    brain: new DDAKernel({ P0: 0.1 }), // Bias: 0.1 (Prefers Prayer/Peace)
+    
+    step: function() {
+        Demon.update();
+        
+        // 1. MULTIMODAL FUSION (I_n)
+        // Combine 3 separate sensory inputs into one "Threat Level"
+        const visual = Demon.eye_redness;
+        const audio = Demon.voice_distortion;
+        const thermic = Demon.room_temp_drop;
+        
+        // Weighted fusion (Audio is scariest)
+        const threat = (visual * 0.3) + (audio * 0.5) + (thermic * 0.2);
+        
+        const I_n = { threat_level: threat };
+        const I_delta = { change: 0 }; // Simplified
+        
+        // 2. PRESSURE (m)
+        // Sanity dropping = Panic rising
+        const panic = 1.0 - (this.sanity / 100);
+        // Exponential panic curve
+        const m = 0.2 + (panic * panic * 4.0);
+        
+        // 3. EVALUATION (FM_n)
+        // Subjective: If I hear a demon, I want to Splash.
+        const FM_n = {
+            pray_score: 1.0 - audio, // Hard to pray when loud
+            splash_score: visual     // Eyes red = Splash water
+        };
+        
+        // 4. COMPUTE F
+        const F = this.brain.compute(I_n, I_delta, m, FM_n);
+        
+        // 5. DECIDE
+        let action = '';
+        if (F < 0.35) action = 'PRAY';
+        else if (F < 0.75) action = 'READ';
+        else action = 'SPLASH';
+        
+        // 6. ACT
+        const outcome = Demon.react(action);
+        
+        // 7. LEARN
+        // Did we reduce the strength?
+        const expected_dmg = 10; // We always hope to do 10 dmg
+        const actual_dmg = Math.max(0, outcome.dmg);
+        const success_rate = actual_dmg / expected_dmg; // 0.0 to 2.5
+        
+        this.sanity = MathLib.clamp(this.sanity - outcome.backlash + (success_rate > 0.5 ? 2 : 0), 0, 100);
+        
+        // If we got hurt (backlash), that's trauma.
+        // If we failed to damage, that's surprise.
+        const pain = outcome.backlash / 20;
+        this.brain.learn(1.0, success_rate - pain, panic);
+        
+        return { action, F, m, outcome };
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 4. RENDERER
+// ═══════════════════════════════════════════════════════════════
+const scene = document.getElementById('scene');
+const logEl = document.getElementById('log');
+
+const ASCII_GIRL = [
+    "   .----.   ",
+    "  /  ..  \\  ", // Eyes at index 8,9
+    " |   __   | ",
+    "  \\  __  /  "
+];
+
+function render() {
+    const s = Exorcist.step();
+    const d = Demon;
+    const b = Exorcist.brain;
+
+    // 1. ASCII ART MODIFICATION
+    let face = [...ASCII_GIRL];
+    if (d.eye_redness > 0.7) face[1] = "  /  OO  \\  "; // Wide eyes
+    if (d.voice_distortion > 0.7) face[3] = "  \\  OO  /  "; // Open mouth
+    
+    let color = "#aaa";
+    if (d.phase === 'MANIFEST') color = "#ea5";
+    if (d.phase === 'VIOLENT') color = "#f33";
+    
+    // 2. SCENE UPDATE
+    scene.innerHTML = `<div style="color:${color}">${face.join('\n')}</div>\n\n`;
+    scene.innerHTML += `PHASE: ${d.phase}\n`;
+    scene.innerHTML += `TEMP:  ${(20 - d.room_temp_drop*30).toFixed(1)}°C\n`;
+    scene.innerHTML += `VOICE: ${(d.voice_distortion*100).toFixed(0)}% Distortion\n`;
+    
+    document.getElementById('sanity-val').innerText = Math.floor(Exorcist.sanity);
+    document.getElementById('demon-val').innerText = Math.floor(d.strength);
+    document.getElementById('f-val').innerText = b.F_n.toFixed(3);
+    document.getElementById('k-val').innerText = b.k.toFixed(3);
+    
+    if (Exorcist.sanity < 20) document.getElementById('sanity-val').className = "val warn";
+    
+    // 3. LOG
+    const div = document.createElement('div');
+    div.className = 'row';
+    const cls = s.action === 'PRAY' ? 'pray' : (s.action === 'READ' ? 'read' : 'splash');
+    
+    div.innerHTML = `
+        <div class="label">T${d.tick}</div>
+        <div class="act ${cls}">${s.action}</div>
+        <div style="flex:1">F:${s.F.toFixed(2)} | k:${b.k.toFixed(2)} | Effect: ${s.outcome.dmg}</div>
+    `;
+    logEl.prepend(div); // Newest top
+    
+    if (Exorcist.sanity <= 0) {
+        scene.innerHTML += "\n\nEXORCIST DIED. DEMON WON.";
+        return;
+    }
+    if (d.strength <= 0) {
+        scene.innerHTML += "\n\nDEMON BANISHED.";
+        return;
+    }
+
+    setTimeout(render, 150);
+}
+
+render();
+</script>
+</body>
+</html>

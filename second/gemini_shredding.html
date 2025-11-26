@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NECRO-SYMPHONIC SHRED ENGINE</title>
+<style>
+    body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: rgba(0,0,0,0.8); color: #f00; z-index: 10;
+        transition: opacity 0.5s; cursor: pointer; text-align: center;
+    }
+    h1 { font-size: 4rem; text-shadow: 0 0 20px #f00; margin: 0; letter-spacing: -2px; }
+    p { color: #fff; font-size: 1.2rem; margin-top: 1rem; text-transform: uppercase; letter-spacing: 2px; }
+    .hidden { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>NECRO-SYMPHONY</h1>
+    <p>[ CLICK TO INITIALIZE SHRED PROTOCOL ]</p>
+</div>
+<canvas id="cvs"></canvas>
+
+<script>
+/**
+ * STRING ENGINE - "THE SHREDDER" IMPLEMENTATION
+ * Based on Technical Reference v1.0
+ */
+
+// ═══════════════════════════════════════════════════════════════
+// 1. CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 190, // Speed metal tempo
+    STRINGS: [64, 59, 55, 50, 45, 40], // Standard tuning MIDI
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E'],
+    LOOKAHEAD: 0.1, // Seconds
+    SCHEDULE_AHEAD: 1.0 // How far to generate ahead in beats
+};
+
+// E Harmonic Minor Scale Map (String Index -> Available Frets)
+// Focusing on the "sweet spots" for shredding
+const SCALE_MAP = {
+    0: [0, 1, 4, 5, 7, 8, 11, 12, 13, 16, 17, 19], // High e
+    1: [0, 1, 4, 5, 8, 9, 12, 13, 16, 17],         // B
+    2: [1, 2, 4, 5, 8, 9, 10, 13, 14, 16],         // G
+    3: [1, 2, 3, 6, 7, 9, 10, 13, 14],             // D
+    4: [0, 2, 3, 6, 7, 8, 11, 12],                 // A
+    5: [0, 1, 4, 5, 7, 8, 11, 12]                  // Low E
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (HIGH GAIN / METAL)
+// ═══════════════════════════════════════════════════════════════
+const Audio = {
+    ctx: null,
+    master: null,
+    drive: null,
+    delay: null,
+    isPlaying: false,
+
+    init: () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        
+        // Master Bus
+        Audio.master = Audio.ctx.createGain();
+        Audio.master.gain.value = 0.3; // Safety volume
+        
+        // Effects Chain: Drive -> Cabinet Filter -> Delay -> Master
+        
+        // 1. Distortion
+        Audio.drive = Audio.ctx.createWaveShaper();
+        Audio.drive.curve = Audio.makeDistortionCurve(400); // High gain
+        Audio.drive.oversample = '4x';
+
+        // 2. Cabinet Simulation (Tight Lowpass)
+        const cabSim = Audio.ctx.createBiquadFilter();
+        cabSim.type = 'lowpass';
+        cabSim.frequency.value = 3200;
+        cabSim.Q.value = 0.7;
+
+        // 3. Delay (Stereo widening effect)
+        Audio.delay = Audio.ctx.createDelay();
+        Audio.delay.delayTime.value = 0.25; // Slapback/Echo
+        const delayGain = Audio.ctx.createGain();
+        delayGain.gain.value = 0.3;
+
+        // Routing
+        Audio.drive.connect(cabSim);
+        cabSim.connect(Audio.master);
+        
+        // Delay loop
+        cabSim.connect(Audio.delay);
+        Audio.delay.connect(delayGain);
+        delayGain.connect(Audio.master);
+        
+        Audio.master.connect(Audio.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = amount, n_samples = 44100, curve = new Float32Array(n_samples);
+        for (let i = 0; i < n_samples; ++i) {
+            let x = i * 2 / n_samples - 1;
+            curve[i] = (3 + k) * x * 20 * (Math.PI / 180) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    playString: (stringIdx, fret, time, duration, style = 'pick') => {
+        if (!Audio.ctx) return;
+        
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        // Dual Oscillator for thickness
+        const osc1 = Audio.ctx.createOscillator();
+        const osc2 = Audio.ctx.createOscillator();
+        
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc2.detune.value = 4; // Chorus effect
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        
+        const amp = Audio.ctx.createGain();
+        
+        // Envelope shaping
+        amp.gain.setValueAtTime(0, time);
+        
+        if (style === 'pm') {
+            // Palm Mute: Short, percussive
+            amp.gain.linearRampToValueAtTime(0.8, time + 0.005);
+            amp.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+        } else {
+            // Sustain: Aggressive attack, longer hold
+            amp.gain.linearRampToValueAtTime(0.6, time + 0.005);
+            amp.gain.exponentialRampToValueAtTime(0.4, time + 0.1);
+            amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        }
+        
+        osc1.connect(amp);
+        osc2.connect(amp);
+        amp.connect(Audio.drive); // Route to distortion
+        
+        osc1.start(time);
+        osc2.start(time);
+        osc1.stop(time + duration + 0.1);
+        osc2.stop(time + duration + 0.1);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. PROCEDURAL COMPOSER (THE MATH)
+// ═══════════════════════════════════════════════════════════════
+const TAB = [];
+let composeCursor = 0; // Current beat in composition
+const NOTE_DURATIONS = { S: 0.25, E: 0.5, T: 0.166, Q: 1.0 };
+
+function getRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateMusic() {
+    // Keep generating if we don't have enough notes for the next 4 bars
+    while (composeCursor < currentBeat + 16) {
+        const mode = Math.random();
+        
+        if (mode < 0.3) {
+            // MODE: DJENT CHUGS (Low E rhythmic violence)
+            const length = 4; // 4 beats
+            const end = composeCursor + length;
+            while (composeCursor < end) {
+                const subPattern = Math.random() > 0.5 ? 
+                    [0.25, 0.25, 0.5] : [0.25, 0.25, 0.25, 0.25];
+                
+                subPattern.forEach(dur => {
+                    TAB.push({ 
+                        beat: composeCursor, 
+                        string: 5, 
+                        fret: Math.random() > 0.8 ? 1 : 0, // Occasional F note
+                        duration: 0.15,
+                        style: 'pm'
+                    });
+                    composeCursor += dur;
+                });
+            }
+        } 
+        else if (mode < 0.7) {
+            // MODE: ARPEGGIO SWEEP (Linear runs up/down)
+            const stringOrder = [5, 4, 3, 2, 1, 0, 1, 2, 3, 4];
+            const speed = 0.166; // Sextuplets
+            
+            stringOrder.forEach(strIdx => {
+                // Find a note in the scale for this string
+                const frets = SCALE_MAP[strIdx];
+                const fret = frets[Math.floor(Math.random() * (frets.length/2))]; // Low position
+                
+                TAB.push({
+                    beat: composeCursor,
+                    string: strIdx,
+                    fret: fret,
+                    duration: 0.2,
+                    style: 'pick'
+                });
+                composeCursor += speed;
+            });
+        } 
+        else {
+            // MODE: NEO-CLASSICAL LEAD (High string melody)
+            const length = 4;
+            const end = composeCursor + length;
+            let currentString = 0;
+            
+            while (composeCursor < end) {
+                // Determine speed (mix of 16th and triplets)
+                const noteType = Math.random() > 0.5 ? 0.25 : 0.166;
+                const frets = SCALE_MAP[currentString];
+                const fret = getRandom(frets);
+                
+                TAB.push({
+                    beat: composeCursor,
+                    string: currentString,
+                    fret: fret,
+                    duration: noteType * 1.5,
+                    style: 'pick'
+                });
+                
+                // Maybe change string
+                if (Math.random() > 0.7) {
+                    currentString = Math.random() > 0.5 ? 0 : 1; // Stay on E or B
+                }
+                
+                composeCursor += noteType;
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. SEQUENCER ENGINE
+// ═══════════════════════════════════════════════════════════════
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!Audio.isPlaying) return;
+
+    const currentTime = Audio.ctx.currentTime;
+    // Calculate current beat based on time elapsed
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+
+    // Procedural generation trigger
+    generateMusic();
+
+    // Schedule notes that are coming up in the lookahead window
+    while (nextNoteIdx < TAB.length) {
+        const note = TAB[nextNoteIdx];
+        
+        // If note is within the lookahead window (0.1s)
+        if (note.beat <= currentBeat + (CONFIG.BPM/60 * CONFIG.LOOKAHEAD)) {
+            
+            // Audio Playback
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            
+            // Only schedule if it's in the future (or very slightly past)
+            if (playTime >= currentTime - 0.05) {
+                Audio.playString(note.string, note.fret, Math.max(playTime, currentTime), note.duration, note.style);
+                
+                // Trigger Visuals
+                // We use a timeout to sync the visual hit exactly with the audio
+                const timeToVisual = (playTime - currentTime) * 1000;
+                setTimeout(() => triggerVisual(note), timeToVisual);
+            }
+            
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+
+    // Cleanup old notes from memory to prevent leak
+    if (nextNoteIdx > 500) {
+        TAB.splice(0, nextNoteIdx - 10);
+        nextNoteIdx = 10;
+        // Note: This logic assumes we don't need to look back. 
+        // In a real loop we'd handle this differently, but this is infinite generation.
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. VISUAL ENGINE (CANVAS)
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeParticles = [];
+const activeFrets = []; // For the "hit" flash
+
+// Resize handler
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    // Add particle explosion
+    const stringY = (h/2) + (note.string - 2.5) * 40;
+    const hitX = w * 0.3;
+    
+    // Create flash
+    activeFrets.push({ x: hitX, y: stringY, life: 1.0, txt: note.fret });
+
+    // Create sparks
+    const color = note.style === 'pm' ? '#f00' : '#0ff'; // Red for chugs, Cyan for leads
+    for(let i=0; i<8; i++) {
+        activeParticles.push({
+            x: hitX,
+            y: stringY,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 1.0,
+            color: color
+        });
+    }
+}
+
+function draw() {
+    // Clear / Trail effect
+    ctx.fillStyle = 'rgba(10, 10, 12, 0.3)';
+    ctx.fillRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 40;
+    const HIT_X = w * 0.3;
+    const BEAT_PIXELS = 100;
+
+    // Draw Strings
+    ctx.lineWidth = 2;
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        
+        // String glow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#444';
+        ctx.strokeStyle = '#555';
+        
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#888';
+        ctx.shadowBlur = 0;
+        ctx.font = '16px Courier New';
+        ctx.fillText(name, 20, y - 5);
+    });
+
+    // Draw Hit Line
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, 0);
+    ctx.lineTo(HIT_X, h);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw Future Notes
+    // We only draw notes from current index forward
+    for(let i = nextNoteIdx; i < Math.min(TAB.length, nextNoteIdx + 50); i++) {
+        const note = TAB[i];
+        const dist = note.beat - currentBeat;
+        const x = HIT_X + (dist * BEAT_PIXELS);
+        
+        if (x < w) {
+            const y = STAFF_Y + (note.string - 2.5) * SPACING;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI*2);
+            ctx.fillStyle = note.style === 'pm' ? '#500' : '#055';
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px Arial';
+            ctx.fillText(note.fret, x-3, y-10);
+        }
+    }
+
+    // Draw Particles (Explosions)
+    for(let i = activeParticles.length - 1; i >= 0; i--) {
+        const p = activeParticles[i];
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.life * 4, 0, Math.PI*2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+        
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.05;
+        if(p.life <= 0) activeParticles.splice(i, 1);
+    }
+
+    // Draw Fret Flashes
+    for(let i = activeFrets.length - 1; i >= 0; i--) {
+        const f = activeFrets[i];
+        
+        // Ring
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, 20 * (1.5 - f.life), 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${f.life})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        f.life -= 0.08;
+        if(f.life <= 0) activeFrets.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. INITIALIZATION & INTERACTION
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('click', async () => {
+    const overlay = document.getElementById('overlay');
+    if (!overlay.classList.contains('hidden')) {
+        await Audio.init();
+        Audio.isPlaying = true;
+        startTime = Audio.ctx.currentTime;
+        
+        // Initial seeding
+        generateMusic();
+        
+        overlay.classList.add('hidden');
+        scheduler();
+        draw();
+    }
+});
+
+// Key controls
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        if(Audio.isPlaying) {
+            Audio.isPlaying = false;
+            if(Audio.ctx) Audio.ctx.suspend();
+        } else {
+            Audio.isPlaying = true;
+            if(Audio.ctx) Audio.ctx.resume();
+            startTime = Audio.ctx.currentTime - (currentBeat * (60/CONFIG.BPM));
+            scheduler();
+        }
+    }
+});
+
+</script>
+</body>
+</html>

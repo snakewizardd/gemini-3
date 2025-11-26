@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AETHERIUS | Infinite Solo Generator</title>
+<style>
+    body { margin: 0; background: #0b0f19; overflow: hidden; font-family: 'Montserrat', sans-serif; }
+    #canvas { display: block; width: 100vw; height: 100vh; }
+    #overlay { position: absolute; inset: 0; background: linear-gradient(135deg, #0b0f19 0%, #1a1f2e 100%); 
+               display: flex; flex-direction: column; justify-content: center; align-items: center; 
+               z-index: 10; transition: opacity 0.8s ease-in-out; cursor: pointer; }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { font-size: 3rem; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.3em; margin-bottom: 1rem; text-shadow: 0 0 30px rgba(165, 180, 252, 0.5); }
+    p { color: #6366f1; font-size: 1rem; letter-spacing: 0.1em; }
+    .fade-in { animation: fadeIn 2s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Aetherius</h1>
+    <p>GENERATIVE GUITAR UNIVERSE</p>
+    <p style="margin-top:20px; font-size: 0.8em; color: #4b5563;">[ CLICK TO ASCEND ]</p>
+</div>
+<canvas id="canvas"></canvas>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   1. HARMONIC ARCHITECTURE
+   ═══════════════════════════════════════════════════════════════ */
+const CONFIG = {
+    BPM: 110, // A comfortable, soaring tempo
+    BASE_PITCH: 82.41, // Low E
+    STRINGS: [64, 59, 55, 50, 45, 40]
+};
+
+// SCALES (Intervals from Root)
+const SCALES = {
+    LYDIAN:     [0, 2, 4, 6, 7, 9, 11, 12], // Dreamy, floating (Major #4)
+    PENT_MAJ:   [0, 2, 4, 7, 9, 12],        // Triumphant, open
+    DORIAN:     [0, 2, 3, 5, 7, 9, 10, 12], // Soulful, fluid
+    BYZANTINE:  [0, 1, 4, 5, 7, 8, 11, 12], // "The Dragon" (Exotic)
+    MIXOLYDIAN: [0, 2, 4, 5, 7, 9, 10, 12]  // Rock standard
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   2. AUDIO ENGINE: "CREAMY TONE"
+   ═══════════════════════════════════════════════════════════════ */
+const Audio = {
+    ctx: null, out: null, 
+    verb: null, delay: null, drive: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        Audio.out = Audio.ctx.createGain();
+        Audio.out.gain.value = 0.5;
+
+        // 1. COMPRESSOR (Evens out the playing)
+        const comp = Audio.ctx.createDynamicsCompressor();
+        comp.threshold.value = -24;
+        comp.knee.value = 30;
+        comp.ratio.value = 12;
+
+        // 2. OVERDRIVE (Soft Clipping - Tube screamer style)
+        Audio.drive = Audio.ctx.createWaveShaper();
+        Audio.drive.curve = Audio.makeCurve(120); // Lower value = softer clip
+        Audio.drive.oversample = '4x';
+
+        // 3. TONE SHAPING (Mid Boost for "Singing" lead)
+        const tone = Audio.ctx.createBiquadFilter();
+        tone.type = 'peaking';
+        tone.frequency.value = 800; // The "vocal" frequency of guitar
+        tone.Q.value = 0.8;
+        tone.gain.value = 6;
+
+        const cab = Audio.ctx.createBiquadFilter();
+        cab.type = 'lowpass';
+        cab.frequency.value = 3800; // Smooth out digital fizz
+
+        // 4. STEREO DELAY (The "Pink Floyd" Effect)
+        // We create a ping-pong effect for width
+        const dL = Audio.ctx.createDelay(); dL.delayTime.value = 0.35; // Left
+        const dR = Audio.ctx.createDelay(); dR.delayTime.value = 0.50; // Right
+        const dFb = Audio.ctx.createGain(); dFb.gain.value = 0.4;      // Feedback
+        
+        const merger = Audio.ctx.createChannelMerger(2);
+        
+        // 5. REVERB (The "Universe")
+        const rev = Audio.ctx.createConvolver();
+        rev.buffer = await Audio.impulse(3.0, 2.0);
+        const revMix = Audio.ctx.createGain(); revMix.gain.value = 0.4;
+
+        // ROUTING
+        // Osc -> Comp -> Drive -> Tone -> Cab -> [Split to Out & Effects]
+        Audio.input = comp;
+        comp.connect(Audio.drive);
+        Audio.drive.connect(tone);
+        tone.connect(cab);
+        
+        cab.connect(Audio.out); // Dry signal
+        cab.connect(rev);       // Reverb send
+        cab.connect(dL);        // Delay send
+        
+        // Delay Loops
+        dL.connect(dR); dR.connect(dFb); dFb.connect(dL);
+        dL.connect(merger, 0, 0); dR.connect(merger, 0, 1);
+        
+        rev.connect(revMix);
+        merger.connect(revMix);
+        revMix.connect(Audio.out);
+        
+        Audio.out.connect(Audio.ctx.destination);
+    },
+
+    makeCurve: (amount) => {
+        const k = amount, n = 44100, curve = new Float32Array(n);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n; i++) {
+            let x = i * 2 / n - 1;
+            // Soft clipping formula
+            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+
+    impulse: async (dur, decay) => {
+        const rate = Audio.ctx.sampleRate, len = rate * dur;
+        const buff = Audio.ctx.createBuffer(2, len, rate);
+        for (let c=0; c<2; c++) {
+            const d = buff.getChannelData(c);
+            for (let i=0; i<len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, decay);
+        }
+        return buff;
+    },
+
+    play: (freq, time, dur, velocity = 1.0) => {
+        if (!Audio.ctx) return;
+        const t = time;
+        const osc = Audio.ctx.createOscillator();
+        const harm = Audio.ctx.createOscillator(); // Harmonic overtone
+        
+        osc.type = 'sawtooth'; // Rich harmonics
+        harm.type = 'sine';    // Body
+
+        osc.frequency.value = freq;
+        harm.frequency.value = freq; 
+        
+        // Slight vibrato
+        const vib = Audio.ctx.createOscillator();
+        const vibGain = Audio.ctx.createGain();
+        vib.frequency.value = 5; // 5Hz vibrato
+        vibGain.gain.value = freq * 0.01; // Depth
+        vib.connect(vibGain);
+        vibGain.connect(osc.frequency);
+        vib.start(t);
+
+        const amp = Audio.ctx.createGain();
+        
+        // Envelope: "Swell" logic for long notes, "Snap" for short
+        const attack = dur > 0.5 ? 0.05 : 0.005;
+        
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.6 * velocity, t + attack);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.2); // Long release for sustain
+
+        osc.connect(amp);
+        harm.connect(amp);
+        amp.connect(Audio.input);
+
+        osc.start(t); harm.start(t);
+        osc.stop(t + dur + 0.5);
+    }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   3. THE GENERATIVE MUSE (COMPOSER)
+   ═══════════════════════════════════════════════════════════════ */
+const Muse = {
+    beat: 0,
+    measure: 0,
+    currentScale: SCALES.LYDIAN,
+    rootFreq: 146.83, // D3 Start
+    currentNoteIndex: 4, // Start in middle of scale
+    mood: 'dreaming', // dreaming, soaring, burning, resolving
+
+    queue: [],
+
+    // The heart of the improv: Pick the next note based on the last
+    next: () => {
+        // 1. Determine Rhythm
+        const r = Math.random();
+        let dur = 0.25; // 16th default
+        
+        // Mood-based rhythm
+        if (Muse.mood === 'dreaming') dur = r > 0.7 ? 2.0 : 1.0; 
+        else if (Muse.mood === 'burning') dur = r > 0.6 ? 0.25 : 0.5;
+        else dur = r > 0.5 ? 0.5 : 1.0;
+
+        // 2. Determine Pitch Movement (Random Walk)
+        const step = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+        const jump = Math.random() > 0.9; // 10% chance to jump interval
+        
+        let shift = step;
+        if (jump) shift = (Math.random() > 0.5 ? 2 : -2);
+        
+        Muse.currentNoteIndex += shift;
+        
+        // Constrain range (guitar fretboard limits approx)
+        if (Muse.currentNoteIndex < 0) Muse.currentNoteIndex = 2;
+        if (Muse.currentNoteIndex > 14) Muse.currentNoteIndex = 12;
+
+        // 3. Map Index to Frequency via Scale
+        const scaleLen = Muse.currentScale.length;
+        const octave = Math.floor(Muse.currentNoteIndex / scaleLen);
+        const degree = Math.abs(Muse.currentNoteIndex % scaleLen);
+        
+        const interval = Muse.currentScale[degree];
+        const freq = Muse.rootFreq * Math.pow(2, octave + (interval/12));
+
+        return { freq, dur };
+    },
+
+    // Change the "Mindset" of the solo every few measures
+    evolve: () => {
+        Muse.measure++;
+        const cycle = Muse.measure % 32;
+
+        // The "Journey" Logic
+        if (cycle === 0) {
+            Muse.mood = 'dreaming';
+            Muse.currentScale = SCALES.LYDIAN;
+            Muse.rootFreq = 146.83; // D
+            console.log("Phase: THE DREAM");
+        } else if (cycle === 8) {
+            Muse.mood = 'soaring';
+            Muse.currentScale = SCALES.PENT_MAJ;
+            Muse.rootFreq = 196.00; // G
+            console.log("Phase: ASCENSION");
+        } else if (cycle === 16) {
+            Muse.mood = 'burning';
+            Muse.currentScale = SCALES.BYZANTINE;
+            Muse.rootFreq = 164.81; // E
+            console.log("Phase: THE DRAGON");
+        } else if (cycle === 24) {
+            Muse.mood = 'resolving';
+            Muse.currentScale = SCALES.DORIAN;
+            Muse.rootFreq = 146.83; // Back to D
+            console.log("Phase: RETURN");
+        }
+    }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   4. SCHEDULER
+   ═══════════════════════════════════════════════════════════════ */
+let nextNoteTime = 0;
+let isPlaying = false;
+
+function scheduler() {
+    if (!isPlaying) return;
+
+    // Schedule notes up to 0.1s ahead
+    while (nextNoteTime < Audio.ctx.currentTime + 0.1) {
+        
+        const idea = Muse.next();
+        
+        // Convert beats to seconds (60/BPM)
+        const durSecs = idea.dur * (60 / CONFIG.BPM);
+        
+        // Humanize timing slightly
+        const humanize = (Math.random() * 0.02) - 0.01;
+        
+        Audio.play(idea.freq, nextNoteTime + humanize, durSecs);
+        
+        // Visual Trigger
+        Visuals.emit(idea.freq, idea.dur);
+
+        // Advance Time
+        nextNoteTime += durSecs;
+        
+        // Track Measures (assuming 4/4 roughly for state changes)
+        Muse.beat += idea.dur;
+        if (Muse.beat >= 4) {
+            Muse.beat = 0;
+            Muse.evolve();
+        }
+    }
+    requestAnimationFrame(scheduler);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   5. VISUALS (PARTICLE SYSTEM)
+   ═══════════════════════════════════════════════════════════════ */
+const Visuals = {
+    canvas: document.getElementById('canvas'),
+    ctx: document.getElementById('canvas').getContext('2d'),
+    width: 0, height: 0,
+    particles: [],
+
+    init: () => {
+        window.addEventListener('resize', Visuals.resize);
+        Visuals.resize();
+        Visuals.loop();
+    },
+
+    resize: () => {
+        Visuals.width = Visuals.canvas.width = window.innerWidth;
+        Visuals.height = Visuals.canvas.height = window.innerHeight;
+    },
+
+    emit: (freq, dur) => {
+        // Map frequency to Y position and Color
+        // Low freq = Bottom/Blue, High freq = Top/Magenta
+        const yRatio = 1 - Math.min(Math.max((freq - 80) / 600, 0), 1);
+        const y = Visuals.height * yRatio;
+        
+        const colorHue = 200 + (yRatio * 160); // Blue to Red range
+        
+        Visuals.particles.push({
+            x: Visuals.width / 2,
+            y: y,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 1.0,
+            decay: 0.01 + (0.05 / dur), // Faster decay for short notes
+            size: 5 + (dur * 10),
+            hue: colorHue
+        });
+    },
+
+    loop: () => {
+        const ctx = Visuals.ctx;
+        const w = Visuals.width;
+        const h = Visuals.height;
+
+        // Trail effect
+        ctx.fillStyle = 'rgba(11, 15, 25, 0.2)';
+        ctx.fillRect(0, 0, w, h);
+
+        for (let i = Visuals.particles.length - 1; i >= 0; i--) {
+            const p = Visuals.particles[i];
+            
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.95; // Friction
+            p.vy *= 0.95;
+            p.life -= p.decay;
+
+            if (p.life <= 0) {
+                Visuals.particles.splice(i, 1);
+                continue;
+            }
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.life})`;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = `hsla(${p.hue}, 80%, 60%, 1)`;
+            ctx.fill();
+        }
+
+        // Draw "Horizon" line based on current mood
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+
+        requestAnimationFrame(Visuals.loop);
+    }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   6. INITIALIZATION
+   ═══════════════════════════════════════════════════════════════ */
+Visuals.init();
+
+document.getElementById('overlay').addEventListener('click', async (e) => {
+    e.currentTarget.classList.add('hidden');
+    await Audio.init();
+    if (Audio.ctx.state === 'suspended') await Audio.ctx.resume();
+    
+    nextNoteTime = Audio.ctx.currentTime + 0.5;
+    isPlaying = true;
+    scheduler();
+});
+
+</script>
+</body>
+</html>

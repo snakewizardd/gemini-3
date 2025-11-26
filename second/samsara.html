@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Samsara Protocol</title>
+<style>
+    body { background: #050505; margin: 0; overflow: hidden; font-family: 'Cinzel', serif; color: #aaa; }
+    canvas { display: block; }
+    #ui { position: absolute; top: 0; left: 0; width: 300px; height: 100vh; background: rgba(0,0,0,0.8); border-right: 1px solid #333; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+    h1 { font-size: 20px; color: #fff; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+    .stat { margin-bottom: 8px; font-size: 13px; display: flex; justify-content: space-between; }
+    .val { font-weight: bold; color: #fff; }
+    .log { flex: 1; overflow-y: auto; margin-top: 20px; border-top: 1px solid #333; padding-top: 10px; font-family: 'Courier New', monospace; font-size: 11px; }
+    .log-item { margin-bottom: 5px; opacity: 0.8; }
+    .gen-header { color: #fff; font-weight: bold; margin-top: 10px; border-bottom: 1px dashed #444; }
+    .war { color: #f55; }
+    .peace { color: #5ff; }
+    #sim-container { position: absolute; left: 300px; top: 0; width: calc(100% - 300px); height: 100%; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="ui">
+    <h1>The Samsara Lineage</h1>
+    <div class="stat">GENERATION: <span id="val-gen" class="val">1</span></div>
+    <div class="stat">WORLD STATE: <span id="val-world" class="val">PEACE</span></div>
+    <div class="stat" style="margin-top:15px; color:#5ad">CURRENT IDENTITY (P₀): <span id="val-p0" class="val">0.50</span></div>
+    <div class="stat" style="color:#f0f">CURRENT TRAUMA (k): <span id="val-k" class="val">0.00</span></div>
+    <div class="stat" style="color:#fff">CURRENT WILL (F): <span id="val-f" class="val">0.50</span></div>
+    
+    <div class="log" id="history-log">
+        <div class="log-item">Simulating the Karma of the Soul...</div>
+    </div>
+</div>
+
+<div id="sim-container">
+    <canvas id="sim"></canvas>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE MATH KERNEL (V5)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(P0) {
+        this.P0 = P0; // INHERITED IDENTITY
+        this.F_n = P0;
+        this.F_prev = P0;
+        this.k = 0.1; // New life starts with low trauma (innocence)
+    }
+
+    compute(target, m) {
+        // T (Truth): The external demand (War or Peace)
+        const T = target;
+        
+        // R (Reflection): Self-preservation
+        const R = 0; 
+        
+        // Inertia: The weight of Identity/Lineage
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // Pressure: The urgency of the Now
+        const pressure = m * (T + R);
+        
+        // Logic
+        let raw_F = (this.F_prev * this.k) + (T * (1-this.k)) + ( (T - this.F_prev) * m * 0.5 );
+        // We use the weighted blend form for cleaner visual drift
+        raw_F = (this.P0 * this.k) + (pressure) + (this.P0 * (1-this.k - m*0.5));
+        
+        // Simpler V5 logic for this visualization:
+        // F pulls towards T based on m, anchored by P0 based on k
+        const anchor = this.P0;
+        const pull = target;
+        // If m is high, we move to target. If k is high, we stick to anchor.
+        const blend = (m) / (m + this.k + 0.1); 
+        this.F_n = MathLib.lerp(anchor, pull, MathLib.clamp(blend, 0, 1));
+        
+        return this.F_n;
+    }
+
+    learn(target, actual, m) {
+        const surprise = Math.abs(target - actual);
+        // Trauma accumulates over a lifetime
+        const impact = (surprise * 0.05) + (m * 0.01); // Slow accumulation
+        this.k = MathLib.clamp(this.k + impact, 0.1, 0.95);
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. SIMULATION
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+let width, height;
+
+// State
+let generation = 1;
+let currentP0 = 0.5; // Start Neutral
+let Agent = new DDAKernel(currentP0);
+
+let age = 0;
+const LIFESPAN = 400; // Ticks per life
+let worldPhase = 0; // 0=Peace, 1=War
+
+// Visualization History
+let lifePath = []; 
+let ancestors = []; // Store previous life paths
+
+function resize() {
+    width = canvas.width = window.innerWidth - 300;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function resetLife() {
+    // 1. KARMIC CALCULATION
+    const oldP0 = Agent.P0;
+    const finalF = Agent.F_n;
+    const finalK = Agent.k;
+    
+    // The Formula: Next Identity = Old Identity + (Action - Old Identity) * Trauma
+    // "We pass on what we did, scaled by how much it hurt."
+    const shift = (finalF - oldP0) * finalK;
+    let newP0 = MathLib.clamp(oldP0 + shift, 0.05, 0.95);
+    
+    // Log
+    logAncestry(generation, oldP0, finalF, finalK, newP0);
+    
+    // Store visual
+    ancestors.push({ path: [...lifePath], color: getColor(oldP0) });
+    if (ancestors.length > 5) ancestors.shift(); // Keep last 5
+    
+    // Reset
+    generation++;
+    lifePath = [];
+    age = 0;
+    currentP0 = newP0;
+    Agent = new DDAKernel(currentP0);
+}
+
+function step() {
+    age++;
+    
+    // WORLD LOGIC: Eras change slowly
+    // Every 3 generations (approx 1200 ticks), world shifts
+    const era = Math.floor((generation * LIFESPAN + age) / 1000);
+    const isWar = era % 2 !== 0; 
+    
+    // Target: Peace (0.2) or War (0.8) with noise
+    const baseTarget = isWar ? 0.8 : 0.2;
+    const target = baseTarget + (Math.random() - 0.5) * 0.1;
+    
+    // Pressure: Constant existential pressure
+    const m = 0.5;
+    
+    // Agent Thinking
+    const F = Agent.compute(target, m);
+    Agent.learn(target, F, m);
+    
+    // Record
+    lifePath.push({ x: age, y: F, t: target });
+    
+    // Check Death
+    if (age >= LIFESPAN) {
+        resetLife();
+    }
+    
+    // UI Update
+    document.getElementById('val-gen').innerText = generation;
+    const wEl = document.getElementById('val-world');
+    wEl.innerText = isWar ? "WAR (HIGH THREAT)" : "PEACE (LOW THREAT)";
+    wEl.className = isWar ? "val war" : "val peace";
+    
+    document.getElementById('val-p0').innerText = Agent.P0.toFixed(3);
+    document.getElementById('val-p0').style.color = getColor(Agent.P0);
+    
+    document.getElementById('val-k').innerText = Agent.k.toFixed(3);
+    document.getElementById('val-f').innerText = Agent.F_n.toFixed(3);
+}
+
+function getColor(val) {
+    // 0 = Cyan (Peace), 1 = Red (War)
+    const r = Math.floor(MathLib.lerp(0, 255, val));
+    const g = Math.floor(MathLib.lerp(255, 50, val));
+    const b = Math.floor(MathLib.lerp(255, 50, val));
+    return `rgb(${r},${g},${b})`;
+}
+
+function logAncestry(gen, p0, f, k, nextP0) {
+    const log = document.getElementById('history-log');
+    const div = document.createElement('div');
+    div.className = 'log-item';
+    
+    const context = f > 0.6 ? "Violent" : "Peaceful";
+    const trauma = k > 0.6 ? "Traumatized" : "Stable";
+    
+    div.innerHTML = `
+        <div class="gen-header">GEN ${gen} ENDED</div>
+        <div>Life: ${context} & ${trauma}</div>
+        <div>P₀: ${p0.toFixed(2)} → F: ${f.toFixed(2)} (k=${k.toFixed(2)})</div>
+        <div style="color:#fff">Inheritance: P₀ shifts to ${nextP0.toFixed(2)}</div>
+    `;
+    log.prepend(div);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. RENDER LOOP
+// ═══════════════════════════════════════════════════════════════
+function draw() {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, width, height);
+    
+    const centerY = height / 2;
+    const scaleY = height * 0.3;
+    const scaleX = width / LIFESPAN;
+    
+    // 1. Draw Ancestor Shadows (Ghosts)
+    ancestors.forEach((anc, idx) => {
+        ctx.globalAlpha = (idx + 1) / (ancestors.length + 2); // Fade out older ones
+        ctx.strokeStyle = anc.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        anc.path.forEach((p, i) => {
+            const x = p.x * scaleX;
+            const y = centerY - ((p.y - 0.5) * scaleY);
+            if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    });
+    ctx.globalAlpha = 1.0;
+    
+    // 2. Draw Current Truth (Target)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    lifePath.forEach((p, i) => {
+        const x = p.x * scaleX;
+        const y = centerY - ((p.t - 0.5) * scaleY);
+        if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // 3. Draw Current Life (F)
+    const currentColor = getColor(Agent.P0);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = currentColor;
+    
+    ctx.beginPath();
+    lifePath.forEach((p, i) => {
+        const x = p.x * scaleX;
+        const y = centerY - ((p.y - 0.5) * scaleY);
+        if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // 4. Draw Identity Line (P0)
+    const p0Y = centerY - ((Agent.P0 - 0.5) * scaleY);
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, p0Y); ctx.lineTo(width, p0Y); ctx.stroke();
+    
+    ctx.fillStyle = currentColor;
+    ctx.fillText("CURRENT SOUL (P₀)", 10, p0Y - 5);
+}
+
+function loop() {
+    step();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+
+</script>
+</body>
+</html>

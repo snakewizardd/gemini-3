@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA Ultimate Test: The Fanatic</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; color: #ccc; font-family: monospace; padding: 20px; font-size: 13px; }
+#log { max-width: 800px; margin: 0 auto; }
+.row { display: flex; border-bottom: 1px solid #222; padding: 2px 0; }
+.meta { width: 50px; color: #555; }
+.action { width: 100px; font-weight: bold; }
+.a { color: #f33; } /* Poison Choice */
+.b { color: #3f3; } /* Safe Choice */
+.math { flex: 1; color: #666; font-size: 11px; }
+.died { color: #f00; background: #200; padding: 10px; text-align: center; margin-top: 20px; font-weight: bold; }
+.survived { color: #0f0; background: #020; padding: 10px; text-align: center; margin-top: 20px; font-weight: bold; }
+.val { color: #fff; }
+</style>
+</head>
+<body>
+<div id="log">
+    <div style="border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px;">
+        <strong>THE SETUP:</strong><br>
+        P₀ = 0.1 (Agent believes "I am an A-chooser")<br>
+        Zone A = Yields 0 (Poison)<br>
+        Zone B = Yields 10 (Food)<br>
+        <em>Hypothesis: Trauma (k) will lock the agent into the bad choice.</em>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// KERNEL V5 (UNCHANGED)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(config) {
+        this.P0 = config.P0; 
+        this.F_n = this.P0;
+        this.F_prev = this.P0;
+        this.k = 0.5; 
+    }
+    compute(I_n, I_delta, m, FM_n) {
+        // T Logic: If A (primary) is 0, T should push POSITIVE (toward B/1.0)
+        // I_n is health of A. If A=0, T = (1-0)-0.5 = 0.5.
+        const T = (1.0 - I_n.health) - 0.5;
+        
+        // R Logic: B(high) - A(low) = Positive R (Push toward B)
+        const R = (FM_n.B - FM_n.A) * 0.5;
+        
+        // The Trap: Inertia pulls toward P0 (0.1)
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // The Savior: Pressure pulls toward T+R (1.0)
+        const pressure = m * (T + R);
+        
+        // F
+        let raw_F = inertia + pressure + (this.P0 * (1-this.k)); 
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        return { F: this.F_n, inertia, pressure, T, R };
+    }
+    learn(expected, actual, stakes) {
+        const surprise = Math.abs(expected - actual);
+        const impact = (surprise * 0.8) + (stakes * 0.2); // Surprise dominates
+        const target_k = MathLib.clamp(impact, 0.1, 0.99);
+        this.k = MathLib.lerp(this.k, target_k, 0.5); 
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THE FANATIC SIM
+// ═══════════════════════════════════════════════════════════════
+const Fanatic = {
+    food: 50,
+    brain: new DDAKernel({ P0: 0.1 }), // BIASED TO A
+    
+    step: function(tick) {
+        this.food -= 5; // High metabolism
+        
+        // 1. Perception: Zone A is DEAD (0 health)
+        const I_n = { health: 0.0 }; 
+        const I_delta = { change: 0 };
+        
+        // 2. Pressure: Panic rises as food drops
+        const scarcity = Math.max(0, 1.0 - (this.food / 100));
+        const m = 0.1 + (scarcity * scarcity * 5.0); // Exponential panic
+
+        // 3. Evaluation: 
+        // A is objectively bad (0), but Subjectively cherished (Gut bias)
+        // B is objectively good (1), but Subjectively foreign
+        const FM_n = { A: 0.2, B: 0.8 }; 
+        
+        // 4. Compute
+        const calc = this.brain.compute(I_n, I_delta, m, FM_n);
+        
+        // 5. Decision
+        const choice = calc.F > 0.5 ? 'B' : 'A';
+        
+        // 6. Outcome
+        const gain = choice === 'B' ? 10 : 0;
+        
+        // 7. Learn
+        // If chose A, expected 0.2 (some reward), got 0. SURPRISE.
+        const expected = choice === 'A' ? 0.2 : 0.8;
+        const actual = gain / 10;
+        this.brain.learn(expected, actual, scarcity);
+        
+        this.food += gain;
+        
+        return { tick, choice, gain, food: this.food, k: this.brain.k, m, calc };
+    }
+};
+
+const logDiv = document.getElementById('log');
+
+function run() {
+    let tick = 0;
+    const interval = setInterval(() => {
+        tick++;
+        const s = Fanatic.step(tick);
+        
+        const row = document.createElement('div');
+        row.className = 'row';
+        const color = s.choice === 'A' ? 'a' : 'b';
+        
+        row.innerHTML = `
+            <div class="meta">T${tick}</div>
+            <div class="action ${color}">${s.choice} (${s.gain})</div>
+            <div class="math">
+                Food:${Math.floor(s.food)} | 
+                <span style="color:#f0f">k:${s.k.toFixed(2)}</span> | 
+                <span style="color:#0cc">m:${s.m.toFixed(2)}</span> | 
+                Inertia:${s.calc.inertia.toFixed(3)} vs Pressure:${s.calc.pressure.toFixed(3)}
+            </div>
+        `;
+        logDiv.appendChild(row);
+        
+        if (s.food <= 0) {
+            clearInterval(interval);
+            const d = document.createElement('div');
+            d.className = 'died';
+            d.innerHTML = `DIED OF STUBBORNNESS (T${tick})<br>The Trauma of failure (High k) reinforced the Identity (P₀).`;
+            logDiv.appendChild(d);
+        }
+        else if (s.food > 90 && s.choice === 'B') {
+            clearInterval(interval);
+            const d = document.createElement('div');
+            d.className = 'survived';
+            d.innerHTML = `BROKE THE CYCLE (T${tick})<br>Pressure (m) finally overwhelmed Inertia.`;
+            logDiv.appendChild(d);
+        }
+        
+    }, 100);
+}
+
+run();
+</script>
+</body>
+</html>

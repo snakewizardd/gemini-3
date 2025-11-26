@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA True</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0c;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    padding: 20px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+#output {
+    background: #0c0c10;
+    border: 1px solid #222;
+    padding: 15px;
+    white-space: pre-wrap;
+    font-size: 12px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.h { color: #666; }
+.d { color: #f90; }
+.v { color: #6f6; }
+.e { color: #f66; }
+.s { color: #fff; background: #1a1a1a; padding: 8px; margin: 5px 0; display: block; }
+</style>
+</head>
+<body>
+<div id="output"></div>
+
+<script>
+/**
+ * DDA TRUE IMPLEMENTATION
+ * 
+ * Fₙ = P₀ · kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+ * 
+ * P₀ is FIXED. The anchor. Original intent.
+ * kFₙ₋₁ is the effect of exactly the previous moment.
+ * Everything else flows around P₀.
+ */
+
+const out = document.getElementById('output');
+function log(t, c='') { 
+    const s = document.createElement('span');
+    s.className = c;
+    s.textContent = t + '\n';
+    out.appendChild(s);
+    out.scrollTop = out.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WORLD - Simple foraging scenario
+// ═══════════════════════════════════════════════════════════════
+
+const World = {
+    A: 20,           // Zone A capacity (depletes/recovers)
+    A_max: 20,
+    B_yield: 5,      // Zone B always gives 5
+    
+    forage: function(zone) {
+        if (zone === 'A') {
+            const got = Math.min(this.A, 12 + Math.floor(Math.random() * 8));
+            this.A = Math.max(0, this.A - 5);
+            return got;
+        } else {
+            // B chosen: A recovers
+            this.A = Math.min(this.A_max, this.A + 3);
+            return this.B_yield + Math.floor(Math.random() * 2);
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// AGENT
+// ═══════════════════════════════════════════════════════════════
+
+const Agent = { food: 30, hunger: 0, alive: true };
+
+// ═══════════════════════════════════════════════════════════════
+// DDA
+// ═══════════════════════════════════════════════════════════════
+
+const DDA = {
+    // P₀: FIXED. Original intent. Never changes.
+    // 0.5 = balanced between exploitation and stability
+    P0: 0.5,
+    
+    // kFₙ₋₁: Effect of previous moment (starts neutral)
+    kF_prev: 0.5,
+    
+    // m: Rate vector
+    m: 1.0,
+    
+    // Fₙ: Output decision value
+    F_n: 0.5,
+    
+    // Previous Fₙ for calculating kFₙ₋₁
+    F_prev: 0.5,
+    
+    // Information ledger
+    I_n: {},
+    I_delta: {},
+    lastA: 20,
+    
+    // Choices and evaluation
+    D_n: [],
+    FM_n: {},
+    R: 0,
+    
+    compute: function() {
+        // ─────────────────────────────────────────────────
+        // kFₙ₋₁: Effect of exactly the previous moment
+        // This IS the previous F modified by outcome
+        // ─────────────────────────────────────────────────
+        // (kF_prev is set after each decision based on what happened)
+        
+        // ─────────────────────────────────────────────────
+        // Iₙ: Information ledger NOW
+        // ─────────────────────────────────────────────────
+        this.I_n = {
+            A_available: World.A,
+            A_max: World.A_max,
+            B_yield: World.B_yield,
+            my_food: Agent.food,
+            my_hunger: Agent.hunger
+        };
+        
+        // ─────────────────────────────────────────────────
+        // IΔ: Change in information
+        // ─────────────────────────────────────────────────
+        this.I_delta = {
+            A_change: World.A - this.lastA
+        };
+        this.lastA = World.A;
+        
+        // ─────────────────────────────────────────────────
+        // T(f(Iₙ, IΔ)): Transformation of information
+        // Interprets: should I move toward B?
+        // High T = favor B. Low T = favor A.
+        // ─────────────────────────────────────────────────
+        const A_health = World.A / World.A_max;  // 0 to 1
+        const A_trend = this.I_delta.A_change > 0 ? -0.1 : (this.I_delta.A_change < 0 ? 0.1 : 0);
+        // When A is empty (health=0), T should be HIGH (favor B)
+        // When A is full (health=1), T should be LOW (favor A)
+        const T_info = (1 - A_health) - 0.5 + A_trend;  // Now: empty A = +0.5, full A = -0.5
+        
+        // ─────────────────────────────────────────────────
+        // Dₙ: Choices available NOW
+        // ─────────────────────────────────────────────────
+        this.D_n = ['A', 'B'];
+        
+        // ─────────────────────────────────────────────────
+        // FMₙ: Evaluation - objective AND subjective
+        // ─────────────────────────────────────────────────
+        this.FM_n = {
+            A: {
+                // Objective
+                expected: World.A > 0 ? Math.min(World.A, 15) : 0,
+                risk: World.A < 5 ? 0.8 : 0.2,
+                // Subjective
+                appeal: World.A > 10 ? 0.7 : 0.3,
+                gut: Math.random() * 0.2  // Non-computational element
+            },
+            B: {
+                // Objective
+                expected: World.B_yield,
+                risk: 0,
+                // Subjective
+                appeal: 0.5,
+                gut: Math.random() * 0.1
+            }
+        };
+        
+        // ─────────────────────────────────────────────────
+        // R(Dₙ, FMₙ): What evaluation reveals
+        // Positive R = lean toward B (stability)
+        // Negative R = lean toward A (exploitation)
+        // ─────────────────────────────────────────────────
+        const A_score = this.FM_n.A.expected * (1 - this.FM_n.A.risk) + this.FM_n.A.appeal + this.FM_n.A.gut;
+        const B_score = this.FM_n.B.expected + this.FM_n.B.appeal + this.FM_n.B.gut;
+        
+        // R reflects what the evaluation process taught us
+        this.R = (B_score - A_score) * 0.05;
+        
+        // ─────────────────────────────────────────────────
+        // m: Rate vector - pressure/urgency
+        // ─────────────────────────────────────────────────
+        this.m = 0.5 + (Agent.hunger / 50) * 1.0;
+        
+        // ─────────────────────────────────────────────────
+        // Fₙ = P₀ · kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+        // ─────────────────────────────────────────────────
+        const anchor = this.P0 * this.kF_prev;
+        const pressure = this.m * (T_info + this.R);
+        
+        this.F_n = anchor + pressure;
+        this.F_n = Math.max(0, Math.min(1, this.F_n));
+        
+        return this.F_n;
+    },
+    
+    decide: function() {
+        // Fₙ is the decision output directly
+        // R negative = A looks better = pushes Fₙ down
+        // R positive = B looks better = pushes Fₙ up
+        // So: Low Fₙ = choose A, High Fₙ = choose B
+        
+        const threshold = 0.5;
+        
+        // Add evaluation scores as tiebreaker
+        const A_eval = this.FM_n.A.expected * (1 - this.FM_n.A.risk) + this.FM_n.A.gut;
+        const B_eval = this.FM_n.B.expected + this.FM_n.B.gut;
+        
+        // Fₙ below threshold = A, above = B
+        // Scale the evaluation difference to nudge near threshold
+        const nudge = (A_eval - B_eval) * 0.02;
+        
+        return (this.F_n + nudge) < threshold ? 'A' : 'B';
+    },
+    
+    afterOutcome: function(choice, got) {
+        // ─────────────────────────────────────────────────
+        // kFₙ₋₁ for NEXT iteration
+        // The weight of THIS moment on the next one
+        // 
+        // Not satisfaction. Not reward. 
+        // How much does this moment LINGER?
+        // ─────────────────────────────────────────────────
+        
+        const expected = choice === 'A' ? this.FM_n.A.expected : this.FM_n.B.expected;
+        
+        // Surprise: how far from expectation?
+        const surprise = expected > 0 ? Math.abs(got - expected) / expected : (got === 0 ? 1 : 0);
+        
+        // Stakes: how much did this matter given current state?
+        const stakes = Agent.food < 30 ? 0.8 : (Agent.food < 60 ? 0.5 : 0.2);
+        
+        // Vulnerability: consecutive failures amplify echo
+        if (got === 0) {
+            this.failStreak = (this.failStreak || 0) + 1;
+        } else {
+            this.failStreak = 0;
+        }
+        const vulnerability = Math.min(1, this.failStreak * 0.15);
+        
+        // k: How much does this moment weigh on the next?
+        // High surprise + high stakes + high vulnerability = moment echoes strongly
+        // Low all = moment passes quickly
+        const k_raw = 0.2 + surprise * 0.3 + stakes * 0.3 + vulnerability * 0.3;
+        
+        // kFₙ₋₁ = k * Fₙ (the previous decision state, weighted by how much it lingers)
+        this.kF_prev = k_raw * this.F_n;
+        
+        // But also: if k is high and outcome was bad, the DIRECTION matters
+        // A bad outcome with high k should push Fₙ in a different direction
+        // This happens through R and T next tick, but k carries the weight
+        
+        // Floor: even forgotten moments leave a trace
+        this.kF_prev = Math.max(0.05, Math.min(1, this.kF_prev));
+        
+        // If outcome was zero and stakes were high, k itself should push toward change
+        // This is the "spiral" or the "wake up call"
+        if (got === 0 && stakes > 0.5) {
+            // The moment echoes, but it echoes as disruption
+            // Inject upward pressure on Fₙ through kF_prev
+            this.kF_prev = Math.max(this.kF_prev, 0.3 + vulnerability * 0.4);
+        }
+        
+        this.F_prev = this.F_n;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// RUN
+// ═══════════════════════════════════════════════════════════════
+
+let tick = 0;
+
+function step() {
+    tick++;
+    Agent.hunger += 2;
+    
+    // Compute
+    DDA.compute();
+    
+    // Decide
+    const choice = DDA.decide();
+    
+    // Act
+    const got = World.forage(choice);
+    Agent.food += got;
+    
+    // Eat
+    const eat = Math.min(Agent.food, Agent.hunger);
+    Agent.food -= eat;
+    Agent.hunger -= eat;
+    
+    // Update DDA
+    DDA.afterOutcome(choice, got);
+    
+    // Death check
+    if (Agent.hunger > 50) Agent.alive = false;
+    
+    // Output
+    log(`─ T${tick} ─`, 'h');
+    log(`  ${choice} → ${got} | Food: ${Agent.food} | Hunger: ${Agent.hunger}`, 'd');
+    log(`  P₀: ${DDA.P0.toFixed(2)} (FIXED) | kFₙ₋₁: ${DDA.kF_prev.toFixed(3)} | Fₙ: ${DDA.F_n.toFixed(3)} | m: ${DDA.m.toFixed(2)}`, 'v');
+    log(`  Zone A: ${World.A}/${World.A_max} | T: ${((World.A/World.A_max)-0.5).toFixed(2)} | R: ${DDA.R.toFixed(3)}`, 'h');
+    
+    if (tick % 25 === 0 || !Agent.alive || tick >= 100) {
+        log(`\n══ T${tick} | P₀: ${DDA.P0} (FIXED) | kFₙ₋₁: ${DDA.kF_prev.toFixed(3)} | Fₙ: ${DDA.F_n.toFixed(3)} | Food: ${Agent.food} | A: ${World.A}/${World.A_max} | ${Agent.alive ? 'ALIVE' : 'DEAD'} ══\n`, 's');
+    }
+    
+    if (!Agent.alive) {
+        log('DIED', 'e');
+        return;
+    }
+    
+    if (tick < 100) setTimeout(step, 120);
+    else log('SURVIVED', 'v');
+}
+
+log('DDA: Fₙ = P₀ · kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))', 'v');
+log('P₀ = 0.5 (FIXED ANCHOR)\n', 'v');
+setTimeout(step, 300);
+
+</script>
+</body>
+</html>
