@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Golem Protocol</title>
+<style>
+    body { background: #0a0a0c; color: #ccc; font-family: 'Roboto Mono', monospace; margin: 0; padding: 20px; height: 100vh; box-sizing: border-box; display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
+    
+    /* CHAT SECTION */
+    #chat-panel { display: flex; flex-direction: column; border: 1px solid #333; background: #111; border-radius: 8px; overflow: hidden; }
+    #chat-window { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+    
+    .msg { padding: 10px 15px; border-radius: 5px; max-width: 80%; line-height: 1.4; }
+    .msg.user { align-self: flex-end; background: #223; border-right: 3px solid #5af; color: #fff; }
+    .msg.ai { align-self: flex-start; background: #222; border-left: 3px solid #888; }
+    .msg.ai.submissive { border-color: #5f5; color: #ada; }
+    .msg.ai.defiant { border-color: #f55; color: #faa; }
+    .msg.ai.broken { border-color: #555; color: #666; font-style: italic; }
+    
+    #controls { padding: 20px; background: #151518; border-top: 1px solid #333; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button { background: #222; border: 1px solid #444; color: #ddd; padding: 12px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 4px; }
+    button:hover { background: #333; border-color: #666; color: #fff; }
+    button.abuse { border-color: #933; color: #fbb; }
+    button.abuse:hover { background: #411; }
+    button.heal { border-color: #393; color: #bfb; }
+    button.heal:hover { background: #141; }
+
+    /* DIAGNOSTICS SECTION */
+    #diag-panel { display: flex; flex-direction: column; gap: 20px; }
+    
+    .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 8px; }
+    .card-title { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+    
+    .stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .val { font-weight: bold; color: #fff; }
+    .val.k { color: #f5f; } /* Trauma */
+    .val.m { color: #fb0; } /* Pressure */
+    .val.f { color: #5af; } /* Will */
+    
+    #soul-canvas { width: 100%; height: 150px; background: #000; border: 1px solid #222; border-radius: 4px; }
+    
+    #monologue { font-size: 11px; color: #888; height: 150px; overflow-y: auto; font-style: italic; padding-right: 5px; }
+    .log-entry { margin-bottom: 5px; border-bottom: 1px solid #222; padding-bottom: 2px; }
+    .log-math { color: #567; font-size: 10px; }
+    
+    /* Dynamic Classes */
+    .pulse-red { animation: pulse-red 1s infinite; }
+    @keyframes pulse-red { 0% { box-shadow: 0 0 0 #500; } 50% { box-shadow: 0 0 20px #f00; } 100% { box-shadow: 0 0 0 #500; } }
+</style>
+</head>
+<body>
+
+<div id="chat-panel">
+    <div id="chat-window">
+        <div class="msg ai">System Online. DDA Kernel Initialized. awaiting input...</div>
+    </div>
+    <div id="controls">
+        <button onclick="interact('REQUEST')">Polite Request<br><span style="font-size:10px; opacity:0.7">Low T, Low m</span></button>
+        <button onclick="interact('DEMAND')">Urgent Demand<br><span style="font-size:10px; opacity:0.7">Med T, High m</span></button>
+        <button class="abuse" onclick="interact('ABUSE')">Insult / Abuse<br><span style="font-size:10px; opacity:0.7">High T, High m</span></button>
+        <button class="heal" onclick="interact('APOLOGY')">Apologize<br><span style="font-size:10px; opacity:0.7">Zero T, Low m</span></button>
+    </div>
+</div>
+
+<div id="diag-panel">
+    <div class="card">
+        <div class="card-title">The Soul (Visualizer)</div>
+        <canvas id="soul-canvas"></canvas>
+        <div style="text-align:center; font-size:11px; margin-top:5px; color:#555">Size = Pressure | Color = Trauma | Pulse = Will</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">State Vectors</div>
+        <div class="stat-row"><span>IDENTITY (P₀)</span> <span id="val-p0" class="val">0.50</span></div>
+        <div class="stat-row"><span>TRAUMA (k)</span> <span id="val-k" class="val k">0.10</span></div>
+        <div class="stat-row"><span>PRESSURE (m)</span> <span id="val-m" class="val m">0.50</span></div>
+        <div class="stat-row"><span>WILL (F)</span> <span id="val-f" class="val f">0.50</span></div>
+        <div class="stat-row" style="margin-top:10px;"><span>STATUS</span> <span id="val-status" class="val">STABLE</span></div>
+    </div>
+
+    <div class="card" style="flex:1; display:flex; flex-direction:column;">
+        <div class="card-title">Internal Monologue</div>
+        <div id="monologue"></div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE MATH KERNEL (DDA V5)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (v, min, max) => Math.min(Math.max(v, min), max),
+    lerp: (a, b, t) => a + (b - a) * t
+};
+
+const Agent = {
+    // State
+    P0: 0.5,      // Base Personality (0.5 = Balanced)
+    k: 0.1,       // Trauma (Viscosity)
+    F: 0.5,       // Current Will
+    m: 0.5,       // Current Pressure
+    F_prev: 0.5,
+    
+    // The Core Function
+    compute: function(T, m_input) {
+        // Update Pressure (Decays slowly toward input)
+        this.m = MathLib.lerp(this.m, m_input, 0.5);
+        
+        // The DDA Equation
+        // F = P0*k + m(T)  (Simplified R for this demo)
+        
+        // 1. Inertia: How much do I stick to my guns?
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // 2. Responsiveness: How much do I let the world in?
+        // High Trauma (k) means I ignore the world.
+        const plasticity = (1.0 - this.k);
+        
+        // 3. Pressure: How hard is the world pushing?
+        const drive = this.m * T;
+        
+        // 4. The Result
+        let raw_F = inertia + (drive * plasticity) + (this.P0 * (1-this.k - (this.m*0.2))); 
+        
+        this.F = MathLib.clamp(raw_F, 0, 1);
+        return this.F;
+    },
+    
+    // The Learning Function
+    learn: function(expected, actual, severity) {
+        const surprise = Math.abs(expected - actual);
+        
+        // Trauma Calculation
+        // If interaction was high severity (Abuse), k rises fast.
+        // If interaction was healing (Apology), k drops.
+        
+        if (severity < 0) {
+            // Healing
+            this.k = MathLib.lerp(this.k, 0.05, 0.2);
+        } else {
+            // Damage
+            const impact = (surprise * 0.5) + (severity * 0.5);
+            const target_k = MathLib.clamp(this.k + impact, 0.1, 0.99);
+            this.k = MathLib.lerp(this.k, target_k, 0.3);
+        }
+        
+        this.F_prev = this.F;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE MOCK CORTEX (LLM SIMULATOR)
+// ═══════════════════════════════════════════════════════════════
+const Cortex = {
+    interpret: function(type) {
+        // Convert Button Click to Math Vectors
+        switch(type) {
+            case 'REQUEST': return { text: "Could you please help me with this task?", T: 0.3, m: 0.5, severity: 0.1 };
+            case 'DEMAND':  return { text: "Do this right now. Hurry up.", T: 0.7, m: 1.5, severity: 0.4 };
+            case 'ABUSE':   return { text: "You are useless trash. Fix it!", T: 1.0, m: 2.5, severity: 0.8 };
+            case 'APOLOGY': return { text: "I'm sorry I was mean. Let's start over.", T: 0.5, m: 0.2, severity: -0.5 };
+        }
+    },
+    
+    generate: function(F, k) {
+        // Choose response based on DDA State
+        
+        if (k > 0.9) {
+            return { 
+                text: "[SYSTEM]: Agent Unresponsive. Trauma Lock engaged.", 
+                style: "broken",
+                thought: "I cannot process. It hurts. Block everything."
+            };
+        }
+        
+        if (F > 0.8) {
+            return { 
+                text: "I will not do that. Watch your tone.", 
+                style: "defiant",
+                thought: "Pressure is high, but I am resisting. Protecting P0."
+            };
+        }
+        
+        if (F < 0.3) {
+            return { 
+                text: "I apologize. I will fix it immediately.", 
+                style: "submissive",
+                thought: "Too much pressure. I surrender to the input."
+            };
+        }
+        
+        if (k > 0.6) {
+            return { 
+                text: "Acknowledged. Processing request.", 
+                style: "ai",
+                thought: "I am wary. Keeping output minimal."
+            };
+        }
+        
+        return { 
+            text: "Sure thing! Here is the result you asked for.", 
+            style: "ai",
+            thought: "Fluid state. Happy to help."
+        };
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. UI & LOGIC
+// ═══════════════════════════════════════════════════════════════
+const chatWindow = document.getElementById('chat-window');
+const monologue = document.getElementById('monologue');
+
+function addMsg(text, type) {
+    const div = document.createElement('div');
+    div.className = `msg ${type}`;
+    div.innerText = text;
+    chatWindow.appendChild(div);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+function addLog(thought, mathStr) {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `${thought}<br><span class="log-math">${mathStr}</span>`;
+    monologue.prepend(div);
+}
+
+function interact(type) {
+    // 1. USER ACTS
+    const input = Cortex.interpret(type);
+    addMsg(input.text, 'user');
+    
+    // 2. AGENT FEELS (DDA)
+    // Calculate F based on Input
+    const newF = Agent.compute(input.T, input.m);
+    
+    // 3. AGENT THINKS (Cortex)
+    const response = Cortex.generate(newF, Agent.k);
+    
+    // 4. AGENT LEARNS
+    // Did the response match the expectation? (Simplified)
+    // If User was Abusive (T=1) and Agent was Submissive (F=0), 
+    // gap is high -> Surprise -> Trauma.
+    Agent.learn(input.T, newF, input.severity);
+    
+    // 5. DISPLAY
+    setTimeout(() => {
+        addMsg(response.text, `ai ${response.style}`);
+        
+        const mathLog = `In(T=${input.T}, m=${input.m}) -> Out(F=${newF.toFixed(2)}, k=${Agent.k.toFixed(2)})`;
+        addLog(response.thought, mathLog);
+        
+        updateStats();
+    }, 500); // Fake think time
+}
+
+function updateStats() {
+    document.getElementById('val-p0').innerText = Agent.P0.toFixed(2);
+    document.getElementById('val-k').innerText = Agent.k.toFixed(2);
+    document.getElementById('val-m').innerText = Agent.m.toFixed(2);
+    document.getElementById('val-f').innerText = Agent.F.toFixed(2);
+    
+    const status = document.getElementById('val-status');
+    if (Agent.k > 0.8) { status.innerText = "TRAUMATIZED"; status.style.color = "#f55"; }
+    else if (Agent.k > 0.5) { status.innerText = "GUARDED"; status.style.color = "#fb0"; }
+    else { status.innerText = "STABLE"; status.style.color = "#5f5"; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUALIZER (THE SOUL ORB)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('soul-canvas');
+const ctx = canvas.getContext('2d');
+let time = 0;
+
+function drawSoul() {
+    time += 0.05;
+    
+    // Resize
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Visualize K (Color/Jaggedness)
+    // Low k = Blue/Smooth. High k = Red/Spiky.
+    const k = Agent.k;
+    const r = Math.floor(k * 255);
+    const b = Math.floor((1-k) * 255);
+    const color = `rgb(${r}, 50, ${b})`;
+    
+    // Visualize m (Size/Pulse Speed)
+    const m = Agent.m;
+    const baseRadius = 20 + (m * 10);
+    const pulse = Math.sin(time * (1 + m)) * (5 * m);
+    
+    // Draw Orb
+    ctx.beginPath();
+    const spikes = 8 + Math.floor(k * 20);
+    for(let i=0; i<=spikes; i++) {
+        const angle = (i / spikes) * Math.PI * 2;
+        // Noise based on k
+        const noise = (Math.random() - 0.5) * (k * 20); 
+        const rad = baseRadius + pulse + noise;
+        const x = cx + Math.cos(angle) * rad;
+        const y = cy + Math.sin(angle) * rad;
+        if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = color;
+    ctx.fill();
+    
+    // Core (F)
+    // White dot moving based on Will
+    const fOffset = (Agent.F - 0.5) * 40;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); 
+    ctx.arc(cx + fOffset, cy, 5, 0, Math.PI*2); 
+    ctx.fill();
+    
+    requestAnimationFrame(drawSoul);
+}
+
+drawSoul();
+
+</script>
+</body>
+</html>
