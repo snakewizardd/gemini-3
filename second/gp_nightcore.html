@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GemmyCore // Optimist Prime</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&family=Outfit:wght@900&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #0d1117; 
+        color: #e6edf3; 
+        font-family: 'JetBrains Mono', monospace; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 1;
+    }
+
+    /* UI OVERLAY */
+    #ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none;
+        display: flex; flex-direction: column; justify-content: space-between;
+        padding: 40px; box-sizing: border-box;
+    }
+
+    .header {
+        display: flex; justify-content: space-between; align-items: flex-start;
+    }
+
+    h1 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 3rem; margin: 0;
+        background: linear-gradient(135deg, #7ee787, #2f81f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 0 30px rgba(47, 129, 247, 0.3);
+    }
+
+    .stat-block {
+        text-align: right;
+        font-size: 0.8rem;
+        color: #8b949e;
+    }
+
+    .val { color: #fff; font-weight: bold; }
+    .status-ok { color: #7ee787; }
+    
+    /* TERMINAL LOG */
+    #console {
+        font-size: 0.9rem;
+        color: #8b949e;
+        height: 150px;
+        overflow: hidden;
+        display: flex; flex-direction: column-reverse;
+        mask-image: linear-gradient(to top, black 80%, transparent 100%);
+    }
+
+    .log-msg { margin-top: 4px; }
+    .log-msg span { color: #2f81f7; margin-right: 10px; }
+
+    /* START BUTTON */
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(13, 17, 23, 0.9);
+        backdrop-filter: blur(5px);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 0.5s;
+    }
+
+    .btn {
+        background: linear-gradient(135deg, #2f81f7, #a371f7);
+        border: none; padding: 20px 60px;
+        color: white; font-family: 'Outfit', sans-serif; font-weight: 900;
+        font-size: 1.5rem; letter-spacing: 2px;
+        border-radius: 50px;
+        box-shadow: 0 0 50px rgba(47, 129, 247, 0.5);
+        transition: transform 0.2s;
+    }
+    .btn:hover { transform: scale(1.05); }
+
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <button class="btn">COMPILE HAPPINESS</button>
+</div>
+
+<div id="ui-layer">
+    <div class="header">
+        <div>
+            <h1>GEMMYCORE</h1>
+            <div style="margin-top:5px; font-size: 0.8rem; letter-spacing: 2px;">BUILD 1.0 // OPTIMIST PRIME</div>
+        </div>
+        <div class="stat-block">
+            <div>CPU_LOAD: <span id="cpu-val" class="val status-ok">LOW</span></div>
+            <div>BPM: <span class="val">172</span></div>
+            <div>KEY: <span class="val">F LYDIAN</span></div>
+        </div>
+    </div>
+    
+    <div id="console">
+        </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. SYSTEM CORE (Configuration)
+// ═══════════════════════════════════════════════════════════════
+const SYS = {
+    BPM: 172,
+    // F Lydian: F G A B C D E (Bright, floaty, hopeful)
+    // Scale degrees: 1, 2, 3, #4, 5, 6, 7
+    SCALE: [349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25], 
+    NOTES: ['F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5'],
+    PARTICLE_LIMIT: 200 // Safety cap to prevent crash
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (Optimized Voice Pooling)
+// ═══════════════════════════════════════════════════════════════
+const Audio = {
+    ctx: null, master: null, delay: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        
+        // LIMITER (Safety first!)
+        const limiter = Audio.ctx.createDynamicsCompressor();
+        limiter.threshold.value = -2.0;
+        limiter.ratio.value = 20.0;
+        limiter.attack.value = 0.001;
+
+        Audio.master = Audio.ctx.createGain();
+        Audio.master.gain.value = 0.5;
+
+        // Stereo Delay (The "Space")
+        Audio.delay = Audio.ctx.createDelay();
+        Audio.delay.delayTime.value = 60 / SYS.BPM * 0.75; // Dotted 8th
+        const fb = Audio.ctx.createGain();
+        fb.gain.value = 0.4;
+        const filter = Audio.ctx.createBiquadFilter();
+        filter.frequency.value = 3000; // Bright repeats
+        
+        Audio.delay.connect(fb);
+        fb.connect(filter);
+        filter.connect(Audio.delay);
+        
+        const delayMix = Audio.ctx.createGain();
+        delayMix.gain.value = 0.25;
+
+        // Routing
+        Audio.master.connect(limiter);
+        limiter.connect(Audio.ctx.destination);
+        Audio.master.connect(Audio.delay);
+        Audio.delay.connect(delayMix);
+        delayMix.connect(Audio.master);
+
+        log("Audio Graph Built successfully.");
+        log("Limiter engaged. Safety protocols active.");
+    },
+
+    // SUPER-SAW SYNTH (Optimized)
+    playSynth: (freq, duration, pan = 0) => {
+        if (!Audio.ctx) return;
+        const t = Audio.ctx.currentTime;
+
+        // Stereo Panning
+        const panner = Audio.ctx.createStereoPanner();
+        panner.pan.value = pan;
+
+        // Oscillator A (Saw)
+        const osc1 = Audio.ctx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc1.frequency.value = freq;
+        
+        // Oscillator B (Detuned Saw for width)
+        const osc2 = Audio.ctx.createOscillator();
+        osc2.type = 'sawtooth';
+        osc2.frequency.value = freq;
+        osc2.detune.value = 8; // Cents
+
+        // Filter Envelope (Pluck)
+        const filter = Audio.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 1;
+        filter.frequency.setValueAtTime(400, t);
+        filter.frequency.exponentialRampToValueAtTime(8000, t + 0.02);
+        filter.frequency.exponentialRampToValueAtTime(400, t + duration);
+
+        // Amp Envelope
+        const amp = Audio.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.3, t + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        // Connect
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(amp);
+        amp.connect(panner);
+        panner.connect(Audio.master);
+
+        // Fire
+        osc1.start(t); osc2.start(t);
+        osc1.stop(t + duration + 0.1); osc2.stop(t + duration + 0.1);
+    },
+
+    playKick: (t) => {
+        const osc = Audio.ctx.createOscillator();
+        const amp = Audio.ctx.createGain();
+        
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+        
+        amp.gain.setValueAtTime(0.8, t);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        
+        osc.connect(amp);
+        amp.connect(Audio.master);
+        osc.start(t); osc.stop(t + 0.25);
+        
+        // Visual Pump
+        Visuals.kickPulse();
+    },
+    
+    playBass: (t, freq) => {
+        const osc = Audio.ctx.createOscillator();
+        const amp = Audio.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq / 2; // Sub octave
+        
+        const filter = Audio.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 400;
+
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.4, t + 0.02);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+        osc.connect(filter);
+        filter.connect(amp);
+        amp.connect(Audio.master);
+        osc.start(t); osc.stop(t+0.25);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE OPTIMIST SEQUENCER
+// ═══════════════════════════════════════════════════════════════
+// Generating an endless stream of uplifting Lydian Arpeggios
+const Score = {
+    beat: 0,
+    measure: 0,
+
+    next: () => {
+        const beat = Score.beat % 16; // 4 bar loops
+        const t = Audio.ctx.currentTime;
+        const S = 60 / SYS.BPM / 4; // 16th note duration
+
+        // 1. KICK (4-on-the-floor)
+        if (beat % 4 === 0) Audio.playKick(t);
+
+        // 2. OFF-BEAT BASS
+        if (beat % 4 === 2) {
+            // Root progression: F -> A -> G -> F
+            let rootIdx = 0; // F
+            if (Score.measure % 4 === 1) rootIdx = 2; // A
+            if (Score.measure % 4 === 2) rootIdx = 1; // G
+            Audio.playBass(t, SYS.SCALE[rootIdx]);
+        }
+
+        // 3. EUPHORIC ARPEGGIOS
+        // Pattern: Upward spiraling structures
+        // We select notes from scale based on a simple math pattern
+        // Note Index = (Beat + Measure offset) % 7
+        let offset = (Score.measure % 2 === 0) ? 0 : 2; // Shift up 3rd every other bar
+        let noteIdx = (beat + offset) % 7;
+        
+        // Randomly skip notes to create rhythm texture (Space)
+        if (Math.random() > 0.2) {
+            let freq = SYS.SCALE[noteIdx];
+            // Pitch up octave for melody
+            if (beat % 2 !== 0) freq *= 2; 
+            
+            // Pan left/right based on pitch
+            let pan = (noteIdx / 7) * 2 - 1; 
+            
+            Audio.playSynth(freq, 0.3, pan);
+            Visuals.spawnParticle(pan, freq);
+        }
+
+        // ADVANCE
+        Score.beat++;
+        if (Score.beat % 16 === 0) {
+            Score.measure++;
+            if(Score.measure % 4 === 0) log("Cycle Complete. Optimizing Joy...");
+        }
+
+        // Schedule next tick
+        setTimeout(Score.next, S * 1000);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUAL ENGINE (The Prism)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h;
+let particles = [];
+let pulse = 1.0;
+
+window.addEventListener('resize', () => { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; });
+w = window.innerWidth; h = window.innerHeight;
+
+const Visuals = {
+    spawnParticle: (pan, freq) => {
+        if (particles.length > SYS.PARTICLE_LIMIT) return; // Prevention
+        
+        // Map Frequency to Color (Lydian Rainbow)
+        // Lower freq = Blue/Green, Higher = Pink/White
+        let hue = 180 + (freq / 1000) * 180;
+        
+        particles.push({
+            x: (w/2) + (pan * (w/3)),
+            y: h,
+            vx: (Math.random()-0.5) * 2,
+            vy: -10 - (Math.random() * 10), // Shooting UP
+            size: 5 + Math.random() * 10,
+            color: `hsl(${hue}, 100%, 70%)`,
+            life: 1.0,
+            char: String.fromCharCode(0x30A0 + Math.random() * 96) // Random Katakana/Matrix glitch
+        });
+    },
+
+    kickPulse: () => {
+        pulse = 1.1; // Visual Zoom
+        document.body.style.backgroundColor = "#1a1f2e";
+        setTimeout(() => document.body.style.backgroundColor = "#0d1117", 50);
+    },
+
+    draw: () => {
+        // Clear with fade trail (Cyber motion blur)
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.2)';
+        ctx.fillRect(0, 0, w, h);
+
+        const cx = w / 2;
+        const cy = h / 2;
+
+        // Draw The Core (The Prism)
+        if (pulse > 1.0) pulse -= 0.01;
+        let radius = 100 * pulse;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#2f81f7';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 15]); // Tech ring
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Inner Core
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.6, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(126, 231, 135, ${pulse - 1})`; // Green flash
+        ctx.fill();
+        ctx.strokeStyle = '#7ee787';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Particles (The Compiled Code)
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.015;
+
+            ctx.font = `${p.size}px monospace`;
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            ctx.fillText(p.char, p.x, p.y);
+            ctx.globalAlpha = 1.0;
+
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        requestAnimationFrame(Visuals.draw);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. UTILS & INIT
+// ═══════════════════════════════════════════════════════════════
+function log(msg) {
+    const el = document.getElementById('console');
+    const line = document.createElement('div');
+    line.className = 'log-msg';
+    line.innerHTML = `<span>>></span> ${msg}`;
+    el.prepend(line);
+}
+
+document.getElementById('overlay').addEventListener('click', () => {
+    Audio.init().then(() => {
+        if (Audio.ctx.state === 'suspended') Audio.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 500);
+        
+        log("System Initialized.");
+        log(`Sequence BPM: ${SYS.BPM}`);
+        log("Compiling Lydian Structures...");
+        
+        Score.next();
+        Visuals.draw();
+    });
+});
+
+</script>
+</body>
+</html>

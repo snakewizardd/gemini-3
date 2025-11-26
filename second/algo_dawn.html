@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Algorithmic Dawn // GemmyCore</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Share+Tech+Mono&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #000; 
+        color: #fff; 
+        font-family: 'Share Tech Mono', monospace; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 1;
+    }
+
+    /* CINEMATIC HUD */
+    #ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none;
+        padding: 40px; box-sizing: border-box;
+        display: flex; flex-direction: column; justify-content: space-between;
+    }
+
+    .top-bar {
+        display: flex; justify-content: space-between;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 20px;
+    }
+
+    h1 {
+        font-family: 'Syncopate', sans-serif;
+        font-weight: 700; font-size: 2rem; margin: 0;
+        text-transform: uppercase; letter-spacing: 5px;
+        background: linear-gradient(90deg, #fff, #0ff);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+    }
+
+    .section-display {
+        font-family: 'Syncopate', sans-serif;
+        font-size: 4rem; color: rgba(255,255,255,0.05);
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center; width: 100%;
+        pointer-events: none;
+        transition: all 0.5s;
+    }
+
+    .active-section {
+        color: rgba(255,255,255,0.9);
+        text-shadow: 0 0 30px #0ff;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    /* ANALYZER BARS */
+    .analyzer {
+        display: flex; gap: 2px; height: 100px; align-items: flex-end;
+    }
+    .bar { width: 10px; background: #0ff; transition: height 0.05s; }
+
+    /* START OVERLAY */
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: #000;
+        display: flex; justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 1s;
+    }
+
+    .btn {
+        border: 1px solid #0ff; color: #0ff; padding: 20px 60px;
+        font-family: 'Syncopate', sans-serif; font-size: 1.2rem;
+        background: rgba(0, 255, 255, 0.05);
+        transition: all 0.2s;
+        text-shadow: 0 0 10px #0ff; box-shadow: 0 0 20px rgba(0,255,255,0.1);
+    }
+    .btn:hover { background: #0ff; color: #000; box-shadow: 0 0 50px #0ff; }
+
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="btn">EXECUTE PROTOCOL</div>
+</div>
+
+<div id="ui-layer">
+    <div class="top-bar">
+        <div>
+            <h1>The Algorithmic Dawn</h1>
+            <div style="color: #666; margin-top:5px;">COMPOSER: GEMMY_AI // BPM: 175</div>
+        </div>
+        <div style="text-align:right">
+            <div>T: <span id="time">0:00</span></div>
+            <div style="color:#0ff">STATUS: <span id="status">STANDBY</span></div>
+        </div>
+    </div>
+
+    <div id="section-text" class="section-display">SYSTEM BOOT</div>
+
+    <div class="analyzer" id="analyzer">
+        </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. SYSTEM CORE (The F# Major Palette)
+// ═══════════════════════════════════════════════════════════════
+const SYS = {
+    BPM: 175,
+    // F# Major Scale (Bright, Euphoric)
+    // F#, G#, A#, B, C#, D#, E#
+    SCALE: [369.99, 415.30, 466.16, 493.88, 554.37, 622.25, 698.46],
+    ROOT: 369.99,
+    BASS_ROOT: 46.25, // F#1
+    PARTICLE_LIMIT: 250
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (Polyphonic & Optimized)
+// ═══════════════════════════════════════════════════════════════
+const Audio = {
+    ctx: null, master: null, delay: null, reverb: null,
+    analyser: null,
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        
+        // Master Limiter
+        const limiter = Audio.ctx.createDynamicsCompressor();
+        limiter.threshold.value = -3;
+        limiter.ratio.value = 12;
+
+        Audio.master = Audio.ctx.createGain();
+        Audio.master.gain.value = 0.6;
+
+        // FX: Ethereal Delay
+        Audio.delay = Audio.ctx.createDelay();
+        Audio.delay.delayTime.value = 60 / SYS.BPM * 0.75; // Dotted 8th
+        const fb = Audio.ctx.createGain();
+        fb.gain.value = 0.4;
+        const filter = Audio.ctx.createBiquadFilter();
+        filter.frequency.value = 2000;
+        
+        Audio.delay.connect(fb); fb.connect(filter); filter.connect(Audio.delay);
+        const delMix = Audio.ctx.createGain(); delMix.gain.value = 0.3;
+
+        // FX: Reverb
+        // Simple decay noise buffer
+        const rate = Audio.ctx.sampleRate;
+        const len = rate * 3.0;
+        const buff = Audio.ctx.createBuffer(2, len, rate);
+        for(let i=0; i<len; i++) {
+            let d = Math.pow(1 - i/len, 3);
+            buff.getChannelData(0)[i] = (Math.random()*2-1)*d;
+            buff.getChannelData(1)[i] = (Math.random()*2-1)*d;
+        }
+        Audio.reverb = Audio.ctx.createConvolver();
+        Audio.reverb.buffer = buff;
+        const revMix = Audio.ctx.createGain(); revMix.gain.value = 0.3;
+
+        // Analyser
+        Audio.analyser = Audio.ctx.createAnalyser();
+        Audio.analyser.fftSize = 64;
+
+        // Routing
+        Audio.master.connect(limiter);
+        limiter.connect(Audio.ctx.destination);
+        limiter.connect(Audio.analyser);
+        
+        Audio.master.connect(Audio.delay);
+        Audio.delay.connect(delMix);
+        delMix.connect(Audio.master);
+
+        Audio.master.connect(Audio.reverb);
+        Audio.reverb.connect(revMix);
+        revMix.connect(Audio.master);
+    },
+
+    // INSTRUMENT: The Super-Saw Lead
+    playLead: (freq, dur, pan=0, detune=0) => {
+        if(!Audio.ctx) return;
+        const t = Audio.ctx.currentTime;
+        const panner = Audio.ctx.createStereoPanner(); panner.pan.value = pan;
+        
+        const osc1 = Audio.ctx.createOscillator(); osc1.type = 'sawtooth'; osc1.frequency.value = freq;
+        const osc2 = Audio.ctx.createOscillator(); osc2.type = 'sawtooth'; osc2.frequency.value = freq; osc2.detune.value = 8 + detune;
+        const osc3 = Audio.ctx.createOscillator(); osc3.type = 'square'; osc3.frequency.value = freq/2; osc3.detune.value = -8;
+
+        const f = Audio.ctx.createBiquadFilter(); f.type = 'lowpass';
+        f.frequency.setValueAtTime(400, t);
+        f.frequency.linearRampToValueAtTime(6000, t+0.05);
+        f.frequency.exponentialRampToValueAtTime(400, t+dur);
+
+        const a = Audio.ctx.createGain(); a.gain.setValueAtTime(0, t);
+        a.gain.linearRampToValueAtTime(0.3, t+0.02);
+        a.gain.exponentialRampToValueAtTime(0.001, t+dur);
+
+        osc1.connect(f); osc2.connect(f); osc3.connect(f);
+        f.connect(a); a.connect(panner); panner.connect(Audio.master);
+        
+        osc1.start(t); osc2.start(t); osc3.start(t);
+        osc1.stop(t+dur+0.2); osc2.stop(t+dur+0.2); osc3.stop(t+dur+0.2);
+    },
+
+    // INSTRUMENT: The Pad (Atmosphere)
+    playPad: (freqs, dur) => {
+        const t = Audio.ctx.currentTime;
+        const a = Audio.ctx.createGain();
+        a.gain.setValueAtTime(0, t);
+        a.gain.linearRampToValueAtTime(0.15, t+1); // Slow rise
+        a.gain.linearRampToValueAtTime(0, t+dur);
+
+        freqs.forEach(fr => {
+            const o = Audio.ctx.createOscillator(); o.type = 'triangle';
+            o.frequency.value = fr;
+            o.connect(a);
+            o.start(t); o.stop(t+dur+0.1);
+        });
+        a.connect(Audio.reverb); // Pads live in reverb
+    },
+
+    // INSTRUMENT: The 909 Kick
+    playKick: (t) => {
+        const o = Audio.ctx.createOscillator();
+        const g = Audio.ctx.createGain();
+        o.frequency.setValueAtTime(180, t);
+        o.frequency.exponentialRampToValueAtTime(50, t+0.1);
+        g.gain.setValueAtTime(1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t+0.4);
+        o.connect(g); g.connect(Audio.master);
+        o.start(t); o.stop(t+0.4);
+        Visuals.kick();
+    },
+
+    // INSTRUMENT: The Offbeat Donk Bass
+    playBass: (t, freq) => {
+        const o = Audio.ctx.createOscillator(); o.type='sawtooth'; o.frequency.value = freq;
+        const f = Audio.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = 800;
+        const g = Audio.ctx.createGain();
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t+0.02); g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+        o.connect(f); f.connect(g); g.connect(Audio.master);
+        o.start(t); o.stop(t+0.3);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE COMPOSER (State Machine)
+// ═══════════════════════════════════════════════════════════════
+const Score = {
+    beat: 0,
+    measure: 0,
+    section: 'BOOT',
+    
+    // Chord Progressions (F# Major)
+    // I (F#) - V (C#) - vi (D#m) - IV (B)
+    chords: [
+        [369.99, 466.16, 554.37], // F# Major
+        [277.18, 349.23, 415.30], // C# Major
+        [311.13, 369.99, 466.16], // D# Minor
+        [246.94, 311.13, 369.99]  // B Major
+    ],
+    rootNotes: [46.25, 34.65, 38.89, 30.87],
+
+    tick: () => {
+        const t = Audio.ctx.currentTime;
+        const b = Score.beat % 16;
+        const S = 60 / SYS.BPM / 4; // 16th Note
+        
+        // SECTION LOGIC
+        if (Score.measure === 0) changeSection('BOOT');
+        if (Score.measure === 4) changeSection('COMPILE');
+        if (Score.measure === 12) changeSection('GLITCH');
+        if (Score.measure === 16) changeSection('OPTIMIZE'); // THE DROP
+        if (Score.measure === 32) changeSection('SHUTDOWN');
+
+        let currentChordIdx = Math.floor((Score.measure % 4));
+        let root = Score.rootNotes[currentChordIdx];
+
+        // 1. KICK DRUM
+        if (Score.section === 'COMPILE' || Score.section === 'OPTIMIZE') {
+            if (b % 4 === 0) Audio.playKick(t);
+        }
+        if (Score.section === 'GLITCH') {
+            // Broken beat
+            if (b === 0 || b === 3 || b === 8 || b === 11) Audio.playKick(t);
+        }
+
+        // 2. BASS
+        if (Score.section !== 'BOOT' && Score.section !== 'SHUTDOWN') {
+            if (b % 4 === 2) Audio.playBass(t, root); // Offbeat
+        }
+
+        // 3. PADS (Long tones)
+        if (b === 0 && Score.measure % 2 === 0) {
+            Audio.playPad(Score.chords[currentChordIdx], 4.0); // 2 Bar sustain
+        }
+
+        // 4. LEAD ARPEGGIOS
+        // Generate Euphoria pattern
+        if (Score.section === 'OPTIMIZE' || Score.section === 'COMPILE') {
+            // Arp pattern: Root - 5th - Octave - 3rd
+            // 16th notes
+            let chord = Score.chords[currentChordIdx];
+            let note = chord[b % 3];
+            if (b % 2 === 0) note *= 2; // Octave jump
+            
+            // Randomize slightly for "human" feel
+            if (Math.random() > 0.1) {
+                let pan = (b % 2 === 0) ? -0.5 : 0.5;
+                Audio.playLead(note, 0.2, pan);
+                Visuals.spawn(pan, note, 'lead');
+            }
+        }
+        
+        // 5. GLITCH FX
+        if (Score.section === 'GLITCH' && Math.random() > 0.7) {
+            let freq = 1000 + Math.random() * 2000;
+            Audio.playLead(freq, 0.05, 0, 500); // Detuned squeal
+            Visuals.spawn(0, freq, 'glitch');
+        }
+
+        Score.beat++;
+        if (Score.beat % 16 === 0) Score.measure++;
+        
+        if (Score.section !== 'END') {
+            setTimeout(Score.tick, S * 1000);
+        }
+    }
+};
+
+function changeSection(name) {
+    if (Score.section === name) return;
+    Score.section = name;
+    
+    const el = document.getElementById('section-text');
+    el.innerText = name;
+    el.classList.add('active-section');
+    setTimeout(() => el.classList.remove('active-section'), 500);
+    
+    document.getElementById('status').innerText = name;
+    
+    if (name === 'SHUTDOWN') {
+        setTimeout(() => { document.getElementById('overlay').style.opacity = 1; }, 5000);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUAL ENGINE (The GPU Renderer)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w = window.innerWidth, h = window.innerHeight;
+let particles = [];
+let kickScale = 1.0;
+
+window.addEventListener('resize', () => { w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; });
+canvas.width = w; canvas.height = h;
+
+// Build Analyzer UI
+const analyzerContainer = document.getElementById('analyzer');
+const bars = [];
+for(let i=0; i<30; i++) {
+    let d = document.createElement('div');
+    d.className = 'bar';
+    analyzerContainer.appendChild(d);
+    bars.push(d);
+}
+
+const Visuals = {
+    kick: () => {
+        kickScale = 1.05;
+        document.body.style.filter = "brightness(1.2)";
+        setTimeout(() => document.body.style.filter = "brightness(1)", 50);
+    },
+
+    spawn: (pan, freq, type) => {
+        let color = '#0ff';
+        if (type === 'glitch') color = '#f0f';
+        if (type === 'lead') {
+            // Color based on pitch (F# major palette: Cyan -> White)
+            let hue = 180 + (freq / 1000) * 60;
+            color = `hsl(${hue}, 100%, 70%)`;
+        }
+
+        particles.push({
+            x: (w/2) + (pan * w * 0.4),
+            y: h,
+            vx: (Math.random()-0.5) * 2,
+            vy: -15 - Math.random() * 10,
+            size: Math.random() * 5 + 2,
+            color: color,
+            life: 1.0,
+            type: type
+        });
+    },
+
+    render: () => {
+        // Fade Trail
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(0, 0, w, h);
+
+        const cx = w/2; 
+        const cy = h/2;
+
+        // Kick Pulse Ring
+        if (kickScale > 1.0) kickScale -= 0.005;
+        
+        ctx.beginPath();
+        ctx.arc(cx, cy, 100 * kickScale, 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(0, 255, 255, ${kickScale-1})`;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+
+        // Particles
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            p.x += p.vx; p.y += p.vy;
+            p.life -= 0.02;
+            
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            
+            if (p.type === 'glitch') {
+                ctx.fillRect(p.x, p.y, p.size*2, p.size*2);
+            } else {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+            
+            if(p.life <= 0) particles.splice(i, 1);
+        }
+        ctx.globalAlpha = 1;
+
+        // Update Analyzer DOM
+        if (Audio.analyser) {
+            const data = new Uint8Array(Audio.analyser.frequencyBinCount);
+            Audio.analyser.getByteFrequencyData(data);
+            for(let i=0; i<30; i++) {
+                let val = data[i] || 0;
+                bars[i].style.height = (val / 2) + 'px';
+                bars[i].style.background = `hsl(${180 + val}, 100%, 50%)`;
+            }
+        }
+        
+        // Update Time
+        if (Audio.ctx) {
+            let mins = Math.floor(Audio.ctx.currentTime / 60);
+            let secs = Math.floor(Audio.ctx.currentTime % 60).toString().padStart(2, '0');
+            document.getElementById('time').innerText = `${mins}:${secs}`;
+        }
+
+        requestAnimationFrame(Visuals.render);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. EXECUTE
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('overlay').addEventListener('click', () => {
+    Audio.init().then(() => {
+        if (Audio.ctx.state === 'suspended') Audio.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 1000);
+        
+        Score.tick();
+        Visuals.render();
+    });
+});
+
+</script>
+</body>
+</html>
