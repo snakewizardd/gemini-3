@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Silence at the Center</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@200&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #000; 
+        color: #fff; 
+        font-family: 'Cinzel', serif; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 1;
+        cursor: crosshair;
+    }
+
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: #000;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 2s ease-in-out;
+    }
+
+    .title { font-size: 2rem; letter-spacing: 0.5rem; color: #888; margin-bottom: 2rem; }
+    
+    .btn {
+        border: 1px solid #444; color: #888; padding: 20px 60px;
+        font-family: 'Montserrat', sans-serif; letter-spacing: 3px;
+        background: transparent; transition: all 1s;
+    }
+    .btn:hover { border-color: #fff; color: #fff; letter-spacing: 6px; }
+
+    #ui-layer {
+        position: absolute; top: 40px; width: 100%; text-align: center;
+        pointer-events: none; z-index: 10;
+        opacity: 0; transition: opacity 2s;
+    }
+
+    .verse {
+        font-family: 'Montserrat', sans-serif; font-weight: 200; font-size: 14px;
+        color: rgba(255,255,255,0.6); letter-spacing: 2px;
+        margin-top: 10px;
+    }
+
+    #footer {
+        position: absolute; bottom: 30px; width: 100%; text-align: center;
+        font-family: 'Montserrat', sans-serif; font-size: 10px; color: #444;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="title">QUIESCENCE</div>
+    <div class="btn">ENTER THE VOID</div>
+</div>
+
+<div id="ui-layer">
+    <div id="mantra" class="verse">"The past is a trail. The future is a wave."</div>
+</div>
+
+<div id="footer">X: COMPLEXITY &nbsp;|&nbsp; Y: MEMORY</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE PHYSICS OF STILLNESS
+// ═══════════════════════════════════════════════════════════════
+const SYS = {
+    // Just Intonation Frequencies (C2 Root)
+    // 1/1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8, 2/1
+    ROOT: 65.41,
+    RATIOS: [1, 9/8, 5/4, 4/3, 3/2, 5/3, 15/8, 2],
+    PARTICLE_COUNT: 400
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE ETERNAL DRONE ENGINE
+// ═══════════════════════════════════════════════════════════════
+const Audio = {
+    ctx: null, master: null,
+    oscillators: [],
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        
+        // Master with massive reverb built-in (Convolver)
+        Audio.master = Audio.ctx.createGain();
+        Audio.master.gain.value = 0.0; // Fade in
+
+        const rate = Audio.ctx.sampleRate;
+        const length = rate * 6.0; // 6 Second tail
+        const impulse = Audio.ctx.createBuffer(2, length, rate);
+        for(let i=0; i<length; i++) {
+            let d = Math.pow(1 - i/length, 2);
+            impulse.getChannelData(0)[i] = (Math.random()*2-1)*d*0.5;
+            impulse.getChannelData(1)[i] = (Math.random()*2-1)*d*0.5;
+        }
+        const reverb = Audio.ctx.createConvolver();
+        reverb.buffer = impulse;
+        
+        const limiter = Audio.ctx.createDynamicsCompressor();
+        
+        Audio.master.connect(reverb);
+        reverb.connect(limiter);
+        limiter.connect(Audio.ctx.destination);
+        
+        // Initial fade in
+        Audio.master.gain.linearRampToValueAtTime(0.4, Audio.ctx.currentTime + 5);
+
+        Audio.createDrone();
+    },
+
+    createDrone: () => {
+        // Create a bank of oscillators for additive synthesis
+        // They play the Harmonic Series of the Root
+        for(let i=0; i<8; i++) {
+            const osc = Audio.ctx.createOscillator();
+            const pan = Audio.ctx.createStereoPanner();
+            const gain = Audio.ctx.createGain();
+            
+            osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.value = SYS.ROOT * (i+1); // Harmonics: 65, 130, 196...
+            
+            // Random slow panning for movement
+            let panPos = (Math.random() * 2 - 1) * 0.8;
+            pan.pan.value = panPos;
+            
+            gain.gain.value = 0; // Start silent
+
+            osc.connect(gain);
+            gain.connect(pan);
+            pan.connect(Audio.master);
+            osc.start();
+            
+            Audio.oscillators.push({ osc, gain, baseVol: 1/(i+1) });
+        }
+    },
+
+    update: (complexity) => {
+        // Complexity (Mouse X) determines how many harmonics are audible
+        if(!Audio.ctx) return;
+        const t = Audio.ctx.currentTime;
+        
+        Audio.oscillators.forEach((o, i) => {
+            // Calculate target volume based on complexity
+            // If complexity is low, only fundamental (i=0) is heard
+            // If high, all harmonics enter
+            let threshold = i / 8;
+            let targetVol = (complexity > threshold) ? o.baseVol * 0.5 : 0;
+            
+            // Subtle breathing modulation
+            let breath = (Math.sin(t * 0.5 + i) + 1) / 2;
+            
+            o.gain.gain.setTargetAtTime(targetVol * (0.8 + 0.2*breath), t, 0.5);
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE MANDALA AGENT
+// ═══════════════════════════════════════════════════════════════
+const World = {
+    particles: [],
+    
+    init: () => {
+        for(let i=0; i<SYS.PARTICLE_COUNT; i++) {
+            World.particles.push({
+                angle: (i / SYS.PARTICLE_COUNT) * Math.PI * 2,
+                radius: 10 + Math.random() * 200,
+                speed: (Math.random() - 0.5) * 0.02,
+                size: Math.random() * 1.5,
+                hue: Math.random() * 60 + 180 // Cyan/Blue base
+            });
+        }
+    },
+
+    update: (k, m) => {
+        // k = Memory (Trail/Persistence) - Controlled by Visual Engine logic
+        // m = Complexity (Speed/Chaos)
+        
+        World.particles.forEach((p, i) => {
+            // Orbit Logic
+            p.angle += p.speed * (1 + m * 5); // Speed up with complexity
+            
+            // Breathing Radius
+            // The radius expands and contracts based on the "breath" of the system
+            let breath = Math.sin(Date.now() * 0.001);
+            let targetRadius = 200 + (breath * 50) + (m * 100);
+            
+            // DDA Logic applied to Radius (Smooth transition)
+            // p.radius = p.radius * 0.95 + targetRadius * 0.05
+            p.radius += (targetRadius - p.radius) * 0.05;
+            
+            // Calculate Position
+            p.x = Math.cos(p.angle) * p.radius;
+            p.y = Math.sin(p.angle) * p.radius;
+            
+            // Z-Depth simulation for 3D feel
+            p.z = Math.sin(p.angle * 3 + Date.now()*0.0005);
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 4. THE RENDERER
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h, cx, cy;
+let mouse = { x: 0.5, y: 0.5 };
+
+window.addEventListener('resize', resize);
+function resize() { w=cvs.width=window.innerWidth; h=cvs.height=window.innerHeight; cx=w/2; cy=h/2; }
+resize();
+
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX / w;
+    mouse.y = e.clientY / h;
+});
+
+function draw() {
+    // k (Memory) controls the fade out rate
+    // Low Y = Low Fade (Long Trails), High Y = Fast Fade (Short Trails)
+    let fade = 0.05 + (mouse.y * 0.3);
+    
+    ctx.fillStyle = `rgba(0, 0, 0, ${fade})`;
+    ctx.fillRect(0, 0, w, h);
+
+    // Update Physics
+    World.update(mouse.y, mouse.x);
+    Audio.update(mouse.x);
+
+    // Update UI Text based on state
+    const mantra = document.getElementById('mantra');
+    if (mouse.x < 0.2) mantra.innerText = "The silence is the source.";
+    else if (mouse.x < 0.8) mantra.innerText = "Harmony emerges from the void.";
+    else mantra.innerText = "Complexity returns to silence.";
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Draw Mandala
+    World.particles.forEach(p => {
+        let scale = 1 + p.z * 0.5; // Perspective scale
+        let alpha = 0.5 + p.z * 0.4;
+        
+        ctx.fillStyle = `hsla(${p.hue + (mouse.x*100)}, 70%, 60%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * scale, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Connections (The Web of Indra)
+        // If particles are close, draw a line
+        // Optimization: Only check a few neighbors to save CPU
+        /* (Omitted for performance in 'Profundity' mode - 
+            focus is on the singular movement of the whole) 
+        */
+    });
+
+    // Draw the Center Light
+    let centerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, 100);
+    centerGlow.addColorStop(0, `rgba(255, 255, 255, ${0.1 + mouse.x * 0.2})`);
+    centerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = centerGlow;
+    ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('overlay').addEventListener('click', () => {
+    Audio.init().then(() => {
+        if(Audio.ctx.state === 'suspended') Audio.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        document.getElementById('ui-layer').style.opacity = 1;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 2000);
+        
+        World.init();
+        draw();
+    });
+});
+
+</script>
+</body>
+</html>

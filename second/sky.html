@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Musica Universalis</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@300&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #000; 
+        color: #fff; 
+        font-family: 'Lato', sans-serif; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 1;
+    }
+
+    /* UI OVERLAY */
+    #ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none;
+        padding: 40px; box-sizing: border-box;
+        display: flex; flex-direction: column; justify-content: space-between;
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif; font-size: 2.5rem; letter-spacing: 10px;
+        margin: 0; text-align: center; color: rgba(255,255,255,0.9);
+        text-shadow: 0 0 30px rgba(255,255,255,0.2);
+    }
+
+    .subtitle {
+        font-family: 'Cinzel', serif; font-size: 0.8rem; color: #666;
+        text-align: center; letter-spacing: 4px; margin-top: 10px; text-transform: uppercase;
+    }
+
+    #stats {
+        position: absolute; bottom: 40px; left: 40px;
+        font-size: 0.7rem; color: #444; line-height: 1.6;
+        border-left: 1px solid #333; padding-left: 15px;
+    }
+
+    .active-voice { color: #fff; text-shadow: 0 0 10px #fff; }
+
+    /* START SCREEN */
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: radial-gradient(circle at center, #111 0%, #000 100%);
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 2s;
+    }
+
+    .star-icon { font-size: 4rem; color: #fff; margin-bottom: 30px; animation: spin 20s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); opacity: 0.5; } 50% { opacity: 1; } 100% { transform: rotate(360deg); opacity: 0.5; } }
+
+    .btn {
+        border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 20px 50px;
+        font-family: 'Cinzel', serif; letter-spacing: 5px; background: transparent;
+        transition: all 0.5s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.1); box-shadow: 0 0 40px rgba(255,255,255,0.1); letter-spacing: 8px; }
+
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="star-icon">✴</div>
+    <div class="btn">IGNITE THE STARS</div>
+</div>
+
+<div id="ui-layer">
+    <div>
+        <h1>Musica Universalis</h1>
+        <div class="subtitle">N-Body Gravitational Symphony</div>
+    </div>
+    
+    <div id="stats">
+        </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. COSMOLOGY (Configuration)
+// ═══════════════════════════════════════════════════════════════
+const COSMOS = {
+    // E Lydian (The Sound of Eternity)
+    // E, F#, G#, A#, B, C#, D#
+    ROOT: 82.41, // E2
+    // Pentatonic Spread across octaves for zero dissonance
+    SCALE: [
+        82.41, 123.47, 164.81, // Lows
+        246.94, 329.63, 369.99, 493.88, // Mids
+        659.25, 739.99, 987.77, 1318.51, // Highs
+        1975.53, 2637.02 // Sparkles
+    ],
+    G: 0.8, // Gravity Constant
+    DRAG: 0.999 // Space friction (Vacuum)
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (FM + Granular Textures)
+// ═══════════════════════════════════════════════════════════════
+const Audio = {
+    ctx: null, master: null, reverb: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        
+        Audio.master = Audio.ctx.createGain();
+        Audio.master.gain.value = 0.3;
+        Audio.master.connect(Audio.ctx.destination);
+
+        // GALACTIC REVERB (8 second tail)
+        const rate = Audio.ctx.sampleRate;
+        const len = rate * 8.0;
+        const buff = Audio.ctx.createBuffer(2, len, rate);
+        for(let i=0; i<len; i++) {
+            let d = Math.pow(1 - i/len, 4);
+            buff.getChannelData(0)[i] = (Math.random()*2-1)*d*0.5;
+            buff.getChannelData(1)[i] = (Math.random()*2-1)*d*0.5;
+        }
+        Audio.reverb = Audio.ctx.createConvolver();
+        Audio.reverb.buffer = buff;
+        
+        const revMix = Audio.ctx.createGain();
+        revMix.gain.value = 0.7; // Wet
+        Audio.master.connect(Audio.reverb);
+        Audio.reverb.connect(revMix);
+        revMix.connect(Audio.master);
+
+        // SUN DRONE (Permanent Bass)
+        Audio.createDrone(COSMOS.ROOT / 2); // E1
+    },
+
+    createDrone: (freq) => {
+        const osc = Audio.ctx.createOscillator();
+        const gain = Audio.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = 0.15;
+        osc.connect(gain);
+        gain.connect(Audio.master);
+        osc.start();
+    },
+
+    // PLANETARY VOICE (FM Bell)
+    playTone: (freq, mass, pan) => {
+        if (!Audio.ctx) return;
+        const t = Audio.ctx.currentTime;
+        const dur = 2.0 + (mass * 2); // Heavy planets ring longer
+
+        // FM Setup
+        const carrier = Audio.ctx.createOscillator();
+        const modulator = Audio.ctx.createOscillator();
+        const modGain = Audio.ctx.createGain();
+        
+        carrier.frequency.value = freq;
+        modulator.frequency.value = freq * 2.0; // 2:1 ratio (Octave bell)
+        modGain.gain.value = freq * (mass * 0.5); // Brightness proportional to mass
+
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency);
+
+        // Envelope
+        const amp = Audio.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.2 * Math.min(1, mass), t + 0.05);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+        // Pan
+        const panner = Audio.ctx.createStereoPanner();
+        panner.pan.value = pan;
+
+        carrier.connect(amp);
+        amp.connect(panner);
+        panner.connect(Audio.master);
+
+        carrier.start(t); modulator.start(t);
+        carrier.stop(t + dur); modulator.stop(t + dur);
+    },
+
+    // COMET VOICE (Noise Swell)
+    playSwell: (pan) => {
+        if (!Audio.ctx) return;
+        const t = Audio.ctx.currentTime;
+        const osc = Audio.ctx.createOscillator();
+        osc.type = 'triangle'; // Soft wind
+        osc.frequency.value = 2000; // High pitch
+        
+        const filter = Audio.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 10;
+        filter.frequency.setValueAtTime(1000, t);
+        filter.frequency.linearRampToValueAtTime(8000, t + 4);
+
+        const amp = Audio.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.05, t + 2);
+        amp.gain.linearRampToValueAtTime(0, t + 4);
+
+        const panner = Audio.ctx.createStereoPanner();
+        panner.pan.value = pan;
+
+        osc.connect(filter);
+        filter.connect(amp);
+        amp.connect(panner);
+        panner.connect(Audio.reverb); // Wash into reverb
+
+        osc.start(t);
+        osc.stop(t + 4);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE N-BODY DDA ENGINE
+// ═══════════════════════════════════════════════════════════════
+class Body {
+    constructor(type, r, angle, mass) {
+        this.type = type; // 'star', 'planet', 'comet'
+        this.mass = mass;
+        this.dist = r;
+        this.angle = angle;
+        
+        // Physics State
+        this.pos = { x: Math.cos(angle)*r, y: Math.sin(angle)*r };
+        this.vel = { 
+            // Perfect circular orbit velocity v = sqrt(GM/r)
+            // We approximate for stable starting conditions
+            x: Math.cos(angle + Math.PI/2) * (10 / Math.sqrt(r)), 
+            y: Math.sin(angle + Math.PI/2) * (10 / Math.sqrt(r)) 
+        };
+        
+        if (type === 'comet') {
+            this.vel.x *= 0.3; // Highly elliptical
+            this.vel.y *= 2.5;
+        }
+
+        // DDA State
+        this.k = 0.99; // Inertia
+        this.m = mass; // Pressure
+        
+        this.history = [];
+        this.color = this.getColor();
+        this.lastNote = 0;
+    }
+
+    getColor() {
+        if (this.type === 'star') return '#fff';
+        if (this.type === 'comet') return '#aaddff';
+        // Planets: Gold to Red based on distance
+        const hue = 40 + (this.dist / 400) * 20; 
+        return `hsl(${hue}, 70%, 60%)`;
+    }
+
+    update(bodies) {
+        if (this.type === 'star') return; // Star is fixed
+
+        // 1. ACCUMULATE FORCES (N-Body Gravity)
+        let Fx = 0, Fy = 0;
+
+        bodies.forEach(other => {
+            if (other === this) return;
+            
+            let dx = other.pos.x - this.pos.x;
+            let dy = other.pos.y - this.pos.y;
+            let distSq = dx*dx + dy*dy;
+            let dist = Math.sqrt(distSq);
+            
+            // Softening parameter to prevent divide by zero slingshots
+            if (dist < 5) dist = 5; 
+
+            // F = G * (m1*m2) / r^2
+            let force = (COSMOS.G * this.mass * other.mass) / distSq;
+            
+            Fx += (dx / dist) * force;
+            Fy += (dy / dist) * force;
+        });
+
+        // 2. DDA INTEGRATION
+        // F_n = k * V + m * (Gravity)
+        this.vel.x = (this.vel.x * COSMOS.DRAG) + (Fx / this.mass);
+        this.vel.y = (this.vel.y * COSMOS.DRAG) + (Fy / this.mass);
+
+        // Move
+        this.pos.x += this.vel.x;
+        this.pos.y += this.vel.y;
+
+        // Update Polar Coords for Trigger Logic
+        this.dist = Math.sqrt(this.pos.x*this.pos.x + this.pos.y*this.pos.y);
+        let newAngle = Math.atan2(this.pos.y, this.pos.x);
+        
+        // 3. TRIGGER LOGIC (Crossing the Meridian)
+        // Trigger when crossing 0, 90, 180, 270 degrees
+        // Or simply when crossing X axis (y sign flip) or Y axis (x sign flip)
+        if ((this.angle < 0 && newAngle >= 0) || (this.angle > 0 && newAngle <= 0)) {
+            this.sing();
+        }
+        
+        this.angle = newAngle;
+
+        // Trail
+        if (Date.now() % 2 === 0) {
+            this.history.push({ x: this.pos.x, y: this.pos.y });
+            if (this.history.length > (this.type==='comet'?100:200)) this.history.shift();
+        }
+    }
+
+    sing() {
+        // Pitch Selection based on Velocity (Kinetic Energy)
+        // Faster = Higher Pitch
+        let speed = Math.sqrt(this.vel.x*this.vel.x + this.vel.y*this.vel.y);
+        let energy = 0.5 * this.mass * speed * speed;
+        
+        // Map energy to scale index
+        let idx = Math.floor(energy * 10) % COSMOS.SCALE.length;
+        // Invert for outer planets (Slow = Low)
+        if (this.dist > 200) idx = Math.floor(10 / energy) % COSMOS.SCALE.length;
+        
+        let freq = COSMOS.SCALE[idx];
+        let pan = this.pos.x / (window.innerWidth/2); // Stereo Pan
+
+        if (this.type === 'comet') {
+            Audio.playSwell(pan);
+        } else {
+            Audio.playTone(freq, this.mass, pan);
+        }
+        
+        Visuals.pulse(this);
+        this.updateStat(freq);
+    }
+
+    updateStat(freq) {
+        const el = document.getElementById('stats');
+        // Keep last 5 lines
+        let lines = el.innerHTML.split('<br>').slice(0, 4);
+        lines.unshift(`<span class="active-voice">${this.type.toUpperCase()}: ${freq.toFixed(1)} Hz</span>`);
+        el.innerHTML = lines.join('<br>');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUAL ENGINE (Deep Space)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h, cx, cy;
+let bodies = [];
+let stars = [];
+
+window.addEventListener('resize', initVis);
+function initVis() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w/2; cy = h/2;
+    generateStars();
+}
+
+function generateStars() {
+    stars = [];
+    for(let i=0; i<500; i++) {
+        stars.push({
+            x: Math.random()*w, y: Math.random()*h,
+            size: Math.random()*1.5,
+            alpha: Math.random()
+        });
+    }
+}
+
+const Visuals = {
+    pulses: [],
+    
+    pulse: (body) => {
+        Visuals.pulses.push({
+            x: body.pos.x, y: body.pos.y,
+            size: body.mass * 5,
+            life: 1.0,
+            color: body.color
+        });
+    },
+
+    draw: () => {
+        // Trail Fade
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw Static Stars
+        ctx.fillStyle = '#fff';
+        stars.forEach(s => {
+            ctx.globalAlpha = s.alpha * 0.5;
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // Draw Orbital Trails
+        bodies.forEach(b => {
+            if (b.type === 'star') return;
+            if (b.history.length < 2) return;
+            
+            ctx.beginPath();
+            ctx.moveTo(b.history[0].x, b.history[0].y);
+            for(let i=1; i<b.history.length; i++) {
+                ctx.lineTo(b.history[i].x, b.history[i].y);
+            }
+            ctx.strokeStyle = b.color;
+            ctx.lineWidth = b.type === 'comet' ? 1 : 0.5;
+            ctx.globalAlpha = 0.3;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        });
+
+        // Draw Bodies
+        bodies.forEach(b => {
+            let r = b.type === 'star' ? 20 : b.mass * 4;
+            
+            // Glow
+            let g = ctx.createRadialGradient(b.pos.x, b.pos.y, 0, b.pos.x, b.pos.y, r*4);
+            g.addColorStop(0, b.color);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, r*4, 0, Math.PI*2); ctx.fill();
+            
+            // Core
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, b.type==='star'?r/2:r/3, 0, Math.PI*2); ctx.fill();
+        });
+
+        // Draw Pulses (Sound Waves)
+        for(let i=Visuals.pulses.length-1; i>=0; i--) {
+            let p = Visuals.pulses[i];
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size + (1-p.life)*100, 0, Math.PI*2);
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = p.life;
+            ctx.stroke();
+            p.life -= 0.02;
+            if(p.life <= 0) Visuals.pulses.splice(i,1);
+        }
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
+        requestAnimationFrame(loop);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. INIT & LOOP
+// ═══════════════════════════════════════════════════════════════
+let isRunning = false;
+
+function initSimulation() {
+    bodies = [];
+    // THE SUN
+    bodies.push(new Body('star', 0, 0, 50));
+    
+    // INNER PLANETS (Fast, Light)
+    bodies.push(new Body('planet', 80, Math.random()*6, 0.8));
+    bodies.push(new Body('planet', 130, Math.random()*6, 1.2));
+    bodies.push(new Body('planet', 180, Math.random()*6, 1.5));
+    
+    // OUTER GIANTS (Slow, Heavy)
+    bodies.push(new Body('planet', 300, Math.random()*6, 3.0));
+    bodies.push(new Body('planet', 450, Math.random()*6, 4.5));
+    
+    // COMET (The Chaos Agent)
+    bodies.push(new Body('comet', 600, 0, 0.5));
+}
+
+function loop() {
+    if (isRunning) {
+        bodies.forEach(b => b.update(bodies));
+    }
+    Visuals.draw();
+}
+
+document.getElementById('overlay').addEventListener('click', () => {
+    Audio.init().then(() => {
+        if (Audio.ctx.state === 'suspended') Audio.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 2000);
+        
+        initVis();
+        initSimulation();
+        isRunning = true;
+        loop();
+    });
+});
+
+// Initial static draw
+initVis();
+
+</script>
+</body>
+</html>

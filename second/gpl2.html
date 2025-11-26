@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Keplerian Engine</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Space+Mono&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #050508; 
+        color: #e0e0e0; 
+        font-family: 'Cormorant Garamond', serif; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 1;
+    }
+
+    /* ASTROLABE UI */
+    #ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none;
+        padding: 40px; box-sizing: border-box;
+        display: flex; flex-direction: column; justify-content: space-between;
+    }
+
+    header {
+        text-align: center;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 20px;
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif; font-weight: 400; font-size: 2.5rem; letter-spacing: 8px;
+        margin: 0; color: #d4af37; text-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+    }
+
+    .subtitle {
+        font-family: 'Space Mono', monospace; font-size: 0.8rem; color: #888;
+        text-transform: uppercase; letter-spacing: 3px; margin-top: 10px;
+    }
+
+    /* DDA READOUTS */
+    .readout-panel {
+        position: absolute; top: 150px; left: 40px;
+        width: 250px;
+    }
+
+    .planet-stat {
+        margin-bottom: 20px; padding-left: 10px;
+        border-left: 2px solid #333; transition: border-color 0.3s;
+    }
+
+    .planet-name { font-family: 'Cinzel'; color: #fff; font-size: 1rem; }
+    .planet-data { font-family: 'Space Mono'; font-size: 0.7rem; color: #666; }
+    
+    .active-p { border-left-color: #d4af37; }
+    .active-p .planet-name { text-shadow: 0 0 10px #fff; }
+
+    /* START OVERLAY */
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(5,5,8,0.95);
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 1.5s;
+    }
+
+    .sigil {
+        font-size: 4rem; color: #d4af37; margin-bottom: 20px;
+        animation: pulse 4s infinite ease-in-out;
+    }
+
+    .btn {
+        border: 1px solid #d4af37; color: #d4af37; padding: 20px 50px;
+        font-family: 'Cinzel', serif; letter-spacing: 4px; font-size: 1.2rem;
+        background: transparent; transition: all 0.5s;
+    }
+    .btn:hover { background: rgba(212, 175, 55, 0.1); box-shadow: 0 0 30px rgba(212, 175, 55, 0.2); }
+
+    @keyframes pulse { 0%, 100% { opacity: 0.5; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.05); } }
+
+    #equation {
+        position: absolute; bottom: 40px; width: 100%; text-align: center;
+        font-family: 'Space Mono'; font-size: 0.8rem; color: #444;
+    }
+
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="sigil">♃</div>
+    <div class="btn">ALIGN THE SPHERES</div>
+    <div style="margin-top: 20px; font-family:'Space Mono'; font-size: 0.7rem; color: #666;">HARMONICES MUNDI // 1619</div>
+</div>
+
+<div id="ui-layer">
+    <header>
+        <h1>The Keplerian Engine</h1>
+        <div class="subtitle">Orbital Resonance Synthesis</div>
+    </header>
+
+    <div class="readout-panel" id="stats">
+        </div>
+
+    <div id="equation">Fₙ = P₀·k(ω) + m(G + R)</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. COSMIC CONSTANTS (Configuration)
+// ═══════════════════════════════════════════════════════════════
+const COSMOS = {
+    // C Lydian Tuning (Pythagorean Ratios)
+    // Root (C3) = 130.81 Hz
+    ROOT: 130.81,
+    // Ratios: 1/1, 9/8, 5/4, 11/8 (#4), 3/2, 13/8, 15/8
+    RATIOS: [1, 1.125, 1.25, 1.375, 1.5, 1.625, 1.875, 2.0],
+    
+    // The Planets (Voices)
+    PLANETS: [
+        { name: "TERRA",  ratio: 3, color: "#4da6ff", dist: 150, mass: 1.0 }, // 3 beats per cycle
+        { name: "MARS",   ratio: 4, color: "#ff6b6b", dist: 220, mass: 0.8 }, // 4 beats per cycle
+        { name: "JOVIS",  ratio: 5, color: "#d4af37", dist: 300, mass: 2.5 }  // 5 beats per cycle
+    ],
+    
+    G: 0.5 // Gravitational Constant (for DDA)
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUDIO ENGINE (FM Synthesis - Glass/Bell Textures)
+// ═══════════════════════════════════════════════════════════════
+const Audio = {
+    ctx: null, master: null, reverb: null, delay: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        Audio.ctx = new AC();
+        
+        // Master
+        Audio.master = Audio.ctx.createGain();
+        Audio.master.gain.value = 0.4;
+        Audio.master.connect(Audio.ctx.destination);
+
+        // FX: Space Reverb (Convolution)
+        const rate = Audio.ctx.sampleRate;
+        const len = rate * 6.0; // 6s tail
+        const buff = Audio.ctx.createBuffer(2, len, rate);
+        for(let i=0; i<len; i++) {
+            let d = Math.pow(1 - i/len, 3); // Exp decay
+            buff.getChannelData(0)[i] = (Math.random()*2-1)*d*0.6;
+            buff.getChannelData(1)[i] = (Math.random()*2-1)*d*0.6;
+        }
+        Audio.reverb = Audio.ctx.createConvolver();
+        Audio.reverb.buffer = buff;
+        const revMix = Audio.ctx.createGain(); revMix.gain.value = 0.5;
+        
+        // FX: Ping Pong Delay
+        Audio.delay = Audio.ctx.createDelay();
+        Audio.delay.delayTime.value = 0.333; // Triplet feel
+        const fb = Audio.ctx.createGain(); fb.gain.value = 0.4;
+        const filter = Audio.ctx.createBiquadFilter(); filter.frequency.value = 2000;
+        
+        Audio.delay.connect(fb); fb.connect(filter); filter.connect(Audio.delay);
+        const delMix = Audio.ctx.createGain(); delMix.gain.value = 0.3;
+
+        // Routing
+        Audio.master.connect(Audio.reverb);
+        Audio.reverb.connect(revMix);
+        revMix.connect(Audio.master);
+        
+        Audio.master.connect(Audio.delay);
+        Audio.delay.connect(delMix);
+        delMix.connect(Audio.master);
+    },
+
+    // FM BELL GENERATOR
+    playTone: (freq, velocity, panVal) => {
+        if(!Audio.ctx) return;
+        const t = Audio.ctx.currentTime;
+        const dur = 3.0;
+
+        // 1. Carrier (The fundamental pitch)
+        const carrier = Audio.ctx.createOscillator();
+        carrier.type = 'sine';
+        carrier.frequency.value = freq;
+
+        // 2. Modulator (The "Metal" texture)
+        const modulator = Audio.ctx.createOscillator();
+        modulator.type = 'sine';
+        // Non-integer ratio creates inharmonic metallic sounds (Keplerian discord)
+        modulator.frequency.value = freq * 1.414; 
+        
+        const modGain = Audio.ctx.createGain();
+        modGain.gain.value = freq * 2 * velocity; // Modulation index
+
+        // 3. Envelopes
+        const amp = Audio.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.4 * velocity, t + 0.01); // Attack
+        amp.gain.exponentialRampToValueAtTime(0.001, t + dur); // Decay
+
+        const modEnv = Audio.ctx.createGain(); // Modulator envelope (timbre change)
+        modEnv.gain.setValueAtTime(1, t);
+        modEnv.gain.exponentialRampToValueAtTime(0.01, t + 0.5); // Tone dulls quickly
+
+        // Panning
+        const panner = Audio.ctx.createStereoPanner();
+        panner.pan.value = panVal;
+
+        // Routing Graph
+        // Modulator -> ModGain -> Carrier.freq
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency);
+        
+        // Carrier -> Amp -> Panner -> Master
+        carrier.connect(amp);
+        amp.connect(panner);
+        panner.connect(Audio.master);
+
+        // Start
+        carrier.start(t); modulator.start(t);
+        carrier.stop(t + dur); modulator.stop(t + dur);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE KEPLERIAN DDA ENGINE
+// ═══════════════════════════════════════════════════════════════
+class Planet {
+    constructor(config, index) {
+        this.config = config;
+        this.index = index;
+        
+        // Physics State
+        this.angle = -Math.PI / 2; // Start top
+        this.velocity = 0.005 * config.ratio; // Angular velocity
+        this.radius = config.dist;
+        
+        // DDA Variables
+        this.k = 0.99; // Angular Inertia (High = stable orbit)
+        this.m = config.mass; // Gravitational Mass
+        this.p0 = config.dist; // Ideal Orbit Radius
+        
+        // Trail History
+        this.history = [];
+        this.maxHistory = 200;
+    }
+
+    update(others) {
+        // 1. CALCULATE FORCES (DDA)
+        // F_n = k * F_n-1 (Inertia) + m * (Gravity + Perturbation)
+        
+        // Calculate Perturbation (R) from other planets
+        // If planets align, they pull on each other
+        let R = 0;
+        others.forEach(p => {
+            if (p !== this) {
+                let dx = Math.cos(p.angle)*p.radius - Math.cos(this.angle)*this.radius;
+                let dy = Math.sin(p.angle)*p.radius - Math.sin(this.angle)*this.radius;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                // Inverse square law simplified
+                if (dist < 100) R += (100-dist) * 0.0001; 
+            }
+        });
+
+        // Apply Perturbation to Velocity (Kepler's 2nd Law variant)
+        // Closer to resonance = faster
+        this.velocity += R * 0.01;
+        
+        // Normalize velocity (Friction of the ether) to keep musical timing roughly consistent
+        let idealVel = 0.005 * this.config.ratio;
+        this.velocity = this.velocity * this.k + idealVel * (1-this.k);
+
+        // Move
+        this.angle += this.velocity;
+
+        // 2. CHECK MERIDIAN CROSSING (The "Note")
+        // When cos(angle) crosses 0 (Left/Right side of screen)
+        // Actually, let's do when it crosses the X-axis (y=0)
+        // Monitor sign change of Math.sin(this.angle)
+        let prevSin = Math.sin(this.angle - this.velocity);
+        let currSin = Math.sin(this.angle);
+        
+        if ((prevSin < 0 && currSin >= 0) || (prevSin > 0 && currSin <= 0)) {
+            this.triggerNote();
+        }
+
+        // 3. RECORD TRAIL
+        this.history.push({
+            x: Math.cos(this.angle) * this.radius,
+            y: Math.sin(this.angle) * this.radius
+        });
+        if(this.history.length > this.maxHistory) this.history.shift();
+    }
+
+    triggerNote() {
+        // Select Pitch based on angular position or velocity
+        // Let's map "Orbit Speed" relative to ideal to the Harmonic Series
+        let perturbation = Math.abs(this.velocity - (0.005 * this.config.ratio)) * 1000;
+        let harmonicIdx = Math.floor(perturbation) % COSMOS.RATIOS.length;
+        
+        // Base octave depends on planet (Outer planets = lower)
+        let octave = 1;
+        if (this.index === 0) octave = 4;
+        if (this.index === 1) octave = 2;
+        if (this.index === 2) octave = 1;
+
+        let freq = COSMOS.ROOT * COSMOS.RATIOS[harmonicIdx] * octave;
+        
+        // Velocity based on Mass
+        let vel = 0.6 + (Math.random() * 0.2);
+        
+        // Pan based on X position
+        let pan = Math.cos(this.angle);
+
+        Audio.playTone(freq, vel, pan);
+        Visuals.flash(this.index);
+        
+        // Update DOM UI
+        this.updateDOM(freq, vel);
+    }
+
+    updateDOM(freq, vel) {
+        const el = document.getElementById(`p-stat-${this.index}`);
+        if(el) {
+            el.innerHTML = `
+                VEL: ${this.velocity.toFixed(4)}<br>
+                FREQ: ${Math.round(freq)} Hz<br>
+                PERTURB: ${(vel*100).toFixed(0)}%
+            `;
+            el.classList.add('active-p');
+            setTimeout(() => el.classList.remove('active-p'), 200);
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUAL ENGINE (The Orrery)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h, cx, cy;
+let planets = [];
+
+window.addEventListener('resize', resize);
+function resize() { 
+    w = canvas.width = window.innerWidth; 
+    h = canvas.height = window.innerHeight; 
+    cx = w/2; cy = h/2;
+}
+resize();
+
+// Initialize Stats UI
+const statsPanel = document.getElementById('stats');
+COSMOS.PLANETS.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'planet-stat';
+    div.innerHTML = `<div class="planet-name" style="color:${p.color}">${p.name}</div><div class="planet-data" id="p-stat-${i}">WAITING...</div>`;
+    statsPanel.appendChild(div);
+    planets.push(new Planet(p, i));
+});
+
+const Visuals = {
+    flashes: [0,0,0],
+    
+    flash: (idx) => { Visuals.flashes[idx] = 1.0; },
+
+    draw: () => {
+        // Deep Space Fade
+        ctx.fillStyle = 'rgba(5, 5, 8, 0.15)'; 
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // Draw Sun (Center)
+        ctx.beginPath();
+        ctx.arc(0,0, 5, 0, Math.PI*2);
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 20; ctx.shadowColor = '#fff';
+        ctx.fill(); ctx.shadowBlur = 0;
+
+        // Draw Orbital Rings (Ideal P0)
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.lineWidth = 1;
+        planets.forEach(p => {
+            ctx.beginPath(); ctx.arc(0,0, p.radius, 0, Math.PI*2); ctx.stroke();
+        });
+
+        // Draw Planets & Trails
+        planets.forEach((p, i) => {
+            // Draw Spirograph Connections (Venus Dance)
+            // Connect this planet to the next one inward
+            if (i < planets.length - 1) {
+                let other = planets[i+1];
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(p.angle)*p.radius, Math.sin(p.angle)*p.radius);
+                ctx.lineTo(Math.cos(other.angle)*other.radius, Math.sin(other.angle)*other.radius);
+                ctx.strokeStyle = `rgba(255,255,255,0.03)`;
+                ctx.stroke();
+            }
+
+            // Draw Trail
+            ctx.beginPath();
+            if(p.history.length) {
+                ctx.moveTo(p.history[0].x, p.history[0].y);
+                for(let k=1; k<p.history.length; k++) ctx.lineTo(p.history[k].x, p.history[k].y);
+            }
+            ctx.strokeStyle = p.config.color;
+            ctx.globalAlpha = 0.3;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+
+            // Draw Planet Body
+            let x = Math.cos(p.angle) * p.radius;
+            let y = Math.sin(p.angle) * p.radius;
+            
+            // Flash Size
+            let size = 4 + (Visuals.flashes[i] * 10);
+            Visuals.flashes[i] *= 0.9; // Decay flash
+
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI*2);
+            ctx.fillStyle = p.config.color;
+            ctx.shadowBlur = 15 * Visuals.flashes[i] + 5;
+            ctx.shadowColor = p.config.color;
+            ctx.fill(); ctx.shadowBlur = 0;
+        });
+
+        ctx.restore();
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. ENGINE LOOP
+// ═══════════════════════════════════════════════════════════════
+let isRunning = false;
+
+function loop() {
+    if(isRunning) {
+        // Physics Step
+        planets.forEach(p => p.update(planets));
+    }
+    // Render Step
+    Visuals.draw();
+    requestAnimationFrame(loop);
+}
+
+// Init
+document.getElementById('overlay').addEventListener('click', () => {
+    Audio.init().then(() => {
+        if(Audio.ctx.state === 'suspended') Audio.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 1500);
+        
+        isRunning = true;
+        loop();
+    });
+});
+
+// Pre-render loop just for visuals (static)
+loop();
+
+</script>
+</body>
+</html>
