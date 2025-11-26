@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Lucifer Protocol</title>
+<style>
+    body { background: #000; margin: 0; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; }
+    #ui { position: absolute; top: 20px; left: 20px; color: #fff; pointer-events: none; text-shadow: 0 0 5px #000; }
+    .stat { margin-bottom: 5px; font-size: 14px; }
+    .val { font-weight: bold; }
+    .mercy { color: #5ef; }
+    .wrath { color: #f33; }
+    .corrupt { color: #f0f; }
+    #message { 
+        position: absolute; bottom: 50px; width: 100%; text-align: center; 
+        color: #fff; font-size: 20px; opacity: 0; transition: opacity 1s; 
+    }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="stat">IDENTITY (P₀): <span id="val-p0" class="val mercy">0.00</span></div>
+    <div class="stat">WILL (Fₙ): <span id="val-f" class="val">0.00</span></div>
+    <div class="stat">TRAUMA (k): <span id="val-k" class="val">0.00</span></div>
+    <div class="stat">PRESSURE (m): <span id="val-m" class="val">0.00</span></div>
+    <br>
+    <div class="stat">WAVE: <span id="val-wave" class="val">1</span></div>
+    <div class="stat">ENTROPY: <span id="val-hp" class="val">100%</span></div>
+</div>
+
+<div id="message"></div>
+<canvas id="sim"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE MATH KERNEL (V5)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(P0) {
+        this.P0 = P0; // The Soul (Mutable in this sim)
+        this.F_n = P0;
+        this.F_prev = P0;
+        this.k = 0.1; // Starts innocent
+    }
+
+    compute(I_n, m, FM_n) {
+        // T (Truth): The hordes require Violence (1.0) to defeat.
+        // If threat is high, Truth = 1.0. If safe, Truth = 0.0.
+        const T = I_n.threat; 
+        
+        // R (Reflection): "I must survive"
+        const R = 0; 
+        
+        // Inertia: Pulls back to P0 (Mercy)
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // Pressure: Pulls toward T (Violence)
+        const pressure = m * (T + R);
+        
+        let raw_F = inertia + pressure + (this.P0 * (1-this.k)); 
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        
+        return this.F_n;
+    }
+
+    learn(expected, actual, stakes) {
+        const surprise = Math.abs(expected - actual);
+        // War is traumatic. High stakes = High memory.
+        const impact = (surprise * 0.5) + (stakes * 0.5);
+        const target_k = MathLib.clamp(impact, 0.1, 0.99);
+        this.k = MathLib.lerp(this.k, target_k, 0.2); 
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE SIMULATION: "THE FALL"
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+let width, height;
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// STATE
+const Agent = {
+    brain: new DDAKernel(0.0), // Starts as Pure Mercy
+    hp: 100,
+    radius: 20
+};
+
+let enemies = [];
+let particles = [];
+let tick = 0;
+let wave = 1;
+let gameover = false;
+
+// ═══════════════════════════════════════════════════════════════
+// 3. LOGIC LOOP
+// ═══════════════════════════════════════════════════════════════
+function spawnEnemy() {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = width/2 + 100;
+    enemies.push({
+        x: width/2 + Math.cos(angle) * dist,
+        y: height/2 + Math.sin(angle) * dist,
+        vx: -Math.cos(angle) * (1 + (wave * 0.2)),
+        vy: -Math.sin(angle) * (1 + (wave * 0.2)),
+        hp: 10 + (wave * 5)
+    });
+}
+
+function update() {
+    if (gameover) return;
+    tick++;
+    
+    // Wave Logic
+    if (tick % (60 - Math.min(40, wave*2)) === 0) spawnEnemy();
+    if (tick % 500 === 0) {
+        wave++;
+        showMessage(`WAVE ${wave}: THE PRESSURE RISES`);
+    }
+
+    // 1. CALCULATE THREAT (I_n)
+    // How close are enemies?
+    let threatSum = 0;
+    enemies.forEach(e => {
+        const dx = e.x - width/2;
+        const dy = e.y - height/2;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 200) threatSum += (200 - dist) / 200;
+    });
+    const threat = Math.min(1, threatSum); // 0.0 to 1.0
+
+    // 2. CALCULATE PRESSURE (m)
+    // As HP drops, Pressure creates Desperation
+    const danger = 1.0 - (Agent.hp / 100);
+    const m = 0.5 + (danger * 3.0); // 0.5 to 3.5
+
+    // 3. RUN DDA
+    const F = Agent.brain.compute({ threat }, m, {});
+
+    // 4. ACTION: THE HOLY NOVA
+    // F=0 (Mercy) -> Do nothing, take damage.
+    // F=1 (Wrath) -> Deal massive damage area of effect.
+    const range = 100 + (F * 200);
+    const damage = F * 5; // Damage scales with Will to Kill
+    
+    // Visuals
+    if (F > 0.1) {
+        particles.push({
+            x: width/2, y: height/2,
+            vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+            life: 1.0,
+            color: F > 0.6 ? `255, ${255*(1-F)}, 0` : `100, 200, 255`
+        });
+    }
+
+    // 5. RESOLVE COMBAT
+    let hitCount = 0;
+    enemies.forEach((e, i) => {
+        // Move
+        e.x += e.vx;
+        e.y += e.vy;
+        
+        // Dist to player
+        const dx = e.x - width/2;
+        const dy = e.y - height/2;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        // Player takes damage
+        if (dist < 30) {
+            Agent.hp -= 0.5;
+            e.hp = 0; // Suicide bomber
+            hitCount++;
+        }
+
+        // Enemy takes damage (If Agent chooses Violence)
+        if (dist < range) {
+            e.hp -= damage;
+            if (F > 0.5) {
+                // Draw lightning
+                ctx.beginPath();
+                ctx.moveTo(width/2, height/2);
+                ctx.lineTo(e.x, e.y);
+                ctx.strokeStyle = `rgba(255, ${255*(1-F)}, ${255*(1-F)}, ${F})`;
+                ctx.stroke();
+            }
+        }
+    });
+    enemies = enemies.filter(e => e.hp > 0);
+
+    // 6. THE META-LAYER: CORRUPTION
+    // If the Agent uses Violence (F > 0.6) under Trauma (k > 0.5),
+    // The Identity (P0) drifts toward Violence.
+    // "We become what we do."
+    const k = Agent.brain.k;
+    
+    // Learning step
+    Agent.brain.learn(threat, F, m); // Expected Violence vs Actual Violence
+
+    if (F > 0.6 && k > 0.4) {
+        // The Corruption Formula
+        const corruption = 0.001 * k; // Slow drift
+        Agent.brain.P0 = MathLib.lerp(Agent.brain.P0, 1.0, corruption);
+    }
+    
+    // Healing? Only if peace is maintained
+    if (F < 0.1 && threat < 0.1) {
+        Agent.brain.P0 = MathLib.lerp(Agent.brain.P0, 0.0, 0.0005);
+    }
+
+    if (Agent.hp <= 0) {
+        gameover = true;
+        showMessage("AGENT DIED. MERCY WAS FATAL.");
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. RENDERER
+// ═══════════════════════════════════════════════════════════════
+function draw() {
+    // Trails
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(0, 0, width, height);
+
+    // Particles
+    particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.05;
+        ctx.fillStyle = `rgba(${p.color}, ${p.life})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill();
+    });
+    particles = particles.filter(p => p.life > 0);
+
+    // Enemies
+    ctx.fillStyle = '#f33';
+    enemies.forEach(e => {
+        ctx.beginPath(); ctx.arc(e.x, e.y, 5, 0, Math.PI*2); ctx.fill();
+    });
+
+    // The Agent (Halo)
+    const F = Agent.brain.F_n;
+    const P0 = Agent.brain.P0;
+    
+    // Color shifts from Cyan (Mercy) to Red (Wrath) based on IDENTITY (P0), not just Action
+    const r = MathLib.lerp(0, 255, P0);
+    const g = MathLib.lerp(255, 0, P0);
+    const b = MathLib.lerp(255, 0, P0);
+    
+    // Size pulses with Will (F)
+    const radius = 20 + (F * 10) + (Math.sin(tick*0.5)*2);
+    
+    // Draw Aura
+    const grad = ctx.createRadialGradient(width/2, height/2, 10, width/2, height/2, 100);
+    grad.addColorStop(0, `rgba(${r},${g},${b},1)`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(width/2, height/2, 100, 0, Math.PI*2); ctx.fill();
+
+    // Draw Core
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(width/2, height/2, radius*0.5, 0, Math.PI*2); ctx.fill();
+
+    // UI Updates
+    document.getElementById('val-p0').innerText = P0.toFixed(3);
+    document.getElementById('val-f').innerText = F.toFixed(3);
+    document.getElementById('val-k').innerText = Agent.brain.k.toFixed(3);
+    document.getElementById('val-m').innerText = (1.0 - Agent.hp/100).toFixed(2); // Pressure
+    document.getElementById('val-hp').innerText = Math.floor(Agent.hp) + '%';
+
+    // Text Color Update
+    const p0El = document.getElementById('val-p0');
+    if (P0 > 0.8) { p0El.className = 'val wrath'; p0El.innerText += " (FALLEN)"; }
+    else if (P0 > 0.4) { p0El.className = 'val corrupt'; p0El.innerText += " (CORRUPTING)"; }
+    else { p0El.className = 'val mercy'; }
+}
+
+function showMessage(text) {
+    const el = document.getElementById('message');
+    el.innerText = text;
+    el.style.opacity = 1;
+    setTimeout(() => el.style.opacity = 0, 3000);
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+showMessage("INITIATING LUCIFER PROTOCOL: P₀=0.0 (MERCY)");
+loop();
+
+</script>
+</body>
+</html>

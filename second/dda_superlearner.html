@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Human vs Superlearner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #08080a;
+    color: #aaa;
+    font-family: 'Courier New', monospace;
+    padding: 20px;
+    font-size: 13px;
+}
+
+h1 { color: #fff; font-size: 14px; letter-spacing: 0.1em; margin-bottom: 20px; }
+
+#container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.panel {
+    background: #0a0a0e;
+    border: 1px solid #1a1a22;
+    padding: 15px;
+}
+
+.panel h2 {
+    font-size: 12px;
+    color: #555;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1a1a22;
+}
+
+.human h2 { color: #f90; border-color: #f90; }
+.super h2 { color: #0ff; border-color: #0ff; }
+
+.log {
+    height: 400px;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.tick { color: #333; }
+.choice { font-weight: bold; }
+.choice-a { color: #f66; }
+.choice-b { color: #6f6; }
+.val { color: #fff; }
+.dim { color: #444; }
+
+.stats {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #1a1a22;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    font-size: 11px;
+}
+
+.stat-row { display: flex; justify-content: space-between; }
+
+#summary {
+    grid-column: span 2;
+    margin-top: 20px;
+    padding: 20px;
+    background: #0c0c12;
+    border: 1px solid #2a2a32;
+    white-space: pre-wrap;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.highlight { color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>DDA PARAMETER OPTIMIZATION: HUMAN vs SUPERLEARNER</h1>
+
+<div id="container">
+    <div class="panel human">
+        <h2>Human Agent</h2>
+        <div class="log" id="log-human"></div>
+        <div class="stats" id="stats-human"></div>
+    </div>
+    
+    <div class="panel super">
+        <h2>Superlearner Agent</h2>
+        <div class="log" id="log-super"></div>
+        <div class="stats" id="stats-super"></div>
+    </div>
+    
+    <div id="summary"></div>
+</div>
+
+<script>
+/**
+ * DDA: Fₙ = P₀ · kFₙ₋₁ + m(T(f(Iₙ, IΔ)) + R(Dₙ, FMₙ))
+ * 
+ * Both agents use the SAME equation.
+ * The difference is in how well they compute each component.
+ * 
+ * HUMAN: Noise, bias, over-reaction, sticky trauma
+ * SUPER: Clean signal, accurate evaluation, calibrated response, adaptive memory
+ */
+
+// ═══════════════════════════════════════════════════════════════
+// THE WORLD - Identical for both agents
+// ═══════════════════════════════════════════════════════════════
+
+function createWorld() {
+    return {
+        A: 50,
+        A_max: 100,
+        B_yield: 4,
+        volatility: 0.3,  // 30% chance A fails even when present
+        
+        tick: 0,
+        
+        // A follows a hidden cycle - recovers slowly, can be depleted
+        update: function() {
+            this.tick++;
+            // Natural recovery when not harvested
+            if (this.tick % 3 === 0) {
+                this.A = Math.min(this.A_max, this.A + 2);
+            }
+        },
+        
+        forage: function(choice) {
+            if (choice === 'A') {
+                if (this.A < 10) return 0;
+                // Volatility - sometimes fails
+                if (Math.random() < this.volatility) return 0;
+                const yield_val = Math.min(this.A, 12 + Math.floor(Math.random() * 6));
+                this.A = Math.max(0, this.A - 8);
+                return yield_val;
+            } else {
+                // B is stable but low
+                this.A = Math.min(this.A_max, this.A + 1); // Passive A recovery
+                return this.B_yield + Math.floor(Math.random() * 2);
+            }
+        },
+        
+        getState: function() {
+            return { A: this.A, A_max: this.A_max };
+        }
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THE DDA KERNEL - Same structure, different parameter quality
+// ═══════════════════════════════════════════════════════════════
+
+class DDAAgent {
+    constructor(type) {
+        this.type = type; // 'human' or 'super'
+        
+        // P₀: Fixed anchor - same for both
+        this.P0 = 0.5;
+        
+        // State
+        this.F_n = 0.5;
+        this.F_prev = 0.5;
+        this.k = 0.3;
+        
+        // Agent resources
+        this.food = 50;
+        this.alive = true;
+        
+        // History for analysis
+        this.history = {
+            choices: [],
+            F: [],
+            k: [],
+            food: [],
+            outcomes: []
+        };
+        
+        // Tracking for learning
+        this.lastWorldA = 50;
+        this.failStreak = 0;
+        this.successStreak = 0;
+    }
+    
+    // ─────────────────────────────────────────────────────────────
+    // T(f(Iₙ, IΔ)) - Information Transform
+    // ─────────────────────────────────────────────────────────────
+    computeT(worldState) {
+        const A_health = worldState.A / worldState.A_max;
+        const A_trend = worldState.A - this.lastWorldA;
+        this.lastWorldA = worldState.A;
+        
+        if (this.type === 'human') {
+            // HUMAN: Noisy perception, slow to notice trends
+            const noise = (Math.random() - 0.5) * 0.3;
+            const perceived_health = A_health + noise;
+            const perceived_trend = A_trend > 5 ? 0.1 : (A_trend < -5 ? -0.1 : 0);
+            
+            // Bias: Humans tend toward optimism or pessimism
+            const bias = 0.1; // Slight optimism
+            
+            return (1 - perceived_health) - 0.5 + perceived_trend + bias;
+        } else {
+            // SUPER: Clean signal, accurate trend detection
+            const trend_signal = A_trend * 0.02; // Proportional response
+            return (1 - A_health) - 0.5 + trend_signal;
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────
+    // R(Dₙ, FMₙ) - Option Evaluation
+    // ─────────────────────────────────────────────────────────────
+    computeR(worldState) {
+        if (this.type === 'human') {
+            // HUMAN: Subjective evaluation with gut feelings
+            const A_appeal = worldState.A > 30 ? 0.6 : 0.2;
+            const B_appeal = 0.4;
+            
+            // Recency bias - what worked last time feels better
+            const recency = this.history.outcomes.length > 0 
+                ? (this.history.outcomes[this.history.outcomes.length - 1] > 5 ? 0.1 : -0.1)
+                : 0;
+            
+            // Gut noise
+            const gut = (Math.random() - 0.5) * 0.2;
+            
+            return (B_appeal - A_appeal + recency + gut) * 0.5;
+        } else {
+            // SUPER: Expected value calculation
+            const A_prob = worldState.A > 10 ? 0.7 : 0.1; // Accounts for volatility
+            const A_expected = A_prob * 15;
+            const B_expected = 4.5;
+            
+            // Clean comparison
+            return (B_expected - A_expected) * 0.03;
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────
+    // m - Rate Vector (Pressure/Urgency)
+    // ─────────────────────────────────────────────────────────────
+    computeM() {
+        const scarcity = Math.max(0, 1 - (this.food / 100));
+        
+        if (this.type === 'human') {
+            // HUMAN: Panic curve - over-reacts to danger, complacent in safety
+            if (scarcity < 0.3) return 0.3; // Complacent
+            if (scarcity > 0.7) return 2.0 + (Math.random() * 0.5); // Panic
+            return 0.5 + scarcity * 2;
+        } else {
+            // SUPER: Calibrated response - linear, no panic
+            return 0.4 + scarcity * 1.2;
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────
+    // k - Previous Moment Weight
+    // ─────────────────────────────────────────────────────────────
+    computeK(outcome, expected) {
+        const surprise = Math.abs(outcome - expected);
+        const stakes = Math.max(0, 1 - (this.food / 100));
+        
+        if (this.type === 'human') {
+            // HUMAN: Trauma sticks, success fades
+            // Bad outcomes are remembered longer than good ones
+            if (outcome < expected) {
+                // Negative surprise - trauma
+                this.k = Math.min(0.95, this.k + surprise * 0.3 + stakes * 0.2);
+            } else {
+                // Positive surprise - slow fade
+                this.k = Math.max(0.1, this.k - 0.05);
+            }
+            
+            // Streak effects
+            if (this.failStreak > 2) this.k = Math.min(0.95, this.k + 0.1);
+        } else {
+            // SUPER: Adaptive memory - adjusts k based on environment stability
+            const target_k = surprise * 0.5 + stakes * 0.3;
+            this.k = this.k * 0.7 + target_k * 0.3; // Smooth adjustment
+            this.k = Math.max(0.1, Math.min(0.7, this.k)); // Bounded
+        }
+    }
+    
+    // ─────────────────────────────────────────────────────────────
+    // THE EQUATION: Fₙ = P₀ · kFₙ₋₁ + m(T + R)
+    // ─────────────────────────────────────────────────────────────
+    compute(worldState) {
+        const T = this.computeT(worldState);
+        const R = this.computeR(worldState);
+        const m = this.computeM();
+        
+        const anchor = this.P0 * this.k * this.F_prev;
+        const pressure = m * (T + R);
+        
+        this.F_n = anchor + pressure + (this.P0 * (1 - this.k));
+        this.F_n = Math.max(0, Math.min(1, this.F_n));
+        
+        return { F: this.F_n, T, R, m, k: this.k };
+    }
+    
+    decide() {
+        // F < 0.5 = A (exploit), F > 0.5 = B (stable)
+        return this.F_n < 0.5 ? 'A' : 'B';
+    }
+    
+    step(world) {
+        if (!this.alive) return null;
+        
+        // Metabolic cost
+        this.food -= 2;
+        
+        // Compute DDA
+        const state = this.compute(world.getState());
+        
+        // Decide
+        const choice = this.decide();
+        
+        // Act
+        const outcome = world.forage(choice);
+        
+        // Track streaks
+        if (outcome === 0 && choice === 'A') {
+            this.failStreak++;
+            this.successStreak = 0;
+        } else if (outcome > 0) {
+            this.successStreak++;
+            this.failStreak = 0;
+        }
+        
+        // Learn (update k)
+        const expected = choice === 'A' ? 12 : 4;
+        this.computeK(outcome, expected);
+        
+        // Apply outcome
+        this.food += outcome;
+        this.food = Math.min(100, this.food);
+        
+        // Check death
+        if (this.food <= 0) this.alive = false;
+        
+        // Update state
+        this.F_prev = this.F_n;
+        
+        // Record history
+        this.history.choices.push(choice);
+        this.history.F.push(this.F_n);
+        this.history.k.push(this.k);
+        this.history.food.push(this.food);
+        this.history.outcomes.push(outcome);
+        
+        return { choice, outcome, food: this.food, ...state };
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIMULATION
+// ═══════════════════════════════════════════════════════════════
+
+const worldHuman = createWorld();
+const worldSuper = createWorld();
+const human = new DDAAgent('human');
+const superAgent = new DDAAgent('super');
+
+const logHuman = document.getElementById('log-human');
+const logSuper = document.getElementById('log-super');
+const statsHuman = document.getElementById('stats-human');
+const statsSuper = document.getElementById('stats-super');
+const summary = document.getElementById('summary');
+
+let tick = 0;
+const MAX_TICKS = 150;
+
+function renderLog(container, tick, state, type) {
+    const div = document.createElement('div');
+    const choiceClass = state.choice === 'A' ? 'choice-a' : 'choice-b';
+    
+    div.innerHTML = `<span class="tick">T${tick.toString().padStart(3, '0')}</span> ` +
+        `<span class="choice ${choiceClass}">${state.choice}</span> → ` +
+        `<span class="val">${state.outcome.toString().padStart(2)}</span> ` +
+        `<span class="dim">| Food: ${state.food.toString().padStart(3)} | ` +
+        `k: ${state.k.toFixed(2)} | Fₙ: ${state.F.toFixed(2)} | m: ${state.m.toFixed(2)}</span>`;
+    
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderStats(container, agent, world) {
+    const aCount = agent.history.choices.filter(c => c === 'A').length;
+    const bCount = agent.history.choices.filter(c => c === 'B').length;
+    const avgFood = agent.history.food.reduce((a,b) => a+b, 0) / agent.history.food.length;
+    const avgK = agent.history.k.reduce((a,b) => a+b, 0) / agent.history.k.length;
+    
+    container.innerHTML = `
+        <div class="stat-row"><span>Status:</span><span class="val">${agent.alive ? 'ALIVE' : 'DEAD'}</span></div>
+        <div class="stat-row"><span>Final Food:</span><span class="val">${agent.food.toFixed(0)}</span></div>
+        <div class="stat-row"><span>A choices:</span><span class="val">${aCount}</span></div>
+        <div class="stat-row"><span>B choices:</span><span class="val">${bCount}</span></div>
+        <div class="stat-row"><span>Avg Food:</span><span class="val">${avgFood.toFixed(1)}</span></div>
+        <div class="stat-row"><span>Avg k:</span><span class="val">${avgK.toFixed(3)}</span></div>
+    `;
+}
+
+function renderSummary() {
+    const hAlive = human.alive;
+    const sAlive = superAgent.alive;
+    const hFood = human.food;
+    const sFood = superAgent.food;
+    const hAvgK = human.history.k.reduce((a,b) => a+b, 0) / human.history.k.length;
+    const sAvgK = superAgent.history.k.reduce((a,b) => a+b, 0) / superAgent.history.k.length;
+    
+    let text = `<span class="highlight">═══ ANALYSIS ═══</span>\n\n`;
+    
+    text += `SURVIVAL:\n`;
+    text += `  Human:      ${hAlive ? 'SURVIVED' : 'DIED'} (${hFood.toFixed(0)} food)\n`;
+    text += `  Superlearner: ${sAlive ? 'SURVIVED' : 'DIED'} (${sFood.toFixed(0)} food)\n\n`;
+    
+    text += `TRAUMA (avg k):\n`;
+    text += `  Human:      ${hAvgK.toFixed(3)} ${hAvgK > 0.5 ? '(HIGH - Past dominates)' : '(MODERATE)'}\n`;
+    text += `  Superlearner: ${sAvgK.toFixed(3)} ${sAvgK > 0.5 ? '(HIGH)' : '(CALIBRATED - Adaptive)'}\n\n`;
+    
+    text += `INTERPRETATION:\n`;
+    
+    if (sFood > hFood + 20) {
+        text += `  The Superlearner outperformed by ${(sFood - hFood).toFixed(0)} food.\n`;
+        text += `  Clean information transform + calibrated pressure + adaptive memory\n`;
+        text += `  = better decisions from the SAME equation.\n\n`;
+        text += `  The DDA structure is identical. The parameter QUALITY differs.\n`;
+        text += `  This is the optimization gap between human and superintelligence.`;
+    } else if (Math.abs(sFood - hFood) < 20) {
+        text += `  Performance was similar.\n`;
+        text += `  In stable environments, human heuristics can match optimal play.\n`;
+        text += `  The gap shows in volatility, edge cases, long time horizons.`;
+    } else {
+        text += `  Human outperformed - likely due to environment matching human biases.\n`;
+        text += `  Sometimes "irrational" heuristics are locally optimal.`;
+    }
+    
+    summary.innerHTML = text;
+}
+
+function step() {
+    tick++;
+    
+    // Update worlds
+    worldHuman.update();
+    worldSuper.update();
+    
+    // Step agents
+    const hState = human.step(worldHuman);
+    const sState = superAgent.step(worldSuper);
+    
+    // Render
+    if (hState) renderLog(logHuman, tick, hState, 'human');
+    if (sState) renderLog(logSuper, tick, sState, 'super');
+    
+    renderStats(statsHuman, human, worldHuman);
+    renderStats(statsSuper, superAgent, worldSuper);
+    
+    // Continue or finish
+    if (tick < MAX_TICKS && (human.alive || superAgent.alive)) {
+        setTimeout(step, 80);
+    } else {
+        renderSummary();
+    }
+}
+
+// Start
+step();
+
+</script>
+</body>
+</html>

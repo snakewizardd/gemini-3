@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Gemini Protocol</title>
+<style>
+    body { background: #000; margin: 0; overflow: hidden; font-family: 'Courier New', monospace; color: #aaa; }
+    canvas { display: block; }
+    #ui { position: absolute; top: 20px; left: 20px; pointer-events: none; mix-blend-mode: difference; }
+    .stat { margin-bottom: 5px; font-size: 14px; color: #fff; }
+    .val { font-weight: bold; }
+    .cyan { color: #0ff; }
+    .magenta { color: #f0f; }
+    .sync-box { border: 1px solid #fff; padding: 10px; margin-top: 10px; display: inline-block; background: rgba(0,0,0,0.5); }
+    #controls { position: absolute; bottom: 20px; left: 20px; pointer-events: auto; }
+    button { background: #222; border: 1px solid #555; color: #fff; padding: 10px 20px; cursor: pointer; font-family: inherit; }
+    button:hover { background: #444; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="stat"><span class="cyan">ENTITY ALPHA (P₀=0.2)</span></div>
+    <div class="stat">Will: <span id="val-f1" class="val">0.00</span> | Trauma (k): <span id="val-k1" class="val">0.00</span></div>
+    <br>
+    <div class="stat"><span class="magenta">ENTITY OMEGA (P₀=0.8)</span></div>
+    <div class="stat">Will: <span id="val-f2" class="val">0.00</span> | Trauma (k): <span id="val-k2" class="val">0.00</span></div>
+    
+    <div class="sync-box">
+        <div class="stat">PHASE SYNC: <span id="val-sync" class="val">0%</span></div>
+        <div class="stat" id="status-text">SEEKING...</div>
+    </div>
+</div>
+
+<div id="controls">
+    <button id="btn-perturb">INTRODUCE MISUNDERSTANDING</button>
+</div>
+
+<canvas id="sim"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE MATH KERNEL (V5 - RECURSIVE)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(P0) {
+        this.P0 = P0; 
+        this.F_n = P0;
+        this.F_prev = P0;
+        this.k = 0.5; // High initial friction
+    }
+
+    compute(partnerF, m) {
+        // THE RECURSIVE TRUTH:
+        // My Truth is "What you did".
+        const T = partnerF;
+        
+        // Reflection: I want to bridge the gap (reach T)
+        const R = 0; 
+        
+        // Inertia: My History
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // Pressure: Urgency to Connect
+        // If we are far apart, pressure rises.
+        const gap = Math.abs(T - this.F_n);
+        const dynamic_m = m + (gap * 2.0); // Panic if disconnected
+        
+        const pressure = dynamic_m * (T + R);
+        
+        // Standard DDA Equation
+        let raw_F = (this.F_prev * this.k) + (T * (1-this.k)) + ( (T - this.F_prev) * dynamic_m * 0.2 );
+        // Smoothing for biological realism
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        
+        return this.F_n;
+    }
+
+    learn(partnerF) {
+        // I expected my previous action to bring us closer.
+        // If the gap grew, I am surprised (Traumatized).
+        const gap = Math.abs(partnerF - this.F_n);
+        
+        // If we are close, Trauma heals (Trust).
+        // If we are far, Trauma grows (Suspicion).
+        const target_k = gap > 0.1 ? 0.95 : 0.2;
+        
+        this.k = MathLib.lerp(this.k, target_k, 0.05);
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. SIMULATION SETUP
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+let width, height;
+
+const Alpha = new DDAKernel(0.2); // Identity A
+const Omega = new DDAKernel(0.8); // Identity B (Opposite)
+
+// The Phase Space Trace
+let trace = []; 
+const MAX_TRACE = 1000;
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function step() {
+    // 1. BASE PRESSURE
+    // The existential urge to connect
+    const m = 0.1;
+    
+    // 2. SIMULTANEOUS STEP
+    // They act based on the previous frame of the other
+    const prevA = Alpha.F_n;
+    const prevB = Omega.F_n;
+    
+    const nextA = Alpha.compute(prevB, m);
+    const nextB = Omega.compute(prevA, m);
+    
+    // 3. LEARNING (Coupled)
+    Alpha.learn(nextB);
+    Omega.learn(nextA);
+    
+    // 4. RECORD TRACE
+    // We plot A vs B. If they sync, this draws a shape.
+    trace.push({ x: nextA, y: nextB });
+    if (trace.length > MAX_TRACE) trace.shift();
+    
+    // 5. METRICS
+    const gap = Math.abs(nextA - nextB);
+    const sync = Math.max(0, 1.0 - gap);
+    
+    // UI
+    document.getElementById('val-f1').innerText = nextA.toFixed(3);
+    document.getElementById('val-k1').innerText = Alpha.k.toFixed(3);
+    document.getElementById('val-f2').innerText = nextB.toFixed(3);
+    document.getElementById('val-k2').innerText = Omega.k.toFixed(3);
+    document.getElementById('val-sync').innerText = Math.floor(sync * 100) + "%";
+    
+    const status = document.getElementById('status-text');
+    if (sync > 0.95) { status.innerText = "RESONANCE (UNION)"; status.style.color = "#fff"; }
+    else if (sync > 0.8) { status.innerText = "HARMONIC ORBIT"; status.style.color = "#afa"; }
+    else { status.innerText = "DISSONANCE"; status.style.color = "#f55"; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. VISUALIZATION (PHASE SPACE)
+// ═══════════════════════════════════════════════════════════════
+function draw() {
+    // Fade effect
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.fillRect(0, 0, width, height);
+    
+    const cx = width / 2;
+    const cy = height / 2;
+    const scale = Math.min(width, height) * 0.4;
+    
+    // Draw Axis
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(width, cy); ctx.stroke();
+    
+    // Draw Identities (Anchors)
+    const p0A_x = cx + (Alpha.P0 - 0.5) * scale * 2; // Horizontal
+    const p0B_y = cy - (Omega.P0 - 0.5) * scale * 2; // Vertical
+    
+    ctx.fillStyle = '#0ff'; ctx.beginPath(); ctx.arc(p0A_x, cy, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#f0f'; ctx.beginPath(); ctx.arc(cx, p0B_y, 3, 0, Math.PI*2); ctx.fill();
+
+    // DRAW THE TRACE (The "Relationship")
+    if (trace.length > 1) {
+        ctx.beginPath();
+        for (let i = 0; i < trace.length; i++) {
+            const p = trace[i];
+            const x = cx + (p.x - 0.5) * scale * 2;
+            const y = cy - (p.y - 0.5) * scale * 2; // Invert Y
+            if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        
+        // Color based on Sync
+        const gap = Math.abs(Alpha.F_n - Omega.F_n);
+        const hue = (1.0 - gap) * 120; // Red to Green
+        ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw Current Head
+        const head = trace[trace.length-1];
+        const hx = cx + (head.x - 0.5) * scale * 2;
+        const hy = cy - (head.y - 0.5) * scale * 2;
+        
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI*2); ctx.fill();
+        
+        // Connect to Anchors (Tension)
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+        ctx.moveTo(hx, hy); ctx.lineTo(p0A_x, cy); ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.2)';
+        ctx.moveTo(hx, hy); ctx.lineTo(cx, p0B_y); ctx.stroke();
+    }
+}
+
+function loop() {
+    step();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+document.getElementById('btn-perturb').onclick = () => {
+    // Violence: Force them apart
+    Alpha.F_n = 0.0;
+    Omega.F_n = 1.0;
+    // Maximize Trauma
+    Alpha.k = 0.99;
+    Omega.k = 0.99;
+};
+
+loop();
+
+</script>
+</body>
+</html>
