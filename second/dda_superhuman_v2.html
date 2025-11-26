@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: Superhuman Intelligence v2</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #000; 
+    overflow: hidden; 
+    font-family: 'Courier New', monospace;
+    color: #0f0;
+}
+canvas { display: block; }
+
+#ui {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 15, 0, 0.95);
+    padding: 15px;
+    border: 1px solid #0f0;
+    min-width: 240px;
+    z-index: 100;
+    font-size: 12px;
+}
+
+#ui h1 { font-size: 13px; margin-bottom: 12px; letter-spacing: 2px; border-bottom: 1px solid #0a0; padding-bottom: 8px; }
+.stat { margin: 6px 0; display: flex; justify-content: space-between; }
+.val { color: #fff; }
+.warning { color: #f80; }
+.danger { color: #f00; }
+.good { color: #0f0; }
+
+.section { margin-top: 12px; padding-top: 8px; border-top: 1px solid #0a0; }
+.section-title { color: #0a0; font-size: 10px; letter-spacing: 1px; margin-bottom: 6px; }
+
+#controls {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(0, 15, 0, 0.95);
+    padding: 10px 15px;
+    border: 1px solid #0f0;
+    font-size: 11px;
+}
+
+#controls span { margin-right: 15px; }
+kbd { background: #0a0; color: #000; padding: 2px 6px; border-radius: 3px; }
+
+#legend {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 15, 0, 0.95);
+    padding: 15px;
+    border: 1px solid #0f0;
+    font-size: 11px;
+}
+.legend-item { display: flex; align-items: center; margin: 4px 0; }
+.legend-color { width: 14px; height: 14px; margin-right: 8px; border: 1px solid #333; }
+
+#analysis {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 15, 0, 0.95);
+    padding: 15px;
+    border: 1px solid #0f0;
+    width: 300px;
+    font-size: 11px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+#analysis h2 { font-size: 11px; margin-bottom: 10px; color: #0f0; letter-spacing: 1px; }
+.log-entry { padding: 3px 0; border-bottom: 1px solid #0a0; }
+.log-frustration { color: #f80; background: rgba(255,100,0,0.1); padding: 2px 5px; }
+.log-teleport { color: #a0f; }
+.log-key { color: #ff0; }
+.log-escape { color: #f00; background: rgba(255,0,0,0.1); padding: 2px 5px; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <h1>▸ DDA SUPERHUMAN v2</h1>
+    <div class="stat">Status <span class="val" id="status">SOLVING</span></div>
+    <div class="stat">Steps <span class="val" id="steps">0</span></div>
+    <div class="stat">Optimal Est. <span class="val" id="optimal">--</span></div>
+    <div class="stat">Efficiency <span class="val" id="efficiency">--</span></div>
+    
+    <div class="section">
+        <div class="section-title">▸ DDA PARAMETERS</div>
+        <div class="stat">k (Memory) <span class="val" id="k-val">0.30</span></div>
+        <div class="stat">m (Pressure) <span class="val" id="m-val">0.50</span></div>
+        <div class="stat">Health <span class="val" id="health">100</span></div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">▸ SUPERHUMAN SYSTEMS</div>
+        <div class="stat">Lookahead <span class="val" id="lookahead">3 tiles</span></div>
+        <div class="stat">Frustration <span class="val" id="frustration">0%</span></div>
+        <div class="stat">Mode <span class="val" id="mode">EXPLOIT</span></div>
+        <div class="stat">Dead Ends Found <span class="val" id="deadends">0</span></div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">▸ INVENTORY</div>
+        <div id="keys">None</div>
+    </div>
+</div>
+
+<div id="controls">
+    <span><kbd>SPACE</kbd> Pause</span>
+    <span><kbd>R</kbd> Reset</span>
+    <span><kbd>+/-</kbd> Speed</span>
+</div>
+
+<div id="legend">
+    <div class="legend-item"><div class="legend-color" style="background:#111"></div>Wall</div>
+    <div class="legend-item"><div class="legend-color" style="background:#000"></div>Path</div>
+    <div class="legend-item"><div class="legend-color" style="background:#a0f"></div>Teleporter</div>
+    <div class="legend-item"><div class="legend-color" style="background:#500"></div>Decay Zone</div>
+    <div class="legend-item"><div class="legend-color" style="background:#00f"></div>Goal</div>
+    <div class="legend-item"><div class="legend-color" style="background:rgba(255,100,0,0.5)"></div>Heat (Memory)</div>
+    <div class="legend-item"><div class="legend-color" style="background:rgba(0,255,255,0.3)"></div>Lookahead Vision</div>
+</div>
+
+<div id="analysis">
+    <h2>▸ DECISION LOG</h2>
+    <div id="decision-log">Initializing...</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const TILE = 22;
+let SPEED = 3;
+let PAUSED = false;
+
+const WALL = 1, PATH = 0, TELEPORT = 2, DECAY = 3, KEY = 4, DOOR = 5, GOAL = 6;
+const KEY_COLORS = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff'];
+
+// ═══════════════════════════════════════════════════════════════
+// THE SUPERHUMAN DDA BRAIN
+// ═══════════════════════════════════════════════════════════════
+const Brain = {
+    P0: { x: 1, y: 1 },
+    k: 0.3,
+    m: 0.5,
+    lastDir: { x: 0, y: 0 },
+    
+    // SUPERHUMAN ADDITIONS
+    teleportMemory: new Map(),
+    deadEndMemory: new Set(),
+    
+    // FRUSTRATION SYSTEM (addresses "bucket problem")
+    recentPositions: [],
+    frustration: 0,
+    mode: 'EXPLOIT', // EXPLOIT or EXPLORE
+    
+    // LOOKAHEAD SYSTEM (addresses "sight" critique)
+    lookaheadDepth: 3,
+    visionTiles: [], // Tiles the agent can "see"
+    
+    // Reset
+    reset() {
+        this.lastDir = { x: 0, y: 0 };
+        this.teleportMemory.clear();
+        this.deadEndMemory.clear();
+        this.recentPositions = [];
+        this.frustration = 0;
+        this.mode = 'EXPLOIT';
+        this.k = 0.3;
+        this.m = 0.5;
+        this.visionTiles = [];
+    },
+    
+    // ─────────────────────────────────────────────────────────────
+    // LOOKAHEAD: Raycast in all directions to "see" ahead
+    // ─────────────────────────────────────────────────────────────
+    computeVision(x, y, world) {
+        this.visionTiles = [];
+        const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+        
+        for (const dir of dirs) {
+            for (let d = 1; d <= this.lookaheadDepth; d++) {
+                const nx = x + dir.x * d;
+                const ny = y + dir.y * d;
+                
+                if (nx < 0 || nx >= world.cols || ny < 0 || ny >= world.rows) break;
+                if (world.grid[ny][nx] === WALL) break;
+                
+                this.visionTiles.push({x: nx, y: ny, dist: d, dir});
+                
+                // Can see through paths but record what's there
+                const tile = world.grid[ny][nx];
+                if (tile === DOOR) {
+                    const door = world.doors.find(dd => dd.x === nx && dd.y === ny);
+                    if (door && !world.inventory.has(door.color)) break; // Can't see past locked door
+                }
+            }
+        }
+        
+        return this.visionTiles;
+    },
+    
+    // Evaluate what we can see in a direction
+    evaluateDirection(dir, x, y, world, heat) {
+        let score = 0;
+        let wallAhead = false;
+        let deadEndAhead = false;
+        
+        for (let d = 1; d <= this.lookaheadDepth; d++) {
+            const nx = x + dir.x * d;
+            const ny = y + dir.y * d;
+            
+            if (nx < 0 || nx >= world.cols || ny < 0 || ny >= world.rows) {
+                wallAhead = true;
+                break;
+            }
+            
+            const tile = world.grid[ny][nx];
+            
+            if (tile === WALL) {
+                wallAhead = true;
+                score -= (this.lookaheadDepth - d + 1) * 2; // Penalty for nearby walls
+                break;
+            }
+            
+            if (this.deadEndMemory.has(`${nx},${ny}`)) {
+                deadEndAhead = true;
+                score -= 10;
+            }
+            
+            // Reward for seeing good things ahead
+            if (tile === GOAL) score += 20 / d;
+            if (tile === KEY) {
+                const key = world.keys.find(k => k.x === nx && k.y === ny);
+                if (key && !world.inventory.has(key.color)) score += 10 / d;
+            }
+            if (tile === TELEPORT) score += 3 / d;
+            if (tile === DECAY) score -= 2 / d;
+            
+            // Heat penalty (already visited)
+            const h = heat[ny]?.[nx] || 0;
+            score -= h * 0.5 / d;
+        }
+        
+        return { score, wallAhead, deadEndAhead };
+    },
+    
+    // ─────────────────────────────────────────────────────────────
+    // FRUSTRATION: Detect when stuck in local minimum
+    // ─────────────────────────────────────────────────────────────
+    updateFrustration(x, y) {
+        this.recentPositions.push({x, y});
+        if (this.recentPositions.length > 50) {
+            this.recentPositions.shift();
+        }
+        
+        if (this.recentPositions.length >= 30) {
+            // Calculate bounding box of recent positions
+            const xs = this.recentPositions.map(p => p.x);
+            const ys = this.recentPositions.map(p => p.y);
+            const width = Math.max(...xs) - Math.min(...xs);
+            const height = Math.max(...ys) - Math.min(...ys);
+            const area = (width + 1) * (height + 1);
+            
+            // If confined to small area, increase frustration
+            if (area < 25) { // 5x5 or smaller
+                this.frustration = Math.min(1, this.frustration + 0.05);
+            } else {
+                this.frustration = Math.max(0, this.frustration - 0.02);
+            }
+        }
+        
+        // Mode switch based on frustration
+        if (this.frustration > 0.7 && this.mode === 'EXPLOIT') {
+            this.mode = 'EXPLORE';
+            this.recentPositions = []; // Reset tracking
+            return 'ESCAPE_TRIGGERED';
+        } else if (this.frustration < 0.3 && this.mode === 'EXPLORE') {
+            this.mode = 'EXPLOIT';
+            return 'EXPLOIT_RESUMED';
+        }
+        
+        return null;
+    },
+    
+    // ─────────────────────────────────────────────────────────────
+    // T: Information Transform (using Manhattan distance)
+    // ─────────────────────────────────────────────────────────────
+    computeT(nx, ny, world) {
+        let t = 0;
+        
+        // MANHATTAN DISTANCE (addresses critique)
+        const dx = Math.abs(world.goal.x - nx);
+        const dy = Math.abs(world.goal.y - ny);
+        const distToGoal = dx + dy;
+        const maxDist = world.cols + world.rows;
+        
+        // In EXPLORE mode, INVERT the goal attraction
+        if (this.mode === 'EXPLORE') {
+            t -= (1 - distToGoal/maxDist) * 1.5; // Push AWAY from goal
+            t += Math.random() * 0.5; // Add randomness
+        } else {
+            t += (1 - distToGoal/maxDist) * 2;
+        }
+        
+        // Teleporter memory
+        const key = `${nx},${ny}`;
+        if (world.grid[ny][nx] === TELEPORT && this.teleportMemory.has(key)) {
+            const dest = this.teleportMemory.get(key);
+            const destDist = Math.abs(world.goal.x - dest.x) + Math.abs(world.goal.y - dest.y);
+            if (destDist < distToGoal) {
+                t += 4;
+            }
+        }
+        
+        // Key awareness
+        if (world.grid[ny][nx] === KEY) {
+            const keyData = world.keys.find(k => k.x === nx && k.y === ny);
+            if (keyData && !world.inventory.has(keyData.color)) {
+                t += 3;
+            }
+        }
+        
+        // Decay penalty
+        if (world.grid[ny][nx] === DECAY) {
+            t -= 1.5;
+        }
+        
+        // Dead end memory (strong avoidance)
+        if (this.deadEndMemory.has(key)) {
+            t -= 8;
+        }
+        
+        return t;
+    },
+    
+    // ─────────────────────────────────────────────────────────────
+    // R: Reflection (evaluation with lookahead)
+    // ─────────────────────────────────────────────────────────────
+    computeR(nx, ny, move, world, heat) {
+        let r = 0;
+        
+        // Heat penalty
+        const h = heat[ny]?.[nx] || 0;
+        
+        if (this.mode === 'EXPLORE') {
+            r -= h * 1.5; // Strongly avoid revisited in explore mode
+            if (h === 0) r += 3; // Bonus for unvisited
+        } else {
+            r -= h * 0.6;
+            if (h === 0) r += 1;
+        }
+        
+        // LOOKAHEAD EVALUATION (addresses "sight" critique)
+        const vision = this.evaluateDirection(move, nx - move.x, ny - move.y, world, heat);
+        r += vision.score * 0.5;
+        
+        if (vision.wallAhead && vision.score < -5) {
+            r -= 3; // Penalty for walking toward dead end
+        }
+        
+        // Door check
+        if (world.grid[ny][nx] === DOOR) {
+            const door = world.doors.find(d => d.x === nx && d.y === ny);
+            if (door && !world.inventory.has(door.color)) {
+                r -= 100;
+            }
+        }
+        
+        return r;
+    },
+    
+    // ─────────────────────────────────────────────────────────────
+    // Adaptive k and m
+    // ─────────────────────────────────────────────────────────────
+    updateK(outcome, expected) {
+        const surprise = Math.abs(outcome - expected);
+        const target = 0.2 + surprise * 0.4 + this.frustration * 0.3;
+        this.k = this.k * 0.8 + Math.min(0.8, Math.max(0.1, target)) * 0.2;
+    },
+    
+    updateM(health, steps, optimal) {
+        const healthPressure = (100 - health) / 100;
+        const timePressure = optimal > 0 ? Math.max(0, (steps - optimal) / optimal) : 0;
+        const frustrationPressure = this.frustration;
+        
+        this.m = 0.3 + healthPressure * 0.3 + timePressure * 0.2 + frustrationPressure * 0.4;
+        this.m = Math.max(0.2, Math.min(1.8, this.m));
+    },
+    
+    // ─────────────────────────────────────────────────────────────
+    // THE CORE DDA DECISION
+    // ─────────────────────────────────────────────────────────────
+    decide(x, y, world, heat) {
+        // Update vision
+        this.computeVision(x, y, world);
+        
+        // Get valid moves
+        const moves = [];
+        const directions = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+        
+        for (const d of directions) {
+            const nx = x + d.x;
+            const ny = y + d.y;
+            
+            if (nx < 0 || nx >= world.cols || ny < 0 || ny >= world.rows) continue;
+            if (world.grid[ny][nx] === WALL) continue;
+            
+            if (world.grid[ny][nx] === DOOR) {
+                const door = world.doors.find(dd => dd.x === nx && dd.y === ny);
+                if (door && !world.inventory.has(door.color)) continue;
+            }
+            
+            moves.push({x: d.x, y: d.y, nx, ny});
+        }
+        
+        if (moves.length === 0) return null;
+        
+        // Detect dead end
+        if (moves.length === 1 && (this.lastDir.x !== 0 || this.lastDir.y !== 0)) {
+            if (moves[0].x === -this.lastDir.x && moves[0].y === -this.lastDir.y) {
+                this.deadEndMemory.add(`${x},${y}`);
+            }
+        }
+        
+        let bestMove = null;
+        let bestScore = -Infinity;
+        
+        for (const move of moves) {
+            // Fₙ = P₀ · kFₙ₋₁ + m(T + R)
+            
+            // Inertia
+            let inertia = 0;
+            if (this.lastDir.x === move.x && this.lastDir.y === move.y) {
+                inertia = 0.5;
+            } else if (this.lastDir.x === -move.x && this.lastDir.y === -move.y) {
+                inertia = this.mode === 'EXPLORE' ? 0.3 : -0.4; // U-turns OK in explore
+            }
+            
+            const T = this.computeT(move.nx, move.ny, world);
+            const R = this.computeR(move.nx, move.ny, move, world, heat);
+            
+            const F = (this.k * inertia) + (this.m * (T + R));
+            
+            if (F > bestScore) {
+                bestScore = F;
+                bestMove = move;
+            }
+        }
+        
+        if (bestMove) {
+            this.lastDir = {x: bestMove.x, y: bestMove.y};
+        }
+        
+        return bestMove;
+    },
+    
+    recordTeleport(from, to) {
+        this.teleportMemory.set(`${from.x},${from.y}`, to);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// WORLD GENERATION
+// ═══════════════════════════════════════════════════════════════
+class World {
+    constructor(cols, rows) {
+        this.cols = cols;
+        this.rows = rows;
+        this.grid = [];
+        this.heat = [];
+        this.keys = [];
+        this.doors = [];
+        this.teleporters = [];
+        this.goal = {x: cols-2, y: rows-2};
+        this.inventory = new Set();
+        this.generate();
+    }
+    
+    generate() {
+        this.grid = [];
+        this.heat = [];
+        for (let y = 0; y < this.rows; y++) {
+            this.grid.push(new Array(this.cols).fill(WALL));
+            this.heat.push(new Array(this.cols).fill(0));
+        }
+        
+        this.carveMaze();
+        this.addTeleporters(3);
+        this.addKeysAndDoors(2);
+        this.addDecayZones(6);
+        
+        this.grid[this.goal.y][this.goal.x] = GOAL;
+        this.optimalLength = this.calculateOptimal();
+    }
+    
+    carveMaze() {
+        const stack = [{x: 1, y: 1}];
+        this.grid[1][1] = PATH;
+        
+        while (stack.length > 0) {
+            const cur = stack[stack.length - 1];
+            const neighbors = [];
+            
+            for (const [dx, dy] of [[0,-2], [0,2], [-2,0], [2,0]]) {
+                const nx = cur.x + dx;
+                const ny = cur.y + dy;
+                if (nx > 0 && nx < this.cols-1 && ny > 0 && ny < this.rows-1) {
+                    if (this.grid[ny][nx] === WALL) {
+                        neighbors.push({x: nx, y: ny, wx: cur.x + dx/2, wy: cur.y + dy/2});
+                    }
+                }
+            }
+            
+            if (neighbors.length > 0) {
+                const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                this.grid[next.y][next.x] = PATH;
+                this.grid[next.wy][next.wx] = PATH;
+                stack.push({x: next.x, y: next.y});
+            } else {
+                stack.pop();
+            }
+        }
+        
+        // Add loops for multiple routes
+        for (let i = 0; i < this.cols * this.rows / 40; i++) {
+            const x = 2 + Math.floor(Math.random() * (this.cols - 4));
+            const y = 2 + Math.floor(Math.random() * (this.rows - 4));
+            if (this.grid[y][x] === WALL) {
+                let pathNeighbors = 0;
+                if (this.grid[y-1]?.[x] === PATH) pathNeighbors++;
+                if (this.grid[y+1]?.[x] === PATH) pathNeighbors++;
+                if (this.grid[y]?.[x-1] === PATH) pathNeighbors++;
+                if (this.grid[y]?.[x+1] === PATH) pathNeighbors++;
+                if (pathNeighbors >= 2) this.grid[y][x] = PATH;
+            }
+        }
+    }
+    
+    addTeleporters(count) {
+        const paths = this.getPathCells();
+        for (let i = 0; i < count && paths.length >= 2; i++) {
+            const p1 = paths.splice(Math.floor(Math.random() * paths.length), 1)[0];
+            const p2 = paths.splice(Math.floor(Math.random() * paths.length), 1)[0];
+            this.grid[p1.y][p1.x] = TELEPORT;
+            this.grid[p2.y][p2.x] = TELEPORT;
+            this.teleporters.push({x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y});
+        }
+    }
+    
+    addKeysAndDoors(count) {
+        const paths = this.getPathCells();
+        for (let i = 0; i < count && paths.length >= 2; i++) {
+            const color = KEY_COLORS[i];
+            const keyPaths = paths.filter(p => p.x + p.y < (this.cols + this.rows) * 0.5);
+            if (keyPaths.length === 0) continue;
+            const keyPos = keyPaths[Math.floor(Math.random() * keyPaths.length)];
+            paths.splice(paths.indexOf(keyPos), 1);
+            
+            const doorPaths = paths.filter(p => p.x + p.y > (this.cols + this.rows) * 0.5);
+            if (doorPaths.length === 0) continue;
+            const doorPos = doorPaths[Math.floor(Math.random() * doorPaths.length)];
+            paths.splice(paths.indexOf(doorPos), 1);
+            
+            this.grid[keyPos.y][keyPos.x] = KEY;
+            this.grid[doorPos.y][doorPos.x] = DOOR;
+            this.keys.push({x: keyPos.x, y: keyPos.y, color});
+            this.doors.push({x: doorPos.x, y: doorPos.y, color});
+        }
+    }
+    
+    addDecayZones(count) {
+        const paths = this.getPathCells();
+        for (let i = 0; i < count && paths.length > 0; i++) {
+            const p = paths.splice(Math.floor(Math.random() * paths.length), 1)[0];
+            this.grid[p.y][p.x] = DECAY;
+        }
+    }
+    
+    getPathCells() {
+        const paths = [];
+        for (let y = 1; y < this.rows - 1; y++) {
+            for (let x = 1; x < this.cols - 1; x++) {
+                if (this.grid[y][x] === PATH && !(x === 1 && y === 1) && 
+                    !(x === this.goal.x && y === this.goal.y)) {
+                    paths.push({x, y});
+                }
+            }
+        }
+        return paths;
+    }
+    
+    calculateOptimal() {
+        const queue = [{x: 1, y: 1, dist: 0}];
+        const visited = new Set(['1,1']);
+        
+        while (queue.length > 0) {
+            const cur = queue.shift();
+            if (cur.x === this.goal.x && cur.y === this.goal.y) return cur.dist;
+            
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+                const nx = cur.x + dx, ny = cur.y + dy;
+                const key = `${nx},${ny}`;
+                if (visited.has(key)) continue;
+                if (nx < 0 || nx >= this.cols || ny < 0 || ny >= this.rows) continue;
+                if (this.grid[ny][nx] === WALL) continue;
+                visited.add(key);
+                queue.push({x: nx, y: ny, dist: cur.dist + 1});
+            }
+        }
+        return 999;
+    }
+    
+    getTeleportDestination(x, y) {
+        for (const tp of this.teleporters) {
+            if (tp.x1 === x && tp.y1 === y) return {x: tp.x2, y: tp.y2};
+            if (tp.x2 === x && tp.y2 === y) return {x: tp.x1, y: tp.y1};
+        }
+        return null;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AGENT
+// ═══════════════════════════════════════════════════════════════
+class Agent {
+    constructor(world) {
+        this.world = world;
+        this.x = 1;
+        this.y = 1;
+        this.health = 100;
+        this.steps = 0;
+        this.path = [{x: 1, y: 1}];
+        this.solved = false;
+        this.log = [];
+        
+        Brain.reset();
+        world.heat[1][1] = 1;
+    }
+    
+    step() {
+        if (this.solved || this.health <= 0) return;
+        
+        Brain.updateM(this.health, this.steps, this.world.optimalLength);
+        
+        // Frustration check
+        const frustrationEvent = Brain.updateFrustration(this.x, this.y);
+        if (frustrationEvent) {
+            this.log.push({type: frustrationEvent, step: this.steps});
+        }
+        
+        const move = Brain.decide(this.x, this.y, this.world, this.world.heat);
+        
+        if (!move) {
+            this.health = 0;
+            return;
+        }
+        
+        const oldX = this.x, oldY = this.y;
+        this.x = move.nx;
+        this.y = move.ny;
+        this.steps++;
+        
+        this.world.heat[this.y][this.x] += 1;
+        
+        const tile = this.world.grid[this.y][this.x];
+        
+        // Tile effects
+        if (tile === TELEPORT) {
+            const dest = this.world.getTeleportDestination(this.x, this.y);
+            if (dest) {
+                Brain.recordTeleport({x: this.x, y: this.y}, dest);
+                this.x = dest.x;
+                this.y = dest.y;
+                this.log.push({type: 'TELEPORT', step: this.steps, to: dest});
+            }
+        }
+        
+        if (tile === KEY) {
+            const key = this.world.keys.find(k => k.x === move.nx && k.y === move.ny);
+            if (key && !this.world.inventory.has(key.color)) {
+                this.world.inventory.add(key.color);
+                this.log.push({type: 'KEY', step: this.steps, color: key.color});
+            }
+        }
+        
+        if (tile === DECAY) {
+            this.health -= 2;
+        }
+        
+        if (tile === GOAL) {
+            this.solved = true;
+            this.log.push({type: 'SOLVED', step: this.steps});
+        }
+        
+        this.path.push({x: this.x, y: this.y});
+        
+        // Learning
+        Brain.updateK(tile === DECAY ? 1 : 0, 0);
+        
+        if (this.log.length > 30) this.log.shift();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDERER
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let world, agent;
+let cols, rows;
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width / TILE);
+    rows = Math.floor(canvas.height / TILE);
+    if (cols % 2 === 0) cols--;
+    if (rows % 2 === 0) rows--;
+    reset();
+}
+
+function reset() {
+    world = new World(cols, rows);
+    agent = new Agent(world);
+}
+
+function updateUI() {
+    document.getElementById('status').textContent = 
+        agent.solved ? 'SOLVED' : (agent.health <= 0 ? 'FAILED' : 'SOLVING');
+    document.getElementById('status').className = 'val ' + 
+        (agent.solved ? 'good' : (agent.health <= 0 ? 'danger' : ''));
+    document.getElementById('steps').textContent = agent.steps;
+    document.getElementById('optimal').textContent = world.optimalLength;
+    document.getElementById('efficiency').textContent = 
+        agent.solved ? `${(world.optimalLength / agent.steps * 100).toFixed(1)}%` : '--';
+    
+    document.getElementById('k-val').textContent = Brain.k.toFixed(3);
+    document.getElementById('m-val').textContent = Brain.m.toFixed(3);
+    document.getElementById('health').textContent = Math.max(0, agent.health);
+    document.getElementById('health').className = 'val ' + 
+        (agent.health < 30 ? 'danger' : (agent.health < 60 ? 'warning' : ''));
+    
+    document.getElementById('frustration').textContent = `${(Brain.frustration * 100).toFixed(0)}%`;
+    document.getElementById('frustration').className = 'val ' + 
+        (Brain.frustration > 0.5 ? 'danger' : (Brain.frustration > 0.3 ? 'warning' : ''));
+    document.getElementById('mode').textContent = Brain.mode;
+    document.getElementById('mode').className = 'val ' + 
+        (Brain.mode === 'EXPLORE' ? 'warning' : 'good');
+    document.getElementById('deadends').textContent = Brain.deadEndMemory.size;
+    
+    // Keys
+    const keysDiv = document.getElementById('keys');
+    if (world.inventory.size === 0) {
+        keysDiv.textContent = 'None';
+    } else {
+        keysDiv.innerHTML = '';
+        for (const color of world.inventory) {
+            const span = document.createElement('span');
+            span.style.cssText = `display:inline-block;width:12px;height:12px;background:${color};margin-right:4px;border-radius:2px;`;
+            keysDiv.appendChild(span);
+        }
+    }
+    
+    // Log
+    const logDiv = document.getElementById('decision-log');
+    logDiv.innerHTML = agent.log.slice(-10).map(entry => {
+        if (entry.type === 'ESCAPE_TRIGGERED') 
+            return `<div class="log-entry log-escape">T${entry.step}: ⚠ ESCAPE MODE - Breaking local minimum</div>`;
+        if (entry.type === 'EXPLOIT_RESUMED')
+            return `<div class="log-entry">T${entry.step}: ✓ Resuming goal-seeking</div>`;
+        if (entry.type === 'TELEPORT')
+            return `<div class="log-entry log-teleport">T${entry.step}: ◈ WARP → (${entry.to.x},${entry.to.y})</div>`;
+        if (entry.type === 'KEY')
+            return `<div class="log-entry log-key">T${entry.step}: ★ KEY [${entry.color}]</div>`;
+        if (entry.type === 'SOLVED')
+            return `<div class="log-entry" style="color:#0f0;font-weight:bold">T${entry.step}: ◆ GOAL REACHED ◆</div>`;
+        return `<div class="log-entry">${JSON.stringify(entry)}</div>`;
+    }).join('');
+}
+
+function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw grid
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const tile = world.grid[y][x];
+            const heat = world.heat[y][x];
+            const px = x * TILE, py = y * TILE;
+            
+            // Base tile
+            switch (tile) {
+                case WALL: ctx.fillStyle = '#0a0a0a'; break;
+                case PATH: ctx.fillStyle = '#000'; break;
+                case TELEPORT: ctx.fillStyle = '#a0f'; break;
+                case DECAY: ctx.fillStyle = '#400'; break;
+                case KEY: ctx.fillStyle = '#000'; break;
+                case DOOR: ctx.fillStyle = '#000'; break;
+                case GOAL: ctx.fillStyle = '#00f'; break;
+            }
+            ctx.fillRect(px, py, TILE, TILE);
+            
+            // Heat overlay
+            if (heat > 0 && tile !== WALL) {
+                ctx.fillStyle = `rgba(255, 100, 0, ${Math.min(1, heat * 0.12)})`;
+                ctx.fillRect(px, py, TILE, TILE);
+            }
+            
+            // Vision overlay
+            if (Brain.visionTiles.some(v => v.x === x && v.y === y)) {
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+                ctx.fillRect(px, py, TILE, TILE);
+            }
+            
+            // Key/Door icons
+            if (tile === KEY) {
+                const key = world.keys.find(k => k.x === x && k.y === y);
+                if (key && !world.inventory.has(key.color)) {
+                    ctx.fillStyle = key.color;
+                    ctx.beginPath();
+                    ctx.arc(px + TILE/2, py + TILE/2, TILE/4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            if (tile === DOOR) {
+                const door = world.doors.find(d => d.x === x && d.y === y);
+                if (door && !world.inventory.has(door.color)) {
+                    ctx.strokeStyle = door.color;
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(px + 3, py + 3, TILE - 6, TILE - 6);
+                }
+            }
+        }
+    }
+    
+    // Draw path
+    if (agent.path.length > 1) {
+        ctx.strokeStyle = `rgba(0, 255, 0, ${Brain.mode === 'EXPLORE' ? 0.3 : 0.6})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < agent.path.length; i++) {
+            const p = agent.path[i];
+            const px = p.x * TILE + TILE/2;
+            const py = p.y * TILE + TILE/2;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+    }
+    
+    // Draw agent
+    const ax = agent.x * TILE + TILE/2;
+    const ay = agent.y * TILE + TILE/2;
+    
+    ctx.shadowBlur = Brain.mode === 'EXPLORE' ? 20 : 12;
+    ctx.shadowColor = Brain.mode === 'EXPLORE' ? '#f80' : '#fff';
+    ctx.fillStyle = Brain.mode === 'EXPLORE' ? '#f80' : '#fff';
+    ctx.beginPath();
+    ctx.arc(ax, ay, TILE/3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+}
+
+function loop() {
+    if (!PAUSED) {
+        for (let i = 0; i < SPEED; i++) {
+            agent.step();
+        }
+    }
+    
+    updateUI();
+    draw();
+    
+    if (agent.solved || agent.health <= 0) {
+        setTimeout(() => {
+            if (agent.solved || agent.health <= 0) reset();
+        }, 2500);
+    }
+    
+    requestAnimationFrame(loop);
+}
+
+// Controls
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { PAUSED = !PAUSED; e.preventDefault(); }
+    if (e.code === 'KeyR') reset();
+    if (e.code === 'Equal' || e.code === 'NumpadAdd') SPEED = Math.min(20, SPEED + 1);
+    if (e.code === 'Minus' || e.code === 'NumpadSubtract') SPEED = Math.max(1, SPEED - 1);
+});
+
+window.addEventListener('resize', resize);
+resize();
+loop();
+</script>
+</body>
+</html>

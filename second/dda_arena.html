@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA ARENA: Human vs Superhuman</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #050508;
+    font-family: 'Courier New', monospace;
+    color: #888;
+    overflow: hidden;
+}
+
+#header {
+    text-align: center;
+    padding: 15px;
+    background: linear-gradient(180deg, #0a0a10 0%, #050508 100%);
+    border-bottom: 1px solid #222;
+}
+
+#header h1 {
+    font-size: 14px;
+    letter-spacing: 0.3em;
+    color: #fff;
+    margin-bottom: 5px;
+}
+
+#header p {
+    font-size: 11px;
+    color: #666;
+}
+
+#arena {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: calc(100vh - 80px);
+}
+
+.panel {
+    position: relative;
+    border-right: 1px solid #222;
+}
+
+.panel:last-child { border-right: none; }
+
+.panel-header {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.agent-name {
+    background: rgba(0, 0, 0, 0.9);
+    padding: 10px 15px;
+    border: 1px solid;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+}
+
+.human-agent .agent-name { border-color: #f80; color: #f80; }
+.super-agent .agent-name { border-color: #0ff; color: #0ff; }
+
+.stats {
+    background: rgba(0, 0, 0, 0.9);
+    padding: 10px;
+    border: 1px solid #333;
+    font-size: 11px;
+    text-align: right;
+}
+
+.stats div { margin: 3px 0; }
+.stat-label { color: #666; }
+.stat-val { color: #fff; margin-left: 8px; }
+
+.human-agent .stat-val.mode { color: #f80; }
+.super-agent .stat-val.mode { color: #0ff; }
+
+canvas { width: 100%; height: 100%; }
+
+#results {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.98);
+    border: 2px solid #0ff;
+    padding: 40px 60px;
+    text-align: center;
+    z-index: 1000;
+}
+
+#results h2 {
+    font-size: 18px;
+    color: #0ff;
+    margin-bottom: 20px;
+    letter-spacing: 0.2em;
+}
+
+#results-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    text-align: left;
+    font-size: 12px;
+    line-height: 2;
+}
+
+.result-col h3 {
+    font-size: 13px;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #333;
+}
+
+.human-col h3 { color: #f80; }
+.super-col h3 { color: #0ff; }
+
+.winner { color: #0f0; }
+.loser { color: #f55; }
+
+#controls {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 8px 20px;
+    border: 1px solid #333;
+    font-size: 11px;
+    z-index: 100;
+}
+
+kbd {
+    background: #222;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin: 0 3px;
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+    <h1>◈ DDA ARENA ◈</h1>
+    <p>Same Maze. Same Equation. Different Parameters. Watch the gap.</p>
+</div>
+
+<div id="arena">
+    <div class="panel human-agent">
+        <div class="panel-header">
+            <div class="agent-name">◯ HUMAN-LIKE</div>
+            <div class="stats">
+                <div><span class="stat-label">Steps:</span><span class="stat-val" id="human-steps">0</span></div>
+                <div><span class="stat-label">k:</span><span class="stat-val" id="human-k">0.70</span></div>
+                <div><span class="stat-label">Mode:</span><span class="stat-val mode" id="human-mode">STUBBORN</span></div>
+            </div>
+        </div>
+        <canvas id="canvas-human"></canvas>
+    </div>
+    
+    <div class="panel super-agent">
+        <div class="panel-header">
+            <div class="agent-name">◆ SUPERHUMAN</div>
+            <div class="stats">
+                <div><span class="stat-label">Steps:</span><span class="stat-val" id="super-steps">0</span></div>
+                <div><span class="stat-label">k:</span><span class="stat-val" id="super-k">0.30</span></div>
+                <div><span class="stat-label">Mode:</span><span class="stat-val mode" id="super-mode">EXPLOIT</span></div>
+            </div>
+        </div>
+        <canvas id="canvas-super"></canvas>
+    </div>
+</div>
+
+<div id="controls">
+    <kbd>SPACE</kbd> Pause &nbsp;&nbsp;
+    <kbd>R</kbd> New Maze &nbsp;&nbsp;
+    <kbd>+/-</kbd> Speed
+</div>
+
+<div id="results">
+    <h2>◈ RACE COMPLETE ◈</h2>
+    <div id="results-body">
+        <div class="result-col human-col">
+            <h3>Human-Like Agent</h3>
+            <div id="human-result"></div>
+        </div>
+        <div class="result-col super-col">
+            <h3>Superhuman Agent</h3>
+            <div id="super-result"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const TILE = 16;
+let SPEED = 2;
+let PAUSED = false;
+
+const WALL = 1, PATH = 0, TELEPORT = 2, DECAY = 3, GOAL = 6;
+
+// ═══════════════════════════════════════════════════════════════
+// SHARED WORLD (Both agents see the same maze)
+// ═══════════════════════════════════════════════════════════════
+class World {
+    constructor(cols, rows) {
+        this.cols = cols;
+        this.rows = rows;
+        this.grid = [];
+        this.goal = {x: cols-2, y: rows-2};
+        this.teleporters = [];
+        this.generate();
+    }
+    
+    generate() {
+        // Initialize walls
+        this.grid = [];
+        for (let y = 0; y < this.rows; y++) {
+            this.grid.push(new Array(this.cols).fill(WALL));
+        }
+        
+        // Carve maze
+        const stack = [{x: 1, y: 1}];
+        this.grid[1][1] = PATH;
+        
+        while (stack.length > 0) {
+            const cur = stack[stack.length - 1];
+            const neighbors = [];
+            
+            for (const [dx, dy] of [[0,-2], [0,2], [-2,0], [2,0]]) {
+                const nx = cur.x + dx, ny = cur.y + dy;
+                if (nx > 0 && nx < this.cols-1 && ny > 0 && ny < this.rows-1) {
+                    if (this.grid[ny][nx] === WALL) {
+                        neighbors.push({x: nx, y: ny, wx: cur.x + dx/2, wy: cur.y + dy/2});
+                    }
+                }
+            }
+            
+            if (neighbors.length > 0) {
+                const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                this.grid[next.y][next.x] = PATH;
+                this.grid[next.wy][next.wx] = PATH;
+                stack.push({x: next.x, y: next.y});
+            } else {
+                stack.pop();
+            }
+        }
+        
+        // Add some loops
+        for (let i = 0; i < this.cols * this.rows / 60; i++) {
+            const x = 2 + Math.floor(Math.random() * (this.cols - 4));
+            const y = 2 + Math.floor(Math.random() * (this.rows - 4));
+            if (this.grid[y][x] === WALL) {
+                let pathNeighbors = 0;
+                if (this.grid[y-1]?.[x] === PATH) pathNeighbors++;
+                if (this.grid[y+1]?.[x] === PATH) pathNeighbors++;
+                if (this.grid[y]?.[x-1] === PATH) pathNeighbors++;
+                if (this.grid[y]?.[x+1] === PATH) pathNeighbors++;
+                if (pathNeighbors >= 2) this.grid[y][x] = PATH;
+            }
+        }
+        
+        // Add teleporters
+        const paths = [];
+        for (let y = 1; y < this.rows - 1; y++) {
+            for (let x = 1; x < this.cols - 1; x++) {
+                if (this.grid[y][x] === PATH && !(x === 1 && y === 1) && 
+                    !(x === this.goal.x && y === this.goal.y)) {
+                    paths.push({x, y});
+                }
+            }
+        }
+        
+        for (let i = 0; i < 2 && paths.length >= 2; i++) {
+            const p1 = paths.splice(Math.floor(Math.random() * paths.length), 1)[0];
+            const p2 = paths.splice(Math.floor(Math.random() * paths.length), 1)[0];
+            this.grid[p1.y][p1.x] = TELEPORT;
+            this.grid[p2.y][p2.x] = TELEPORT;
+            this.teleporters.push({x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y});
+        }
+        
+        // Add decay zones
+        for (let i = 0; i < 5 && paths.length > 0; i++) {
+            const p = paths.splice(Math.floor(Math.random() * paths.length), 1)[0];
+            this.grid[p.y][p.x] = DECAY;
+        }
+        
+        this.grid[this.goal.y][this.goal.x] = GOAL;
+        
+        // Calculate optimal
+        this.optimal = this.bfs();
+    }
+    
+    bfs() {
+        const queue = [{x: 1, y: 1, dist: 0}];
+        const visited = new Set(['1,1']);
+        
+        while (queue.length > 0) {
+            const cur = queue.shift();
+            if (cur.x === this.goal.x && cur.y === this.goal.y) return cur.dist;
+            
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+                const nx = cur.x + dx, ny = cur.y + dy;
+                const key = `${nx},${ny}`;
+                if (visited.has(key)) continue;
+                if (this.grid[ny]?.[nx] === WALL || this.grid[ny]?.[nx] === undefined) continue;
+                visited.add(key);
+                queue.push({x: nx, y: ny, dist: cur.dist + 1});
+            }
+        }
+        return 999;
+    }
+    
+    getTeleportDest(x, y) {
+        for (const tp of this.teleporters) {
+            if (tp.x1 === x && tp.y1 === y) return {x: tp.x2, y: tp.y2};
+            if (tp.x2 === x && tp.y2 === y) return {x: tp.x1, y: tp.y1};
+        }
+        return null;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HUMAN-LIKE BRAIN (High k, no frustration detection, Euclidean)
+// ═══════════════════════════════════════════════════════════════
+class HumanBrain {
+    constructor() {
+        this.reset();
+    }
+    
+    reset() {
+        this.k = 0.7;  // HIGH - stubborn, attached to past
+        this.m = 0.4;  // LOW - slow to respond to pressure
+        this.lastDir = {x: 0, y: 0};
+        this.teleportMemory = new Map();
+        // NO frustration detection
+        // NO dead end memory
+        // NO lookahead
+    }
+    
+    // Euclidean distance (flawed for grids)
+    computeT(nx, ny, world) {
+        const dx = world.goal.x - nx;
+        const dy = world.goal.y - ny;
+        const dist = Math.sqrt(dx*dx + dy*dy); // EUCLIDEAN
+        const maxDist = Math.sqrt(world.cols**2 + world.rows**2);
+        return (1 - dist/maxDist) * 2;
+    }
+    
+    computeR(nx, ny, heat) {
+        const h = heat[ny]?.[nx] || 0;
+        return -h * 0.4 + (h === 0 ? 0.5 : 0);
+    }
+    
+    decide(x, y, world, heat) {
+        const moves = [];
+        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (world.grid[ny]?.[nx] !== WALL && world.grid[ny]?.[nx] !== undefined) {
+                moves.push({x: dx, y: dy, nx, ny});
+            }
+        }
+        
+        if (moves.length === 0) return null;
+        
+        let best = null, bestF = -Infinity;
+        
+        for (const move of moves) {
+            let inertia = 0;
+            if (this.lastDir.x === move.x && this.lastDir.y === move.y) inertia = 0.8;
+            else if (this.lastDir.x === -move.x && this.lastDir.y === -move.y) inertia = -0.5;
+            
+            const T = this.computeT(move.nx, move.ny, world);
+            const R = this.computeR(move.nx, move.ny, heat);
+            const F = (this.k * inertia) + (this.m * (T + R));
+            
+            if (F > bestF) { bestF = F; best = move; }
+        }
+        
+        if (best) this.lastDir = {x: best.x, y: best.y};
+        return best;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUPERHUMAN BRAIN (All optimizations)
+// ═══════════════════════════════════════════════════════════════
+class SuperBrain {
+    constructor() {
+        this.reset();
+    }
+    
+    reset() {
+        this.k = 0.3;
+        this.m = 0.5;
+        this.lastDir = {x: 0, y: 0};
+        this.teleportMemory = new Map();
+        this.deadEnds = new Set();
+        this.recentPos = [];
+        this.frustration = 0;
+        this.mode = 'EXPLOIT';
+    }
+    
+    updateFrustration(x, y) {
+        this.recentPos.push({x, y});
+        if (this.recentPos.length > 40) this.recentPos.shift();
+        
+        if (this.recentPos.length >= 25) {
+            const xs = this.recentPos.map(p => p.x);
+            const ys = this.recentPos.map(p => p.y);
+            const area = (Math.max(...xs) - Math.min(...xs) + 1) * (Math.max(...ys) - Math.min(...ys) + 1);
+            
+            if (area < 20) this.frustration = Math.min(1, this.frustration + 0.06);
+            else this.frustration = Math.max(0, this.frustration - 0.03);
+        }
+        
+        if (this.frustration > 0.65 && this.mode === 'EXPLOIT') {
+            this.mode = 'EXPLORE';
+            this.recentPos = [];
+        } else if (this.frustration < 0.25 && this.mode === 'EXPLORE') {
+            this.mode = 'EXPLOIT';
+        }
+    }
+    
+    lookahead(dir, x, y, world, heat) {
+        let score = 0;
+        for (let d = 1; d <= 3; d++) {
+            const nx = x + dir.x * d, ny = y + dir.y * d;
+            if (world.grid[ny]?.[nx] === WALL || world.grid[ny]?.[nx] === undefined) {
+                score -= (4 - d) * 1.5;
+                break;
+            }
+            if (this.deadEnds.has(`${nx},${ny}`)) score -= 5;
+            if (world.grid[ny][nx] === GOAL) score += 10 / d;
+            score -= (heat[ny]?.[nx] || 0) * 0.3 / d;
+        }
+        return score;
+    }
+    
+    computeT(nx, ny, world) {
+        // Manhattan distance
+        const dist = Math.abs(world.goal.x - nx) + Math.abs(world.goal.y - ny);
+        const maxDist = world.cols + world.rows;
+        
+        let t = (1 - dist/maxDist) * 2;
+        
+        if (this.mode === 'EXPLORE') {
+            t = -t * 0.8 + Math.random() * 0.5;
+        }
+        
+        if (this.deadEnds.has(`${nx},${ny}`)) t -= 6;
+        
+        return t;
+    }
+    
+    computeR(nx, ny, move, x, y, world, heat) {
+        const h = heat[ny]?.[nx] || 0;
+        let r = this.mode === 'EXPLORE' ? -h * 1.2 : -h * 0.5;
+        if (h === 0) r += this.mode === 'EXPLORE' ? 2 : 1;
+        
+        r += this.lookahead(move, x, y, world, heat) * 0.4;
+        
+        return r;
+    }
+    
+    decide(x, y, world, heat) {
+        this.updateFrustration(x, y);
+        
+        const moves = [];
+        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (world.grid[ny]?.[nx] !== WALL && world.grid[ny]?.[nx] !== undefined) {
+                moves.push({x: dx, y: dy, nx, ny});
+            }
+        }
+        
+        if (moves.length === 0) return null;
+        
+        // Dead end detection
+        if (moves.length === 1 && (this.lastDir.x || this.lastDir.y)) {
+            if (moves[0].x === -this.lastDir.x && moves[0].y === -this.lastDir.y) {
+                this.deadEnds.add(`${x},${y}`);
+            }
+        }
+        
+        let best = null, bestF = -Infinity;
+        
+        for (const move of moves) {
+            let inertia = 0;
+            if (this.lastDir.x === move.x && this.lastDir.y === move.y) inertia = 0.4;
+            else if (this.lastDir.x === -move.x && this.lastDir.y === -move.y) {
+                inertia = this.mode === 'EXPLORE' ? 0.2 : -0.3;
+            }
+            
+            const T = this.computeT(move.nx, move.ny, world);
+            const R = this.computeR(move.nx, move.ny, move, x, y, world, heat);
+            const F = (this.k * inertia) + (this.m * (T + R));
+            
+            if (F > bestF) { bestF = F; best = move; }
+        }
+        
+        if (best) this.lastDir = {x: best.x, y: best.y};
+        return best;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AGENT WRAPPER
+// ═══════════════════════════════════════════════════════════════
+class Agent {
+    constructor(brain, world) {
+        this.brain = brain;
+        this.world = world;
+        this.x = 1;
+        this.y = 1;
+        this.steps = 0;
+        this.path = [{x: 1, y: 1}];
+        this.heat = [];
+        this.solved = false;
+        
+        for (let y = 0; y < world.rows; y++) {
+            this.heat.push(new Array(world.cols).fill(0));
+        }
+        this.heat[1][1] = 1;
+    }
+    
+    step() {
+        if (this.solved) return;
+        
+        const move = this.brain.decide(this.x, this.y, this.world, this.heat);
+        if (!move) return;
+        
+        this.x = move.nx;
+        this.y = move.ny;
+        this.steps++;
+        this.heat[this.y][this.x]++;
+        this.path.push({x: this.x, y: this.y});
+        
+        // Teleport
+        if (this.world.grid[this.y][this.x] === TELEPORT) {
+            const dest = this.world.getTeleportDest(this.x, this.y);
+            if (dest) {
+                this.brain.teleportMemory?.set(`${this.x},${this.y}`, dest);
+                this.x = dest.x;
+                this.y = dest.y;
+            }
+        }
+        
+        if (this.world.grid[this.y][this.x] === GOAL) {
+            this.solved = true;
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDERER
+// ═══════════════════════════════════════════════════════════════
+const canvasHuman = document.getElementById('canvas-human');
+const canvasSuper = document.getElementById('canvas-super');
+const ctxHuman = canvasHuman.getContext('2d');
+const ctxSuper = canvasSuper.getContext('2d');
+
+let world, humanAgent, superAgent;
+let cols, rows;
+
+function resize() {
+    const w = window.innerWidth / 2;
+    const h = window.innerHeight - 80;
+    
+    canvasHuman.width = w;
+    canvasHuman.height = h;
+    canvasSuper.width = w;
+    canvasSuper.height = h;
+    
+    cols = Math.floor(w / TILE);
+    rows = Math.floor(h / TILE);
+    if (cols % 2 === 0) cols--;
+    if (rows % 2 === 0) rows--;
+    
+    reset();
+}
+
+function reset() {
+    document.getElementById('results').style.display = 'none';
+    
+    world = new World(cols, rows);
+    
+    const humanBrain = new HumanBrain();
+    const superBrain = new SuperBrain();
+    
+    humanAgent = new Agent(humanBrain, world);
+    superAgent = new Agent(superBrain, world);
+}
+
+function draw(ctx, agent, color) {
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    
+    ctx.fillStyle = '#050508';
+    ctx.fillRect(0, 0, w, h);
+    
+    // Grid
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const tile = world.grid[y][x];
+            const heat = agent.heat[y][x];
+            const px = x * TILE, py = y * TILE;
+            
+            if (tile === WALL) ctx.fillStyle = '#0a0a0a';
+            else if (tile === TELEPORT) ctx.fillStyle = '#408';
+            else if (tile === DECAY) ctx.fillStyle = '#300';
+            else if (tile === GOAL) ctx.fillStyle = '#006';
+            else ctx.fillStyle = '#000';
+            
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            
+            if (heat > 0 && tile !== WALL) {
+                ctx.fillStyle = `rgba(${color === '#f80' ? '255,120,0' : '0,200,200'}, ${Math.min(0.7, heat * 0.1)})`;
+                ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            }
+        }
+    }
+    
+    // Path
+    if (agent.path.length > 1) {
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < agent.path.length; i++) {
+            const p = agent.path[i];
+            const px = p.x * TILE + TILE/2;
+            const py = p.y * TILE + TILE/2;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+    
+    // Agent
+    ctx.fillStyle = agent.solved ? '#0f0' : color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.beginPath();
+    ctx.arc(agent.x * TILE + TILE/2, agent.y * TILE + TILE/2, TILE/3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+}
+
+function updateUI() {
+    document.getElementById('human-steps').textContent = humanAgent.steps;
+    document.getElementById('human-k').textContent = humanAgent.brain.k.toFixed(2);
+    document.getElementById('human-mode').textContent = 'STUBBORN';
+    
+    document.getElementById('super-steps').textContent = superAgent.steps;
+    document.getElementById('super-k').textContent = superAgent.brain.k.toFixed(2);
+    document.getElementById('super-mode').textContent = superAgent.brain.mode;
+}
+
+function showResults() {
+    const results = document.getElementById('results');
+    results.style.display = 'block';
+    
+    const humanWon = humanAgent.solved;
+    const superWon = superAgent.solved;
+    
+    let humanHTML = '';
+    if (humanWon) {
+        humanHTML = `
+            <div>Status: <span class="${superWon && superAgent.steps < humanAgent.steps ? 'loser' : 'winner'}">SOLVED</span></div>
+            <div>Steps: ${humanAgent.steps}</div>
+            <div>Efficiency: ${(world.optimal / humanAgent.steps * 100).toFixed(1)}%</div>
+        `;
+    } else {
+        humanHTML = `<div>Status: <span class="loser">STUCK</span></div><div>Steps: ${humanAgent.steps}+</div>`;
+    }
+    
+    let superHTML = '';
+    if (superWon) {
+        superHTML = `
+            <div>Status: <span class="winner">SOLVED</span></div>
+            <div>Steps: ${superAgent.steps}</div>
+            <div>Efficiency: ${(world.optimal / superAgent.steps * 100).toFixed(1)}%</div>
+            <div>Dead Ends Found: ${superAgent.brain.deadEnds.size}</div>
+        `;
+    } else {
+        superHTML = `<div>Status: <span class="loser">STUCK</span></div><div>Steps: ${superAgent.steps}+</div>`;
+    }
+    
+    if (humanWon && superWon) {
+        const diff = humanAgent.steps - superAgent.steps;
+        if (diff > 0) {
+            superHTML += `<div style="margin-top:10px;color:#0f0">▲ ${diff} steps faster</div>`;
+        }
+    }
+    
+    document.getElementById('human-result').innerHTML = humanHTML;
+    document.getElementById('super-result').innerHTML = superHTML;
+}
+
+let raceEnded = false;
+
+function loop() {
+    if (!PAUSED && !raceEnded) {
+        for (let i = 0; i < SPEED; i++) {
+            humanAgent.step();
+            superAgent.step();
+        }
+    }
+    
+    draw(ctxHuman, humanAgent, '#f80');
+    draw(ctxSuper, superAgent, '#0ff');
+    updateUI();
+    
+    // Check race end
+    if (!raceEnded) {
+        if (humanAgent.solved && superAgent.solved) {
+            raceEnded = true;
+            setTimeout(showResults, 500);
+        } else if (humanAgent.steps > 2000 || superAgent.steps > 2000) {
+            raceEnded = true;
+            setTimeout(showResults, 500);
+        }
+    }
+    
+    requestAnimationFrame(loop);
+}
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { PAUSED = !PAUSED; e.preventDefault(); }
+    if (e.code === 'KeyR') { raceEnded = false; reset(); }
+    if (e.code === 'Equal') SPEED = Math.min(15, SPEED + 1);
+    if (e.code === 'Minus') SPEED = Math.max(1, SPEED - 1);
+});
+
+window.addEventListener('resize', resize);
+resize();
+loop();
+</script>
+</body>
+</html>

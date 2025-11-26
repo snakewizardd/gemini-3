@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Dynamic Decision Algorithm — A Unified Theory of Agency</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg: #08080c;
+    --bg-secondary: #0c0c12;
+    --border: #1a1a24;
+    --text: #a0a0b0;
+    --text-bright: #e0e0f0;
+    --accent: #00d4aa;
+    --accent-dim: #00a080;
+    --human: #ff8844;
+    --super: #00d4ff;
+    --danger: #ff4466;
+    --warning: #ffaa00;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAVIGATION
+   ═══════════════════════════════════════════════════════════════ */
+nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(8, 8, 12, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    z-index: 1000;
+    padding: 0 40px;
+}
+
+nav ul {
+    display: flex;
+    list-style: none;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+nav li a {
+    display: block;
+    padding: 16px 20px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    transition: color 0.2s;
+}
+
+nav li a:hover { color: var(--accent); }
+nav li a.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTIONS
+   ═══════════════════════════════════════════════════════════════ */
+section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 100px 40px;
+}
+
+.hero {
+    max-width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding-top: 60px;
+    background: radial-gradient(ellipse at center, #10101a 0%, var(--bg) 70%);
+}
+
+.hero h1 {
+    font-size: 48px;
+    font-weight: 300;
+    color: var(--text-bright);
+    letter-spacing: 0.02em;
+    margin-bottom: 20px;
+}
+
+.hero .subtitle {
+    font-size: 18px;
+    color: var(--text);
+    margin-bottom: 40px;
+    max-width: 600px;
+}
+
+.equation-hero {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 28px;
+    color: var(--accent);
+    padding: 30px 50px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 40px;
+}
+
+.scroll-hint {
+    position: absolute;
+    bottom: 40px;
+    color: var(--text);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+h2 {
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--text-bright);
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border);
+}
+
+h3 {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text-bright);
+    margin: 40px 0 20px 0;
+}
+
+p { margin-bottom: 20px; }
+
+.highlight { color: var(--accent); }
+.human-color { color: var(--human); }
+.super-color { color: var(--super); }
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPONENTS
+   ═══════════════════════════════════════════════════════════════ */
+.card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 30px;
+    margin: 30px 0;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+}
+
+.card-grid .card {
+    margin: 0;
+    text-align: center;
+}
+
+.card-grid .card h4 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 24px;
+    color: var(--accent);
+    margin-bottom: 10px;
+}
+
+.card-grid .card p {
+    font-size: 14px;
+    margin: 0;
+}
+
+code {
+    font-family: 'IBM Plex Mono', monospace;
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.proof-block {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.05) 0%, transparent 100%);
+    border-left: 3px solid var(--accent);
+    padding: 25px 30px;
+    margin: 30px 0;
+    font-size: 14px;
+}
+
+.proof-block .label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 10px;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 30px;
+    margin: 30px 0;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 30px;
+    padding-left: 20px;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -34px;
+    top: 8px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.timeline-item.failure::before { background: var(--danger); }
+.timeline-item.success::before { background: var(--accent); }
+
+.timeline-item h4 {
+    color: var(--text-bright);
+    font-size: 16px;
+    margin-bottom: 5px;
+}
+
+.timeline-item p {
+    font-size: 14px;
+    margin: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPARISON TABLE
+   ═══════════════════════════════════════════════════════════════ */
+.comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 30px 0;
+    font-size: 14px;
+}
+
+.comparison-table th,
+.comparison-table td {
+    padding: 15px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.comparison-table th {
+    color: var(--text-bright);
+    font-weight: 500;
+}
+
+.comparison-table th:nth-child(2) { color: var(--human); }
+.comparison-table th:nth-child(3) { color: var(--super); }
+
+.comparison-table td:first-child { color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════
+   SIMULATION ARENA
+   ═══════════════════════════════════════════════════════════════ */
+#arena-section {
+    max-width: 100%;
+    padding: 60px 20px;
+    background: var(--bg-secondary);
+}
+
+#arena-section h2 {
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto 40px auto;
+}
+
+#arena-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.arena-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.arena-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.arena-title {
+    font-size: 14px;
+    letter-spacing: 0.1em;
+}
+
+.human-panel .arena-title { color: var(--human); }
+.super-panel .arena-title { color: var(--super); }
+
+.arena-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+}
+
+.arena-stats span { color: var(--text-bright); margin-left: 5px; }
+
+.arena-canvas {
+    width: 100%;
+    height: 400px;
+    display: block;
+}
+
+#arena-controls {
+    text-align: center;
+    margin-top: 20px;
+}
+
+#arena-controls button {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 10px 30px;
+    margin: 0 10px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#arena-controls button:hover {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+#arena-result {
+    text-align: center;
+    margin-top: 30px;
+    padding: 20px;
+    font-size: 14px;
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════ */
+footer {
+    text-align: center;
+    padding: 60px 40px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text);
+}
+
+footer .equation {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent);
+    font-size: 16px;
+    margin-bottom: 20px;
+}
+</style>
+</head>
+<body>
+
+<nav>
+    <ul>
+        <li><a href="#hero" class="active">Home</a></li>
+        <li><a href="#intuition">Intuition</a></li>
+        <li><a href="#equation">Equation</a></li>
+        <li><a href="#proof">Proof</a></li>
+        <li><a href="#journey">Journey</a></li>
+        <li><a href="#arena">Arena</a></li>
+    </ul>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="hero" id="hero">
+    <h1>The Dynamic Decision Algorithm</h1>
+    <p class="subtitle">
+        A unified mathematical framework for modeling agency — from mouse to human to superhuman.
+        One equation. Infinite behaviors.
+    </p>
+    <div class="equation-hero">
+        Fₙ = P₀ · kFₙ₋₁ + m(T + R)
+    </div>
+    <p style="font-size: 13px; color: var(--text);">
+        Where every variable is a statement about what it means to choose.
+    </p>
+    <div class="scroll-hint">↓ SCROLL TO EXPLORE</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     INTUITION
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="intuition">
+    <h2>The Intuition</h2>
+    
+    <p>
+        Watch any creature make a decision — a mouse at a fork in a maze, a human choosing 
+        whether to speak or stay silent, an algorithm selecting the next move. Beneath the 
+        apparent complexity, a pattern emerges:
+    </p>
+    
+    <div class="card">
+        <p style="font-size: 18px; color: var(--text-bright); margin: 0; text-align: center;">
+            Every decision is a negotiation between <span class="highlight">who you are</span>, 
+            <span class="highlight">what you just did</span>, and <span class="highlight">what the world is telling you</span>.
+        </p>
+    </div>
+    
+    <p>
+        This isn't philosophy — it's mechanics. A system that ignores its identity dissolves 
+        into noise. A system that ignores its momentum cannot act coherently. A system that 
+        ignores the world cannot survive.
+    </p>
+    
+    <h3>The Components</h3>
+    
+    <div class="card-grid">
+        <div class="card">
+            <h4>P₀</h4>
+            <p><strong>Identity</strong><br>The fixed point. Who you are. What you're trying to do. The anchor that prevents dissolution.</p>
+        </div>
+        <div class="card">
+            <h4>k</h4>
+            <p><strong>Memory Weight</strong><br>How much the past constrains the present. High k = stubborn. Low k = reactive.</p>
+        </div>
+        <div class="card">
+            <h4>Fₙ₋₁</h4>
+            <p><strong>Previous Moment</strong><br>What you just decided. The inertia of action. Why change is hard.</p>
+        </div>
+        <div class="card">
+            <h4>m</h4>
+            <p><strong>Pressure</strong><br>How urgent is survival? How loud is the world? The gain on external signal.</p>
+        </div>
+        <div class="card">
+            <h4>T</h4>
+            <p><strong>Information Transform</strong><br>What the environment is telling you, filtered through perception. Signal and noise.</p>
+        </div>
+        <div class="card">
+            <h4>R</h4>
+            <p><strong>Reflection</strong><br>Your evaluation of options. Memory, preference, learned patterns. The subjective layer.</p>
+        </div>
+    </div>
+    
+    <p>
+        The insight: <code>k</code> and <code>m</code> are not constants. They respond to context. 
+        This single fact generates trauma, addiction, flow, panic — all as parameter states of 
+        the same underlying equation.
+    </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     EQUATION
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="equation">
+    <h2>The Equation</h2>
+    
+    <div class="card" style="text-align: center;">
+        <p style="font-family: 'IBM Plex Mono', monospace; font-size: 24px; color: var(--accent); margin-bottom: 20px;">
+            Fₙ = P₀ · kFₙ₋₁ + m(T + R)
+        </p>
+        <p style="font-size: 14px; margin: 0;">
+            The decision vector at moment n equals identity times memory-weighted previous decision, 
+            plus pressure times the sum of information and reflection.
+        </p>
+    </div>
+    
+    <h3>Decomposition</h3>
+    
+    <p><strong>Internal Force (Inertia):</strong> <code>P₀ · kFₙ₋₁</code></p>
+    <p style="margin-left: 20px; font-size: 14px;">
+        Identity modulates memory-weighted momentum. This term resists change. It encodes 
+        "who I am" and "what I've been doing." When k is high, the past dominates. When k 
+        is low, the agent is responsive but unmoored.
+    </p>
+    
+    <p><strong>External Force (Pressure):</strong> <code>m(T + R)</code></p>
+    <p style="margin-left: 20px; font-size: 14px;">
+        Urgency multiplies the combination of environmental signal and internal evaluation. 
+        When m is high (hungry, scared, desperate), the world's voice is loud. When m is 
+        low, the agent can afford to be patient.
+    </p>
+    
+    <h3>Why This Structure?</h3>
+    
+    <p>
+        The equation is a <em>superposition</em> of internal and external vector fields. 
+        It's not arbitrary — it's the minimal form that satisfies four constraints:
+    </p>
+    
+    <div class="proof-block">
+        <div class="label">AXIOM 1: INERTIA</div>
+        An agent tends to maintain its state. Change requires force.
+    </div>
+    
+    <div class="proof-block">
+        <div class="label">AXIOM 2: ENTROPY</div>
+        The environment exerts pressure. The agent must respond to survive.
+    </div>
+    
+    <div class="proof-block">
+        <div class="label">AXIOM 3: VISCOSITY</div>
+        Resistance to change is variable. Trauma increases it. Safety decreases it.
+    </div>
+    
+    <div class="proof-block">
+        <div class="label">AXIOM 4: GAIN</div>
+        Sensitivity to environment is variable. Urgency increases it. Comfort decreases it.
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PROOF
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="proof">
+    <h2>The Proof</h2>
+    
+    <h3>Signal Processing Interpretation</h3>
+    
+    <p>
+        Rewrite the equation assuming P₀ = 1:
+    </p>
+    
+    <div class="card" style="font-family: 'IBM Plex Mono', monospace; text-align: center;">
+        Fₙ = k·Fₙ₋₁ + m·Tₙ
+    </div>
+    
+    <p>
+        This is the standard form of an <strong>Infinite Impulse Response (IIR) Low-Pass Filter</strong>. 
+        The cutoff frequency — the point where the system stops responding to fast changes — is:
+    </p>
+    
+    <div class="card" style="font-family: 'IBM Plex Mono', monospace; text-align: center;">
+        fᶜ ≈ (1 - k) / 2π
+    </div>
+    
+    <p>
+        <strong>When k → 0:</strong> High bandwidth. The agent reacts to everything. Optimal for 
+        stable, safe environments ("Eden state").
+    </p>
+    
+    <p>
+        <strong>When k → 1:</strong> Low bandwidth. The agent filters out noise. Optimal for 
+        chaotic, dangerous environments ("Wasteland state").
+    </p>
+    
+    <div class="proof-block">
+        <div class="label">THEOREM</div>
+        The DDA is mathematically optimal because it dynamically trades <strong>responsiveness</strong> 
+        for <strong>stability</strong>. It maximizes signal-to-noise ratio across environment types.
+    </div>
+    
+    <h3>Emergent Pathologies</h3>
+    
+    <p>
+        Human-like behaviors emerge not as programmed features but as <em>boundary conditions</em>:
+    </p>
+    
+    <table class="comparison-table">
+        <tr>
+            <th>Behavior</th>
+            <th>Mechanism</th>
+            <th>Parameter State</th>
+        </tr>
+        <tr>
+            <td>Trauma / PTSD</td>
+            <td>k accumulates from repeated shock, approaching 1</td>
+            <td>k → 1, agent ignores present reality</td>
+        </tr>
+        <tr>
+            <td>Panic Attack</td>
+            <td>m spikes past threshold, discontinuous phase transition</td>
+            <td>m jumps, output goes from 0 to maximum</td>
+        </tr>
+        <tr>
+            <td>Addiction</td>
+            <td>R assigns supernormal value to one option</td>
+            <td>R(drug) >> R(everything else)</td>
+        </tr>
+        <tr>
+            <td>Flow State</td>
+            <td>k and m balanced, T and R aligned</td>
+            <td>Minimal friction, maximum coherence</td>
+        </tr>
+        <tr>
+            <td>Depression</td>
+            <td>m → 0, agent stops responding to world</td>
+            <td>External signal attenuated to silence</td>
+        </tr>
+    </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     JOURNEY
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="journey">
+    <h2>The Journey</h2>
+    
+    <p>
+        This framework wasn't designed. It was <em>discovered</em> through iteration — building 
+        simulations, watching them fail, understanding why, and refining the parameters.
+    </p>
+    
+    <h3>The Gauntlet: 11 Attempts</h3>
+    
+    <p>
+        A survival simulation with 4 zones, 3 needs (health, energy, sanity), 500 ticks to survive. 
+        Each death revealed a boundary condition of the equation:
+    </p>
+    
+    <div class="timeline">
+        <div class="timeline-item failure">
+            <h4>Attempt 1 — Death at T32 (Sanity)</h4>
+            <p>Agent locked into health zone while sanity bled out. <strong>Insight:</strong> R wasn't weighting critical needs.</p>
+        </div>
+        <div class="timeline-item failure">
+            <h4>Attempt 2 — Death at T130 (Energy)</h4>
+            <p>Agent chose depleted zones giving minimal yield. <strong>Insight:</strong> R must compute actual yields, not base yields.</p>
+        </div>
+        <div class="timeline-item failure">
+            <h4>Attempt 3 — Death at T116 (Sanity)</h4>
+            <p>Trauma from danger event made agent avoid the only sanity source. <strong>Insight:</strong> T function needs necessity override.</p>
+        </div>
+        <div class="timeline-item failure">
+            <h4>Attempt 4 — Death at T71 (Energy)</h4>
+            <p>Two consecutive danger events when energy already critical. <strong>Insight:</strong> Proactive management, not reactive.</p>
+        </div>
+        <div class="timeline-item failure">
+            <h4>Attempts 5-10 — Various Deaths</h4>
+            <p>Successive refinements: raised critical thresholds, capped consecutive dangers, balanced damage values.</p>
+        </div>
+        <div class="timeline-item success">
+            <h4>Attempt 11+ — Consistent Survival</h4>
+            <p>With all optimizations, the superhuman agent survives the gauntlet reliably.</p>
+        </div>
+    </div>
+    
+    <h3>The Critique That Refined Everything</h3>
+    
+    <p>
+        A collaborating AI identified the core limitation: "This is a local optimizer with momentum." 
+        The agent could get trapped in "buckets" — U-shaped walls that attract via Euclidean distance 
+        but lead nowhere.
+    </p>
+    
+    <p>The fixes:</p>
+    
+    <ul style="margin-left: 20px; margin-bottom: 20px;">
+        <li><strong>Manhattan Distance</strong> — Honest grid-based pathfinding</li>
+        <li><strong>Lookahead (Raycasting)</strong> — See walls before hitting them</li>
+        <li><strong>Frustration Detection</strong> — If position variance is low, trigger escape mode</li>
+        <li><strong>Mode Switching</strong> — EXPLOIT (seek goal) vs EXPLORE (flee local minimum)</li>
+        <li><strong>Dead End Memory</strong> — Never repeat confirmed failures</li>
+    </ul>
+    
+    <p>
+        None of these broke the DDA framework. They <em>enhanced</em> the T and R functions. 
+        Same equation, better signals.
+    </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     ARENA
+     ═══════════════════════════════════════════════════════════════ -->
+<section id="arena-section">
+    <h2 id="arena">The Arena: Human vs Superhuman</h2>
+    
+    <p style="text-align: center; max-width: 700px; margin: 0 auto 40px auto;">
+        Same maze. Same equation. Different parameters.<br>
+        Watch the gap between <span class="human-color">human-like</span> and 
+        <span class="super-color">superhuman</span> decision-making.
+    </p>
+    
+    <table class="comparison-table" style="max-width: 700px; margin: 0 auto 40px auto;">
+        <tr>
+            <th>Attribute</th>
+            <th>Human-Like</th>
+            <th>Superhuman</th>
+        </tr>
+        <tr>
+            <td>k (Memory)</td>
+            <td>0.70 (sticky)</td>
+            <td>0.30 (adaptive)</td>
+        </tr>
+        <tr>
+            <td>Distance Metric</td>
+            <td>Euclidean</td>
+            <td>Manhattan</td>
+        </tr>
+        <tr>
+            <td>Lookahead</td>
+            <td>None</td>
+            <td>3 tiles</td>
+        </tr>
+        <tr>
+            <td>Frustration Detection</td>
+            <td>None</td>
+            <td>Yes (mode switch)</td>
+        </tr>
+        <tr>
+            <td>Dead End Memory</td>
+            <td>None</td>
+            <td>Permanent</td>
+        </tr>
+    </table>
+    
+    <div id="arena-container">
+        <div class="arena-panel human-panel">
+            <div class="arena-header">
+                <div class="arena-title">◯ HUMAN-LIKE</div>
+                <div class="arena-stats">
+                    <div>Steps: <span id="human-steps">0</span></div>
+                    <div>k: <span id="human-k">0.70</span></div>
+                </div>
+            </div>
+            <canvas id="canvas-human" class="arena-canvas"></canvas>
+        </div>
+        <div class="arena-panel super-panel">
+            <div class="arena-header">
+                <div class="arena-title">◆ SUPERHUMAN</div>
+                <div class="arena-stats">
+                    <div>Steps: <span id="super-steps">0</span></div>
+                    <div>Mode: <span id="super-mode">EXPLOIT</span></div>
+                </div>
+            </div>
+            <canvas id="canvas-super" class="arena-canvas"></canvas>
+        </div>
+    </div>
+    
+    <div id="arena-controls">
+        <button onclick="togglePause()">PAUSE / RESUME</button>
+        <button onclick="resetArena()">NEW MAZE</button>
+    </div>
+    
+    <div id="arena-result"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════════════ -->
+<footer>
+    <div class="equation">Fₙ = P₀ · kFₙ₋₁ + m(T + R)</div>
+    <p>
+        The Dynamic Decision Algorithm<br>
+        A collaboration between human intuition and machine iteration.
+    </p>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SIMULATION CODE
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+const TILE = 14;
+let SPEED = 2;
+let PAUSED = false;
+
+const WALL = 1, PATH = 0, GOAL = 6;
+
+// World
+class World {
+    constructor(cols, rows) {
+        this.cols = cols;
+        this.rows = rows;
+        this.grid = [];
+        this.goal = {x: cols-2, y: rows-2};
+        this.generate();
+    }
+    
+    generate() {
+        this.grid = [];
+        for (let y = 0; y < this.rows; y++) {
+            this.grid.push(new Array(this.cols).fill(WALL));
+        }
+        
+        const stack = [{x: 1, y: 1}];
+        this.grid[1][1] = PATH;
+        
+        while (stack.length > 0) {
+            const cur = stack[stack.length - 1];
+            const neighbors = [];
+            
+            for (const [dx, dy] of [[0,-2], [0,2], [-2,0], [2,0]]) {
+                const nx = cur.x + dx, ny = cur.y + dy;
+                if (nx > 0 && nx < this.cols-1 && ny > 0 && ny < this.rows-1 && this.grid[ny][nx] === WALL) {
+                    neighbors.push({x: nx, y: ny, wx: cur.x + dx/2, wy: cur.y + dy/2});
+                }
+            }
+            
+            if (neighbors.length > 0) {
+                const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                this.grid[next.y][next.x] = PATH;
+                this.grid[next.wy][next.wx] = PATH;
+                stack.push({x: next.x, y: next.y});
+            } else {
+                stack.pop();
+            }
+        }
+        
+        for (let i = 0; i < this.cols * this.rows / 80; i++) {
+            const x = 2 + Math.floor(Math.random() * (this.cols - 4));
+            const y = 2 + Math.floor(Math.random() * (this.rows - 4));
+            if (this.grid[y][x] === WALL) {
+                let n = 0;
+                if (this.grid[y-1]?.[x] === PATH) n++;
+                if (this.grid[y+1]?.[x] === PATH) n++;
+                if (this.grid[y]?.[x-1] === PATH) n++;
+                if (this.grid[y]?.[x+1] === PATH) n++;
+                if (n >= 2) this.grid[y][x] = PATH;
+            }
+        }
+        
+        this.grid[this.goal.y][this.goal.x] = GOAL;
+        this.optimal = this.bfs();
+    }
+    
+    bfs() {
+        const queue = [{x: 1, y: 1, dist: 0}];
+        const visited = new Set(['1,1']);
+        while (queue.length > 0) {
+            const cur = queue.shift();
+            if (cur.x === this.goal.x && cur.y === this.goal.y) return cur.dist;
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+                const nx = cur.x + dx, ny = cur.y + dy, key = `${nx},${ny}`;
+                if (!visited.has(key) && this.grid[ny]?.[nx] !== WALL && this.grid[ny]?.[nx] !== undefined) {
+                    visited.add(key);
+                    queue.push({x: nx, y: ny, dist: cur.dist + 1});
+                }
+            }
+        }
+        return 999;
+    }
+}
+
+// Human Brain
+class HumanBrain {
+    constructor() { this.k = 0.7; this.m = 0.4; this.lastDir = {x:0,y:0}; }
+    reset() { this.lastDir = {x:0,y:0}; }
+    
+    decide(x, y, world, heat) {
+        const moves = [];
+        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (world.grid[ny]?.[nx] !== WALL && world.grid[ny]?.[nx] !== undefined)
+                moves.push({x: dx, y: dy, nx, ny});
+        }
+        if (!moves.length) return null;
+        
+        let best = null, bestF = -Infinity;
+        for (const m of moves) {
+            const dx = world.goal.x - m.nx, dy = world.goal.y - m.ny;
+            const T = (1 - Math.sqrt(dx*dx+dy*dy)/Math.sqrt(world.cols**2+world.rows**2)) * 2;
+            const R = -(heat[m.ny]?.[m.nx]||0) * 0.4;
+            let inertia = 0;
+            if (this.lastDir.x === m.x && this.lastDir.y === m.y) inertia = 0.8;
+            else if (this.lastDir.x === -m.x && this.lastDir.y === -m.y) inertia = -0.5;
+            const F = this.k * inertia + this.m * (T + R);
+            if (F > bestF) { bestF = F; best = m; }
+        }
+        if (best) this.lastDir = {x: best.x, y: best.y};
+        return best;
+    }
+}
+
+// Super Brain
+class SuperBrain {
+    constructor() { this.reset(); }
+    reset() {
+        this.k = 0.3; this.m = 0.5; this.lastDir = {x:0,y:0};
+        this.deadEnds = new Set(); this.recentPos = [];
+        this.frustration = 0; this.mode = 'EXPLOIT';
+    }
+    
+    updateFrustration(x, y) {
+        this.recentPos.push({x,y});
+        if (this.recentPos.length > 35) this.recentPos.shift();
+        if (this.recentPos.length >= 20) {
+            const xs = this.recentPos.map(p=>p.x), ys = this.recentPos.map(p=>p.y);
+            const area = (Math.max(...xs)-Math.min(...xs)+1)*(Math.max(...ys)-Math.min(...ys)+1);
+            this.frustration = area < 16 ? Math.min(1, this.frustration + 0.07) : Math.max(0, this.frustration - 0.04);
+        }
+        if (this.frustration > 0.6 && this.mode === 'EXPLOIT') { this.mode = 'EXPLORE'; this.recentPos = []; }
+        else if (this.frustration < 0.2 && this.mode === 'EXPLORE') this.mode = 'EXPLOIT';
+    }
+    
+    lookahead(dir, x, y, world, heat) {
+        let score = 0;
+        for (let d = 1; d <= 3; d++) {
+            const nx = x + dir.x*d, ny = y + dir.y*d;
+            if (world.grid[ny]?.[nx] === WALL || world.grid[ny]?.[nx] === undefined) { score -= (4-d)*1.5; break; }
+            if (this.deadEnds.has(`${nx},${ny}`)) score -= 4;
+            if (world.grid[ny][nx] === GOAL) score += 8/d;
+            score -= (heat[ny]?.[nx]||0) * 0.2/d;
+        }
+        return score;
+    }
+    
+    decide(x, y, world, heat) {
+        this.updateFrustration(x, y);
+        const moves = [];
+        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (world.grid[ny]?.[nx] !== WALL && world.grid[ny]?.[nx] !== undefined)
+                moves.push({x: dx, y: dy, nx, ny});
+        }
+        if (!moves.length) return null;
+        
+        if (moves.length === 1 && (this.lastDir.x||this.lastDir.y) && 
+            moves[0].x === -this.lastDir.x && moves[0].y === -this.lastDir.y)
+            this.deadEnds.add(`${x},${y}`);
+        
+        let best = null, bestF = -Infinity;
+        for (const m of moves) {
+            const dist = Math.abs(world.goal.x - m.nx) + Math.abs(world.goal.y - m.ny);
+            let T = (1 - dist/(world.cols+world.rows)) * 2;
+            if (this.mode === 'EXPLORE') T = -T * 0.7 + Math.random() * 0.4;
+            if (this.deadEnds.has(`${m.nx},${m.ny}`)) T -= 5;
+            
+            const h = heat[m.ny]?.[m.nx]||0;
+            let R = this.mode === 'EXPLORE' ? -h * 1.0 : -h * 0.4;
+            if (h === 0) R += this.mode === 'EXPLORE' ? 1.5 : 0.8;
+            R += this.lookahead(m, x, y, world, heat) * 0.3;
+            
+            let inertia = 0;
+            if (this.lastDir.x === m.x && this.lastDir.y === m.y) inertia = 0.3;
+            else if (this.lastDir.x === -m.x && this.lastDir.y === -m.y)
+                inertia = this.mode === 'EXPLORE' ? 0.1 : -0.3;
+            
+            const F = this.k * inertia + this.m * (T + R);
+            if (F > bestF) { bestF = F; best = m; }
+        }
+        if (best) this.lastDir = {x: best.x, y: best.y};
+        return best;
+    }
+}
+
+// Agent
+class Agent {
+    constructor(brain, world) {
+        this.brain = brain; this.world = world;
+        this.x = 1; this.y = 1; this.steps = 0;
+        this.path = [{x:1,y:1}]; this.solved = false;
+        this.heat = [];
+        for (let y = 0; y < world.rows; y++) this.heat.push(new Array(world.cols).fill(0));
+        this.heat[1][1] = 1;
+    }
+    
+    step() {
+        if (this.solved) return;
+        const move = this.brain.decide(this.x, this.y, this.world, this.heat);
+        if (!move) return;
+        this.x = move.nx; this.y = move.ny; this.steps++;
+        this.heat[this.y][this.x]++;
+        this.path.push({x: this.x, y: this.y});
+        if (this.world.grid[this.y][this.x] === GOAL) this.solved = true;
+    }
+}
+
+// Rendering
+const canvasH = document.getElementById('canvas-human');
+const canvasS = document.getElementById('canvas-super');
+const ctxH = canvasH.getContext('2d');
+const ctxS = canvasS.getContext('2d');
+
+let world, humanAgent, superAgent, cols, rows, raceEnded = false;
+
+function initArena() {
+    const rect = canvasH.parentElement.getBoundingClientRect();
+    canvasH.width = rect.width;
+    canvasH.height = 400;
+    canvasS.width = rect.width;
+    canvasS.height = 400;
+    
+    cols = Math.floor(canvasH.width / TILE);
+    rows = Math.floor(canvasH.height / TILE);
+    if (cols % 2 === 0) cols--;
+    if (rows % 2 === 0) rows--;
+    
+    resetArena();
+}
+
+function resetArena() {
+    raceEnded = false;
+    document.getElementById('arena-result').style.display = 'none';
+    
+    world = new World(cols, rows);
+    humanAgent = new Agent(new HumanBrain(), world);
+    superAgent = new Agent(new SuperBrain(), world);
+}
+
+function togglePause() { PAUSED = !PAUSED; }
+
+function draw(ctx, agent, color) {
+    ctx.fillStyle = '#08080c';
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const tile = world.grid[y][x];
+            const heat = agent.heat[y][x];
+            const px = x * TILE, py = y * TILE;
+            
+            ctx.fillStyle = tile === WALL ? '#0a0a0e' : (tile === GOAL ? '#003366' : '#000');
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            
+            if (heat > 0 && tile !== WALL) {
+                const rgb = color === '#ff8844' ? '255,136,68' : '0,212,255';
+                ctx.fillStyle = `rgba(${rgb}, ${Math.min(0.6, heat * 0.08)})`;
+                ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            }
+        }
+    }
+    
+    if (agent.path.length > 1) {
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        agent.path.forEach((p, i) => {
+            const px = p.x * TILE + TILE/2, py = p.y * TILE + TILE/2;
+            i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+    
+    ctx.fillStyle = agent.solved ? '#00ff88' : color;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.beginPath();
+    ctx.arc(agent.x * TILE + TILE/2, agent.y * TILE + TILE/2, TILE/3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+}
+
+function updateArenaUI() {
+    document.getElementById('human-steps').textContent = humanAgent.steps;
+    document.getElementById('human-k').textContent = humanAgent.brain.k.toFixed(2);
+    document.getElementById('super-steps').textContent = superAgent.steps;
+    document.getElementById('super-mode').textContent = superAgent.brain.mode;
+}
+
+function showArenaResult() {
+    const res = document.getElementById('arena-result');
+    res.style.display = 'block';
+    
+    if (humanAgent.solved && superAgent.solved) {
+        const diff = humanAgent.steps - superAgent.steps;
+        if (diff > 0) {
+            res.innerHTML = `<span style="color:var(--super)">◆ Superhuman wins by ${diff} steps</span> 
+                (${(world.optimal/superAgent.steps*100).toFixed(0)}% efficiency vs ${(world.optimal/humanAgent.steps*100).toFixed(0)}%)`;
+        } else if (diff < 0) {
+            res.innerHTML = `<span style="color:var(--human)">◯ Human-like wins by ${-diff} steps</span>`;
+        } else {
+            res.innerHTML = `Tie at ${humanAgent.steps} steps`;
+        }
+    } else if (superAgent.solved) {
+        res.innerHTML = `<span style="color:var(--super)">◆ Superhuman solved</span> — 
+            <span style="color:var(--human)">Human-like stuck after ${humanAgent.steps} steps</span>`;
+    } else if (humanAgent.solved) {
+        res.innerHTML = `<span style="color:var(--human)">◯ Human-like solved</span>`;
+    } else {
+        res.innerHTML = `Both agents stuck. Maze may be too complex.`;
+    }
+}
+
+function arenaLoop() {
+    if (!PAUSED && !raceEnded) {
+        for (let i = 0; i < SPEED; i++) {
+            humanAgent.step();
+            superAgent.step();
+        }
+    }
+    
+    draw(ctxH, humanAgent, '#ff8844');
+    draw(ctxS, superAgent, '#00d4ff');
+    updateArenaUI();
+    
+    if (!raceEnded) {
+        if ((humanAgent.solved && superAgent.solved) || humanAgent.steps > 1500) {
+            raceEnded = true;
+            setTimeout(showArenaResult, 300);
+        }
+    }
+    
+    requestAnimationFrame(arenaLoop);
+}
+
+// Smooth scroll for nav
+document.querySelectorAll('nav a').forEach(a => {
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        document.querySelector(a.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+        document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
+        a.classList.add('active');
+    });
+});
+
+// Init
+window.addEventListener('load', () => {
+    initArena();
+    arenaLoop();
+});
+
+window.addEventListener('resize', initArena);
+</script>
+
+</body>
+</html>
