@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA Generalized: The Tether</title>
+<style>
+    body { background: #080808; margin: 0; overflow: hidden; font-family: 'Roboto Mono', monospace; color: #888; }
+    canvas { display: block; }
+    #ui { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+    .stat { margin-bottom: 5px; font-size: 12px; }
+    .val { color: #fff; font-weight: bold; }
+    .label-p0 { color: #5ad; }
+    .label-t { color: #5d5; }
+    .label-f { color: #fff; }
+    .label-k { color: #f0f; }
+    .label-m { color: #fa0; }
+    
+    #controls { position: absolute; bottom: 20px; left: 20px; display: flex; gap: 10px; pointer-events: auto; }
+    button { background: #222; border: 1px solid #444; color: #ccc; padding: 8px 16px; cursor: pointer; font-family: inherit; transition: 0.2s; }
+    button:hover { background: #333; color: #fff; border-color: #666; }
+    button.active { background: #353; border-color: #5a5; color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="stat">IDENTITY (P₀): <span class="val label-p0">0.50</span> (Fixed)</div>
+    <div class="stat">TRUTH (T): <span id="val-t" class="val label-t">0.00</span></div>
+    <div class="stat">WILL (Fₙ): <span id="val-f" class="val label-f">0.00</span></div>
+    <br>
+    <div class="stat label-m">PRESSURE (m): <span id="val-m" class="val">0.00</span></div>
+    <div class="stat label-k">TRAUMA (k): <span id="val-k" class="val">0.00</span></div>
+    <div class="stat">Equation: Fₙ = P₀·k + m(T + R)</div>
+</div>
+
+<div id="controls">
+    <button id="btn-smooth" class="active">Mode: Smooth</button>
+    <button id="btn-chaos">Mode: Chaos</button>
+    <button id="btn-shock">TRIGGER SHOCK</button>
+</div>
+
+<canvas id="sim"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE MATH KERNEL (V5 - PURE)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(P0) {
+        this.P0 = P0;
+        this.F_n = P0;
+        this.F_prev = P0;
+        this.k = 0.2; // Starting Trauma
+    }
+
+    compute(I_n, I_delta, m, FM_n) {
+        // In this abstract sim:
+        // T (Truth) is the target position (0.0 to 1.0) relative to P0
+        // We normalize T so that T=0 means "Truth is at P0"
+        
+        // T calculation: Direction to Target
+        // If Target > P0, T is positive.
+        const T = I_n.target - 0.5; // Center at 0
+        
+        // R (Reflection): Internal delta (simplified here to 0 for pure tracking)
+        const R = 0; 
+        
+        // The Tether (Inertia)
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // The Pull (Pressure)
+        // Note: m is applied to the DIFFERENCE needed to move
+        const signal = T; 
+        const pressure = m * signal;
+        
+        // Equation
+        // We blend Inertia and Pressure based on k
+        // High k = Heavy Past. Low k = Light Past.
+        
+        // Visualizing the exact formula F = P0*k*F_prev + m(...)
+        // We adjust slightly for screen space normalization
+        let raw_F = (this.P0 * this.k) + (this.F_prev * this.k * 0.5) + pressure + (this.P0 * (1-this.k - m*0.5));
+        
+        this.F_n = raw_F;
+        return this.F_n;
+    }
+
+    learn(expected, actual, stakes) {
+        const surprise = Math.abs(expected - actual);
+        // Trauma (k) rises with Surprise and Stakes
+        const impact = (surprise * 0.8) + (stakes * 0.2);
+        const target_k = MathLib.clamp(impact, 0.05, 0.95);
+        
+        // Memory takes time to form (0.1) but fades slowly
+        this.k = MathLib.lerp(this.k, target_k, 0.05); 
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE SIMULATION
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+const kernel = new DDAKernel(0.5); // Identity is CENTER (0.5)
+
+// State
+let time = 0;
+let target = 0.5;
+let mode = 'smooth'; // smooth, chaos
+let shock = 0;
+
+// History for graphing
+const history = {
+    target: [],
+    agent: [],
+    k: [],
+    m: []
+};
+const MAX_HISTORY = 400;
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════════════
+// 3. LOGIC LOOP
+// ═══════════════════════════════════════════════════════════════
+function step() {
+    time += 0.01;
+    
+    // 1. Move the "Truth" (Target)
+    if (shock > 0) {
+        // Artificial Shock
+        target = (time % 0.2 < 0.1) ? 0.9 : 0.1;
+        shock--;
+    } else if (mode === 'smooth') {
+        // Sine wave
+        target = 0.5 + (Math.sin(time * 2) * 0.35);
+    } else {
+        // Chaos (Perlin-ish)
+        target = 0.5 + (Math.sin(time * 3) * 0.2) + (Math.cos(time * 13) * 0.2);
+    }
+    
+    // 2. Calculate Pressure (m)
+    // m represents "Error" or "Urgency".
+    // If Agent is far from Target, Pressure rises.
+    const error = Math.abs(kernel.F_n - target);
+    // Exponential pressure: Small errors are ignored (Comfort), Large errors panic.
+    let m = error * error * 4.0;
+    m = MathLib.clamp(m, 0, 2.0);
+
+    // 3. Compute DDA
+    const F = kernel.compute({ target: target }, {}, m, {});
+    
+    // 4. Learn (Update k)
+    // If F is far from Target, that is Surprise.
+    // m acts as Stakes.
+    kernel.learn(target, F, m);
+
+    // 5. Record History
+    history.target.push(target);
+    history.agent.push(F);
+    history.k.push(kernel.k);
+    history.m.push(m);
+    if (history.target.length > width) {
+        history.target.shift();
+        history.agent.shift();
+        history.k.shift();
+        history.m.shift();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. RENDER LOOP
+// ═══════════════════════════════════════════════════════════════
+function draw() {
+    ctx.fillStyle = '#080808';
+    ctx.fillRect(0, 0, width, height);
+
+    // Layout
+    const centerY = height / 2;
+    const scaleY = height * 0.4;
+    
+    // Draw P0 (Identity) Line - The Anchor
+    ctx.beginPath();
+    ctx.strokeStyle = '#5ad'; // Blue
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#5ad';
+    ctx.fillText("IDENTITY (P0)", 10, centerY - 5);
+
+    // Draw History Graphs
+    ctx.lineWidth = 2;
+    
+    // Truth (Green)
+    ctx.beginPath();
+    ctx.strokeStyle = '#5d5';
+    for (let i = 0; i < history.target.length; i++) {
+        const x = width - (history.target.length - i);
+        const y = centerY - ((history.target[i] - 0.5) * scaleY);
+        if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Agent (White/Red based on Stress)
+    ctx.beginPath();
+    // Color varies based on Trauma (k)
+    // Low k = White (Flexible), High k = Magenta (Traumatized/Rigid)
+    const currentK = kernel.k;
+    const r = MathLib.lerp(255, 255, currentK);
+    const g = MathLib.lerp(255, 0, currentK);
+    const b = MathLib.lerp(255, 255, currentK);
+    ctx.strokeStyle = `rgb(${r},${g},${b})`;
+    
+    for (let i = 0; i < history.agent.length; i++) {
+        const x = width - (history.agent.length - i);
+        const y = centerY - ((history.agent[i] - 0.5) * scaleY);
+        if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Draw Visualization of current state (Right Side)
+    const tx = width - 50;
+    const ty = centerY - ((target - 0.5) * scaleY);
+    const ax = width - 50;
+    const ay = centerY - ((kernel.F_n - 0.5) * scaleY);
+    const p0y = centerY;
+
+    // Draw Springs/Tethers
+    
+    // 1. Identity Tether (Blue)
+    // Thickness = k (Trauma/Inertia)
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(85, 170, 221, 0.5)';
+    ctx.lineWidth = kernel.k * 10 + 1; 
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax, p0y);
+    ctx.stroke();
+    
+    // 2. Pressure Tether (Orange)
+    // Thickness = m (Pressure)
+    const m = history.m[history.m.length-1];
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255, 170, 0, 0.5)';
+    ctx.lineWidth = m * 5; 
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+
+    // Dots
+    // Truth
+    ctx.fillStyle = '#5d5';
+    ctx.beginPath(); ctx.arc(tx, ty, 6, 0, Math.PI*2); ctx.fill();
+    
+    // Agent
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(ax, ay, 8, 0, Math.PI*2); ctx.fill();
+
+    // UI Updates
+    document.getElementById('val-t').innerText = target.toFixed(3);
+    document.getElementById('val-f').innerText = kernel.F_n.toFixed(3);
+    document.getElementById('val-m').innerText = m.toFixed(3);
+    document.getElementById('val-k').innerText = kernel.k.toFixed(3);
+}
+
+function loop() {
+    step();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+// Controls
+document.getElementById('btn-smooth').onclick = (e) => {
+    mode = 'smooth';
+    document.querySelectorAll('button').forEach(b => b.className = '');
+    e.target.className = 'active';
+};
+document.getElementById('btn-chaos').onclick = (e) => {
+    mode = 'chaos';
+    document.querySelectorAll('button').forEach(b => b.className = '');
+    e.target.className = 'active';
+};
+document.getElementById('btn-shock').onclick = () => {
+    shock = 20; // 20 frames of shock
+};
+
+loop();
+</script>
+</body>
+</html>

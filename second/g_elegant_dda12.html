@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Gemini Logs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #050505; color: #aaa; font-family: 'Consolas', monospace; padding: 20px; font-size: 13px; }
+#log { max-width: 900px; margin: 0 auto; }
+.header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; color: #fff; }
+.row { display: grid; grid-template-columns: 50px 150px 150px 100px 1fr; border-bottom: 1px solid #1a1a1a; padding: 4px 0; align-items: center; }
+.tick { color: #555; }
+.val { font-weight: bold; }
+.gap { color: #f55; }
+.sync { color: #5f5; }
+.a-col { color: #5df; }
+.b-col { color: #f5d; }
+.narrative { font-style: italic; color: #888; }
+.highlight { background: #111; color: #fff; }
+.trusting { color: #5f5; font-size: 11px; }
+.guarded { color: #f55; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div id="log">
+    <div class="header">
+        <strong>THE GEMINI PROTOCOL (FORENSIC LOGS)</strong><br>
+        ENTITY A (P₀=0.2) vs ENTITY B (P₀=0.8)<br>
+        <span style="font-size:11px; color:#777;">GOAL: Reduce GAP to 0.00. | k = Distrust level. | m = Desperation to connect.</span>
+    </div>
+    <!-- Rows will appear here -->
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE KERNEL (V5)
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(P0) {
+        this.P0 = P0;
+        this.F_n = P0;
+        this.F_prev = P0;
+        this.k = 0.5; // Start with neutral trust
+    }
+
+    compute(partnerF, m) {
+        const T = partnerF; // Truth is the other person
+        const R = 0; // No internal reflection, purely reactive to partner
+        
+        // Inertia (Self)
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // Pressure (Desire to connect)
+        const pressure = m * (T + R);
+        
+        // Logic
+        // F = P0*k + m*T ... normalized
+        let raw_F = (this.P0 * this.k) + (pressure) + (this.P0 * (1-this.k - m));
+        
+        // Fix for stability: Blend Self (P0) and Other (T) based on k and m
+        // Low k (Trust) + High m (Desire) = Move toward T
+        // High k (Distrust) = Stay at P0
+        const blend = m / (m + this.k + 0.1);
+        this.F_n = MathLib.lerp(this.P0, T, MathLib.clamp(blend, 0, 1));
+        
+        return this.F_n;
+    }
+
+    learn(partnerF) {
+        const gap = Math.abs(partnerF - this.F_n);
+        
+        // TRUST MECHANIC:
+        // If Gap is small, Trust increases (k drops).
+        // If Gap is large, Distrust increases (k rises).
+        const target_k = gap > 0.15 ? 0.95 : 0.05;
+        this.k = MathLib.lerp(this.k, target_k, 0.1);
+        
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. SIMULATION
+// ═══════════════════════════════════════════════════════════════
+const EntityA = new DDAKernel(0.2); // Stoic
+const EntityB = new DDAKernel(0.8); // Manic
+const logEl = document.getElementById('log');
+
+function logRow(tick, A, B, gap, narrative) {
+    const div = document.createElement('div');
+    div.className = 'row';
+    if (gap < 0.05) div.classList.add('highlight');
+    
+    // Status strings
+    const kA_str = A.k < 0.3 ? "TRUSTING" : (A.k > 0.7 ? "GUARDED" : "NEUTRAL");
+    const kB_str = B.k < 0.3 ? "TRUSTING" : (B.k > 0.7 ? "GUARDED" : "NEUTRAL");
+    const kA_cls = A.k < 0.3 ? "trusting" : (A.k > 0.7 ? "guarded" : "tick");
+    const kB_cls = B.k < 0.3 ? "trusting" : (B.k > 0.7 ? "guarded" : "tick");
+
+    div.innerHTML = `
+        <div class="tick">T${tick}</div>
+        <div class="a-col">A: ${A.F_n.toFixed(2)} <span class="${kA_cls}">(${kA_str})</span></div>
+        <div class="b-col">B: ${B.F_n.toFixed(2)} <span class="${kB_cls}">(${kB_str})</span></div>
+        <div class="${gap < 0.1 ? 'sync' : 'gap'}">GAP: ${gap.toFixed(2)}</div>
+        <div class="narrative">${narrative}</div>
+    `;
+    logEl.appendChild(div);
+}
+
+function getNarrative(A, B, gap, m) {
+    if (gap < 0.02) return "RESONANCE. Identity dissolved into Union.";
+    if (gap < 0.10) return "Compromise found. Trust is high.";
+    if (A.k > 0.8 && B.k > 0.8) return "STALEMATE. Both retreated to Identity.";
+    
+    // Directionality
+    const a_move = A.F_n - 0.2; // How far A moved from self
+    const b_move = 0.8 - B.F_n; // How far B moved from self
+    
+    if (a_move > b_move + 0.1) return "A is chasing B. B is stubborn.";
+    if (b_move > a_move + 0.1) return "B is chasing A. A is stubborn.";
+    
+    if (m > 1.5) return "PANIC. Desperation to connect is spiking.";
+    
+    return "Negotiating reality...";
+}
+
+function run() {
+    let tick = 0;
+    const interval = setInterval(() => {
+        tick++;
+        
+        // 1. Current State
+        const fA = EntityA.F_n;
+        const fB = EntityB.F_n;
+        
+        // 2. The Gap (Misunderstanding)
+        const gap = Math.abs(fA - fB);
+        
+        // 3. Pressure (m)
+        // m = The Pain of Separation. 
+        // If we are far apart, we are desperate (High m).
+        // If we are close, we are calm (Low m).
+        let m = 0.1 + (gap * 3.0); 
+        
+        // 4. Compute Next Step (Simultaneous)
+        const nextA = EntityA.compute(fB, m);
+        const nextB = EntityB.compute(fA, m);
+        
+        // 5. Learn (Update Trust/Trauma)
+        EntityA.learn(nextB);
+        EntityB.learn(nextA);
+        
+        // 6. Log
+        const narrative = getNarrative(EntityA, EntityB, gap, m);
+        logRow(tick, EntityA, EntityB, gap, narrative);
+        
+        // End conditions
+        if (tick >= 100) clearInterval(interval);
+        
+    }, 50); // Speed for readability
+}
+
+run();
+
+</script>
+</body>
+</html>

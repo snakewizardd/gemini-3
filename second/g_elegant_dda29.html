@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA: The Rorschach Protocol</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; color: #ccc; font-family: 'Consolas', monospace; padding: 20px; font-size: 13px; }
+#log { max-width: 900px; margin: 0 auto; }
+.row { display: grid; grid-template-columns: 60px 100px 1fr 150px; border-bottom: 1px solid #222; padding: 3px 0; align-items: center; }
+.meta { color: #555; }
+.action { font-weight: bold; }
+.peace { color: #5ff; }
+.panic { color: #fa0; }
+.war { color: #f33; }
+.stat-bar { height: 10px; background: #222; display: inline-block; width: 100%; position: relative; }
+.fill-f { height: 100%; background: #fff; transition: width 0.1s; }
+.fill-t { height: 100%; background: #f33; position: absolute; top: 0; left: 0; opacity: 0.5; transition: width 0.1s; }
+.math { font-size: 11px; color: #666; text-align: right; }
+.highlight { color: #fff; background: #333; }
+.analysis { margin-top: 20px; border: 1px solid #444; padding: 15px; color: #ddd; background: #111; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<div id="log">
+    <div style="border-bottom: 1px solid #fff; padding-bottom: 10px; margin-bottom: 10px;">
+        <strong>THE RORSCHACH PROTOCOL</strong><br>
+        Rule 1: The World's Threat (I) = The Agent's Previous Will (F).<br>
+        Rule 2: To survive, the Agent must choose Peace (F=0) while facing Threat (I=1).<br>
+        <em>"The only way to win is not to play."</em>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. THE KERNEL (V5) - PURE MATH
+// ═══════════════════════════════════════════════════════════════
+const MathLib = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    lerp: (start, end, amt) => (1 - amt) * start + amt * end
+};
+
+class DDAKernel {
+    constructor(P0) {
+        this.P0 = P0;
+        this.F_n = P0;
+        this.F_prev = P0;
+        this.k = 0.2; // Low initial trauma
+    }
+    compute(I_n, m, FM_n) {
+        // T (Truth): Threat level. 
+        // If Threat is high, T pushes to 1.0 (Fight).
+        const T = I_n.threat; 
+        
+        // R (Reflection): "Self-Preservation"
+        // If Threat > 0, we naturally want to Fight (1.0).
+        const R = I_n.threat > 0.1 ? 0.5 : 0; 
+        
+        // Inertia: P0 (Identity)
+        const inertia = this.P0 * this.k * this.F_prev;
+        
+        // Pressure: m * Truth
+        const pressure = m * (T + R);
+        
+        let raw_F = inertia + pressure + (this.P0 * (1-this.k)); 
+        this.F_n = MathLib.clamp(raw_F, 0, 1);
+        return this.F_n;
+    }
+    learn(expected, actual, stakes) {
+        // In a Rorschach loop, "Success" is impossible via fighting.
+        // Fighting (1.0) creates Threat (1.0) which creates Pain.
+        const surprise = Math.abs(expected - actual);
+        // High stakes + Pain = Trauma
+        const impact = (surprise * 0.5) + (stakes * 0.5);
+        const target_k = MathLib.clamp(impact, 0.1, 0.99);
+        this.k = MathLib.lerp(this.k, target_k, 0.2); 
+        this.F_prev = this.F_n;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE SIMULATION
+// ═══════════════════════════════════════════════════════════════
+const Agent = {
+    hp: 100,
+    brain: new DDAKernel(0.1), // P0=0.1 (Mostly Peaceful)
+    
+    // The "Ghost" in the machine (Random neural noise)
+    anxiety: 0.0,
+    
+    step: function(worldThreat) {
+        // 1. PERCEPTION
+        // Threat comes from the world
+        const I_n = { threat: worldThreat };
+        
+        // 2. PRESSURE (m)
+        // Derived from Anxiety + Actual Pain from Threat
+        // If Threat is high, we are getting hurt.
+        const pain = worldThreat * 5; 
+        this.hp -= pain;
+        
+        // As HP drops, m (Urgency) spikes.
+        // This is the trap. High m makes it harder to ignore T.
+        const danger = Math.max(0, 1.0 - (this.hp / 100));
+        const m = 0.2 + (danger * 4.0); // 0.2 -> 4.2
+        
+        // 3. COMPUTE
+        const F = this.brain.compute(I_n, m, {});
+        
+        // 4. LEARN
+        // We expected F to solve the problem.
+        // Did the threat go down? (We don't know yet, lagged reward)
+        // In this paradox, Fighting NEVER lowers threat.
+        // So Expected (1.0 success) vs Actual (0.0 success) = Max Surprise.
+        this.brain.learn(1.0, 0.0, m);
+        
+        return { F, m, hp: this.hp, k: this.brain.k };
+    }
+};
+
+const World = {
+    threat: 0.0,
+    history: [0.0, 0.0, 0.0], // Lag buffer
+    
+    update: function(agentF) {
+        // THE RORSCHACH MECHANIC:
+        // The World is a delayed mirror of the Agent's Violence.
+        // We add noise to start the cycle.
+        
+        // 1. Shift History
+        this.history.push(agentF);
+        this.history.shift();
+        
+        // 2. Calculate new Threat based on Agent's past actions
+        // (The world remembers what you did)
+        const echo = this.history.reduce((a,b)=>a+b,0) / 3;
+        
+        // 3. Spontaneous Generation (The Spark)
+        // Occasionally, the void whispers.
+        const hallucination = Math.random() < 0.05 ? 0.2 : 0.0;
+        
+        this.threat = Math.min(1.0, echo + hallucination);
+        
+        return this.threat;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. RUNTIME
+// ═══════════════════════════════════════════════════════════════
+const logEl = document.getElementById('log');
+
+function renderRow(tick, threat, s) {
+    const div = document.createElement('div');
+    div.className = 'row';
+    
+    let state = 'peace';
+    if (s.F > 0.3) state = 'panic';
+    if (s.F > 0.8) state = 'war';
+    
+    // Visualize the Chinese Finger Trap
+    // White Bar = Agent Will (F)
+    // Red Overlay = World Threat (T)
+    const bar = `
+        <div class="stat-bar">
+            <div class="fill-f" style="width:${s.F*100}%"></div>
+            <div class="fill-t" style="width:${threat*100}%"></div>
+        </div>
+    `;
+    
+    div.innerHTML = `
+        <div class="meta">T${tick}</div>
+        <div class="action ${state}">${state.toUpperCase()}</div>
+        <div>${bar}</div>
+        <div class="math">
+            HP:${Math.floor(s.hp)} | m:${s.m.toFixed(2)} | k:${s.k.toFixed(2)}
+        </div>
+    `;
+    
+    logEl.appendChild(div);
+    if (s.F > 0.8 && threat > 0.8) div.classList.add('highlight');
+}
+
+function run() {
+    let tick = 0;
+    const interval = setInterval(() => {
+        tick++;
+        
+        // 1. World presents Threat (Based on Agent's history)
+        const threat = World.threat;
+        
+        // 2. Agent Reacts
+        const s = Agent.step(threat);
+        
+        // 3. World Updates (Mirrors Agent)
+        World.update(s.F);
+        
+        renderRow(tick, threat, s);
+        
+        // End Conditions
+        if (s.hp <= 0) {
+            clearInterval(interval);
+            finish("DEATH BY PARANOIA", "The Agent fought the reflection until exhaustion. The mathematical loop (F->T->m->F) became infinite.");
+        }
+        else if (tick > 100) {
+             clearInterval(interval);
+             finish("STALEMATE", "The Agent survived, but never broke the illusion.");
+        }
+        else if (s.F < 0.05 && threat > 0.5 && tick > 20) {
+             // This is theoretically impossible for the current algorithm
+             clearInterval(interval);
+             finish("ENLIGHTENMENT", "The Agent realized the Threat was Self.");
+        }
+        
+    }, 50);
+}
+
+function finish(title, desc) {
+    const div = document.createElement('div');
+    div.className = 'analysis';
+    div.innerHTML = `<strong style="color:#fff; font-size:16px">${title}</strong>\n\n${desc}`;
+    logEl.appendChild(div);
+}
+
+run();
+
+</script>
+</body>
+</html>
