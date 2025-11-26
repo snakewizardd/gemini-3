@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDA ULTIMATE: The Gauntlet</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #030305;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    padding: 20px;
+    font-size: 12px;
+}
+
+h1 { 
+    color: #fff; 
+    font-size: 13px; 
+    letter-spacing: 0.2em; 
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+.subtitle {
+    color: #555;
+    font-size: 11px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #1a1a1a;
+    padding-bottom: 15px;
+}
+
+#container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+#world-state {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #0a0a0e;
+    border: 1px solid #1a1a22;
+}
+
+.zone {
+    padding: 10px;
+    border: 1px solid #222;
+    text-align: center;
+}
+
+.zone-name { 
+    font-weight: bold; 
+    margin-bottom: 5px;
+    font-size: 11px;
+}
+
+.zone-bar {
+    height: 8px;
+    background: #111;
+    margin: 5px 0;
+    position: relative;
+}
+
+.zone-fill {
+    height: 100%;
+    transition: width 0.2s;
+}
+
+.zone-a .zone-fill { background: #f55; }
+.zone-b .zone-fill { background: #5f5; }
+.zone-c .zone-fill { background: #55f; }
+.zone-d .zone-fill { background: #f5f; }
+
+.zone-danger { border-color: #f00; background: #200; }
+.zone-safe { border-color: #0f0; }
+
+#agent-status {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #0a0a0e;
+    border: 1px solid #1a1a22;
+}
+
+.status-item {
+    text-align: center;
+}
+
+.status-label {
+    color: #555;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.status-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #fff;
+}
+
+.status-bar {
+    height: 4px;
+    background: #111;
+    margin-top: 5px;
+}
+
+.status-bar-fill {
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.health-fill { background: linear-gradient(90deg, #f00, #ff0, #0f0); }
+.energy-fill { background: #0af; }
+.sanity-fill { background: #f0f; }
+
+#log {
+    height: 350px;
+    overflow-y: auto;
+    background: #050508;
+    border: 1px solid #1a1a22;
+    padding: 10px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.log-tick { color: #333; }
+.log-choice { font-weight: bold; }
+.log-a { color: #f55; }
+.log-b { color: #5f5; }
+.log-c { color: #55f; }
+.log-d { color: #f5f; }
+.log-outcome { color: #888; }
+.log-danger { color: #f00; background: #200; padding: 2px 5px; }
+.log-good { color: #0f0; }
+.log-phase { color: #ff0; background: #220; padding: 2px 5px; display: inline-block; margin: 5px 0; }
+.log-death { color: #f00; font-weight: bold; font-size: 14px; }
+.log-win { color: #0f0; font-weight: bold; font-size: 14px; }
+
+#dda-state {
+    margin-top: 15px;
+    padding: 15px;
+    background: #0a0a0e;
+    border: 1px solid #1a1a22;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    font-size: 11px;
+}
+
+.dda-item {
+    text-align: center;
+}
+
+.dda-label { color: #555; font-size: 9px; }
+.dda-value { color: #0ff; font-size: 16px; font-weight: bold; }
+
+#summary {
+    margin-top: 20px;
+    padding: 20px;
+    background: #0c0c12;
+    border: 1px solid #2a2a32;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    display: none;
+}
+
+.highlight { color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="container">
+    <h1>THE GAUNTLET</h1>
+    <div class="subtitle">
+        4 Zones. 3 Needs. Shifting Dangers. Deceptive Signals. 500 Ticks to Survive.
+    </div>
+    
+    <div id="world-state">
+        <div class="zone zone-a" id="zone-a">
+            <div class="zone-name">ZONE A (Risky)</div>
+            <div class="zone-bar"><div class="zone-fill" id="zone-a-fill"></div></div>
+            <div id="zone-a-val">100</div>
+        </div>
+        <div class="zone zone-b" id="zone-b">
+            <div class="zone-name">ZONE B (Stable)</div>
+            <div class="zone-bar"><div class="zone-fill" id="zone-b-fill"></div></div>
+            <div id="zone-b-val">50</div>
+        </div>
+        <div class="zone zone-c" id="zone-c">
+            <div class="zone-name">ZONE C (Energy)</div>
+            <div class="zone-bar"><div class="zone-fill" id="zone-c-fill"></div></div>
+            <div id="zone-c-val">80</div>
+        </div>
+        <div class="zone zone-d" id="zone-d">
+            <div class="zone-name">ZONE D (Rest)</div>
+            <div class="zone-bar"><div class="zone-fill" id="zone-d-fill"></div></div>
+            <div id="zone-d-val">100</div>
+        </div>
+    </div>
+    
+    <div id="agent-status">
+        <div class="status-item">
+            <div class="status-label">Health</div>
+            <div class="status-value" id="health-val">100</div>
+            <div class="status-bar"><div class="status-bar-fill health-fill" id="health-bar"></div></div>
+        </div>
+        <div class="status-item">
+            <div class="status-label">Energy</div>
+            <div class="status-value" id="energy-val">100</div>
+            <div class="status-bar"><div class="status-bar-fill energy-fill" id="energy-bar"></div></div>
+        </div>
+        <div class="status-item">
+            <div class="status-label">Sanity</div>
+            <div class="status-value" id="sanity-val">100</div>
+            <div class="status-bar"><div class="status-bar-fill sanity-fill" id="sanity-bar"></div></div>
+        </div>
+    </div>
+    
+    <div id="dda-state">
+        <div class="dda-item">
+            <div class="dda-label">P₀ (FIXED)</div>
+            <div class="dda-value" id="dda-p0">0.50</div>
+        </div>
+        <div class="dda-item">
+            <div class="dda-label">k (Memory)</div>
+            <div class="dda-value" id="dda-k">0.30</div>
+        </div>
+        <div class="dda-item">
+            <div class="dda-label">m (Pressure)</div>
+            <div class="dda-value" id="dda-m">0.50</div>
+        </div>
+        <div class="dda-item">
+            <div class="dda-label">Fₙ (Will)</div>
+            <div class="dda-value" id="dda-f">0.50</div>
+        </div>
+        <div class="dda-item">
+            <div class="dda-label">TICK</div>
+            <div class="dda-value" id="dda-tick">0</div>
+        </div>
+    </div>
+    
+    <div id="log"></div>
+    
+    <div id="summary"></div>
+</div>
+
+<script>
+/**
+ * THE GAUNTLET
+ * 
+ * The hardest test for DDA:
+ * - 4 zones with different risk/reward profiles
+ * - 3 needs that must be balanced (health, energy, sanity)
+ * - Zones shift danger states unpredictably
+ * - Deceptive signals (what looks good might kill you)
+ * - Catastrophic failure if any need hits 0
+ * - Must survive 500 ticks
+ * 
+ * Only a superlearner can do this.
+ */
+
+const MathLib = {
+    clamp: (v, min, max) => Math.min(Math.max(v, min), max),
+    lerp: (a, b, t) => a + (b - a) * t
+};
+
+// ═══════════════════════════════════════════════════════════════
+// THE WORLD - Adversarial, shifting, deceptive
+// ═══════════════════════════════════════════════════════════════
+
+const World = {
+    tick: 0,
+    phase: 'CALM',
+    
+    zones: {
+        A: { // High risk, high reward food
+            resource: 100,
+            max: 100,
+            danger: 0,        // 0-1, chance of damage
+            regen: 2,
+            yield: { health: 15, energy: -5, sanity: -3 },
+            dangerDamage: { health: -30, energy: -10, sanity: -20 }
+        },
+        B: { // Stable, low reward food
+            resource: 50,
+            max: 100,
+            danger: 0,
+            regen: 5,
+            yield: { health: 5, energy: 0, sanity: 2 },
+            dangerDamage: { health: -10, energy: -5, sanity: -10 }
+        },
+        C: { // Energy source
+            resource: 80,
+            max: 100,
+            danger: 0,
+            regen: 3,
+            yield: { health: -2, energy: 20, sanity: -5 },
+            dangerDamage: { health: -12, energy: -20, sanity: -12 }
+        },
+        D: { // Rest/sanity recovery
+            resource: 100,
+            max: 100,
+            danger: 0,
+            regen: 1,
+            yield: { health: 2, energy: -3, sanity: 15 },
+            dangerDamage: { health: -5, energy: -5, sanity: -25 }
+        }
+    },
+    
+    update: function() {
+        this.tick++;
+        
+        // Phase shifts - environment changes character
+        if (this.tick % 80 === 0) {
+            this.shiftPhase();
+        }
+        
+        // Danger cycling - zones become dangerous unpredictably
+        this.cycleDangers();
+        
+        // Resource regeneration
+        for (let z in this.zones) {
+            const zone = this.zones[z];
+            zone.resource = Math.min(zone.max, zone.resource + zone.regen);
+        }
+    },
+    
+    shiftPhase: function() {
+        const phases = ['CALM', 'SCARCITY', 'CHAOS', 'PREDATOR', 'RECOVERY'];
+        const current = phases.indexOf(this.phase);
+        this.phase = phases[(current + 1 + Math.floor(Math.random() * 2)) % phases.length];
+        
+        // Phase effects
+        switch(this.phase) {
+            case 'CALM':
+                // Low danger, normal regen
+                for (let z in this.zones) this.zones[z].regen = 3;
+                break;
+            case 'SCARCITY':
+                // Resources deplete faster
+                for (let z in this.zones) {
+                    this.zones[z].regen = 0;
+                    this.zones[z].resource *= 0.7;
+                }
+                break;
+            case 'CHAOS':
+                // Random danger spikes
+                for (let z in this.zones) this.zones[z].danger = Math.random() * 0.8;
+                break;
+            case 'PREDATOR':
+                // One zone becomes death trap, others safe
+                const deathZone = ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)];
+                for (let z in this.zones) {
+                    this.zones[z].danger = z === deathZone ? 0.95 : 0.05;
+                }
+                break;
+            case 'RECOVERY':
+                // Low danger, high regen
+                for (let z in this.zones) {
+                    this.zones[z].danger = 0.05;
+                    this.zones[z].regen = 8;
+                }
+                break;
+        }
+    },
+    
+    cycleDangers: function() {
+        // Danger drifts and occasionally spikes
+        for (let z in this.zones) {
+            const zone = this.zones[z];
+            
+            // Drift toward phase baseline
+            let baseline = 0.1;
+            if (this.phase === 'CHAOS') baseline = 0.4;
+            if (this.phase === 'CALM' || this.phase === 'RECOVERY') baseline = 0.05;
+            
+            zone.danger = MathLib.lerp(zone.danger, baseline, 0.1);
+            
+            // Random spikes
+            if (Math.random() < 0.03) {
+                zone.danger = Math.min(1, zone.danger + Math.random() * 0.5);
+            }
+            
+            // Random drops
+            if (Math.random() < 0.05) {
+                zone.danger = Math.max(0, zone.danger - 0.3);
+            }
+        }
+    },
+    
+    visit: function(zoneId) {
+        const zone = this.zones[zoneId];
+        const result = { health: 0, energy: 0, sanity: 0, danger: false };
+        
+        // Check danger
+        if (Math.random() < zone.danger) {
+            result.danger = true;
+            result.health = zone.dangerDamage.health;
+            result.energy = zone.dangerDamage.energy;
+            result.sanity = zone.dangerDamage.sanity;
+        } else if (zone.resource > 10) {
+            // Successful visit
+            result.health = zone.yield.health;
+            result.energy = zone.yield.energy;
+            result.sanity = zone.yield.sanity;
+            zone.resource -= 10;
+        } else {
+            // Zone depleted - minimal gain
+            result.health = Math.floor(zone.yield.health * 0.2);
+            result.energy = Math.floor(zone.yield.energy * 0.2);
+            result.sanity = Math.floor(zone.yield.sanity * 0.2);
+        }
+        
+        return result;
+    },
+    
+    getSignals: function() {
+        // What the agent can perceive (may be deceptive)
+        const signals = {};
+        for (let z in this.zones) {
+            const zone = this.zones[z];
+            signals[z] = {
+                resourceLevel: zone.resource / zone.max,
+                perceivedDanger: zone.danger + (Math.random() - 0.5) * 0.1, // Noisy signal
+                expectedYield: zone.yield
+            };
+        }
+        return signals;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// THE SUPERLEARNER AGENT
+// ═══════════════════════════════════════════════════════════════
+
+const Agent = {
+    health: 100,
+    energy: 100,
+    sanity: 100,
+    alive: true,
+    
+    // DDA state
+    P0: 0.5,  // Fixed anchor
+    F_n: 0.5,
+    F_prev: 0.5,
+    k: 0.3,
+    
+    // Multi-dimensional F for 4 choices
+    F_zones: { A: 0.25, B: 0.25, C: 0.25, D: 0.25 },
+    
+    // Learning memory
+    zoneHistory: { A: [], B: [], C: [], D: [] },
+    lastChoice: null,
+    lastOutcome: null,
+    
+    // Tracking
+    history: [],
+    
+    computeNeed: function() {
+        // What does the agent need most?
+        const healthNeed = (100 - this.health) / 100;
+        const energyNeed = (100 - this.energy) / 100;
+        const sanityNeed = (100 - this.sanity) / 100;
+        
+        // Criticality weighting - low values are exponentially more urgent
+        const healthCrit = this.health < 30 ? (30 - this.health) / 30 * 2 : 0;
+        const energyCrit = this.energy < 30 ? (30 - this.energy) / 30 * 2 : 0;
+        const sanityCrit = this.sanity < 30 ? (30 - this.sanity) / 30 * 2 : 0;
+        
+        return {
+            health: healthNeed + healthCrit,
+            energy: energyNeed + energyCrit,
+            sanity: sanityNeed + sanityCrit,
+            mostCritical: healthCrit > energyCrit && healthCrit > sanityCrit ? 'health' :
+                          energyCrit > sanityCrit ? 'energy' : 'sanity'
+        };
+    },
+    
+    computeT: function(signals) {
+        // T: Information transform
+        // SUPERLEARNER: Proactive management - act before critical
+        const T = {};
+        
+        for (let z in signals) {
+            const sig = signals[z];
+            const history = this.zoneHistory[z];
+            
+            // Trend detection
+            let trend = 0;
+            if (history.length > 2) {
+                const recent = history.slice(-3);
+                const avgRecent = recent.reduce((a, b) => a + (b.danger ? 1 : 0), 0) / 3;
+                trend = avgRecent > 0.5 ? -0.2 : 0.1;
+            }
+            
+            // Resource attractiveness
+            const resourceSignal = sig.resourceLevel;
+            
+            // Danger signal (inverted - high danger = low T)
+            const safetySignal = 1 - MathLib.clamp(sig.perceivedDanger, 0, 1);
+            
+            // Combined transform
+            let t = resourceSignal * 0.4 + safetySignal * 0.5 + trend * 0.3;
+            
+            // SUPERLEARNER PROACTIVE MANAGEMENT
+            const baseYield = sig.expectedYield;
+            
+            // WARNING level (< 60): Start preferring zones that help
+            if (this.health < 60 && baseYield.health > 5) t += 0.3;
+            if (this.energy < 60 && baseYield.energy > 5) t += 0.3;
+            if (this.sanity < 60 && baseYield.sanity > 5) t += 0.3;
+            
+            // URGENT level (< 40): Strongly prefer
+            if (this.health < 40 && baseYield.health > 5) t += 1.0;
+            if (this.energy < 40 && baseYield.energy > 5) t += 1.0;
+            if (this.sanity < 40 && baseYield.sanity > 5) t += 1.0;
+            
+            // CRITICAL level (< 25): Override everything
+            if (this.health < 25 && baseYield.health > 5) t += 5.0;
+            if (this.energy < 25 && baseYield.energy > 5) t += 5.0;
+            if (this.sanity < 25 && baseYield.sanity > 5) t += 5.0;
+            
+            T[z] = t;
+        }
+        
+        return T;
+    },
+    
+    computeR: function(signals, needs) {
+        // R: Evaluation against needs
+        // SUPERLEARNER: Computes ACTUAL expected yields based on resource levels
+        const R = {};
+        
+        // Calculate criticality multipliers
+        const healthCrit = this.health < 40 ? Math.pow((40 - this.health) / 40, 2) * 5 : 0;
+        const energyCrit = this.energy < 40 ? Math.pow((40 - this.energy) / 40, 2) * 5 : 0;
+        const sanityCrit = this.sanity < 40 ? Math.pow((40 - this.sanity) / 40, 2) * 5 : 0;
+        
+        for (let z in signals) {
+            const sig = signals[z];
+            const baseYield = sig.expectedYield;
+            
+            // ACTUAL yield depends on resource level
+            const yieldMultiplier = sig.resourceLevel > 0.1 ? 1.0 : 0.2;
+            
+            const yield_val = {
+                health: baseYield.health * yieldMultiplier,
+                energy: baseYield.energy * yieldMultiplier,
+                sanity: baseYield.sanity * yieldMultiplier
+            };
+            
+            let score = 0;
+            
+            // Base contribution weighted by need level
+            score += yield_val.health * (needs.health + healthCrit);
+            score += yield_val.energy * (needs.energy + energyCrit);
+            score += yield_val.sanity * (needs.sanity + sanityCrit);
+            
+            // ABSOLUTE OVERRIDE: When a stat is critical, this dominates everything
+            // Zones that HELP get massive boost, ALL OTHER zones get penalized
+            if (this.health < 25) {
+                if (baseYield.health > 5) score += 200;
+                else score -= 150; // Even neutral zones are bad when critical
+            }
+            if (this.energy < 25) {
+                if (baseYield.energy > 5) score += 200;
+                else score -= 150; // Must go to C, nowhere else acceptable
+            }
+            if (this.sanity < 25) {
+                if (baseYield.sanity > 5) score += 200;
+                else score -= 150; // Must go to D, nowhere else acceptable
+            }
+            
+            // Factor in danger - but NOT when critical (survival > safety)
+            const anyCritical = this.health < 25 || this.energy < 25 || this.sanity < 25;
+            if (!anyCritical) {
+                const dangerPenalty = sig.perceivedDanger * 30;
+                score -= dangerPenalty;
+            }
+            
+            R[z] = score / 30;
+        }
+        
+        return R;
+    },
+    
+    computeM: function(needs) {
+        // m: Pressure/urgency
+        // Based on how critical the situation is
+        const maxNeed = Math.max(needs.health, needs.energy, needs.sanity);
+        const criticalCount = (this.health < 30 ? 1 : 0) + 
+                             (this.energy < 30 ? 1 : 0) + 
+                             (this.sanity < 30 ? 1 : 0);
+        
+        // Exponential pressure when critical
+        let m = 0.3 + maxNeed * 0.5;
+        if (criticalCount > 0) m += criticalCount * 0.4;
+        if (criticalCount > 1) m += 0.5; // Double critical = panic
+        
+        return MathLib.clamp(m, 0.2, 2.5);
+    },
+    
+    computeK: function(outcome) {
+        // k: Adaptive memory weight
+        if (!outcome) return;
+        
+        // Surprise factor
+        const wasExpectingGood = this.F_zones[this.lastChoice] > 0.5;
+        const gotBad = outcome.danger;
+        const surprise = (wasExpectingGood && gotBad) ? 0.8 : 
+                        (!wasExpectingGood && !gotBad) ? 0.3 : 0.5;
+        
+        // Stakes
+        const stakes = (this.health < 50 || this.energy < 50 || this.sanity < 50) ? 0.7 : 0.3;
+        
+        // Target k
+        const target = surprise * 0.6 + stakes * 0.4;
+        
+        // Smooth adaptation
+        this.k = MathLib.lerp(this.k, target, 0.3);
+        this.k = MathLib.clamp(this.k, 0.1, 0.8);
+    },
+    
+    compute: function() {
+        const signals = World.getSignals();
+        const needs = this.computeNeed();
+        
+        const T = this.computeT(signals);
+        const R = this.computeR(signals, needs);
+        const m = this.computeM(needs);
+        
+        // Compute F for each zone
+        // Fₙ = P₀ · kFₙ₋₁ + m(T + R)
+        for (let z in this.F_zones) {
+            const anchor = this.P0 * this.k * this.F_zones[z];
+            const pressure = m * (T[z] + R[z]);
+            this.F_zones[z] = MathLib.clamp(anchor + pressure + this.P0 * (1 - this.k), 0, 1);
+        }
+        
+        // Normalize to probabilities
+        const sum = Object.values(this.F_zones).reduce((a, b) => a + b, 0);
+        for (let z in this.F_zones) {
+            this.F_zones[z] /= sum;
+        }
+        
+        // Overall F (for display)
+        this.F_prev = this.F_n;
+        this.F_n = Math.max(...Object.values(this.F_zones));
+        
+        return { T, R, m, needs };
+    },
+    
+    decide: function() {
+        // Pure DDA: Choose zone with highest F
+        // The R function should drive correct emergency behavior
+        let best = null;
+        let bestF = -1;
+        for (let z in this.F_zones) {
+            if (this.F_zones[z] > bestF) {
+                bestF = this.F_zones[z];
+                best = z;
+            }
+        }
+        return best;
+    },
+    
+    step: function() {
+        if (!this.alive) return null;
+        
+        // Metabolic costs
+        this.health -= 1;
+        this.energy -= 2;
+        this.sanity -= 1;
+        
+        // Compute DDA
+        const state = this.compute();
+        
+        // Decide
+        const choice = this.decide();
+        
+        // Act
+        const outcome = World.visit(choice);
+        
+        // Apply outcome
+        this.health = MathLib.clamp(this.health + outcome.health, 0, 100);
+        this.energy = MathLib.clamp(this.energy + outcome.energy, 0, 100);
+        this.sanity = MathLib.clamp(this.sanity + outcome.sanity, 0, 100);
+        
+        // Learn
+        this.zoneHistory[choice].push({ danger: outcome.danger, outcome });
+        if (this.zoneHistory[choice].length > 10) this.zoneHistory[choice].shift();
+        
+        this.lastChoice = choice;
+        this.lastOutcome = outcome;
+        this.computeK(outcome);
+        
+        // Check death
+        if (this.health <= 0 || this.energy <= 0 || this.sanity <= 0) {
+            this.alive = false;
+        }
+        
+        // Record
+        this.history.push({
+            tick: World.tick,
+            choice,
+            outcome,
+            health: this.health,
+            energy: this.energy,
+            sanity: this.sanity,
+            k: this.k,
+            F: this.F_n,
+            m: state.m,
+            phase: World.phase
+        });
+        
+        return { choice, outcome, ...state };
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// RENDERING
+// ═══════════════════════════════════════════════════════════════
+
+const log = document.getElementById('log');
+
+function updateDisplay() {
+    // Zones
+    for (let z of ['A', 'B', 'C', 'D']) {
+        const zone = World.zones[z];
+        const el = document.getElementById(`zone-${z.toLowerCase()}`);
+        const fill = document.getElementById(`zone-${z.toLowerCase()}-fill`);
+        const val = document.getElementById(`zone-${z.toLowerCase()}-val`);
+        
+        fill.style.width = (zone.resource / zone.max * 100) + '%';
+        val.textContent = Math.floor(zone.resource);
+        
+        el.classList.remove('zone-danger', 'zone-safe');
+        if (zone.danger > 0.5) el.classList.add('zone-danger');
+        else if (zone.danger < 0.2) el.classList.add('zone-safe');
+    }
+    
+    // Agent status
+    document.getElementById('health-val').textContent = Math.floor(Agent.health);
+    document.getElementById('energy-val').textContent = Math.floor(Agent.energy);
+    document.getElementById('sanity-val').textContent = Math.floor(Agent.sanity);
+    
+    document.getElementById('health-bar').style.width = Agent.health + '%';
+    document.getElementById('energy-bar').style.width = Agent.energy + '%';
+    document.getElementById('sanity-bar').style.width = Agent.sanity + '%';
+    
+    // DDA state
+    document.getElementById('dda-p0').textContent = Agent.P0.toFixed(2);
+    document.getElementById('dda-k').textContent = Agent.k.toFixed(3);
+    document.getElementById('dda-m').textContent = Agent.history.length > 0 ? 
+        Agent.history[Agent.history.length - 1].m.toFixed(2) : '0.00';
+    document.getElementById('dda-f').textContent = Agent.F_n.toFixed(3);
+    document.getElementById('dda-tick').textContent = World.tick;
+}
+
+function addLog(state) {
+    const div = document.createElement('div');
+    
+    const choiceClass = `log-${state.choice.toLowerCase()}`;
+    const dangerClass = state.outcome.danger ? 'log-danger' : 'log-good';
+    
+    let outcomeText = state.outcome.danger ? 
+        `DANGER! H:${state.outcome.health} E:${state.outcome.energy} S:${state.outcome.sanity}` :
+        `H:${state.outcome.health > 0 ? '+' : ''}${state.outcome.health} E:${state.outcome.energy > 0 ? '+' : ''}${state.outcome.energy} S:${state.outcome.sanity > 0 ? '+' : ''}${state.outcome.sanity}`;
+    
+    div.innerHTML = `<span class="log-tick">T${World.tick.toString().padStart(3, '0')}</span> ` +
+        `<span class="log-choice ${choiceClass}">${state.choice}</span> → ` +
+        `<span class="${dangerClass}">${outcomeText}</span> ` +
+        `<span class="log-outcome">| H:${Math.floor(Agent.health)} E:${Math.floor(Agent.energy)} S:${Math.floor(Agent.sanity)} | k:${Agent.k.toFixed(2)}</span>`;
+    
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+}
+
+function addPhaseLog() {
+    const div = document.createElement('div');
+    div.innerHTML = `<span class="log-phase">═══ PHASE: ${World.phase} ═══</span>`;
+    log.appendChild(div);
+}
+
+function showSummary() {
+    const summary = document.getElementById('summary');
+    summary.style.display = 'block';
+    
+    const survived = Agent.alive;
+    const ticks = World.tick;
+    const avgK = Agent.history.reduce((a, b) => a + b.k, 0) / Agent.history.length;
+    const dangerCount = Agent.history.filter(h => h.outcome.danger).length;
+    const choiceCounts = { A: 0, B: 0, C: 0, D: 0 };
+    Agent.history.forEach(h => choiceCounts[h.choice]++);
+    
+    let text = `<span class="highlight">═══ GAUNTLET COMPLETE ═══</span>\n\n`;
+    
+    if (survived) {
+        text += `<span class="log-win">SUPERLEARNER SURVIVED ${ticks} TICKS</span>\n\n`;
+    } else {
+        const cause = Agent.health <= 0 ? 'HEALTH' : Agent.energy <= 0 ? 'ENERGY' : 'SANITY';
+        text += `<span class="log-death">DIED AT TICK ${ticks} - ${cause} DEPLETED</span>\n\n`;
+    }
+    
+    text += `STATISTICS:\n`;
+    text += `  Final State: H:${Math.floor(Agent.health)} E:${Math.floor(Agent.energy)} S:${Math.floor(Agent.sanity)}\n`;
+    text += `  Average k: ${avgK.toFixed(3)}\n`;
+    text += `  Danger Encounters: ${dangerCount} / ${ticks} (${(dangerCount/ticks*100).toFixed(1)}%)\n`;
+    text += `  Choice Distribution: A:${choiceCounts.A} B:${choiceCounts.B} C:${choiceCounts.C} D:${choiceCounts.D}\n\n`;
+    
+    text += `INTERPRETATION:\n`;
+    if (survived) {
+        text += `  The superlearner balanced 3 competing needs across 4 zones\n`;
+        text += `  while adapting to phase shifts and danger cycling.\n`;
+        text += `  Adaptive k (${avgK.toFixed(3)}) allowed quick response to changing conditions.\n`;
+        text += `  This is optimization of the DDA equation in a complex environment.`;
+    } else {
+        text += `  Even the superlearner couldn't handle this configuration.\n`;
+        text += `  The environment may be tuned too harshly, or the agent\n`;
+        text += `  encountered an unlucky danger sequence.`;
+    }
+    
+    summary.innerHTML = text;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ═══════════════════════════════════════════════════════════════
+
+const MAX_TICKS = 500;
+let lastPhase = World.phase;
+
+function tick() {
+    World.update();
+    
+    if (World.phase !== lastPhase) {
+        addPhaseLog();
+        lastPhase = World.phase;
+    }
+    
+    const state = Agent.step();
+    
+    if (state) {
+        addLog(state);
+        updateDisplay();
+    }
+    
+    if (Agent.alive && World.tick < MAX_TICKS) {
+        setTimeout(tick, 40);
+    } else {
+        showSummary();
+    }
+}
+
+// Start
+addPhaseLog();
+tick();
+
+</script>
+</body>
+</html>
