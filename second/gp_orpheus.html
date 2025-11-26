@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Wedding of Orpheus</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Pinyon+Script&display=swap');
+
+    body { 
+        margin: 0; 
+        background: #000; 
+        color: #eec; 
+        font-family: 'Cinzel', serif; 
+        overflow: hidden; 
+    }
+
+    #canvas { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+    }
+
+    #overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8);
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        z-index: 100; cursor: pointer; transition: opacity 1s;
+    }
+
+    .btn {
+        border: 1px solid #d4af37; color: #d4af37; padding: 25px 60px;
+        font-size: 20px; letter-spacing: 5px; background: transparent; 
+        cursor: pointer; text-shadow: 0 0 10px #d4af37;
+        box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
+        transition: all 0.5s;
+        font-family: 'Cinzel', serif;
+    }
+    .btn:hover { background: rgba(212, 175, 55, 0.1); box-shadow: 0 0 60px #d4af37; letter-spacing: 8px; }
+
+    #ui {
+        position: absolute; top: 40px; width: 100%; text-align: center;
+        pointer-events: none;
+    }
+
+    h1 { margin: 0; font-size: 30px; letter-spacing: 10px; color: #d4af37; text-shadow: 0 0 20px rgba(212,175,55,0.5); }
+    .subtitle { font-family: 'Pinyon Script', cursive; font-size: 24px; color: #fff; opacity: 0.8; margin-top: 10px; }
+
+    #readout {
+        position: absolute; bottom: 50px; width: 100%;
+        text-align: center; font-size: 14px; letter-spacing: 3px; color: #888;
+        pointer-events: none;
+    }
+
+    .stat-val { color: #d4af37; font-weight: bold; }
+
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <div class="btn">ATTEND THE CEREMONY</div>
+    <p style="margin-top: 30px; font-family: 'Pinyon Script', cursive; font-size: 20px; color: #888;">Infinite Generative Lyre</p>
+</div>
+
+<div id="ui">
+    <h1>ORPHEUS</h1>
+    <div class="subtitle">Before the Snake</div>
+</div>
+
+<div id="readout">
+    HARMONY: <span id="val-harmony" class="stat-val">PURE</span> &nbsp;|&nbsp; 
+    ECSTASY: <span id="val-joy" class="stat-val">0%</span>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. CELESTIAL CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    // Open C Major 7 (High Voicing for Lyre)
+    // C3, G3, C4, E4, G4, B4
+    BASE_FREQS: [130.81, 196.00, 261.63, 329.63, 392.00, 493.88], 
+    STRING_NAMES: ['C', 'G', 'C', 'E', 'G', 'B'],
+    // C Lydian Scale (The Mode of Wonder)
+    // Intervals: Root, 2, 3, #4, 5, 6, 7
+    SCALE_INTERVALS: [0, 2, 4, 6, 7, 9, 11, 12] 
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 2. ANGELIC AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null, master: null, reverb: null, delay: null,
+    
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.4; // Soft master
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+
+        // CATHEDRAL REVERB (The "Space" of the Temple)
+        // Extremely long decay (5 seconds)
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * 5.0;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        for (let i = 0; i < length; i++) {
+            const decay = Math.pow(1 - i / length, 4); // Smooth exponential fade
+            // Stereo spread
+            impulse.getChannelData(0)[i] = (Math.random() * 2 - 1) * decay * 0.8;
+            impulse.getChannelData(1)[i] = (Math.random() * 2 - 1) * decay * 0.8;
+        }
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = impulse;
+        
+        const revMix = AudioEngine.ctx.createGain();
+        revMix.gain.value = 0.6; // Very Wet
+        AudioEngine.reverb.connect(revMix);
+        revMix.connect(AudioEngine.master);
+
+        // ETHEREAL DELAY (The "Memory" of the Note)
+        AudioEngine.delay = AudioEngine.ctx.createDelay();
+        AudioEngine.delay.delayTime.value = 0.666; // Slow triplet feel
+        const fb = AudioEngine.ctx.createGain();
+        fb.gain.value = 0.3;
+        const filter = AudioEngine.ctx.createBiquadFilter(); 
+        filter.frequency.value = 1500; // Shimmer filter
+        
+        AudioEngine.delay.connect(fb);
+        fb.connect(filter);
+        filter.connect(AudioEngine.delay);
+        
+        const delMix = AudioEngine.ctx.createGain();
+        delMix.gain.value = 0.2;
+        AudioEngine.delay.connect(delMix);
+        delMix.connect(AudioEngine.master);
+    },
+
+    playPluck: (stringIdx, fret, intensity) => {
+        if (!AudioEngine.ctx) return;
+        const t = AudioEngine.ctx.currentTime;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+
+        // LYRE SYNTHESIS
+        // Sine (Body) + Triangle (String) + Slight FM (Shimmer)
+        const osc1 = AudioEngine.ctx.createOscillator();
+        const osc2 = AudioEngine.ctx.createOscillator();
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq; 
+        
+        // Slight Detune for richness
+        osc2.detune.value = Math.random() * 4 - 2;
+
+        // ENVELOPE (Plucked)
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.3 * intensity, t + 0.02); // Soft attack
+        // Long release for the harp feel
+        amp.gain.exponentialRampToValueAtTime(0.001, t + 4.0); 
+
+        // ROUTING
+        osc1.connect(amp);
+        osc2.connect(amp);
+        amp.connect(AudioEngine.master);
+        amp.connect(AudioEngine.reverb); // Massive Send
+        amp.connect(AudioEngine.delay);
+
+        osc1.start(t);
+        osc2.start(t);
+        osc1.stop(t + 4.1);
+        osc2.stop(t + 4.1);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE DIVINE AGENT (Orpheus Logic)
+// ═══════════════════════════════════════════════════════════════
+const Agent = {
+    // Physics
+    posFret: 0,
+    posString: 0,
+    vel: 0,
+    k: 0.95, // High inertia (Graceful)
+    m: 0.05, // Low pressure (Gentle)
+    
+    // Emotion
+    joy: 0, // 0 to 1
+    phase: 0, // Time tracking
+
+    update: () => {
+        // 1. EMOTIONAL CYCLE
+        // Joy oscillates slowly like a tide
+        Agent.phase += 0.005;
+        Agent.joy = (Math.sin(Agent.phase) + 1) / 2;
+        
+        // 2. SIGNAL (T) - THE MELODY
+        // The melody is not random; it seeks the upper register when Joy is high
+        // and the lower register when Joy is contemplative.
+        let targetRegister = Agent.joy * 12 + 5; 
+        let T = targetRegister - Agent.posFret;
+
+        // 3. REFLECTION (R) - HARMONIC CONSONANCE
+        // R restricts movement to the Lydian Scale
+        // It pushes the hand to the nearest "Sweet Note" (3rd, 5th, 7th)
+        let R = 0;
+        // Determine current harmonic context
+        let currentNote = (Agent.posFret) % 12;
+        // Prefer scale degrees: 0 (Root), 4 (Maj3), 7 (Per5), 11 (Maj7)
+        let sweetNotes = [0, 4, 7, 11];
+        
+        let nearestSweet = sweetNotes.reduce((prev, curr) => 
+            Math.abs(curr - currentNote) < Math.abs(prev - currentNote) ? curr : prev
+        );
+        
+        // Push gently towards harmony
+        R = (nearestScaleNote(Agent.posFret) - Agent.posFret) * 0.5;
+
+        // 4. DYNAMICS
+        // When Joy is high, Viscosity (k) lowers -> Sweeping arpeggios
+        // When Joy is low, Viscosity raises -> Slow chords
+        Agent.k = 0.96 - (Agent.joy * 0.3); 
+        Agent.m = 0.02 + (Agent.joy * 0.1);
+
+        // 5. EQUATION
+        let Fn = (Agent.vel * Agent.k) + ((T + R) * Agent.m);
+        Agent.vel = Fn;
+        Agent.posFret += Agent.vel;
+
+        // Constraint
+        if (Agent.posFret < 0) { Agent.posFret = 0; Agent.vel *= -0.5; }
+        if (Agent.posFret > 19) { Agent.posFret = 19; Agent.vel *= -0.5; }
+        
+        // String Selection Logic (Arpeggiation)
+        // If moving fast (High Joy), sweep across strings
+        if (Math.abs(Agent.vel) > 0.5) {
+            Agent.posString = (Agent.posString + 1) % 6;
+        } else {
+            // Randomly pick neighboring string for chords
+            if (Math.random() > 0.8) Agent.posString = Math.floor(Math.random()*6);
+        }
+    },
+
+    trigger: () => {
+        // PLAY LOGIC
+        // Density depends on Joy
+        let threshold = 0.95 - (Agent.joy * 0.6); // High joy = low threshold = many notes
+        
+        if (Math.random() > threshold) {
+            // Quantize fret to Lydian scale
+            let fret = nearestScaleNote(Agent.posFret);
+            let string = Math.floor(Agent.posString);
+            
+            // Velocity map
+            let velocity = 0.4 + (Agent.joy * 0.6);
+            
+            AudioEngine.playPluck(string, fret, velocity);
+            Visuals.emitParticle(string, fret, Agent.joy);
+        }
+    }
+};
+
+function nearestScaleNote(fretVal) {
+    let f = Math.round(fretVal);
+    let note = f % 12;
+    // Check against Lydian Intervals
+    // [0, 2, 4, 6, 7, 9, 11]
+    const lydian = [0, 2, 4, 6, 7, 9, 11];
+    
+    // Find closest valid note
+    // Simple iterative search
+    for(let i=0; i<6; i++) {
+        if (lydian.includes((note+i)%12)) return f+i;
+        if (lydian.includes((note-i+12)%12)) return f-i;
+    }
+    return f;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. VISUAL ENGINE (The Golden Light)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h;
+let particles = [];
+
+window.addEventListener('resize', () => { w=window.innerWidth; h=window.innerHeight; cvs.width=w; cvs.height=h; });
+canvas.width = w = window.innerWidth; 
+canvas.height = h = window.innerHeight;
+
+const Visuals = {
+    emitParticle: (s, f, joy) => {
+        let x = (f / 20) * w;
+        let y = (s / 6) * h + (h/12);
+        particles.push({
+            x, y, 
+            life: 1.0, 
+            size: 5 + joy * 20,
+            hue: 45 + (joy * 20) // Gold to White/Yellow
+        });
+    },
+
+    draw: () => {
+        // Clear with Trail
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw "Strings" of Light
+        for (let i=0; i<6; i++) {
+            let y = (i / 6) * h + (h/12);
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.strokeStyle = `rgba(212, 175, 55, 0.1)`; // Faint Gold
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // Draw Particles (Notes)
+        for (let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            
+            // Glow
+            let gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
+            gradient.addColorStop(0, `hsla(${p.hue}, 100%, 80%, ${p.life})`);
+            gradient.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI*2);
+            ctx.fill();
+
+            // Rising Soul
+            p.y -= 1; // Float up
+            p.life -= 0.01;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        // Draw Agent (The Invisible Hand)
+        // Represented by a soft vertical pillar of light
+        let handX = (Agent.posFret / 20) * w;
+        let gradient = ctx.createLinearGradient(handX-50, 0, handX+50, 0);
+        gradient.addColorStop(0, 'rgba(255,255,255,0)');
+        gradient.addColorStop(0.5, `rgba(255,255,255,${0.1 + Agent.joy*0.2})`);
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(handX-50, 0, 100, h);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5. LOOP
+// ═══════════════════════════════════════════════════════════════
+let isRunning = false;
+
+document.getElementById('overlay').addEventListener('click', () => {
+    AudioEngine.init().then(() => {
+        if (AudioEngine.ctx.state === 'suspended') AudioEngine.ctx.resume();
+        document.getElementById('overlay').style.opacity = 0;
+        setTimeout(() => document.getElementById('overlay').style.display = 'none', 1000);
+        isRunning = true;
+        loop();
+    });
+});
+
+function loop() {
+    if (isRunning) {
+        Agent.update();
+        Agent.trigger(); // Check if note should play
+        
+        // Update UI
+        document.getElementById('val-joy').innerText = Math.round(Agent.joy * 100) + "%";
+        document.getElementById('val-harmony').innerText = Agent.joy > 0.8 ? "ECSTATIC" : "SERENE";
+        document.getElementById('val-joy').style.color = `hsl(45, 100%, ${50 + Agent.joy*50}%)`;
+    }
+    
+    Visuals.draw();
+    requestAnimationFrame(loop);
+}
+
+</script>
+</body>
+</html>
