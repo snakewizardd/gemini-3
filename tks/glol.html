@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OMNI_KERNEL v2.0 | THE LIVING PORTRAIT</title>
+<style>
+    body { 
+        margin: 0; 
+        background: #050505; 
+        overflow: hidden; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        height: 100vh;
+        cursor: crosshair; 
+    }
+    canvas { 
+        box-shadow: 0 0 120px rgba(100, 150, 255, 0.1); 
+    }
+    #status {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        color: rgba(255,255,255,0.2);
+        font-family: monospace;
+        font-size: 10px;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+<div id="status">NEURAL MESH: ACTIVE | GAZE: TRACKING</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * OMNI_KERNEL v2.0
+ * ----------------
+ * HYBRID ENGINE: 
+ * - USES USER'S HIGH-FIDELITY TEXTURE LOGIC (The "Paint")
+ * - USES SYSTEM'S PARALLAX CACHING LOGIC (The "Life")
+ */
+
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+const DPR = window.devicePixelRatio || 1;
+const S = Math.min(innerWidth, innerHeight) * 0.95;
+C.width = S * DPR; C.height = S * DPR;
+C.style.width = S + 'px'; C.style.height = S + 'px';
+X.scale(DPR, DPR);
+X.translate(S/2, S/2);
+const SCALE = 0.82;
+X.scale(SCALE, SCALE);
+
+// MOUSE TRACKING
+const INPUT = { x: 0, y: 0 };
+window.addEventListener('mousemove', e => {
+    const rect = C.getBoundingClientRect();
+    INPUT.x = ((e.clientX - rect.left) / rect.width * 2 - 1);
+    INPUT.y = ((e.clientY - rect.top) / rect.height * 2 - 1);
+});
+
+// ============ 1. THE USER'S MATH KERNEL (PRESERVED) ============
+const P = [];
+let seed = 42;
+for (let i = 0; i < 256; i++) P[i] = i;
+for (let i = 255; i > 0; i--) { seed = (seed * 16807) % 2147483647; [P[i], P[seed % (i+1)]] = [P[seed % (i+1)], P[i]]; }
+for (let i = 0; i < 256; i++) P[256+i] = P[i];
+
+function noise(x, y) {
+    const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
+    const v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const g = (h, a, b) => ((h & 1) ? -a : a) + ((h & 2) ? -b : b);
+    const aa = P[P[xi] + yi], ab = P[P[xi] + yi + 1], ba = P[P[xi + 1] + yi], bb = P[P[xi + 1] + yi + 1];
+    const l = (a, b, t) => a + t * (b - a);
+    return 0.5 + 0.5 * l(l(g(aa, xf, yf), g(ba, xf-1, yf), u), l(g(ab, xf, yf-1), g(bb, xf-1, yf-1), u), v);
+}
+
+// Logic: User's Geometry
+function inFace(x, y) {
+    const skull = (x*x)/(135*135) + ((y+25)*(y+25))/(155*155) < 1;
+    const muzzle = (x*x)/(48*48) + ((y-95)*(y-95))/(55*55) < 1;
+    const cheekL = ((x+105)*(x+105))/(55*55) + ((y+10)*(y+10))/(65*65) < 1;
+    const cheekR = ((x-105)*(x-105))/(55*55) + ((y+10)*(y+10))/(65*65) < 1;
+    return skull || muzzle || cheekL || cheekR;
+}
+function inEar(x, y) {
+    if (x >= -130 && x <= -60 && y >= -290 && y <= -85) {
+        const t = (y - (-85)) / (-280 - (-85));
+        if (Math.abs(x - (-95)) <= 35 * (1 - t * 0.92)) return 'left';
+    }
+    if (x >= 60 && x <= 130 && y >= -290 && y <= -85) {
+        const t = (y - (-85)) / (-280 - (-85));
+        if (Math.abs(x - 95) <= 35 * (1 - t * 0.92)) return 'right';
+    }
+    return false;
+}
+function inside(x, y) { return inFace(x, y) || inEar(x, y); }
+
+function getMask(x, y) {
+    const n = (noise(x * 0.008, y * 0.008) - 0.5) * 0.08;
+    const ear = inEar(x, y);
+    if (ear) {
+        const cx = ear === 'left' ? -95 : 95;
+        if (Math.abs(x - cx) < 15 && y > -250 && y < -110) return 0.1 + n;
+        if (Math.abs(x - cx) > 28) return 0.7 + n;
+        return 0.85 + n;
+    }
+    let dark = 0;
+    if (y < -10) {
+        const intensity = Math.min(1, (-y - 10) / 90);
+        const blazeWidth = 12 + Math.max(0, (y + 80)) * 0.22;
+        if (Math.abs(x) > blazeWidth) dark = intensity * Math.min(1, (Math.abs(x) - blazeWidth) / 18) * 0.88;
+    }
+    for (const eye of [{x: -52, y: -15}, {x: 52, y: -15}]) {
+        const dx = x - eye.x, dy = y - eye.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 25 && dist < 65) {
+            const aboveBonus = dy < 0 ? 0.3 : 0;
+            const outerBonus = (eye.x < 0 ? dx < 0 : dx > 0) ? 0.15 : 0;
+            const strength = (1 - (dist - 25) / 40) * (0.5 + aboveBonus + outerBonus);
+            dark = Math.max(dark, strength * 0.85);
+        }
+    }
+    if (y > 30 && Math.abs(x) < 52) dark = Math.min(dark, 0.03);
+    if (Math.abs(x) > 60 && y > -30 && y < 60) dark = Math.min(dark, Math.max(0, (Math.abs(x) - 85) / 30) * 0.15 + 0.02);
+    if (y > 5 && y < 45 && Math.abs(x) < 70) dark = Math.min(dark, 0.05);
+    return Math.max(0, Math.min(1, dark + n));
+}
+
+function getAngle(x, y) {
+    const n = (noise(x * 0.012, y * 0.012) - 0.5) * 0.25;
+    if (inEar(x, y)) return -Math.PI/2 + n * 0.3;
+    if (y < -30 && Math.abs(x) < 100) return -Math.PI/2 + x * 0.002 + n;
+    if (Math.abs(x) < 30 && y > -30 && y < 50) return Math.PI/2 + n * 0.5;
+    for (const ex of [-52, 52]) {
+        const dx = x - ex, dy = y - (-15);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 55 && dist > 20) return Math.atan2(dy, dx) + n * 0.4;
+    }
+    if (Math.abs(x) > 50 && y > -40) return Math.PI/2 + (x > 0 ? 0.55 : -0.55) + n;
+    return Math.PI/2 + n;
+}
+
+function getLen(x, y, guard) {
+    const base = guard ? 28 : 10;
+    const n = noise(x * 0.015, y * 0.015);
+    if (inEar(x, y)) return base * 0.5 + n * 5;
+    if (y > 60 && Math.abs(x) < 50) return base * 0.28 + n * 3;
+    if (y < -30) return base * 0.7 + n * 8;
+    if (Math.abs(x) > 70 || y > 80) return base * 1.4 + n * 15;
+    return base + n * 10;
+}
+
+function getColor(m) {
+    if (m > 0.65) return `rgb(${Math.round(30 - (m-0.65)*70)},${Math.round(30 - (m-0.65)*70)},${Math.round(32 - (m-0.65)*70)})`;
+    if (m > 0.3) return `rgb(${Math.round(160 - (m-0.3)*370)},${Math.round(160 - (m-0.3)*370)},${Math.round(163 - (m-0.3)*370)})`;
+    return `rgb(${Math.round(250 - m*300)},${Math.round(250 - m*300)},${Math.round(Math.min(255, 256 - m*300))})`;
+}
+
+// ============ 2. CACHING SYSTEM (THE OPTIMIZATION) ============
+// We render the heavy fur ONCE into layers to allow real-time animation.
+
+function createLayer(fn) {
+    const cv = document.createElement('canvas');
+    cv.width = C.width; cv.height = C.height;
+    const cx = cv.getContext('2d');
+    cx.scale(DPR, DPR);
+    cx.translate(S/2, S/2);
+    cx.scale(SCALE, SCALE);
+    fn(cx);
+    return cv;
+}
+
+function fur(ctx, x, y, guard) {
+    if (!inside(x, y)) return;
+    const ang = getAngle(x, y);
+    const len = getLen(x, y, guard);
+    const col = getColor(getMask(x, y));
+    const curve = (noise(x * 0.03, y * 0.03) - 0.5) * (guard ? 0.12 : 0.3);
+    const ex = x + Math.cos(ang + curve) * len;
+    const ey = y + Math.sin(ang + curve) * len;
+    const cx = (x + ex)/2 + (noise(x*0.05, y*0.05) - 0.5) * len * 0.18;
+    const cy = (y + ey)/2 + (noise(x*0.05+50, y*0.05) - 0.5) * len * 0.18;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(cx, cy, ex, ey);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = guard ? 0.7 : 1.4;
+    ctx.globalAlpha = guard ? 0.78 : 0.42;
+    ctx.stroke();
+}
+
+// CACHE: BACK LAYER (Ears & Ruff - parallax deep)
+const LAYER_BACK = createLayer((ctx) => {
+    // Generate points
+    const pts = [];
+    for (let i = 0; i < 50000; i++) {
+        const x = (Math.random() - 0.5) * 500, y = (Math.random() - 0.5) * 670;
+        // Filter for outer edges/ears
+        if (inside(x, y) && (Math.abs(x) > 80 || y < -100)) pts.push({x, y});
+    }
+    pts.sort((a, b) => a.y - b.y);
+    for (const p of pts) {
+        fur(ctx, p.x, p.y, false);
+        if (Math.random() > 0.5) fur(ctx, p.x, p.y, true);
+    }
+});
+
+// CACHE: FRONT LAYER (Face & Snout - parallax close)
+const LAYER_FRONT = createLayer((ctx) => {
+    const pts = [];
+    for (let i = 0; i < 60000; i++) {
+        const x = (Math.random() - 0.5) * 400, y = (Math.random() - 0.5) * 500;
+        // Filter for center face
+        if (inside(x, y) && (Math.abs(x) <= 80 && y >= -100)) pts.push({x, y});
+    }
+    pts.sort((a, b) => a.y - b.y);
+    for (const p of pts) {
+        fur(ctx, p.x, p.y, false);
+        if (Math.random() > 0.4) fur(ctx, p.x, p.y, true);
+    }
+});
+
+// ============ 3. REAL-TIME RENDERER (THE SOUL) ============
+
+let TICK = 0;
+let BLINK = 0;
+
+function drawEyeDynamic(cx, cy, left) {
+    X.save();
+    
+    // Parallax eye movement based on mouse
+    const lookX = INPUT.x * 15;
+    const lookY = INPUT.y * 10;
+    
+    X.translate(cx + lookX * 0.2, cy + lookY * 0.2); // Socket moves slightly
+    X.rotate(left ? 0.12 : -0.12);
+    
+    // Shadow/Socket
+    X.fillStyle = '#000';
+    X.shadowColor = '#000'; X.shadowBlur = 10;
+    X.beginPath(); X.ellipse(0, 0, 24, 14, 0, 0, Math.PI*2); X.fill();
+    X.shadowBlur = 0;
+    
+    // Sclera
+    X.fillStyle = '#c8ccd2';
+    X.beginPath(); X.ellipse(0, 0, 22, 12, 0, 0, Math.PI*2); X.fill();
+    
+    // Iris (Tracking)
+    X.save();
+    X.beginPath(); X.ellipse(0,0, 22, 12, 0, 0, Math.PI*2); X.clip(); // Clip iris to eye shape
+    
+    X.translate(lookX * 0.8, lookY * 0.8); // Iris moves more
+    
+    const ig = X.createRadialGradient(0, 0, 0, 0, 0, 12);
+    ig.addColorStop(0, '#fff');
+    ig.addColorStop(0.1, '#e5faff');
+    ig.addColorStop(0.25, '#6ecef0');
+    ig.addColorStop(0.5, '#2a9fd4');
+    ig.addColorStop(0.7, '#186090');
+    ig.addColorStop(1, '#072030');
+    X.fillStyle = ig;
+    X.beginPath(); X.arc(0, 0, 12, 0, Math.PI*2); X.fill();
+    
+    // Fibers
+    X.strokeStyle = 'rgba(255,255,255,0.08)'; X.lineWidth = 0.3;
+    for (let i = 0; i < 24; i++) {
+        const a = i / 24 * Math.PI * 2;
+        X.beginPath(); X.moveTo(Math.cos(a) * 3, Math.sin(a) * 3); X.lineTo(Math.cos(a) * 11, Math.sin(a) * 11); X.stroke();
+    }
+    
+    // Pupil (Dilation)
+    const dist = Math.sqrt(INPUT.x*INPUT.x + INPUT.y*INPUT.y);
+    const pupilSize = 4 + (1 - Math.min(1, dist)) * 1.5;
+    X.fillStyle = '#000';
+    X.beginPath(); X.arc(0, 0, pupilSize, 0, Math.PI*2); X.fill();
+    
+    // Catchlights (Fixed to world)
+    X.translate(-lookX*0.8, -lookY*0.8);
+    X.fillStyle = '#fff';
+    X.beginPath(); X.arc(3.5, -3.5, 2.8, 0, Math.PI*2); X.fill();
+    
+    X.restore(); // End Clip
+    
+    // Eyelids (Blink)
+    let lidH = 0;
+    if (BLINK > 0) { lidH = Math.sin((BLINK/12)*Math.PI) * 20; BLINK--; }
+    else if (Math.random() < 0.005) BLINK = 12;
+
+    X.fillStyle = '#0a0a0a';
+    X.beginPath();
+    X.rect(-30, -20, 60, lidH); // Upper lid
+    X.fill();
+    
+    X.restore();
+}
+
+function drawNoseDynamic() {
+    const ny = 105;
+    // Parallax
+    const px = INPUT.x * 5;
+    const py = INPUT.y * 5;
+    
+    X.save();
+    X.translate(px, py);
+    
+    X.fillStyle = '#080808';
+    X.beginPath();
+    X.moveTo(-26, ny - 8);
+    X.bezierCurveTo(-30, ny + 14, -14, ny + 34, 0, ny + 36);
+    X.bezierCurveTo(14, ny + 34, 30, ny + 14, 26, ny - 8);
+    X.bezierCurveTo(10, ny - 13, -10, ny - 13, -26, ny - 8);
+    X.fill();
+    
+    // Texture
+    X.fillStyle = 'rgba(30,30,35,0.4)';
+    for (let i = 0; i < 120; i++) {
+        const px = (Math.random() - 0.5) * 44, py = ny + 3 + Math.random() * 26;
+        if (px*px/450 + (py-ny-12)*(py-ny-12)/300 < 1) { X.beginPath(); X.arc(px, py, 0.6, 0, Math.PI*2); X.fill(); }
+    }
+    
+    // Breathing
+    const breath = Math.sin(TICK * 0.05) * 1.5;
+    X.fillStyle = '#000';
+    X.beginPath(); X.ellipse(-10 - breath*0.5, ny + 12, 5.5 + breath*0.2, 3.5 + breath*0.2, -0.3, 0, Math.PI*2); X.fill();
+    X.beginPath(); X.ellipse(10 + breath*0.5, ny + 12, 5.5 + breath*0.2, 3.5 + breath*0.2, 0.3, 0, Math.PI*2); X.fill();
+    
+    X.restore();
+}
+
+function animate() {
+    TICK++;
+    
+    // Background
+    const bg = X.createRadialGradient(0, -30, 15, 0, 20, 380);
+    bg.addColorStop(0, '#090c10'); bg.addColorStop(1, '#000');
+    X.fillStyle = bg;
+    X.fillRect(-500, -500, 1000, 1000);
+
+    // Parallax logic
+    const mx = INPUT.x * 20; 
+    const my = INPUT.y * 20;
+
+    // Draw Back Layer (Moves inverse to mouse = depth)
+    X.save();
+    X.setTransform(1,0,0,1,0,0);
+    X.drawImage(LAYER_BACK, -mx*0.5 * DPR, -my*0.5 * DPR);
+    X.restore();
+
+    // Draw Front Layer (Moves with mouse = pop out)
+    X.save();
+    X.setTransform(1,0,0,1,0,0);
+    X.drawImage(LAYER_FRONT, mx*0.2 * DPR, my*0.2 * DPR);
+    X.restore();
+
+    // Dynamic Features
+    drawEyeDynamic(-52, -15, true);
+    drawEyeDynamic(52, -15, false);
+    drawNoseDynamic();
+    
+    // Overlay Whiskers (Dynamic)
+    X.save();
+    X.translate(mx*0.4, my*0.4); // Whiskers move with snout
+    X.strokeStyle = 'rgba(255,255,255,0.4)'; X.lineWidth = 0.8;
+    for (const side of [-1, 1]) {
+        for (let i = 0; i < 8; i++) {
+            const rx = side * (22 + Math.random() * 12), ry = 105 + Math.random() * 16;
+            const len = 40 + Math.random() * 35, ang = (side === 1 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.5;
+            // Subtle breath movement in whiskers
+            const breath = Math.sin(TICK*0.05 + i)*2;
+            X.globalAlpha = 0.22 + Math.random() * 0.25;
+            X.beginPath();
+            X.moveTo(rx, ry);
+            X.bezierCurveTo(rx + side*len*0.35, ry+breath, rx + side*len*0.65, ry + 20, rx + Math.cos(ang)*len, ry + 30 + breath);
+            X.stroke();
+        }
+    }
+    X.restore();
+    
+    // Vignette
+    const vg = X.createRadialGradient(0, 0, S * 0.2, 0, 0, S * 0.5);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+    X.fillStyle = vg; X.fillRect(-S, -S, S*2, S*2);
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+
+</script>
+</body>
+</html>

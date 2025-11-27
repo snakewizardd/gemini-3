@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROJECT: BOREALIS | THE PHYSIODEFINITIVE ENGINE</title>
+<style>
+    /* 
+     * THE VOID 
+     * We create a vacuum-sealed environment to focus purely on the biological emergence.
+     * The background is not black; it is the deep slate of an arctic midnight.
+     */
+    body { 
+        margin: 0; 
+        padding: 0; 
+        background: radial-gradient(circle at center, #0a0e14 0%, #000000 100%);
+        height: 100vh; 
+        width: 100vw; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        overflow: hidden; 
+        font-family: 'Menlo', 'Courier New', monospace; 
+    }
+
+    /* 
+     * THE ARTIFACT
+     * The canvas acts as the projection plane for the calculated entity.
+     * A subtle 'ice' glow suggests the cryogenic nature of the subject.
+     */
+    canvas { 
+        box-shadow: 0 0 80px rgba(100, 220, 255, 0.08); 
+        border-radius: 2px;
+    }
+    
+    .diagnostic-readout {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #445566;
+        font-size: 9px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        opacity: 0.7;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="morphogenetic_field"></canvas>
+<div class="diagnostic-readout" id="status_log">INITIALIZING OSTEOLOGICAL MATRIX...</div>
+
+<script>
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * PROJECT: BOREALIS [v12.0 PHYSIO-DEFINITIVE]
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * 
+ * CORE DEFINITION (THE "SOURCE CODE" OF THE ORGANISM):
+ * 
+ * 1. OSTEOLOGICAL FOUNDATION: 
+ *    We simulate a MESOCEPHALIC SKULL. The Zygomatic arches are calculated to taper 
+ *    sharply toward the nasal cavity to permit unobstructed binocular vision, essential 
+ *    for high-speed terrain negotiation.
+ * 
+ * 2. MYOLOGICAL MECHANICS:
+ *    We explicitly disable the "Puppy Dog" vectors (Absence of RAOL). 
+ *    The Orbicularis Oculi muscles are tightened to create the "Almond Shutter," 
+ *    shielding the optical sensors from UV radiation and ice crystals.
+ * 
+ * 3. THERMODYNAMIC ENGINEERING:
+ *    The fur rendering is split into two physics engines:
+ *    - TYPE A: AERODYNAMIC VELVET (Muzzle/Ears) - Short, dense, drag-reducing.
+ *    - TYPE B: BOUNDARY LAYER (Ruff/Brow) - Long guard hairs for insulation.
+ *    - THE NOSE: Simulates Tyrosinase enzyme failure (Snow Nose) via pigment recession.
+ * 
+ * 4. SENSORY MECHANICS:
+ *    Vibrissae are rendered not as hair, but as deep-rooted vascular sensors.
+ *    The eyes utilize a Tapetum Lucidum layer for retro-reflection.
+ * 
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE LAWS OF THE SIMULATION (CONSTANTS)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const BIO_PHYSICS = {
+    // High fidelity required to simulate the "double coat" density
+    KERATIN_DENSITY_SCALAR: 1.8, 
+    
+    // Scale of the entity relative to the viewport window
+    DIMENSIONAL_SCALE: 0.9,
+    
+    // The amount of stochastic "wind" affecting the guard hairs
+    ATMOSPHERIC_TURBULENCE: 0.12
+};
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// CANVAS INIT (THE LABORATORY)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('morphogenetic_field');
+const ctx = canvas.getContext('2d');
+const status_log = document.getElementById('status_log');
+
+const dpr = window.devicePixelRatio || 1;
+const size = Math.min(window.innerWidth, window.innerHeight) * 0.95;
+
+canvas.width = size * dpr;
+canvas.height = size * dpr;
+canvas.style.width = size + 'px';
+canvas.style.height = size + 'px';
+
+// Normalize coordinate space: Center is (0,0)
+ctx.scale(dpr, dpr);
+ctx.translate(size/2, size/2);
+ctx.scale(BIO_PHYSICS.DIMENSIONAL_SCALE, BIO_PHYSICS.DIMENSIONAL_SCALE);
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE ARCTIC PALETTE (THERMODYNAMIC COLORS)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const PIGMENT = {
+    // The Guard Hairs (Melanin Rich)
+    OBSIDIAN_SHIELD: 'rgba(25, 28, 33, 0.9)',
+    STORM_GREY: 'rgba(90, 100, 115, 0.85)',
+    
+    // The Undercoat (Trapped Air)
+    GLACIAL_WHITE: 'rgba(245, 248, 255, 0.9)',
+    
+    // The "Snow Nose" (Tyrosinase Dependent)
+    NOSE_HYPER: '#111111',       // Active enzyme (Black)
+    NOSE_HYPO: '#8c6e68',        // Inactive enzyme (Pinkish-Brown)
+    
+    // The Optical Array (The Soul)
+    IRIS_ICE: '#aee',
+    IRIS_DEEP: '#124',
+    TAPETUM_GLOW: 'rgba(180, 255, 255, 0.2)'
+};
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE BRUSH ENGINES
+// ══════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * BRUSH ENGINE A: THE VELVET (Aerodynamic)
+ * Used for the muzzle and ears. Short, dense, precise.
+ * Mimics the "microsopic velvet" described in the thermodynamic breakdown.
+ */
+function paintVelvet(x, y, angle, length, color, opacity) {
+    ctx.beginPath();
+    const tipX = x + Math.cos(angle) * length;
+    const tipY = y + Math.sin(angle) * length;
+    
+    // Low variance control point for stiff, short fur
+    const cx = (x + tipX) / 2 + (Math.random()-0.5) * 2; 
+    const cy = (y + tipY) / 2 + (Math.random()-0.5) * 2;
+
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(cx, cy, tipX, tipY);
+    
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5; // Fine caliber
+    ctx.globalAlpha = opacity;
+    ctx.lineCap = 'butt'; // Sharp ends for velvet look
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+}
+
+/**
+ * BRUSH ENGINE B: THE GUARD (Insulation)
+ * Used for the ruff, brow, and cheeks. Long, chaotic, protective.
+ * Creates the "Boundary Layer" of still air.
+ */
+function paintGuard(x, y, angle, length, color, opacity) {
+    ctx.beginPath();
+    const tipX = x + Math.cos(angle) * length;
+    const tipY = y + Math.sin(angle) * length;
+    
+    // High variance for wind-swept look
+    const turbulence = length * BIO_PHYSICS.ATMOSPHERIC_TURBULENCE;
+    const cx = (x + tipX) / 2 + (Math.random()-0.5) * turbulence;
+    const cy = (y + tipY) / 2 + (Math.random()-0.5) * turbulence;
+
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(cx, cy, tipX, tipY);
+    
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.0; 
+    ctx.globalAlpha = opacity;
+    ctx.lineCap = 'round'; // Tapered look
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE GENESIS QUEUE (Asynchronous Fabrication)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const TASK_QUEUE = [];
+function queue(fn, count) { for(let i=0; i<count; i++) TASK_QUEUE.push(fn); }
+
+function igniteLife() {
+    const start = performance.now();
+    while (TASK_QUEUE.length > 0 && performance.now() - start < 14) {
+        const task = TASK_QUEUE.shift();
+        task();
+    }
+    
+    if (TASK_QUEUE.length > 0) {
+        requestAnimationFrame(igniteLife);
+    } else {
+        status_log.innerText = "PHYSIOLOGICAL RENDER COMPLETE: SUBJECT IS ALIVE.";
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 1: OSTEOLOGICAL MAPPING (The Skull)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// We map the Mesocephalic skull to ensure correct leverage and dimensions.
+function buildOsteology() {
+    // Visualization of the void (Darkness)
+    queue(() => {
+        const bg = ctx.createRadialGradient(0, -100, 50, 0, 0, 400);
+        bg.addColorStop(0, '#151820');
+        bg.addColorStop(1, '#000000');
+        ctx.fillStyle = bg;
+        ctx.fillRect(-500, -500, 1000, 1000);
+    }, 1);
+
+    // Deep Shadow Layer (Musculature depth)
+    queue(() => {
+        ctx.fillStyle = '#050505';
+        ctx.beginPath(); ctx.arc(0, 0, 190, 0, Math.PI*2); ctx.fill();
+        // Ear Cartilage Backing (Triangular, high set)
+        ctx.beginPath(); ctx.moveTo(-70,-120); ctx.lineTo(-110,-260); ctx.lineTo(-10,-140); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(70,-120); ctx.lineTo(110,-260); ctx.lineTo(10,-140); ctx.fill();
+    }, 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 2: THERMODYNAMIC UNDERCOAT (The Heat Exchanger)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function weaveUndercoat() {
+    const fibers = 22000 * BIO_PHYSICS.KERATIN_DENSITY_SCALAR;
+    
+    status_log.innerText = "WEAVING THERMAL INSULATION LAYER...";
+    
+    queue(() => {
+        // Stochastic sampling of the face
+        let x, y, dist;
+        do {
+            x = (Math.random() - 0.5) * 450;
+            y = (Math.random() - 0.5) * 450;
+            dist = Math.sqrt(x*x + y*y);
+        } while (dist > 210);
+
+        // Logic for "The Mask"
+        let color = PIGMENT.GLACIAL_WHITE;
+        let isGuard = false;
+
+        // 1. The Cap (Forehead) & Ears - Dark
+        if (y < -70 && Math.abs(x) > 10) color = PIGMENT.STORM_GREY;
+        
+        // 2. The Spectacles (Eyes) - Dark rings
+        if (y > -60 && y < 10 && Math.abs(x) > 35 && Math.abs(x) < 95) color = PIGMENT.STORM_GREY;
+
+        // 3. The Muzzle (Maxilla) - Pure White
+        // Note: The zygomatic arch tapers here.
+        if (y > 10 && y < 130 && Math.abs(x) < 50) color = PIGMENT.GLACIAL_WHITE;
+
+        // Determine Brush Type based on Anatomy
+        // Muzzle & Ears = Velvet. Ruff & Cheeks = Guard.
+        if (y > 20 && Math.abs(x) < 60) {
+            // Muzzle: Short velvet
+            const angle = Math.atan2(y - (-40), x); 
+            paintVelvet(x, y, angle, 6 + Math.random()*8, color, 0.6);
+        } else {
+            // Ruff/Cheeks: Longer
+            const angle = Math.atan2(y, x) + Math.PI/2; 
+            paintGuard(x, y, angle, 15 + Math.random()*15, color, 0.5);
+        }
+    }, fibers);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 3: INTEGUMENTARY BOUNDARY (The Guard Hairs)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function weaveGuardHairs() {
+    const guards = 12000 * BIO_PHYSICS.KERATIN_DENSITY_SCALAR;
+    
+    queue(() => {
+        let x = (Math.random() - 0.5) * 420;
+        let y = (Math.random() - 0.5) * 420;
+        
+        // Zonal Logic for Flow and Color
+        let angle = Math.PI/2;
+        let color = PIGMENT.OBSIDIAN_SHIELD;
+        let length = 25;
+        let valid = false;
+
+        // ZONE: AURICULAR (Ears)
+        // High rotation mechanics imply stiff, upright hair on edges
+        if (y < -130 && Math.abs(x) > 40 && Math.abs(x) < 120) {
+            angle = -Math.PI/2 + (x>0?0.3:-0.3);
+            if (Math.abs(x) < 70) { color = '#fff'; angle += (x<0?0.5:-0.5); } // Inner ear furnishings
+            length = 20;
+            valid = true;
+        }
+        
+        // ZONE: FRONTALIS (Forehead/Widow's Peak)
+        // The "Fleur-de-lis" pattern often seen in Huskies
+        else if (y < -60 && Math.abs(x) < 140) {
+            angle = -Math.PI/2 + (x * 0.005);
+            if (Math.abs(x) < 15 && y > -140) color = '#fff'; // Central leaf
+            else color = PIGMENT.OBSIDIAN_SHIELD;
+            length = 30;
+            valid = true;
+        }
+
+        // ZONE: ZYGOMATIC (Cheeks)
+        // Tapering to allow binocular vision
+        else if (y > 0 && Math.abs(x) > 60 && Math.abs(x) < 160) {
+            angle = Math.atan2(y, x) + 0.2; // Radial sweep
+            color = PIGMENT.GLACIAL_WHITE;
+            // Transition grey zone
+            if (y < 40 && Math.abs(x) < 90) color = PIGMENT.STORM_GREY;
+            length = 40 + Math.random()*20; // Long boundary layer
+            valid = true;
+        }
+
+        // ZONE: MAXILLA (Muzzle)
+        // Short, aerodynamic velvet. No long guard hairs here to obscure vision.
+        else if (y > 20 && y < 110 && Math.abs(x) < 50) {
+            // Very low probability of guard hair here, mostly velvet
+            if (Math.random() > 0.85) {
+                angle = Math.PI/2 + (x * 0.02);
+                color = '#fff';
+                length = 10;
+                valid = true;
+            }
+        }
+
+        if (valid) {
+            paintGuard(x, y, angle, length, color, 0.75);
+        }
+
+    }, guards);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 4: THERMODYNAMIC EXCHANGE PORT (The Rhinarium)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function growRhinarium() {
+    queue(() => {
+        const nx = 0, ny = 95;
+        
+        // The Planum Nasale Geometry
+        // Designed for moisture reclamation (Countercurrent exchange)
+        ctx.fillStyle = PIGMENT.NOSE_HYPER;
+        ctx.beginPath();
+        ctx.moveTo(-32, ny-12);
+        ctx.quadraticCurveTo(0, ny-18, 32, ny-12); // Superior margin
+        ctx.quadraticCurveTo(28, ny+28, 0, ny+40); // Inferior point
+        ctx.quadraticCurveTo(-28, ny+28, -32, ny-12);
+        ctx.fill();
+
+        // THE TYROSINASE SIMULATION ("Snow Nose")
+        // Temperature-sensitive enzyme failure causes center to lose pigment.
+        // We simulate this with a pixel-cloud gradient.
+        for(let i=0; i<600; i++) {
+            const r = Math.random() * 20;
+            const theta = Math.random() * Math.PI * 2;
+            const px = nx + Math.cos(theta) * r;
+            const py = ny + 10 + Math.sin(theta) * (r*0.7);
+            
+            // The closer to center, the lighter (Hypopigmentation)
+            const dist = Math.sqrt(px*px + (py-ny-10)*(py-ny-10));
+            const alpha = 1 - (dist / 25);
+            
+            if (alpha > 0) {
+                ctx.fillStyle = PIGMENT.NOSE_HYPO;
+                ctx.globalAlpha = alpha * 0.8;
+                ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Nostrils (The Intake)
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.ellipse(-16, ny+18, 7, 5, -0.4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(16, ny+18, 7, 5, 0.4, 0, Math.PI*2); ctx.fill();
+
+        // Philtrum (Vertical groove)
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, ny+40); ctx.lineTo(0, ny+60); ctx.stroke();
+
+    }, 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 5: OPTICAL SENSORS (The Eyes)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function installOptics() {
+    queue(() => {
+        const drawOculus = (ox, oy, isLeft) => {
+            ctx.save();
+            ctx.translate(ox, oy);
+            
+            // MYOLOGICAL ROTATION:
+            // Absence of RAOL = No "puppy" droop. 
+            // The eye is slanted (oblique) to function as a snow-shutter.
+            ctx.rotate(isLeft ? 0.25 : -0.25);
+
+            // 1. The Shutter (Eyelids)
+            ctx.fillStyle = '#050505';
+            ctx.beginPath(); ctx.ellipse(0, 0, 27, 15, 0, 0, Math.PI*2); ctx.fill();
+
+            // 2. The Aperture (Sclera - barely visible)
+            ctx.fillStyle = '#ccc';
+            ctx.beginPath(); ctx.ellipse(0, 0, 25, 12, 0, 0, Math.PI*2); ctx.fill();
+
+            // 3. The Iris (Cryogenic Blue)
+            // Simulates the Tapetum Lucidum reflecting light through the stroma.
+            const grad = ctx.createRadialGradient(0,0, 3, 0,0, 11);
+            grad.addColorStop(0, '#fff'); 
+            grad.addColorStop(0.2, PIGMENT.IRIS_ICE);
+            grad.addColorStop(0.8, '#358');
+            grad.addColorStop(1, '#001');
+            
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI*2); ctx.fill();
+
+            // 4. The Pupil (Focus)
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+
+            // 5. Optical Glare Reduction (Upper Eyelid Shadow)
+            // The almond shape acts as a hood.
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.arc(0, -8, 12, 0, Math.PI*2); ctx.fill();
+
+            // 6. Corneal Reflection (Wetness)
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(3, -3, 2, 0, Math.PI*2); ctx.fill();
+
+            ctx.restore();
+        };
+
+        drawOculus(-55, -35, true);
+        drawOculus(55, -35, false);
+    }, 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// PHASE 6: VIBRISSAL ARRAY (Tactile Sensors)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function extendVibrissae() {
+    queue(() => {
+        // Mystacial Vibrissae (Muzzle)
+        // These are blood-filled sinus follicles, detecting airflow.
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 1.5;
+        
+        for(let side of [-1, 1]) {
+            for(let i=0; i<20; i++) {
+                const rx = side * (30 + Math.random()*15);
+                const ry = 90 + (Math.random()*20);
+                const len = 60 + Math.random()*50;
+                
+                // Angle logic: Fan out from the muzzle
+                const angle = (side===1?0:Math.PI) + (Math.random()-0.5)*0.8;
+                
+                ctx.beginPath();
+                ctx.moveTo(rx, ry);
+                // Quadratic curve for stiffness at root, flex at tip
+                ctx.quadraticCurveTo(
+                    rx + side*len*0.4, 
+                    ry, 
+                    rx + Math.cos(angle)*len, 
+                    ry + Math.sin(angle)*len + 15
+                );
+                ctx.stroke();
+            }
+        }
+
+        // Supraorbital Vibrissae (Brow)
+        ctx.lineWidth = 0.8;
+        for(let side of [-1, 1]) {
+            for(let i=0; i<4; i++) {
+                const rx = side * 45;
+                const ry = -75;
+                ctx.beginPath();
+                ctx.moveTo(rx, ry);
+                ctx.lineTo(rx + side*25, ry - 35 - Math.random()*10);
+                ctx.stroke();
+            }
+        }
+    }, 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// EXECUTION
+// ══════════════════════════════════════════════════════════════════════════════════════════
+
+buildOsteology();
+weaveUndercoat();
+weaveGuardHairs();
+growRhinarium();
+installOptics();
+extendVibrissae();
+
+igniteLife();
+
+</script>
+</body>
+</html>

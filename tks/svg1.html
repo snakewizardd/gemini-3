@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<body style="margin:0; background:#000; overflow:hidden;">
+<canvas id="c"></canvas>
+<script>
+// 1. ENGINE INIT
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+let w, h;
+
+function resize() {
+    w = c.width = window.innerWidth;
+    h = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// 2. KINETICS ENGINE (LFOs)
+const T = {
+    start: Date.now(),
+    sin: (speed, depth) => Math.sin((Date.now() - T.start) * 0.001 * speed) * depth
+};
+
+// 3. TEXTURE ENGINE (Fur & Glow)
+function drawFur(x, y, rad, count) {
+    ctx.save();
+    ctx.translate(x, y);
+    for(let i=0; i<count; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const len = Math.random() * 20;
+        const dist = Math.random() * rad;
+        
+        ctx.rotate(ang);
+        ctx.beginPath();
+        ctx.moveTo(dist, 0);
+        ctx.lineTo(dist + len, Math.random() * 5);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.random() * 0.3})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.rotate(-ang); // Reset for next iteration
+    }
+    ctx.restore();
+}
+
+// 4. COMPOSITION LOOP
+function render() {
+    // A. CLEAR / TRAIL
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, w, h);
+
+    // B. ATMOSPHERE (Background)
+    const glowPulse = 100 + T.sin(1, 20);
+    const grad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, w/1.5);
+    grad.addColorStop(0, '#1a2a3a');
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    // C. THE HUSKY (Subject)
+    // Breathing transform
+    const breath = 1 + T.sin(0.8, 0.02);
+    const floatY = T.sin(0.4, 10);
+    
+    ctx.save();
+    ctx.translate(w/2, h/2 + floatY + 50);
+    ctx.scale(breath, breath);
+
+    // Body/Head Base
+    ctx.fillStyle = '#e0e0e0';
+    ctx.beginPath();
+    ctx.arc(0, 0, 80, 0, Math.PI*2); // Head
+    ctx.fill();
+    
+    // Ears
+    ctx.beginPath();
+    ctx.moveTo(-50, -50); ctx.lineTo(-70, -120); ctx.lineTo(-20, -70);
+    ctx.moveTo(50, -50); ctx.lineTo(70, -120); ctx.lineTo(20, -70);
+    ctx.fill();
+    
+    // Procedural Fur Overlay
+    drawFur(0, 0, 78, 400);
+
+    // Face Details
+    ctx.fillStyle = '#fff';
+    // Snout
+    ctx.beginPath(); ctx.ellipse(0, 20, 25, 20, 0, 0, Math.PI*2); ctx.fill();
+    // Nose
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.moveTo(-10, 15); ctx.lineTo(10, 15); ctx.lineTo(0, 25); ctx.fill();
+    
+    // Closed Eyes (Zen)
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(-30, -10, 12, 0.1*Math.PI, 0.9*Math.PI); // L
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(30, -10, 12, 0.1*Math.PI, 0.9*Math.PI); // R
+    ctx.stroke();
+
+    // D. CHAKRA (Visual FX)
+    // Third eye glow
+    ctx.globalCompositeOperation = 'overlay';
+    const grd = ctx.createRadialGradient(0, -40, 0, 0, -40, 30);
+    grd.addColorStop(0, 'rgba(100, 200, 255, 0.8)');
+    grd.addColorStop(1, 'rgba(100, 200, 255, 0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(0, -40, 30, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+    
+    requestAnimationFrame(render);
+}
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BIO_PAINTER_KERNEL v5.0 | THE LUMINESCENT CONSTRUCT</title>
+<style>
+    body { 
+        margin: 0; 
+        background: #000; 
+        overflow: hidden; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        height: 100vh; 
+        font-family: 'Courier New', monospace;
+        color: #888;
+    }
+    canvas { 
+        box-shadow: 0 0 100px rgba(0, 247, 255, 0.1); 
+        background: #050505; 
+        border-radius: 4px;
+    }
+    #hud {
+        position: absolute;
+        top: 30px;
+        left: 30px;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    .phase { opacity: 0.3; transition: all 0.5s; }
+    .active { opacity: 1.0; color: #00f7ff; text-shadow: 0 0 8px rgba(0, 247, 255, 0.5); font-weight: bold; }
+    #stats { margin-top: 15px; font-size: 10px; color: #555; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+    <div id="p1" class="phase">I. OSTEOLOGICAL FRAMEWORK</div>
+    <div id="p2" class="phase">II. THERMAL INSULATION</div>
+    <div id="p3" class="phase">III. CHROMATIC GUARD LAYER</div>
+    <div id="p4" class="phase">IV. OCULAR & SENSORY SYSTEMS</div>
+    <div id="p5" class="phase">V. ATMOSPHERIC PARTICULATE</div>
+    <div id="stats">STRANDS: 0 | LIGHT CALC: 0%</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * BIO_PAINTER_KERNEL v5.0 "LUMINESCENCE"
+ * --------------------------------------
+ * A physics-based progressive rendering engine.
+ * * NEW MECHANICS:
+ * 1. VOLUMETRIC SHADING: Strands calculate occlusion based on depth.
+ * 2. AGOUTI PIGMENTATION: Per-strand gradient mapping (Root->Tip).
+ * 3. SUBSURFACE SCATTERING: Multi-pass iris rendering.
+ */
+
+const CONFIG = {
+    SCALE: 0.85,
+    DENSITY: {
+        UNDERCOAT: 45000, // High density for volume
+        GUARD: 22000,     // Definition layer
+        SENSORY: 180,
+        DUST: 500
+    },
+    SPEED: 250 // Render speed
+};
+
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+const ui = {
+    p1: document.getElementById('p1'),
+    p2: document.getElementById('p2'),
+    p3: document.getElementById('p3'),
+    p4: document.getElementById('p4'),
+    p5: document.getElementById('p5'),
+    stats: document.getElementById('stats')
+};
+
+// DPI & SIZING
+const dpr = window.devicePixelRatio || 1;
+const size = Math.min(window.innerWidth, window.innerHeight) * 0.95;
+cvs.width = size * dpr;
+cvs.height = size * dpr;
+cvs.style.width = size + 'px';
+cvs.style.height = size + 'px';
+ctx.scale(dpr, dpr);
+ctx.translate(size/2, size/2);
+ctx.scale(CONFIG.SCALE, CONFIG.SCALE);
+
+// ═══════════════════════════════════════════════════════════════
+// 1. THE VECTOR FLOW FIELD
+// ═══════════════════════════════════════════════════════════════
+
+function getFlow(x, y) {
+    const d = Math.sqrt(x*x + y*y);
+    const theta = Math.atan2(y, x);
+    
+    // NOSE BRIDGE: Up and Out
+    if (y > -60 && y < 60 && Math.abs(x) < 45) return -Math.PI/2 + (x * 0.012);
+    
+    // EYES: Orbital flow
+    if (y > -70 && y < 20 && Math.abs(x) > 35 && Math.abs(x) < 90) {
+        const ex = x > 0 ? 60 : -60;
+        const ey = -25;
+        const ang = Math.atan2(y - ey, x - ex);
+        return ang + Math.PI/2; 
+    }
+    
+    // CHEEKS: Sweeping Back/Down
+    if (Math.abs(x) > 60) return Math.PI/2 + (x > 0 ? 0.6 : -0.6);
+
+    // EARS: Vertical Up
+    if (y < -100) return -Math.PI/2 + (x * 0.005);
+    
+    // DEFAULT: Gravity Down
+    return Math.PI/2 + (x * 0.001);
+}
+
+function getMask(x, y) {
+    // Head SDF
+    const head = (x*x)/(140*140) + (y+40)*(y+40)/(130*130);
+    // Cheek Fluff SDF
+    const cheeks = (x*x)/(180*180) + (y-40)*(y-40)/(100*100);
+    // Ears SDF
+    const ears = (Math.abs(x)-75)*(Math.abs(x)-75)/(35*35) + (y+140)*(y+140)/(80*80);
+    
+    return (head < 1 || cheeks < 0.8 || (ears < 1 && y < -80));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE LUMINESCENT BRUSH
+// ═══════════════════════════════════════════════════════════════
+
+let TOTAL_STRANDS = 0;
+const QUEUE = [];
+
+function paintStrand(x, y, layer) {
+    const angle = getFlow(x, y);
+    const noise = Math.random(); // Chaos factor
+    
+    let len, width, cStart, cEnd, opacity;
+    
+    // -- PIGMENT MAP --
+    // Is this the dark "Cap" or the white "Mask"?
+    const isDark = (y < -50 && Math.abs(x) < 140) || (y > -50 && Math.abs(x) > 100) || (y < -120 && Math.abs(x) > 40);
+    
+    if (layer === 'UNDERCOAT') {
+        len = 10 + noise * 15;
+        width = 2.5;
+        opacity = 0.7;
+        const turbulent = (noise - 0.5) * 1.8;
+        
+        // Deep Occlusion: Roots are darker
+        if (isDark) {
+            cStart = '#050505'; cEnd = '#1a1a1a';
+        } else {
+            cStart = '#aaa'; cEnd = '#ddd';
+        }
+        
+        renderCurve(x, y, angle + turbulent, len, width, cStart, cEnd, opacity);
+        
+    } else if (layer === 'GUARD') {
+        len = 35 + noise * 40;
+        width = 0.9;
+        opacity = 0.9;
+        const flow = (noise - 0.5) * 0.3;
+        
+        // AGOUTI BANDING: Dark Root -> Light Tip
+        if (isDark) {
+            cStart = '#000'; cEnd = 'rgba(60,60,70,0.6)';
+        } else {
+            cStart = '#fff'; cEnd = 'rgba(255,255,255,0.8)';
+        }
+        
+        renderCurve(x, y, angle + flow, len, width, cStart, cEnd, opacity);
+    }
+    
+    TOTAL_STRANDS++;
+}
+
+function renderCurve(x, y, ang, len, w, c1, c2, op) {
+    const ex = x + Math.cos(ang) * len;
+    const ey = y + Math.sin(ang) * len;
+    const cx = (x + ex)/2 + (Math.random()-0.5)*10;
+    const cy = (y + ey)/2 + (Math.random()-0.5)*10;
+    
+    const grad = ctx.createLinearGradient(x, y, ex, ey);
+    grad.addColorStop(0, c1);
+    grad.addColorStop(1, c2);
+    
+    ctx.globalAlpha = op;
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(cx, cy, ex, ey);
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE PHASES
+// ═══════════════════════════════════════════════════════════════
+
+function setPhase(p) {
+    ['p1','p2','p3','p4','p5'].forEach(id => ui[id].className = 'phase');
+    if(p) ui[p].className = 'active';
+}
+
+function queue(fn) { QUEUE.push(fn); }
+
+// PHASE I: OSTEOLOGY
+function phase1() {
+    setPhase('p1');
+    
+    // Draw Shadow Depth (The Skull)
+    ctx.fillStyle = '#080808';
+    ctx.shadowBlur = 40; ctx.shadowColor = '#000';
+    
+    ctx.beginPath();
+    // Head shape
+    ctx.ellipse(0, -20, 120, 110, 0, 0, Math.PI*2);
+    // Ears
+    ctx.moveTo(-60, -90); ctx.lineTo(-90, -220); ctx.lineTo(-10, -90);
+    ctx.moveTo(60, -90); ctx.lineTo(90, -220); ctx.lineTo(10, -90);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    setTimeout(phase2, 800);
+}
+
+// PHASE II: THERMAL INSULATION (Undercoat)
+function phase2() {
+    setPhase('p2');
+    
+    const pts = [];
+    for(let i=0; i<CONFIG.DENSITY.UNDERCOAT; i++) {
+        let x = (Math.random()-0.5)*400;
+        let y = (Math.random()-0.5)*450;
+        if(getMask(x,y)) pts.push({x,y});
+    }
+    pts.sort((a,b) => a.y - b.y); // Back-to-front painter's algo
+    
+    pts.forEach(p => queue(() => paintStrand(p.x, p.y, 'UNDERCOAT')));
+    
+    queue(() => setTimeout(phase3, 500));
+}
+
+// PHASE III: CHROMATIC GUARD (Topcoat)
+function phase3() {
+    setPhase('p3');
+    
+    const pts = [];
+    for(let i=0; i<CONFIG.DENSITY.GUARD; i++) {
+        let x = (Math.random()-0.5)*420;
+        let y = (Math.random()-0.5)*470;
+        if(getMask(x,y)) pts.push({x,y});
+    }
+    pts.sort((a,b) => a.y - b.y);
+    
+    pts.forEach(p => queue(() => paintStrand(p.x, p.y, 'GUARD')));
+    
+    queue(() => setTimeout(phase4, 500));
+}
+
+// PHASE IV: OCULAR & SENSORY
+function phase4() {
+    setPhase('p4');
+    
+    queue(() => {
+        // 1. NOSE (Wetness Simulation)
+        ctx.save();
+        ctx.translate(0, 90);
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.moveTo(-28, 0); ctx.quadraticCurveTo(0, -12, 28, 0);
+        ctx.lineTo(0, 38); ctx.fill();
+        
+        // Specular highlight (Wet)
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath(); ctx.ellipse(-8, 5, 6, 3, -0.2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(8, 5, 6, 3, 0.2, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        // 2. EYES (Subsurface Scattering)
+        const drawEye = (x) => {
+            ctx.save();
+            ctx.translate(x, -25);
+            
+            // Orbital Shadow
+            ctx.shadowBlur = 25; ctx.shadowColor = '#000';
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.ellipse(0,0, 26, 15, x<0?0.25:-0.25, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Sclera
+            ctx.fillStyle = '#ccc'; // Off-white
+            ctx.beginPath(); ctx.ellipse(0,0, 24, 13, x<0?0.25:-0.25, 0, Math.PI*2); ctx.fill();
+
+            // Iris Base (Deep Blue)
+            ctx.fillStyle = '#000033';
+            ctx.beginPath(); ctx.arc(0,0, 11, 0, Math.PI*2); ctx.fill();
+            
+            // Iris Mid (Cyan) - Subsurface
+            const grad = ctx.createRadialGradient(0,0, 4, 0,0, 10);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.3, '#0ff');
+            grad.addColorStop(1, 'rgba(0,0,255,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(0,0, 10, 0, Math.PI*2); ctx.fill();
+            
+            // Pupil
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(0,0, 3.5, 0, Math.PI*2); ctx.fill();
+            
+            // Catchlight (The Soul)
+            ctx.shadowBlur = 5; ctx.shadowColor = '#fff';
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(4, -4, 1.5, 0, Math.PI*2); ctx.fill();
+            
+            ctx.restore();
+        };
+        drawEye(-55);
+        drawEye(55);
+    });
+    
+    // 3. VIBRISSAE (Whiskers)
+    for(let i=0; i<CONFIG.DENSITY.SENSORY; i++) {
+        queue(() => {
+            const side = i%2===0 ? 1 : -1;
+            const ox = side * (35 + Math.random()*15);
+            const oy = 90 + Math.random()*25;
+            
+            ctx.beginPath();
+            ctx.moveTo(ox, oy);
+            ctx.bezierCurveTo(ox+side*60, oy+5, ox+side*100, oy+30, ox+side*140, oy+60);
+            ctx.strokeStyle = `rgba(255,255,255,${Math.random()*0.4})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+        });
+    }
+    
+    queue(() => setTimeout(phase5, 500));
+}
+
+// PHASE V: ATMOSPHERE
+function phase5() {
+    setPhase('p5');
+    
+    for(let i=0; i<CONFIG.DENSITY.DUST; i++) {
+        queue(() => {
+            const x = (Math.random()-0.5)*size;
+            const y = (Math.random()-0.5)*size;
+            const r = Math.random() * 1.5;
+            
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = 'rgba(0, 247, 255, ' + (Math.random()*0.3) + ')';
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI*2);
+            ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+        });
+    }
+    
+    queue(() => {
+        setPhase(null); // Done
+        ui.stats.innerHTML = "CONSTRUCT COMPLETE | STRANDS: " + TOTAL_STRANDS;
+        ui.stats.style.color = "#00f7ff";
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXECUTION LOOP
+// ═══════════════════════════════════════════════════════════════
+
+function tick() {
+    const batch = Math.min(QUEUE.length, CONFIG.SPEED);
+    for(let i=0; i<batch; i++) {
+        QUEUE.shift()();
+    }
+    
+    if(QUEUE.length > 0) {
+        ui.stats.innerHTML = "STRANDS: " + TOTAL_STRANDS + " | QUEUE: " + QUEUE.length;
+        requestAnimationFrame(tick);
+    }
+}
+
+// INIT
+ctx.fillStyle = '#050505';
+ctx.fillRect(-size, -size, size*2, size*2);
+
+// Background Ambience
+const bg = ctx.createRadialGradient(0,0, 100, 0,0, size);
+bg.addColorStop(0, '#10151a');
+bg.addColorStop(1, '#000');
+ctx.fillStyle = bg;
+ctx.fillRect(-size, -size, size*2, size*2);
+
+phase1();
+tick();
+
+</script>
+</body>
+</html>

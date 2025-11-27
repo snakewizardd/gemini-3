@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UNITY OF ALL BEINGS</title>
+<style>
+*{margin:0;padding:0}
+body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
+canvas{max-width:100vw;max-height:100vh}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+// Wider aspect ratio like the reference
+const W = 1600;
+const H = 1000;
+C.width = W;
+C.height = H;
+
+// Animation time
+let T = 0;
+
+// Noise function for organic effects
+const P = [];
+let seed = 42;
+for (let i = 0; i < 256; i++) P[i] = i;
+for (let i = 255; i > 0; i--) { seed = (seed * 16807) % 2147483647; [P[i], P[seed % (i+1)]] = [P[seed % (i+1)], P[i]]; }
+for (let i = 0; i < 256; i++) P[256+i] = P[i];
+
+function noise(x, y) {
+    const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
+    const v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const g = (h, a, b) => ((h & 1) ? -a : a) + ((h & 2) ? -b : b);
+    const l = (a, b, t) => a + t * (b - a);
+    return 0.5 + 0.5 * l(l(g(P[P[xi]+yi], xf, yf), g(P[P[xi+1]+yi], xf-1, yf), u), 
+                         l(g(P[P[xi]+yi+1], xf, yf-1), g(P[P[xi+1]+yi+1], xf-1, yf-1), u), v);
+}
+
+// HSL to RGB
+function hsl(h, s, l) {
+    h = h % 360;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+    let r, g, b;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    return `rgb(${Math.round((r+m)*255)},${Math.round((g+m)*255)},${Math.round((b+m)*255)})`;
+}
+
+function hsla(h, s, l, a) {
+    h = h % 360;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+    let r, g, b;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    return `rgba(${Math.round((r+m)*255)},${Math.round((g+m)*255)},${Math.round((b+m)*255)},${a})`;
+}
+
+// ============ PSYCHEDELIC BACKGROUND ============
+function drawBackground() {
+    // Base gradient
+    const bg = X.createRadialGradient(W/2, H/2, 0, W/2, H/2, W);
+    bg.addColorStop(0, '#e8f8ff');
+    bg.addColorStop(0.3, '#a8e0f0');
+    bg.addColorStop(0.5, '#80c8e8');
+    bg.addColorStop(0.7, '#6090c0');
+    bg.addColorStop(1, '#304060');
+    X.fillStyle = bg;
+    X.fillRect(0, 0, W, H);
+    
+    // Swirling iridescent layers
+    for (let layer = 0; layer < 8; layer++) {
+        X.globalAlpha = 0.15;
+        for (let i = 0; i < 2000; i++) {
+            const x = Math.random() * W;
+            const y = Math.random() * H;
+            const t = T * 0.01 + layer * 0.5;
+            
+            // Swirl based on distance from center
+            const dx = x - W/2;
+            const dy = y - H/2;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const angle = Math.atan2(dy, dx) + dist * 0.003 + t;
+            
+            const n = noise(x * 0.003 + Math.cos(angle) * 0.5, y * 0.003 + Math.sin(angle) * 0.5 + t * 0.1);
+            const hue = (n * 360 + dist * 0.3 + T * 0.5) % 360;
+            
+            X.fillStyle = hsl(hue, 0.7, 0.6);
+            X.beginPath();
+            X.arc(x, y, 3 + n * 8, 0, Math.PI * 2);
+            X.fill();
+        }
+    }
+    X.globalAlpha = 1;
+    
+    // Flowing energy streams
+    X.globalAlpha = 0.3;
+    for (let stream = 0; stream < 30; stream++) {
+        const startAngle = (stream / 30) * Math.PI * 2;
+        const hue = (stream * 12 + T) % 360;
+        
+        X.strokeStyle = hsl(hue, 0.8, 0.65);
+        X.lineWidth = 2 + Math.sin(T * 0.02 + stream) * 1;
+        X.beginPath();
+        
+        for (let t = 0; t < 200; t++) {
+            const r = 50 + t * 3 + Math.sin(T * 0.01 + t * 0.1) * 30;
+            const a = startAngle + t * 0.03 + Math.sin(t * 0.05) * 0.5;
+            const x = W/2 + Math.cos(a) * r;
+            const y = H/2 + Math.sin(a) * r * 0.7;
+            
+            if (t === 0) X.moveTo(x, y);
+            else X.lineTo(x, y);
+        }
+        X.stroke();
+    }
+    X.globalAlpha = 1;
+}
+
+// ============ MANDALA ============
+function drawMandala(cx, cy, size, hueBase) {
+    X.save();
+    X.translate(cx, cy);
+    
+    // Outer glow
+    const glow = X.createRadialGradient(0, 0, size * 0.3, 0, 0, size);
+    glow.addColorStop(0, hsla(hueBase, 0.6, 0.7, 0.4));
+    glow.addColorStop(1, hsla(hueBase, 0.6, 0.7, 0));
+    X.fillStyle = glow;
+    X.beginPath();
+    X.arc(0, 0, size, 0, Math.PI * 2);
+    X.fill();
+    
+    // Petals
+    for (let ring = 0; ring < 4; ring++) {
+        const petals = 8 + ring * 4;
+        const ringSize = size * (0.3 + ring * 0.18);
+        
+        for (let i = 0; i < petals; i++) {
+            const angle = (i / petals) * Math.PI * 2 + ring * 0.1 + T * 0.002;
+            const hue = (hueBase + ring * 30 + i * 5) % 360;
+            
+            X.save();
+            X.rotate(angle);
+            X.translate(ringSize * 0.5, 0);
+            
+            // Petal shape
+            X.fillStyle = hsla(hue, 0.7, 0.7, 0.6);
+            X.beginPath();
+            X.ellipse(0, 0, ringSize * 0.25, ringSize * 0.1, 0, 0, Math.PI * 2);
+            X.fill();
+            
+            // Petal highlight
+            X.fillStyle = hsla(hue, 0.5, 0.85, 0.4);
+            X.beginPath();
+            X.ellipse(-ringSize * 0.05, 0, ringSize * 0.12, ringSize * 0.05, 0, 0, Math.PI * 2);
+            X.fill();
+            
+            X.restore();
+        }
+    }
+    
+    // Center jewel
+    const jewel = X.createRadialGradient(0, 0, 0, 0, 0, size * 0.15);
+    jewel.addColorStop(0, '#fff');
+    jewel.addColorStop(0.3, hsla(hueBase + 60, 0.8, 0.75, 1));
+    jewel.addColorStop(1, hsla(hueBase, 0.7, 0.5, 0.8));
+    X.fillStyle = jewel;
+    X.beginPath();
+    X.arc(0, 0, size * 0.15, 0, Math.PI * 2);
+    X.fill();
+    
+    X.restore();
+}
+
+// ============ LOTUS FLOWER ============
+function drawLotus(cx, cy, size, hueBase, open = 1) {
+    X.save();
+    X.translate(cx, cy);
+    
+    // Glow
+    X.globalAlpha = 0.4;
+    const glow = X.createRadialGradient(0, 0, 0, 0, 0, size * 1.5);
+    glow.addColorStop(0, hsla(hueBase, 0.6, 0.8, 0.6));
+    glow.addColorStop(1, hsla(hueBase, 0.6, 0.8, 0));
+    X.fillStyle = glow;
+    X.beginPath();
+    X.arc(0, 0, size * 1.5, 0, Math.PI * 2);
+    X.fill();
+    X.globalAlpha = 1;
+    
+    // Back petals
+    const petalCount = 12;
+    for (let layer = 0; layer < 3; layer++) {
+        const layerPetals = petalCount - layer * 2;
+        const layerSize = size * (1 - layer * 0.15);
+        const layerOpen = open * (0.8 + layer * 0.1);
+        
+        for (let i = 0; i < layerPetals; i++) {
+            const angle = (i / layerPetals) * Math.PI * 2 - Math.PI/2 + layer * 0.1;
+            const petalAngle = -Math.PI/2 + (angle + Math.PI/2) * layerOpen;
+            const hue = (hueBase + layer * 15 - 20) % 360;
+            
+            X.save();
+            X.rotate(angle);
+            X.translate(0, -layerSize * 0.2 * layerOpen);
+            X.rotate(petalAngle - angle + Math.PI/2);
+            
+            // Petal gradient
+            const pg = X.createLinearGradient(0, -layerSize * 0.5, 0, layerSize * 0.1);
+            pg.addColorStop(0, hsla(hue + 20, 0.5, 0.9, 0.9));
+            pg.addColorStop(0.5, hsla(hue, 0.6, 0.75, 0.95));
+            pg.addColorStop(1, hsla(hue - 20, 0.7, 0.6, 1));
+            
+            X.fillStyle = pg;
+            X.beginPath();
+            X.moveTo(0, 0);
+            X.bezierCurveTo(-layerSize * 0.2, -layerSize * 0.3, -layerSize * 0.15, -layerSize * 0.6, 0, -layerSize * 0.7);
+            X.bezierCurveTo(layerSize * 0.15, -layerSize * 0.6, layerSize * 0.2, -layerSize * 0.3, 0, 0);
+            X.fill();
+            
+            // Petal vein
+            X.strokeStyle = hsla(hue, 0.4, 0.6, 0.3);
+            X.lineWidth = 0.5;
+            X.beginPath();
+            X.moveTo(0, 0);
+            X.lineTo(0, -layerSize * 0.6);
+            X.stroke();
+            
+            X.restore();
+        }
+    }
+    
+    // Center
+    const center = X.createRadialGradient(0, 0, 0, 0, 0, size * 0.2);
+    center.addColorStop(0, '#fff8a0');
+    center.addColorStop(0.5, '#f0d060');
+    center.addColorStop(1, '#c09030');
+    X.fillStyle = center;
+    X.beginPath();
+    X.arc(0, 0, size * 0.15, 0, Math.PI * 2);
+    X.fill();
+    
+    // Stamens
+    for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        X.fillStyle = '#f0d860';
+        X.beginPath();
+        X.arc(Math.cos(a) * size * 0.08, Math.sin(a) * size * 0.08, 2, 0, Math.PI * 2);
+        X.fill();
+    }
+    
+    X.restore();
+}
+
+// ============ TREE OF LIFE ============
+function drawTree(cx, cy, height) {
+    X.save();
+    X.translate(cx, cy);
+    
+    // Glow behind tree
+    X.globalAlpha = 0.3;
+    const glow = X.createRadialGradient(0, -height * 0.4, 0, 0, -height * 0.4, height * 0.8);
+    glow.addColorStop(0, 'rgba(255,255,255,0.8)');
+    glow.addColorStop(0.5, 'rgba(200,240,255,0.4)');
+    glow.addColorStop(1, 'rgba(150,200,255,0)');
+    X.fillStyle = glow;
+    X.fillRect(-height * 0.8, -height, height * 1.6, height);
+    X.globalAlpha = 1;
+    
+    // Trunk
+    X.strokeStyle = 'rgba(200,230,255,0.6)';
+    X.lineWidth = 4;
+    X.beginPath();
+    X.moveTo(0, 0);
+    X.bezierCurveTo(-5, -height * 0.3, 5, -height * 0.5, 0, -height * 0.6);
+    X.stroke();
+    
+    // Branches function
+    function branch(x, y, len, angle, depth) {
+        if (depth > 6 || len < 5) return;
+        
+        const endX = x + Math.cos(angle) * len;
+        const endY = y + Math.sin(angle) * len;
+        
+        X.strokeStyle = `rgba(200,230,255,${0.4 - depth * 0.05})`;
+        X.lineWidth = Math.max(0.5, 3 - depth * 0.4);
+        X.beginPath();
+        X.moveTo(x, y);
+        X.lineTo(endX, endY);
+        X.stroke();
+        
+        // Leaf at end
+        if (depth > 3) {
+            const hue = 160 + Math.random() * 60;
+            X.fillStyle = hsla(hue, 0.5, 0.75, 0.6);
+            X.beginPath();
+            X.ellipse(endX, endY, 4 + Math.random() * 4, 6 + Math.random() * 6, angle, 0, Math.PI * 2);
+            X.fill();
+        }
+        
+        // Sub-branches
+        branch(endX, endY, len * 0.7, angle - 0.4 - Math.random() * 0.3, depth + 1);
+        branch(endX, endY, len * 0.7, angle + 0.4 + Math.random() * 0.3, depth + 1);
+    }
+    
+    // Draw branches
+    const baseY = -height * 0.55;
+    branch(0, baseY, height * 0.15, -Math.PI/2 - 0.3, 0);
+    branch(0, baseY, height * 0.15, -Math.PI/2 + 0.3, 0);
+    branch(0, baseY - height * 0.1, height * 0.12, -Math.PI/2 - 0.5, 1);
+    branch(0, baseY - height * 0.1, height * 0.12, -Math.PI/2 + 0.5, 1);
+    branch(0, baseY - height * 0.2, height * 0.1, -Math.PI/2, 2);
+    
+    X.restore();
+}
+
+// ============ MEDITATING FIGURE ============
+function drawMeditator(cx, cy, size) {
+    X.save();
+    X.translate(cx, cy);
+    
+    // Ethereal glow
+    const glow = X.createRadialGradient(0, -size * 0.3, 0, 0, -size * 0.3, size * 1.2);
+    glow.addColorStop(0, 'rgba(255,255,255,0.4)');
+    glow.addColorStop(0.5, 'rgba(200,230,255,0.2)');
+    glow.addColorStop(1, 'rgba(150,200,255,0)');
+    X.fillStyle = glow;
+    X.beginPath();
+    X.arc(0, -size * 0.3, size * 1.2, 0, Math.PI * 2);
+    X.fill();
+    
+    X.strokeStyle = 'rgba(200,230,255,0.5)';
+    X.fillStyle = 'rgba(200,230,255,0.15)';
+    X.lineWidth = 2;
+    
+    // Head
+    X.beginPath();
+    X.arc(0, -size * 0.7, size * 0.12, 0, Math.PI * 2);
+    X.fill();
+    X.stroke();
+    
+    // Body/torso
+    X.beginPath();
+    X.moveTo(0, -size * 0.58);
+    X.bezierCurveTo(-size * 0.15, -size * 0.4, -size * 0.2, -size * 0.2, -size * 0.25, 0);
+    X.lineTo(size * 0.25, 0);
+    X.bezierCurveTo(size * 0.2, -size * 0.2, size * 0.15, -size * 0.4, 0, -size * 0.58);
+    X.fill();
+    X.stroke();
+    
+    // Crossed legs
+    X.beginPath();
+    X.ellipse(0, size * 0.08, size * 0.3, size * 0.1, 0, 0, Math.PI * 2);
+    X.fill();
+    X.stroke();
+    
+    // Arms in meditation pose
+    X.beginPath();
+    X.moveTo(-size * 0.15, -size * 0.35);
+    X.bezierCurveTo(-size * 0.35, -size * 0.25, -size * 0.35, 0, -size * 0.2, size * 0.05);
+    X.stroke();
+    
+    X.beginPath();
+    X.moveTo(size * 0.15, -size * 0.35);
+    X.bezierCurveTo(size * 0.35, -size * 0.25, size * 0.35, 0, size * 0.2, size * 0.05);
+    X.stroke();
+    
+    // Hands on knees
+    X.beginPath();
+    X.arc(-size * 0.2, size * 0.05, size * 0.04, 0, Math.PI * 2);
+    X.arc(size * 0.2, size * 0.05, size * 0.04, 0, Math.PI * 2);
+    X.fill();
+    
+    X.restore();
+}
+
+// ============ DOG RENDERING ============
+
+// Husky with headdress
+function drawHusky(cx, cy, size) {
+    X.save();
+    X.translate(cx, cy);
+    X.scale(size / 100, size / 100);
+    
+    // Body
+    X.fillStyle = '#e8e8f0';
+    X.beginPath();
+    X.ellipse(0, 40, 45, 55, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Dark saddle
+    X.fillStyle = '#3a3a42';
+    X.beginPath();
+    X.ellipse(0, 25, 38, 35, 0, Math.PI, Math.PI * 2);
+    X.fill();
+    
+    // Head
+    X.fillStyle = '#f0f0f5';
+    X.beginPath();
+    X.ellipse(0, -20, 35, 40, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Dark cap
+    X.fillStyle = '#3a3a42';
+    X.beginPath();
+    X.ellipse(0, -40, 30, 25, 0, Math.PI, Math.PI * 2);
+    X.fill();
+    
+    // Ears
+    X.fillStyle = '#3a3a42';
+    X.beginPath();
+    X.moveTo(-25, -45);
+    X.lineTo(-35, -80);
+    X.lineTo(-10, -50);
+    X.fill();
+    X.beginPath();
+    X.moveTo(25, -45);
+    X.lineTo(35, -80);
+    X.lineTo(10, -50);
+    X.fill();
+    
+    // Inner ears
+    X.fillStyle = '#d8c8c0';
+    X.beginPath();
+    X.moveTo(-22, -50);
+    X.lineTo(-28, -70);
+    X.lineTo(-15, -52);
+    X.fill();
+    X.beginPath();
+    X.moveTo(22, -50);
+    X.lineTo(28, -70);
+    X.lineTo(15, -52);
+    X.fill();
+    
+    // Muzzle
+    X.fillStyle = '#f8f8ff';
+    X.beginPath();
+    X.ellipse(0, -5, 18, 22, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Eyes
+    for (const ex of [-12, 12]) {
+        // Eye white
+        X.fillStyle = '#fff';
+        X.beginPath();
+        X.ellipse(ex, -25, 8, 6, ex < 0 ? 0.15 : -0.15, 0, Math.PI * 2);
+        X.fill();
+        
+        // Iris
+        const ig = X.createRadialGradient(ex, -25, 0, ex, -25, 6);
+        ig.addColorStop(0, '#a0e8ff');
+        ig.addColorStop(0.5, '#50a0d0');
+        ig.addColorStop(1, '#205080');
+        X.fillStyle = ig;
+        X.beginPath();
+        X.arc(ex, -25, 5, 0, Math.PI * 2);
+        X.fill();
+        
+        // Pupil
+        X.fillStyle = '#000';
+        X.beginPath();
+        X.arc(ex, -25, 2, 0, Math.PI * 2);
+        X.fill();
+        
+        // Highlight
+        X.fillStyle = '#fff';
+        X.beginPath();
+        X.arc(ex + 1.5, -26.5, 1.2, 0, Math.PI * 2);
+        X.fill();
+    }
+    
+    // Nose
+    X.fillStyle = '#1a1a1a';
+    X.beginPath();
+    X.ellipse(0, 8, 8, 6, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Nose shine
+    X.fillStyle = 'rgba(255,255,255,0.3)';
+    X.beginPath();
+    X.ellipse(-2, 6, 3, 2, -0.3, 0, Math.PI * 2);
+    X.fill();
+    
+    // Front legs
+    X.fillStyle = '#f0f0f5';
+    X.beginPath();
+    X.roundRect(-25, 60, 18, 50, 8);
+    X.fill();
+    X.beginPath();
+    X.roundRect(7, 60, 18, 50, 8);
+    X.fill();
+    
+    // Paws
+    X.fillStyle = '#e0e0e8';
+    X.beginPath();
+    X.ellipse(-16, 110, 12, 8, 0, 0, Math.PI * 2);
+    X.fill();
+    X.beginPath();
+    X.ellipse(16, 110, 12, 8, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // FEATHER HEADDRESS
+    const featherColors = ['#ff6080', '#60d0ff', '#a0ff80', '#ffa060', '#c080ff', '#ffff60'];
+    for (let i = 0; i < 7; i++) {
+        const angle = -Math.PI/2 + (i - 3) * 0.25;
+        const len = 40 + Math.abs(i - 3) * -5;
+        
+        X.save();
+        X.translate(0, -75);
+        X.rotate(angle + Math.sin(T * 0.03 + i) * 0.05);
+        
+        // Feather
+        const fc = featherColors[i % featherColors.length];
+        X.fillStyle = fc;
+        X.beginPath();
+        X.moveTo(0, 0);
+        X.bezierCurveTo(-6, -len * 0.3, -5, -len * 0.7, 0, -len);
+        X.bezierCurveTo(5, -len * 0.7, 6, -len * 0.3, 0, 0);
+        X.fill();
+        
+        // Feather spine
+        X.strokeStyle = 'rgba(0,0,0,0.2)';
+        X.lineWidth = 0.5;
+        X.beginPath();
+        X.moveTo(0, 0);
+        X.lineTo(0, -len);
+        X.stroke();
+        
+        X.restore();
+    }
+    
+    // Headband
+    X.fillStyle = '#806040';
+    X.beginPath();
+    X.ellipse(0, -65, 25, 8, 0, 0, Math.PI);
+    X.fill();
+    
+    // Decorative beads
+    for (let i = 0; i < 5; i++) {
+        X.fillStyle = ['#60c0ff', '#ff6080', '#80ff80', '#ffc060', '#c080ff'][i];
+        X.beginPath();
+        X.arc(-20 + i * 10, -62, 3, 0, Math.PI * 2);
+        X.fill();
+    }
+    
+    X.restore();
+}
+
+// Chihuahua with butterfly wings
+function drawChihuahua(cx, cy, size) {
+    X.save();
+    X.translate(cx, cy);
+    X.scale(size / 80, size / 80);
+    
+    // BUTTERFLY WINGS
+    function drawWing(side) {
+        X.save();
+        X.scale(side, 1);
+        
+        const wingFlap = Math.sin(T * 0.08) * 0.2;
+        X.rotate(wingFlap);
+        
+        // Upper wing
+        const ug = X.createRadialGradient(30, -20, 0, 30, -20, 50);
+        ug.addColorStop(0, 'rgba(200,150,255,0.9)');
+        ug.addColorStop(0.5, 'rgba(100,180,255,0.8)');
+        ug.addColorStop(1, 'rgba(150,100,200,0.6)');
+        X.fillStyle = ug;
+        X.beginPath();
+        X.moveTo(10, 0);
+        X.bezierCurveTo(20, -40, 60, -50, 70, -20);
+        X.bezierCurveTo(75, 0, 50, 10, 10, 0);
+        X.fill();
+        
+        // Wing pattern
+        X.fillStyle = 'rgba(255,255,255,0.4)';
+        X.beginPath();
+        X.arc(35, -25, 12, 0, Math.PI * 2);
+        X.fill();
+        X.fillStyle = 'rgba(100,50,150,0.5)';
+        X.beginPath();
+        X.arc(35, -25, 6, 0, Math.PI * 2);
+        X.fill();
+        
+        // Lower wing
+        const lg = X.createRadialGradient(35, 20, 0, 35, 20, 40);
+        lg.addColorStop(0, 'rgba(255,150,200,0.9)');
+        lg.addColorStop(0.5, 'rgba(150,200,255,0.8)');
+        lg.addColorStop(1, 'rgba(200,100,255,0.6)');
+        X.fillStyle = lg;
+        X.beginPath();
+        X.moveTo(10, 5);
+        X.bezierCurveTo(30, 10, 55, 30, 50, 50);
+        X.bezierCurveTo(30, 45, 15, 25, 10, 5);
+        X.fill();
+        
+        X.restore();
+    }
+    
+    drawWing(1);
+    drawWing(-1);
+    
+    // Body
+    X.fillStyle = '#e8d8c8';
+    X.beginPath();
+    X.ellipse(0, 25, 22, 30, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Head (large for chihuahua)
+    X.fillStyle = '#f0e0d0';
+    X.beginPath();
+    X.ellipse(0, -15, 25, 28, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Giant ears
+    X.fillStyle = '#e8d0c0';
+    X.beginPath();
+    X.moveTo(-18, -25);
+    X.bezierCurveTo(-50, -35, -55, -70, -25, -55);
+    X.lineTo(-15, -30);
+    X.fill();
+    X.beginPath();
+    X.moveTo(18, -25);
+    X.bezierCurveTo(50, -35, 55, -70, 25, -55);
+    X.lineTo(15, -30);
+    X.fill();
+    
+    // Inner ears
+    X.fillStyle = '#d8b8a8';
+    X.beginPath();
+    X.moveTo(-20, -28);
+    X.bezierCurveTo(-40, -35, -42, -55, -25, -48);
+    X.fill();
+    X.beginPath();
+    X.moveTo(20, -28);
+    X.bezierCurveTo(40, -35, 42, -55, 25, -48);
+    X.fill();
+    
+    // Eyes (big and sparkly)
+    for (const ex of [-10, 10]) {
+        X.fillStyle = '#000';
+        X.beginPath();
+        X.arc(ex, -18, 7, 0, Math.PI * 2);
+        X.fill();
+        
+        X.fillStyle = '#fff';
+        X.beginPath();
+        X.arc(ex + 2, -20, 2.5, 0, Math.PI * 2);
+        X.fill();
+        X.beginPath();
+        X.arc(ex - 1, -16, 1, 0, Math.PI * 2);
+        X.fill();
+    }
+    
+    // Nose
+    X.fillStyle = '#2a2a2a';
+    X.beginPath();
+    X.ellipse(0, -2, 5, 4, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Mouth
+    X.strokeStyle = '#604030';
+    X.lineWidth = 1;
+    X.beginPath();
+    X.arc(0, 3, 4, 0.2, Math.PI - 0.2);
+    X.stroke();
+    
+    // Tiny legs
+    X.fillStyle = '#e8d8c8';
+    for (const lx of [-12, 12]) {
+        X.beginPath();
+        X.roundRect(lx - 5, 45, 10, 25, 4);
+        X.fill();
+    }
+    
+    // Paws
+    X.fillStyle = '#d8c8b8';
+    X.beginPath();
+    X.ellipse(-12, 70, 7, 5, 0, 0, Math.PI * 2);
+    X.fill();
+    X.beginPath();
+    X.ellipse(12, 70, 7, 5, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    X.restore();
+}
+
+// Golden Retriever with flower collar
+function drawGolden(cx, cy, size) {
+    X.save();
+    X.translate(cx, cy);
+    X.scale(size / 110, size / 110);
+    
+    // Fluffy body
+    X.fillStyle = '#d4a050';
+    X.beginPath();
+    X.ellipse(0, 40, 55, 65, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Chest fluff (lighter)
+    X.fillStyle = '#e8c080';
+    X.beginPath();
+    X.ellipse(0, 30, 35, 45, 0, 0, Math.PI);
+    X.fill();
+    
+    // Head
+    X.fillStyle = '#d8a858';
+    X.beginPath();
+    X.ellipse(0, -25, 40, 45, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Muzzle
+    X.fillStyle = '#e0b868';
+    X.beginPath();
+    X.ellipse(0, -5, 22, 25, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // Ears (floppy)
+    X.fillStyle = '#c89848';
+    X.beginPath();
+    X.ellipse(-35, -20, 18, 35, 0.3, 0, Math.PI * 2);
+    X.fill();
+    X.beginPath();
+    X.ellipse(35, -20, 18, 35, -0.3, 0, Math.PI * 2);
+    X.fill();
+    
+    // Eyes (friendly)
+    for (const ex of [-15, 15]) {
+        X.fillStyle = '#3a2a1a';
+        X.beginPath();
+        X.ellipse(ex, -30, 7, 8, 0, 0, Math.PI * 2);
+        X.fill();
+        
+        X.fillStyle = '#fff';
+        X.beginPath();
+        X.arc(ex + 2, -32, 2.5, 0, Math.PI * 2);
+        X.fill();
+    }
+    
+    // Nose
+    X.fillStyle = '#2a1a0a';
+    X.beginPath();
+    X.ellipse(0, 5, 10, 8, 0, 0, Math.PI * 2);
+    X.fill();
+    X.fillStyle = 'rgba(255,255,255,0.2)';
+    X.beginPath();
+    X.ellipse(-3, 3, 4, 2.5, -0.3, 0, Math.PI * 2);
+    X.fill();
+    
+    // Happy mouth
+    X.fillStyle = '#c05050';
+    X.beginPath();
+    X.ellipse(0, 18, 15, 12, 0, 0, Math.PI);
+    X.fill();
+    
+    // Tongue
+    X.fillStyle = '#e07070';
+    X.beginPath();
+    X.ellipse(0, 25, 10, 15, 0, 0, Math.PI);
+    X.fill();
+    
+    // Front legs
+    X.fillStyle = '#d4a050';
+    X.beginPath();
+    X.roundRect(-30, 70, 22, 50, 10);
+    X.fill();
+    X.beginPath();
+    X.roundRect(8, 70, 22, 50, 10);
+    X.fill();
+    
+    // Paws
+    X.fillStyle = '#c89848';
+    X.beginPath();
+    X.ellipse(-19, 120, 14, 10, 0, 0, Math.PI * 2);
+    X.fill();
+    X.beginPath();
+    X.ellipse(19, 120, 14, 10, 0, 0, Math.PI * 2);
+    X.fill();
+    
+    // FLOWER COLLAR
+    const flowerColors = ['#ff8090', '#80d0ff', '#ffe080', '#c0ff90', '#ffb0d0'];
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const fx = Math.cos(angle) * 40;
+        const fy = -5 + Math.sin(angle) * 15;
+        
+        if (Math.abs(angle - Math.PI/2) < 0.8) continue; // Skip behind head
+        
+        X.save();
+        X.translate(fx, fy);
+        X.rotate(angle);
+        
+        // Flower
+        const fc = flowerColors[i % flowerColors.length];
+        for (let p = 0; p < 5; p++) {
+            const pa = (p / 5) * Math.PI * 2;
+            X.fillStyle = fc;
+            X.beginPath();
+            X.ellipse(Math.cos(pa) * 5, Math.sin(pa) * 5, 6, 4, pa, 0, Math.PI * 2);
+            X.fill();
+        }
+        // Center
+        X.fillStyle = '#fff080';
+        X.beginPath();
+        X.arc(0, 0, 3, 0, Math.PI * 2);
+        X.fill();
+        
+        X.restore();
+    }
+    
+    // Collar band
+    X.strokeStyle = '#60a040';
+    X.lineWidth = 4;
+    X.beginPath();
+    X.ellipse(0, -5, 40, 15, 0, 0.3, Math.PI - 0.3);
+    X.stroke();
+    
+    X.restore();
+}
+
+// ============ TITLE TEXT ============
+function drawTitle() {
+    X.save();
+    
+    // Glow
+    X.shadowColor = 'rgba(255,255,255,0.8)';
+    X.shadowBlur = 20;
+    
+    X.font = 'italic 52px Georgia, serif';
+    X.textAlign = 'center';
+    X.textBaseline = 'top';
+    
+    // Gradient text
+    const tg = X.createLinearGradient(W/2 - 300, 0, W/2 + 300, 0);
+    tg.addColorStop(0, '#c0a0d0');
+    tg.addColorStop(0.25, '#80c0e0');
+    tg.addColorStop(0.5, '#a0e0c0');
+    tg.addColorStop(0.75, '#e0c0a0');
+    tg.addColorStop(1, '#d0a0c0');
+    
+    X.fillStyle = tg;
+    X.fillText('UNITY OF ALL BEINGS', W/2, 25);
+    
+    X.restore();
+}
+
+// ============ MAIN RENDER ============
+function render() {
+    T++;
+    
+    // Clear
+    X.fillStyle = '#000';
+    X.fillRect(0, 0, W, H);
+    
+    // Background
+    drawBackground();
+    
+    // Mandalas
+    drawMandala(150, 280, 100, 280);
+    drawMandala(W - 150, 280, 100, 320);
+    drawMandala(80, H - 180, 60, 200);
+    drawMandala(W - 80, H - 180, 60, 240);
+    
+    // Lotus flowers
+    drawLotus(120, H - 80, 50, 300, 0.9);
+    drawLotus(W - 120, H - 80, 50, 280, 0.85);
+    drawLotus(350, H - 50, 35, 320, 0.95);
+    drawLotus(W - 350, H - 50, 35, 260, 0.9);
+    drawLotus(W/2 - 200, H - 60, 40, 290, 0.88);
+    drawLotus(W/2 + 200, H - 60, 40, 310, 0.92);
+    
+    // Center composition
+    drawTree(W/2, H - 150, 380);
+    drawMeditator(W/2, H - 160, 120);
+    
+    // Lotus under meditator
+    drawLotus(W/2, H - 80, 55, 310, 1);
+    
+    // Dogs
+    drawChihuahua(190, 380, 90);
+    drawHusky(420, H - 220, 120);
+    drawGolden(W - 280, H - 200, 130);
+    
+    // Small floating lotuses
+    for (let i = 0; i < 6; i++) {
+        const x = 100 + i * 250 + Math.sin(T * 0.02 + i) * 20;
+        const y = 500 + Math.sin(T * 0.015 + i * 2) * 30;
+        if (x > 300 && x < W - 300 && y > 400) continue; // Don't overlap center
+        drawLotus(x, y, 25 + Math.sin(i) * 10, 260 + i * 20, 0.8);
+    }
+    
+    // Title
+    drawTitle();
+    
+    // Sparkles
+    X.globalAlpha = 0.6;
+    for (let i = 0; i < 50; i++) {
+        const x = (noise(i * 0.1 + T * 0.001, 0) * W);
+        const y = (noise(0, i * 0.1 + T * 0.001) * H);
+        const s = 1 + Math.sin(T * 0.1 + i) * 0.5;
+        const hue = (T + i * 20) % 360;
+        
+        X.fillStyle = hsla(hue, 0.8, 0.8, 0.8);
+        X.beginPath();
+        X.arc(x, y, s * 2, 0, Math.PI * 2);
+        X.fill();
+    }
+    X.globalAlpha = 1;
+    
+    requestAnimationFrame(render);
+}
+
+render();
+</script>
+</body>
+</html>

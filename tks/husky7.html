@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="A transcendental procedural rendering of the Siberian Husky, utilizing stochastic fur mechanics.">
+<title>PROJECT: FENRIR | THE CYBERNETIC CANID</title>
+<style>
+    /* 
+     * THE STAGE OF CREATION
+     * The viewport is stripped of all earthly distractions. 
+     * We exist only in the vacuum of the creative process.
+     */
+    body { 
+        margin: 0; 
+        padding: 0; 
+        background-color: #020202; /* The primordial darkness */
+        height: 100vh; 
+        width: 100vw; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        overflow: hidden; 
+        font-family: 'Courier New', monospace; /* The font of the machine spirit */
+    }
+
+    /* 
+     * THE ARTIFACT
+     * A solitary window into the digital soul.
+     * The box-shadow represents the halo of consciousness emerging from the silicon.
+     */
+    canvas { 
+        box-shadow: 0 0 100px rgba(100, 200, 255, 0.15); 
+        border: 1px solid #111;
+        background: #080808;
+    }
+    
+    .loading-text {
+        position: absolute;
+        bottom: 20px;
+        color: #333;
+        font-size: 10px;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="the_loom_of_existence"></canvas>
+<div class="loading-text">SIMULATING FOLLICLE GROWTH ALGORITHMS...</div>
+
+<script>
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * PROJECT FENRIR: THE PROCEDURAL HUSKY ENGINE (v9.0 "MAGNUM OPUS")
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * 
+ * PROLOGUE:
+ * We do not simply place pixels. We mimic the divine arithmetic of nature.
+ * A Husky is not a shape; it is a convergence of millions of years of evolutionary
+ * thermodynamics, designed to survive the unforgiving boreal winds.
+ * 
+ * To render this creature, we must understand it:
+ * 1. The Double Coat: A dense thermal insulator (Undercoat) beneath a hydrophobic shield (Guard Hairs).
+ * 2. The Mask: The stark contrast of pigmentation defined by genetic alleles.
+ * 3. The Gaze: The "Ice Blue" piercing stare that reflects the glacial horizon.
+ * 
+ * THIS ALGORITHM IS STRUCTURED AS A BIOLOGICAL TIMELINE:
+ * [Epoch 1] Skeleton & musculature mapping.
+ * [Epoch 2] Deep tissue pigmentation (The Undercoat).
+ * [Epoch 3] Surface integument generation (The Guard Hairs).
+ * [Epoch 4] The awakening of the senses (Rhinarium & Oculars).
+ * 
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE LAWS OF PHYSICS (CONFIGURATION)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const UNIVERSE_CONSTANTS = {
+    // The Resolution of Reality:
+    // Controls the density of the keratin strands.
+    // WARNING: High values may cause the browser's heart to skip a beat.
+    FOLLICLE_DENSITY_MULTIPLIER: 1.8, 
+    
+    // The Dimensional Aperture:
+    // Scale of the biological entity within the viewing frustum.
+    ORGANISM_SCALE: 0.85,
+    
+    // The Chaos Factor:
+    // How much the wind blows through the digital fur.
+    ENTROPY_LEVEL: 0.15
+};
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// INITIALIZING THE DIMENSIONAL INTERFACE (CANVAS SETUP)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const canvas_artifact = document.getElementById('the_loom_of_existence');
+const reality_context = canvas_artifact.getContext('2d');
+
+// Establish high-fidelity connection to the physical display hardware
+const pixel_ratio_density = window.devicePixelRatio || 1;
+const viewport_singularity = Math.min(window.innerWidth, window.innerHeight) * 0.95;
+
+canvas_artifact.width = viewport_singularity * pixel_ratio_density;
+canvas_artifact.height = viewport_singularity * pixel_ratio_density;
+canvas_artifact.style.width = viewport_singularity + 'px';
+canvas_artifact.style.height = viewport_singularity + 'px';
+
+// Centering the universal coordinate system
+reality_context.scale(pixel_ratio_density, pixel_ratio_density);
+reality_context.translate(viewport_singularity/2, viewport_singularity/2);
+reality_context.scale(UNIVERSE_CONSTANTS.ORGANISM_SCALE, UNIVERSE_CONSTANTS.ORGANISM_SCALE);
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE CHROMATIC SPECTRUM OF THE TUNDRA
+// ══════════════════════════════════════════════════════════════════════════════════════════
+const ARCTIC_PALETTE = {
+    // The Shadow: Melanin-rich carbon for the characteristic "Mask"
+    OBSIDIAN_MANTLE: 'rgba(20, 20, 22, 0.95)',
+    
+    // The Light: Reflective white for the muzzle and cheeks
+    GLACIAL_PURITY: 'rgba(240, 245, 255, 0.9)',
+    
+    // The Transition: A mid-tone grey for the blending of worlds
+    STORM_CLOUD_GREY: 'rgba(120, 125, 135, 0.85)',
+    
+    // The Soul: The electric cyan of the Siberian iris
+    CRYOGENIC_AZURE_CORE: '#aaddff',
+    CRYOGENIC_AZURE_RIM: '#004488',
+    
+    // The Flesh: The vascular hue of the tongue/ears
+    VASCULAR_PINK: 'rgba(200, 140, 140, 0.4)',
+    
+    // The Breath: Wet carbon for the nose
+    RHINARIUM_WET: '#050505',
+    RHINARIUM_DRY: '#333333'
+};
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE MORPHOGENETIC FIELD (ANATOMICAL MAPPING)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// We map the underlying bone structure of the Canid skull to guide the fur growth.
+// Unlike the cat, the Husky has a prominent "Stop" (forehead drop) and high triangular ears.
+const SKELETAL_GUIDES = {
+    // The Auditory Receivers (Ears) - High and alert
+    AURICLE_LEFT_ROOT:  { x: -60, y: -180 },
+    AURICLE_RIGHT_ROOT: { x: 60,  y: -180 },
+    
+    // The Cranial Dome (Forehead)
+    FRONTAL_LOBE:       { x: 0,   y: -100 },
+    
+    // The Ocular Orbits (Eyes)
+    ORBIT_LEFT:         { x: -55, y: -30 },
+    ORBIT_RIGHT:        { x: 55,  y: -30 },
+    
+    // The Maxillary Extension (The Snout/Muzzle)
+    MUZZLE_BRIDGE:      { x: 0,   y: 20 },
+    NOSE_TIP:           { x: 0,   y: 80 },
+    
+    // The Zygomatic Arches (Cheekbones)
+    CHEEK_LEFT:         { x: -90, y: 0 },
+    CHEEK_RIGHT:        { x: 90,  y: 0 }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE FIBER SYNTHESIS ENGINE (THE BRUSH)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+/**
+ * Synthesizes a single strand of keratin based on local anatomical vectors.
+ * 
+ * @param {Number} origin_x - Root follicle X
+ * @param {Number} origin_y - Root follicle Y
+ * @param {Number} magnitude - Length of the hair shaft
+ * @param {Number} orientation_rads - Growth direction
+ * @param {Number} thickness - Root caliper
+ * @param {String} melanin - Color string
+ * @param {Number} opacity - Alpha transparency
+ */
+function synthesizeKeratinStrand(origin_x, origin_y, magnitude, orientation_rads, thickness, melanin, opacity) {
+    // Calculate the terminal point of the hair shaft
+    const terminus_x = origin_x + Math.cos(orientation_rads) * magnitude;
+    const terminus_y = origin_y + Math.sin(orientation_rads) * magnitude;
+    
+    // Calculate a control point for the Quadratic Bezier curve.
+    // This adds the "organic sway" or the "weight" of the fur.
+    // We inject entropy here to prevent the fur from looking like plastic wire.
+    const entropy_x = (Math.random() - 0.5) * (magnitude * 0.3);
+    const entropy_y = (Math.random() - 0.5) * (magnitude * 0.3);
+    
+    const control_x = (origin_x + terminus_x) / 2 + entropy_x;
+    const control_y = (origin_y + terminus_y) / 2 + entropy_y;
+
+    reality_context.beginPath();
+    reality_context.moveTo(origin_x, origin_y);
+    reality_context.quadraticCurveTo(control_x, control_y, terminus_x, terminus_y);
+    
+    reality_context.strokeStyle = melanin;
+    reality_context.lineWidth = thickness;
+    reality_context.globalAlpha = opacity;
+    
+    // 'round' lineCap simulates the tapered tip of natural hair when coupled with low opacity
+    reality_context.lineCap = 'round'; 
+    reality_context.stroke();
+    
+    // Reset the opacity state to maintain system equilibrium
+    reality_context.globalAlpha = 1.0;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE TEMPORAL SCHEDULER (ASYNC QUEUE)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+/*
+ * To render the millions of calculations required for a "Magnum Opus" without
+ * collapsing the browser's render thread, we employ a non-blocking 
+ * task queue. We paint the animal in "time slices" (frames).
+ */
+const GENESIS_QUEUE = [];
+
+function scheduleCreationTask(task_closure, repetitions) {
+    for(let i=0; i<repetitions; i++) GENESIS_QUEUE.push(task_closure);
+}
+
+function executeGenesis() {
+    const epoch_start = performance.now();
+    
+    // We are allowed 14ms of god-like power per frame to leave 2ms for the browser overhead.
+    while (GENESIS_QUEUE.length > 0 && performance.now() - epoch_start < 14) {
+        const divine_act = GENESIS_QUEUE.shift();
+        divine_act();
+    }
+    
+    if (GENESIS_QUEUE.length > 0) {
+        requestAnimationFrame(executeGenesis);
+    } else {
+        console.log("GENESIS COMPLETE: THE ORGANISM LIVES.");
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// LAYER I: THE DEEP SUBSTRATE (UNDERCOAT)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function constructThermalLayer() {
+    // 1. The Silhouette (Dark Matter Backdrop)
+    scheduleCreationTask(() => {
+        const rad = 180;
+        reality_context.fillStyle = '#0a0a0a';
+        reality_context.beginPath();
+        reality_context.arc(0, 0, rad, 0, Math.PI*2);
+        reality_context.fill();
+        
+        // Triangular Ear Backings
+        reality_context.beginPath(); reality_context.moveTo(-60, -100); reality_context.lineTo(-110, -240); reality_context.lineTo(0, -120); reality_context.fill();
+        reality_context.beginPath(); reality_context.moveTo(60, -100); reality_context.lineTo(110, -240); reality_context.lineTo(0, -120); reality_context.fill();
+    }, 1);
+
+    // 2. The Dense Wool (White Base)
+    // The Husky has a thick, pale undercoat that traps heat.
+    const follicle_count = 20000 * UNIVERSE_CONSTANTS.FOLLICLE_DENSITY_MULTIPLIER;
+    
+    scheduleCreationTask(() => {
+        // We scan the facial disc
+        let px, py, dist;
+        do {
+            px = (Math.random() - 0.5) * 450;
+            py = (Math.random() - 0.5) * 450;
+            dist = Math.sqrt(px*px + py*py);
+        } while (dist > 200);
+
+        // Color Logic: The "Clover Mask"
+        // Huskies often have white faces with dark caps and dark spectacles.
+        let fur_color = ARCTIC_PALETTE.GLACIAL_PURITY; // Default white
+        
+        // The Dark Cap (Forehead/Ears)
+        if (py < -80 && Math.abs(px) > 20) fur_color = ARCTIC_PALETTE.STORM_CLOUD_GREY;
+        // The Spectacles (Around Eyes)
+        if (py > -60 && py < 0 && Math.abs(px) > 30 && Math.abs(px) < 90) fur_color = ARCTIC_PALETTE.STORM_CLOUD_GREY;
+
+        const len = 8 + Math.random() * 15;
+        // Radiate outward from the nose bridge (0, -20)
+        const angle = Math.atan2(py - (-20), px); 
+
+        synthesizeKeratinStrand(px, py, len, angle, 2.5, fur_color, 0.7);
+    }, follicle_count);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// LAYER II: THE GUARD HAIRS (TOPCOAT)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function constructGuardLayer() {
+    const guard_count = 12000 * UNIVERSE_CONSTANTS.FOLLICLE_DENSITY_MULTIPLIER;
+    
+    scheduleCreationTask(() => {
+        let px = (Math.random() - 0.5) * 400;
+        let py = (Math.random() - 0.5) * 400;
+        
+        let angle = Math.PI / 2; // Default gravity
+        let color = ARCTIC_PALETTE.OBSIDIAN_MANTLE;
+        let valid = false;
+
+        // --- MYOLOGICAL FLOW MAPS (The direction the hair grows) ---
+        
+        // ZONE A: The Widow's Peak (Forehead)
+        // Hair flows UP and OUT from the center
+        if (py < -60 && Math.abs(px) < 140) {
+            angle = -Math.PI/2 + (px * 0.005); 
+            // The characteristic white "Leaf" in the center of the forehead
+            if (Math.abs(px) < 15 && py > -130) color = ARCTIC_PALETTE.GLACIAL_PURITY;
+            else color = ARCTIC_PALETTE.OBSIDIAN_MANTLE;
+            valid = true;
+        }
+        
+        // ZONE B: The Ears (Auricles)
+        // Dark outside, white fluff inside
+        else if (py < -120 && Math.abs(px) > 40) {
+            angle = -Math.PI/2; 
+            if (Math.abs(px) < 70) { 
+                // Inner ear fluff
+                color = ARCTIC_PALETTE.GLACIAL_PURITY;
+                angle += (px < 0 ? 0.5 : -0.5); // Converge inwards
+            }
+            valid = true;
+        }
+
+        // ZONE C: The Spectacles (Eye Mask)
+        // Hair flows outward radially from the eye
+        else if (py > -50 && py < 40 && Math.abs(px) > 30 && Math.abs(px) < 100) {
+            const eye_x = (px < 0) ? -55 : 55;
+            const eye_y = -30;
+            angle = Math.atan2(py - eye_y, px - eye_x);
+            color = ARCTIC_PALETTE.OBSIDIAN_MANTLE; // Dark rings
+            valid = true;
+        }
+
+        // ZONE D: The Muzzle & Cheeks (Maxilla)
+        // Pure white, flowing back and down
+        else if (py > 0 && py < 150 && Math.abs(px) < 130) {
+            angle = Math.abs(px) * 0.01 + Math.PI/2; // Sweep down/out
+            color = ARCTIC_PALETTE.GLACIAL_PURITY;
+            
+            // Nose bridge fade (Grey transition)
+            if (py < 40 && Math.abs(px) < 30) color = ARCTIC_PALETTE.STORM_CLOUD_GREY;
+            
+            valid = true;
+        }
+        
+        // ZONE E: The Ruff (Neck)
+        // Long, white, chaotic
+        else if (py > 150) {
+            angle = Math.PI/2;
+            color = ARCTIC_PALETTE.GLACIAL_PURITY;
+            valid = true;
+        }
+
+        if (valid) {
+            // Guard hairs are longer and thicker than undercoat
+            const len = 20 + Math.random() * 35;
+            synthesizeKeratinStrand(px, py, len, angle, 0.9, color, 0.75);
+        }
+    }, guard_count);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// LAYER III: THE SENSORY APPARATUS (EYES & NOSE)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function awakenSenses() {
+    
+    // --- THE RHINARIUM (The Nose) ---
+    scheduleCreationTask(() => {
+        const nx = 0, ny = 90;
+        
+        // 1. Base Geometry (The "Leather")
+        reality_context.fillStyle = ARCTIC_PALETTE.RHINARIUM_DRY;
+        reality_context.beginPath();
+        // Dog nose shape: Broad top, narrow bottom, cleft in middle
+        reality_context.moveTo(-30, ny - 10);
+        reality_context.quadraticCurveTo(0, ny - 15, 30, ny - 10); // Top arch
+        reality_context.quadraticCurveTo(25, ny + 25, 0, ny + 35); // Bottom point
+        reality_context.quadraticCurveTo(-25, ny + 25, -30, ny - 10);
+        reality_context.fill();
+        
+        // 2. The Philtrum (Vertical groove)
+        reality_context.strokeStyle = '#000';
+        reality_context.lineWidth = 1;
+        reality_context.beginPath(); reality_context.moveTo(0, ny+35); reality_context.lineTo(0, ny+15); reality_context.stroke();
+
+        // 3. Texture (Bump mapping via stippling)
+        for(let i=0; i<400; i++) {
+            const rx = (Math.random()-0.5) * 50;
+            const ry = (Math.random()-0.5) * 40;
+            if (rx*rx + ry*ry < 600) {
+                reality_context.fillStyle = (Math.random() > 0.5) ? '#111' : '#555';
+                reality_context.globalAlpha = 0.5;
+                reality_context.beginPath(); reality_context.arc(nx+rx, ny+10+ry, 1.2, 0, Math.PI*2); reality_context.fill();
+            }
+        }
+        
+        // 4. Nostrils (The Void)
+        reality_context.fillStyle = '#000';
+        reality_context.globalAlpha = 1.0;
+        // Left
+        reality_context.beginPath(); 
+        reality_context.ellipse(-15, ny + 15, 6, 4, -0.5, 0, Math.PI*2); 
+        reality_context.fill();
+        // Right
+        reality_context.beginPath(); 
+        reality_context.ellipse(15, ny + 15, 6, 4, 0.5, 0, Math.PI*2); 
+        reality_context.fill();
+        
+    }, 1);
+
+    // --- THE OCULUS (The Eyes) ---
+    scheduleCreationTask(() => {
+        const constructEye = (ox, oy, isLeft) => {
+            reality_context.save();
+            reality_context.translate(ox, oy);
+            
+            // Almond Shape Rotation (The "Wolf" slant)
+            const slant = isLeft ? 0.2 : -0.2;
+            reality_context.rotate(slant);
+
+            // 1. Eyeliner (The Mucocutaneous Zone) - Black rim
+            reality_context.fillStyle = '#000';
+            reality_context.beginPath();
+            reality_context.ellipse(0, 0, 26, 16, 0, 0, Math.PI*2);
+            reality_context.fill();
+
+            // 2. Sclera (Whites) - Only slightly visible in corners
+            reality_context.fillStyle = '#ddd';
+            reality_context.beginPath();
+            reality_context.ellipse(0, 0, 24, 13, 0, 0, Math.PI*2);
+            reality_context.fill();
+
+            // 3. Iris (The Blue Galaxy)
+            const iris_grad = reality_context.createRadialGradient(0,0, 2, 0,0, 11);
+            iris_grad.addColorStop(0, '#fff'); // Inner light
+            iris_grad.addColorStop(0.3, ARCTIC_PALETTE.CRYOGENIC_AZURE_CORE); // Bright cyan
+            iris_grad.addColorStop(0.8, ARCTIC_PALETTE.CRYOGENIC_AZURE_RIM); // Deep blue
+            iris_grad.addColorStop(1, '#001133'); // Limbic ring
+            
+            reality_context.fillStyle = iris_grad;
+            reality_context.beginPath();
+            reality_context.arc(0, 0, 11, 0, Math.PI*2);
+            reality_context.fill();
+            
+            // Iris striated texture (Fibrous structure)
+            reality_context.strokeStyle = 'rgba(255,255,255,0.3)';
+            reality_context.lineWidth = 0.5;
+            for(let i=0; i<20; i++) {
+                reality_context.beginPath();
+                reality_context.moveTo(0,0);
+                const theta = Math.random() * Math.PI*2;
+                reality_context.lineTo(Math.cos(theta)*11, Math.sin(theta)*11);
+                reality_context.stroke();
+            }
+
+            // 4. Pupil (The Abyss)
+            reality_context.fillStyle = '#000';
+            reality_context.beginPath();
+            reality_context.arc(0, 0, 4.5, 0, Math.PI*2); // Round pupil for dogs
+            reality_context.fill();
+
+            // 5. Catchlight (The Spark of Life)
+            // Reflection of the sky
+            reality_context.fillStyle = '#fff';
+            reality_context.beginPath();
+            reality_context.arc(3, -3, 2.5, 0, Math.PI*2);
+            reality_context.fill();
+            reality_context.fillStyle = 'rgba(255,255,255,0.5)';
+            reality_context.beginPath();
+            reality_context.arc(5, -1, 1, 0, Math.PI*2);
+            reality_context.fill();
+
+            reality_context.restore();
+        };
+
+        constructEye(-55, -30, true);
+        constructEye(55, -30, false);
+    }, 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// LAYER IV: THE VIBRISSAE (WHISKERS)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+function sproutWhiskers() {
+    scheduleCreationTask(() => {
+        // Muzzle Whiskers
+        for(let side of [-1, 1]) {
+            for(let i=0; i<18; i++) {
+                const root_x = side * (25 + Math.random()*15);
+                const root_y = 85 + (Math.random()*15);
+                const len = 70 + Math.random()*50;
+                const angle = (side===1?0:Math.PI) + (Math.random()-0.5)*0.5;
+                
+                reality_context.beginPath();
+                reality_context.moveTo(root_x, root_y);
+                reality_context.quadraticCurveTo(
+                    root_x + side * (len*0.6), 
+                    root_y + 10, 
+                    root_x + Math.cos(angle)*len, 
+                    root_y + Math.sin(angle)*len + 10
+                );
+                reality_context.strokeStyle = 'rgba(255,255,255,0.5)';
+                reality_context.lineWidth = 1.2;
+                reality_context.stroke();
+            }
+        }
+        
+        // Eyebrow Whiskers (Supraorbital)
+        for(let side of [-1, 1]) {
+            for(let i=0; i<4; i++) {
+                const root_x = side * 45;
+                const root_y = -80;
+                reality_context.beginPath();
+                reality_context.moveTo(root_x, root_y);
+                reality_context.lineTo(root_x + side*20, root_y - 30 - Math.random()*10);
+                reality_context.strokeStyle = 'rgba(255,255,255,0.4)';
+                reality_context.lineWidth = 0.8;
+                reality_context.stroke();
+            }
+        }
+    }, 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// THE BIG BANG (EXECUTION)
+// ══════════════════════════════════════════════════════════════════════════════════════════
+
+// Step 1: Initialize the Void with a cold atmospheric gradient
+const aurora_gradient = reality_context.createLinearGradient(0, -300, 0, 300);
+aurora_gradient.addColorStop(0, '#020408'); // Night sky
+aurora_gradient.addColorStop(1, '#0e1218'); // Tundra shadow
+reality_context.fillStyle = aurora_gradient;
+reality_context.fillRect(-500, -500, 1000, 1000);
+
+// Step 2: Queue the genetic sequencing
+constructThermalLayer(); // The warmth
+constructGuardLayer();   // The protection
+awakenSenses();          // The identity
+sproutWhiskers();        // The perception
+
+// Step 3: Breathe life
+executeGenesis();
+
+</script>
+</body>
+</html>

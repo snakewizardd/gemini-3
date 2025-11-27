@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SIBERIAN HUSKY</title>
+<style>
+* { margin: 0; padding: 0; }
+body { background: #000; height: 100vh; display: flex; justify-content: center; align-items: center; }
+canvas { box-shadow: 0 0 80px rgba(70,140,200,0.06); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+// Canvas setup
+const DPR = window.devicePixelRatio || 1;
+const S = Math.min(innerWidth, innerHeight) * 0.9;
+C.width = S * DPR; C.height = S * DPR;
+C.style.width = S + 'px'; C.style.height = S + 'px';
+X.scale(DPR, DPR);
+X.translate(S/2, S/2);
+X.scale(0.82, 0.82);
+
+// Noise
+const P = [];
+let seed = 42;
+for (let i = 0; i < 256; i++) P[i] = i;
+for (let i = 255; i > 0; i--) { seed = (seed * 16807) % 2147483647; const j = seed % (i+1); [P[i], P[j]] = [P[j], P[i]]; }
+for (let i = 0; i < 256; i++) P[256+i] = P[i];
+
+function noise(x, y) {
+    const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
+    const v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const aa = P[P[xi] + yi], ab = P[P[xi] + yi + 1];
+    const ba = P[P[xi + 1] + yi], bb = P[P[xi + 1] + yi + 1];
+    const g = (h, x, y) => ((h & 1) ? -x : x) + ((h & 2) ? -y : y);
+    const l = (a, b, t) => a + t * (b - a);
+    return 0.5 + 0.5 * l(l(g(aa, xf, yf), g(ba, xf-1, yf), u), l(g(ab, xf, yf-1), g(bb, xf-1, yf-1), u), v);
+}
+
+// ============ GEOMETRY ============
+// Large triangular ears - THIS IS KEY
+function inEar(x, y) {
+    // Left ear: triangle from (-85,-95) to (-55,-250) to (-25,-95)
+    if (x >= -88 && x <= -22 && y <= -95 && y >= -255) {
+        const cx = -55; // center x of ear
+        const top = -250; // tip
+        const base = -95; // bottom
+        const halfW = 33; // half width at base
+        const progress = (y - base) / (top - base); // 0 at base, 1 at tip
+        const widthAtY = halfW * (1 - progress);
+        if (Math.abs(x - cx) <= widthAtY) return true;
+    }
+    // Right ear: mirror
+    if (x >= 22 && x <= 88 && y <= -95 && y >= -255) {
+        const cx = 55;
+        const top = -250;
+        const base = -95;
+        const halfW = 33;
+        const progress = (y - base) / (top - base);
+        const widthAtY = halfW * (1 - progress);
+        if (Math.abs(x - cx) <= widthAtY) return true;
+    }
+    return false;
+}
+
+function inFace(x, y) {
+    // Main face ellipse
+    if ((x*x)/(155*155) + ((y+15)*(y+15))/(145*145) < 1) return true;
+    // Muzzle
+    if ((x*x)/(52*52) + ((y-80)*(y-80))/(50*50) < 1) return true;
+    // Cheek ruffs
+    if (((x+115)*(x+115))/(60*60) + ((y-15)*(y-15))/(70*70) < 1) return true;
+    if (((x-115)*(x-115))/(60*60) + ((y-15)*(y-15))/(70*70) < 1) return true;
+    return false;
+}
+
+function inside(x, y) {
+    return inFace(x, y) || inEar(x, y);
+}
+
+// ============ THE MASK ============
+function getMask(x, y) {
+    let dark = 0;
+    const n = (noise(x * 0.01, y * 0.01) - 0.5) * 0.1;
+    
+    // EARS - dark with light inner furnishings
+    if (inEar(x, y)) {
+        // Inner ear (lighter)
+        const earCx = x < 0 ? -55 : 55;
+        const distFromCenter = Math.abs(x - earCx);
+        if (distFromCenter < 18 && y > -220) {
+            return 0.15 + n;
+        }
+        return 0.88 + n; // Outer ear dark
+    }
+    
+    // FOREHEAD CAP - dark with white blaze
+    if (y < -20) {
+        const intensity = Math.min(1, (-y - 20) / 70);
+        // White blaze widens toward nose
+        const blazeW = 22 + Math.max(0, y + 100) * 0.18;
+        if (Math.abs(x) > blazeW) {
+            const fade = Math.min(1, (Math.abs(x) - blazeW) / 25);
+            dark = intensity * fade * 0.9;
+        }
+    }
+    
+    // SPECTACLES around eyes
+    const eyeY = -22;
+    for (const eyeX of [-56, 56]) {
+        const dx = x - eyeX;
+        const dy = y - eyeY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 28 && dist < 52 && dy < 15) {
+            const ring = 1 - Math.abs(dist - 40) / 14;
+            dark = Math.max(dark, ring * 0.8);
+        }
+    }
+    
+    // Muzzle and cheeks stay white
+    if (y > 25 && Math.abs(x) < 55) dark = Math.min(dark, 0.05);
+    if (Math.abs(x) > 65 && y > -10) dark = Math.min(dark, 0.08);
+    
+    return Math.max(0, Math.min(1, dark + n));
+}
+
+// ============ FUR DIRECTION ============
+function getAngle(x, y) {
+    const n = (noise(x * 0.015, y * 0.015) - 0.5) * 0.35;
+    
+    // EARS - fur points UP
+    if (inEar(x, y)) {
+        const side = x < 0 ? -1 : 1;
+        return -Math.PI/2 + side * 0.1 + n * 0.3;
+    }
+    
+    // FOREHEAD - fans upward from center
+    if (y < -40) {
+        return -Math.PI/2 + x * 0.0025 + n;
+    }
+    
+    // AROUND EYES - radiates outward
+    for (const eyeX of [-56, 56]) {
+        const dx = x - eyeX, dy = y - (-22);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 50 && dist > 22) {
+            return Math.atan2(dy, dx) + n * 0.4;
+        }
+    }
+    
+    // NOSE BRIDGE - down
+    if (Math.abs(x) < 35 && y > -40 && y < 55) {
+        return Math.PI/2 + n;
+    }
+    
+    // CHEEKS - sweep back
+    if (Math.abs(x) > 55) {
+        return Math.PI/2 + (x > 0 ? 0.45 : -0.45) + n;
+    }
+    
+    // MUZZLE - down
+    if (y > 50) return Math.PI/2 + n;
+    
+    return Math.atan2(y, x) + Math.PI/2 + n;
+}
+
+// ============ FUR LENGTH ============
+function getLen(x, y, guard) {
+    const base = guard ? 32 : 11;
+    const n = noise(x * 0.02, y * 0.02);
+    
+    if (inEar(x, y)) return base * 0.6 + n * 6;
+    if (y > 55 && Math.abs(x) < 50) return base * 0.35 + n * 4; // Short muzzle
+    if (Math.abs(x) > 75 || y > 90) return base * 1.6 + n * 18; // Long ruff
+    return base + n * 12;
+}
+
+// ============ COLOR ============
+function getColor(m) {
+    const v = m > 0.6 ? 35 - (m - 0.6) * 60 : m > 0.25 ? 180 - (m - 0.25) * 400 : 250 - m * 280;
+    return `rgb(${Math.round(v)},${Math.round(v)},${Math.round(v + 4)})`;
+}
+
+// ============ PAINT FUR ============
+function fur(x, y, guard) {
+    if (!inside(x, y)) return;
+    
+    const ang = getAngle(x, y);
+    const len = getLen(x, y, guard);
+    const m = getMask(x, y);
+    const col = getColor(m);
+    
+    const curve = (noise(x * 0.04, y * 0.04) - 0.5) * (guard ? 0.18 : 0.4);
+    const ex = x + Math.cos(ang + curve) * len;
+    const ey = y + Math.sin(ang + curve) * len;
+    const cx = (x + ex)/2 + (noise(x*0.06, y*0.06) - 0.5) * len * 0.25;
+    const cy = (y + ey)/2 + (noise(x*0.06+50, y*0.06) - 0.5) * len * 0.25;
+    
+    X.beginPath();
+    X.moveTo(x, y);
+    X.quadraticCurveTo(cx, cy, ex, ey);
+    X.strokeStyle = col;
+    X.lineWidth = guard ? 0.75 : 1.5;
+    X.globalAlpha = guard ? 0.8 : 0.45;
+    X.stroke();
+}
+
+// ============ EYES ============
+function eye(cx, cy, left) {
+    X.save();
+    X.translate(cx, cy);
+    X.rotate(left ? 0.15 : -0.15);
+    X.globalAlpha = 1;
+    
+    // Socket
+    X.fillStyle = '#000';
+    X.shadowColor = '#000';
+    X.shadowBlur = 12;
+    X.beginPath();
+    X.ellipse(0, 0, 26, 15, 0, 0, Math.PI*2);
+    X.fill();
+    X.shadowBlur = 0;
+    
+    // Sclera
+    X.fillStyle = '#ccd';
+    X.beginPath();
+    X.ellipse(0, 0, 24, 13, 0, 0, Math.PI*2);
+    X.fill();
+    
+    // Iris
+    const ig = X.createRadialGradient(0, 0, 0, 0, 0, 13);
+    ig.addColorStop(0, '#fff');
+    ig.addColorStop(0.12, '#e8fcff');
+    ig.addColorStop(0.28, '#60c8f0');
+    ig.addColorStop(0.5, '#2898cc');
+    ig.addColorStop(0.72, '#186090');
+    ig.addColorStop(0.88, '#0c3858');
+    ig.addColorStop(1, '#061828');
+    X.fillStyle = ig;
+    X.beginPath();
+    X.arc(0, 0, 13, 0, Math.PI*2);
+    X.fill();
+    
+    // Iris fibers
+    X.strokeStyle = 'rgba(255,255,255,0.08)';
+    X.lineWidth = 0.3;
+    for (let i = 0; i < 28; i++) {
+        const a = i / 28 * Math.PI * 2;
+        X.beginPath();
+        X.moveTo(Math.cos(a) * 3.5, Math.sin(a) * 3.5);
+        X.lineTo(Math.cos(a) * 12, Math.sin(a) * 12);
+        X.stroke();
+    }
+    
+    // Pupil
+    X.fillStyle = '#000';
+    X.beginPath();
+    X.arc(0, 0, 4.5, 0, Math.PI*2);
+    X.fill();
+    
+    // Lid shadow
+    const lg = X.createLinearGradient(0, -16, 0, 4);
+    lg.addColorStop(0, 'rgba(0,0,0,0.65)');
+    lg.addColorStop(0.5, 'rgba(0,0,0,0.15)');
+    lg.addColorStop(1, 'rgba(0,0,0,0)');
+    X.fillStyle = lg;
+    X.beginPath();
+    X.ellipse(0, -4, 20, 12, 0, 0, Math.PI*2);
+    X.fill();
+    
+    // Catchlights
+    X.fillStyle = '#fff';
+    X.beginPath();
+    X.arc(3.5, -3.5, 2.8, 0, Math.PI*2);
+    X.fill();
+    X.beginPath();
+    X.arc(5.5, 0.5, 1.1, 0, Math.PI*2);
+    X.fill();
+    
+    X.restore();
+}
+
+// ============ NOSE ============
+function drawNose() {
+    X.globalAlpha = 1;
+    const ny = 92;
+    
+    X.fillStyle = '#080808';
+    X.beginPath();
+    X.moveTo(-28, ny - 8);
+    X.bezierCurveTo(-32, ny + 16, -16, ny + 38, 0, ny + 40);
+    X.bezierCurveTo(16, ny + 38, 32, ny + 16, 28, ny - 8);
+    X.bezierCurveTo(10, ny - 14, -10, ny - 14, -28, ny - 8);
+    X.fill();
+    
+    // Texture
+    X.fillStyle = 'rgba(35,35,40,0.5)';
+    for (let i = 0; i < 150; i++) {
+        const px = (Math.random() - 0.5) * 48;
+        const py = ny + 4 + Math.random() * 28;
+        if (px*px/550 + (py-ny-14)*(py-ny-14)/350 < 1) {
+            X.beginPath();
+            X.arc(px, py, 0.7, 0, Math.PI*2);
+            X.fill();
+        }
+    }
+    
+    // Shine
+    const sg = X.createRadialGradient(-7, ny + 4, 0, -7, ny + 4, 14);
+    sg.addColorStop(0, 'rgba(255,255,255,0.22)');
+    sg.addColorStop(1, 'rgba(255,255,255,0)');
+    X.fillStyle = sg;
+    X.beginPath();
+    X.ellipse(-7, ny + 4, 11, 7, -0.3, 0, Math.PI*2);
+    X.fill();
+    
+    // Nostrils
+    X.fillStyle = '#000';
+    X.beginPath();
+    X.ellipse(-11, ny + 14, 6.5, 4, -0.35, 0, Math.PI*2);
+    X.fill();
+    X.beginPath();
+    X.ellipse(11, ny + 14, 6.5, 4, 0.35, 0, Math.PI*2);
+    X.fill();
+    
+    // Philtrum
+    X.strokeStyle = 'rgba(0,0,0,0.25)';
+    X.lineWidth = 1.8;
+    X.beginPath();
+    X.moveTo(0, ny + 40);
+    X.lineTo(0, ny + 55);
+    X.stroke();
+}
+
+// ============ WHISKERS ============
+function whiskers() {
+    X.strokeStyle = 'rgba(255,255,255,0.45)';
+    X.lineWidth = 0.9;
+    
+    for (const side of [-1, 1]) {
+        for (let i = 0; i < 14; i++) {
+            const rx = side * (24 + Math.random() * 14);
+            const ry = 92 + Math.random() * 18;
+            const len = 45 + Math.random() * 40;
+            const ang = (side === 1 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.55;
+            const droop = 12 + Math.random() * 28;
+            
+            X.globalAlpha = 0.25 + Math.random() * 0.3;
+            X.beginPath();
+            X.moveTo(rx, ry);
+            X.bezierCurveTo(rx + side*len*0.35, ry, rx + side*len*0.65, ry + droop*0.5, rx + Math.cos(ang)*len, ry + droop);
+            X.stroke();
+        }
+    }
+    X.globalAlpha = 1;
+}
+
+// ============ RENDER ============
+// Background
+const bg = X.createRadialGradient(0, -40, 20, 0, 20, 400);
+bg.addColorStop(0, '#0a0e12');
+bg.addColorStop(0.35, '#060809');
+bg.addColorStop(1, '#000');
+X.fillStyle = bg;
+X.fillRect(-500, -500, 1000, 1000);
+
+// Base shadow
+X.fillStyle = '#030404';
+X.beginPath();
+X.ellipse(0, 5, 175, 165, 0, 0, Math.PI*2);
+X.fill();
+
+// Ear shadows
+X.beginPath();
+X.moveTo(-88, -95);
+X.lineTo(-55, -250);
+X.lineTo(-22, -95);
+X.fill();
+X.beginPath();
+X.moveTo(88, -95);
+X.lineTo(55, -250);
+X.lineTo(22, -95);
+X.fill();
+
+// Generate points and sort by Y
+const pts = [];
+for (let i = 0; i < 120000; i++) {
+    const x = (Math.random() - 0.5) * 500;
+    const y = (Math.random() - 0.5) * 600;
+    if (inside(x, y)) pts.push({x, y});
+}
+pts.sort((a, b) => a.y - b.y);
+
+// UNDERCOAT - 55,000 strands
+for (let i = 0; i < 55000 && i < pts.length; i++) {
+    fur(pts[i].x, pts[i].y, false);
+}
+
+// Regenerate for guard layer
+const pts2 = [];
+for (let i = 0; i < 80000; i++) {
+    const x = (Math.random() - 0.5) * 520;
+    const y = (Math.random() - 0.5) * 620;
+    if (inside(x, y)) pts2.push({x, y});
+}
+pts2.sort((a, b) => a.y - b.y);
+
+// GUARD HAIRS - 30,000 strands
+for (let i = 0; i < 30000 && i < pts2.length; i++) {
+    fur(pts2[i].x, pts2[i].y, true);
+}
+
+// Highlights on top
+X.globalAlpha = 1;
+for (let i = 0; i < 600; i++) {
+    const x = (Math.random() - 0.5) * 320;
+    const y = -90 - Math.random() * 150;
+    if (inside(x, y)) {
+        const ang = getAngle(x, y);
+        const len = 8 + Math.random() * 18;
+        X.beginPath();
+        X.moveTo(x, y);
+        X.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+        X.strokeStyle = `rgba(255,255,255,${0.025 + Math.random() * 0.05})`;
+        X.lineWidth = 0.45;
+        X.stroke();
+    }
+}
+
+// Features
+drawNose();
+eye(-56, -22, true);
+eye(56, -22, false);
+whiskers();
+
+// Rim lights
+X.globalCompositeOperation = 'screen';
+const rl = X.createLinearGradient(-190, 0, -120, 0);
+rl.addColorStop(0, 'rgba(70,140,190,0.09)');
+rl.addColorStop(1, 'rgba(70,140,190,0)');
+X.fillStyle = rl;
+X.beginPath();
+X.ellipse(-155, -10, 42, 190, 0.04, 0, Math.PI*2);
+X.fill();
+
+const rr = X.createLinearGradient(190, 0, 120, 0);
+rr.addColorStop(0, 'rgba(190,160,120,0.05)');
+rr.addColorStop(1, 'rgba(190,160,120,0)');
+X.fillStyle = rr;
+X.beginPath();
+X.ellipse(155, -10, 42, 190, -0.04, 0, Math.PI*2);
+X.fill();
+
+X.globalCompositeOperation = 'source-over';
+
+// Vignette
+const vg = X.createRadialGradient(0, 0, S * 0.22, 0, 0, S * 0.52);
+vg.addColorStop(0, 'rgba(0,0,0,0)');
+vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+X.fillStyle = vg;
+X.fillRect(-S, -S, S*2, S*2);
+
+console.log('COMPLETE: 85,000 fibers');
+</script>
+</body>
+</html>

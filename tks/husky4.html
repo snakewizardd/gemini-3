@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LUMIN_ENGINE v2.0 | THE CELESTIAL CONSTRUCT</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #000; 
+            overflow: hidden; 
+            cursor: crosshair; /* Precision interface */
+        }
+        canvas { display: block; }
+        #debug {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(0, 247, 255, 0.5);
+            font-family: monospace;
+            font-size: 10px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="debug">SYSTEM: ONLINE | SOUL: 100% | ORBITALS: STABLE</div>
+
+<script>
+/**
+ * ═════════════════════════════════════════════════════════════════════════
+ * LUMIN_ENGINE v2.0: "THE CELESTIAL CONSTRUCT"
+ * ═════════════════════════════════════════════════════════════════════════
+ * * VERBOSITY LEVEL: MAXIMUM
+ * ARCHITECTURE: MONOLITHIC
+ * * MODULES:
+ * 1. THE MATH CORE: Procedural noise generation (Perlin implementation).
+ * 2. THE VOID MANAGER: Handling the infinite background canvas.
+ * 3. THE SPIRIT SYSTEM: Particle physics for "Energy Motes".
+ * 4. THE CONSTRUCT: Signed Distance Field (SDF) geometry for the entity.
+ * 5. THE POST-PROCESSOR: Pseudo-HDR bloom and chromatic aberration.
+ * * ═════════════════════════════════════════════════════════════════════════
+ */
+
+// 1. THE MATH CORE (PERLIN NOISE IMPLEMENTATION)
+// We need raw chaos to create the nebula. Standard Math.random() is too harsh.
+// We implement a classic Perlin Noise algorithm for smooth, gradient chaos.
+const PERLIN = {
+    gradients: {},
+    memory: {},
+    
+    // Deterministic pseudo-random vector generation
+    rand_vect: function(x, y) {
+        let theta = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+        theta = (theta - Math.floor(theta)) * 2 * Math.PI;
+        return { x: Math.cos(theta), y: Math.sin(theta) };
+    },
+    
+    // Dot product distance
+    dot_prod_grid: function(x, y, vx, vy) {
+        let g_vect;
+        let d_vect = { x: x - vx, y: y - vy };
+        if (this.gradients[[vx, vy]]) {
+            g_vect = this.gradients[[vx, vy]];
+        } else {
+            g_vect = this.rand_vect(vx, vy);
+            this.gradients[[vx, vy]] = g_vect;
+        }
+        return d_vect.x * g_vect.x + d_vect.y * g_vect.y;
+    },
+    
+    // Smoothstep interpolation (The "Ease")
+    smootherstep: function(x) {
+        return 6 * x ** 5 - 15 * x ** 4 + 10 * x ** 3;
+    },
+    
+    // The Main Noise Function
+    get: function(x, y) {
+        let xf = Math.floor(x);
+        let yf = Math.floor(y);
+        
+        // Grid corners
+        let tl = this.dot_prod_grid(x, y, xf, yf);
+        let tr = this.dot_prod_grid(x, y, xf + 1, yf);
+        let bl = this.dot_prod_grid(x, y, xf, yf + 1);
+        let br = this.dot_prod_grid(x, y, xf + 1, yf + 1);
+        
+        // Interpolation
+        let xt = this.smootherstep(x - xf);
+        let yt = this.smootherstep(y - yf);
+        
+        let top = tl + (tr - tl) * xt;
+        let bottom = bl + (br - bl) * xt;
+        
+        return bottom + (top - bottom) * yt; // Returns -1 to 1
+    }
+};
+
+// 2. THE ENGINE KERNEL
+const ENGINE = {
+    canvas: null,
+    ctx: null,
+    width: 0,
+    height: 0,
+    tick: 0,
+    mouse: { x: 0, y: 0, active: false },
+    
+    // Configuration Block: The DNA of the simulation
+    config: {
+        TIME_SCALE: 0.008,          // Speed of the universe
+        PARTICLE_COUNT: 150,        // Density of spirit dust
+        BLOOM_INTENSITY: 0.4,       // Strength of the glow
+        HUSKY_SCALE: 1.2,           // Size of the entity
+        PALETTE: {
+            VOID: '#020105',        // The darkest dark
+            NEBULA_A: '#0d001a',    // Purple haze
+            NEBULA_B: '#001a24',    // Cyan haze
+            CORE: '#ffffff',        // Pure light
+            ACCENT: '#00f7ff',      // Cyber-spiritual cyan
+            RUNES: 'rgba(0, 247, 255, 0.3)'
+        }
+    },
+
+    // Initialization Sequence
+    init() {
+        this.canvas = document.getElementById('canvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        this.bindEvents();
+        this.resize();
+        PARTICLES.init(); // Ignite the spirit dust
+        this.loop();      // Begin the simulation
+    },
+
+    bindEvents() {
+        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('mousemove', (e) => {
+            this.mouse.x = e.clientX;
+            this.mouse.y = e.clientY;
+            this.mouse.active = true;
+        });
+    },
+
+    resize() {
+        this.width = this.canvas.width = window.innerWidth;
+        this.height = this.canvas.height = window.innerHeight;
+    },
+
+    // The Main Render Loop (60Hz Heartbeat)
+    loop() {
+        this.tick += this.config.TIME_SCALE;
+        
+        // 1. CLEAR (Erase the past)
+        this.ctx.fillStyle = this.config.PALETTE.VOID;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        // 2. RENDER NEBULA (Procedural Background)
+        RENDERER.drawNebula(this.ctx, this.width, this.height, this.tick);
+        
+        // 3. RENDER PARTICLES (The Environment)
+        PARTICLES.updateAndDraw(this.ctx, this.width, this.height, this.mouse);
+
+        // 4. RENDER CONSTRUCT (The Deity)
+        // Physics calculations for "Floating"
+        const floatY = Math.sin(this.tick * 2) * 15;
+        const breath = 1 + Math.sin(this.tick * 1.5) * 0.02;
+        
+        this.ctx.save();
+        this.ctx.translate(this.width / 2, this.height / 2 + floatY);
+        this.ctx.scale(breath, breath);
+        
+        // 4a. The Orbitals (Rings/Runes)
+        RENDERER.drawOrbitals(this.ctx, this.tick);
+        
+        // 4b. The Entity Itself
+        RENDERER.drawConstruct(this.ctx);
+        
+        this.ctx.restore();
+
+        // 5. POST-PROCESSING (The "Feeling")
+        RENDERER.applyBloom(this.ctx, this.width, this.height);
+
+        requestAnimationFrame(() => this.loop());
+    }
+};
+
+// 3. THE PARTICLE SYSTEM (SPIRIT MOTE SIMULATION)
+const PARTICLES = {
+    pool: [],
+    
+    init() {
+        for(let i = 0; i < ENGINE.config.PARTICLE_COUNT; i++) {
+            this.pool.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                size: Math.random() * 2,
+                life: Math.random() * Math.PI * 2
+            });
+        }
+    },
+    
+    updateAndDraw(ctx, w, h, mouse) {
+        ctx.fillStyle = ENGINE.config.PALETTE.ACCENT;
+        
+        this.pool.forEach(p => {
+            // Physics: Base movement
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life += 0.02;
+            
+            // Physics: Mouse attraction (The "Interaction")
+            if (mouse.active) {
+                const dx = mouse.x - p.x;
+                const dy = mouse.y - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 200) {
+                    p.x += dx * 0.01;
+                    p.y += dy * 0.01;
+                }
+            }
+            
+            // Wrap-around universe logic
+            if (p.x < 0) p.x = w;
+            if (p.x > w) p.x = 0;
+            if (p.y < 0) p.y = h;
+            if (p.y > h) p.y = 0;
+            
+            // Render
+            const alpha = (Math.sin(p.life) + 1) / 2 * 0.5;
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1.0;
+    }
+};
+
+// 4. THE RENDERER (THE ARTIST)
+const RENDERER = {
+    
+    drawNebula(ctx, w, h, t) {
+        // Optimizing: We don't draw pixel-by-pixel (too slow for JS).
+        // Instead, we render giant overlapping plasma clouds using radial gradients
+        // driven by Perlin noise coordinates.
+        
+        ctx.globalCompositeOperation = 'screen';
+        
+        // Cloud 1: The Cyan Haze
+        const n1 = PERLIN.get(t, 0); // Noise value -1 to 1
+        const x1 = w * 0.5 + (n1 * 300);
+        const y1 = h * 0.5 + (PERLIN.get(0, t) * 200);
+        
+        const g1 = ctx.createRadialGradient(x1, y1, 100, x1, y1, w);
+        g1.addColorStop(0, 'rgba(0, 247, 255, 0.05)');
+        g1.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        ctx.fillStyle = g1;
+        ctx.fillRect(0,0,w,h);
+        
+        // Cloud 2: The Purple Void
+        const n2 = PERLIN.get(t + 10, 10);
+        const x2 = w * 0.5 + (n2 * 400);
+        const y2 = h * 0.5 + (PERLIN.get(10, t + 10) * 300);
+        
+        const g2 = ctx.createRadialGradient(x2, y2, 50, x2, y2, w * 0.8);
+        g2.addColorStop(0, 'rgba(150, 0, 255, 0.04)');
+        g2.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        ctx.fillStyle = g2;
+        ctx.fillRect(0,0,w,h);
+        
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    drawOrbitals(ctx, t) {
+        // The "Halo" mechanics.
+        // Ring 1: The dashed data-stream
+        ctx.save();
+        ctx.rotate(t * 0.1);
+        ctx.strokeStyle = ENGINE.config.PALETTE.RUNES;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 15]); // Data packet look
+        ctx.beginPath();
+        ctx.arc(0, 0, 220, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Ring 2: The slow solid containment field
+        ctx.save();
+        ctx.rotate(-t * 0.05);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(0, 0, 240, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    drawConstruct(ctx) {
+        // --- LAYER 1: THE SILHOUETTE (AURA) ---
+        // We draw the full shape in black first with a massive colored shadow
+        // to create the "backlight" effect.
+        
+        ctx.shadowBlur = 80;
+        ctx.shadowColor = ENGINE.config.PALETTE.ACCENT;
+        ctx.fillStyle = '#000';
+        
+        const drawHeadShape = () => {
+            ctx.beginPath();
+            // Complex Bezier Geometry for "Husky" features
+            // Start Top Center
+            ctx.moveTo(0, -90);
+            // Right Ear (Sharp, geometric)
+            ctx.lineTo(30, -100); ctx.lineTo(70, -190); ctx.lineTo(90, -90);
+            // Right Cheek (Fluffed out)
+            ctx.bezierCurveTo(140, -50, 130, 80, 50, 130);
+            // Chin
+            ctx.lineTo(0, 140);
+            // Left Cheek (Symmetry)
+            ctx.lineTo(-50, 130);
+            ctx.bezierCurveTo(-130, 80, -140, -50, -90, -90);
+            // Left Ear
+            ctx.lineTo(-70, -190); ctx.lineTo(-30, -100);
+            ctx.closePath();
+        };
+
+        drawHeadShape();
+        ctx.fill();
+        ctx.shadowBlur = 0; // Disable heavy shadow for inner details
+
+        // --- LAYER 2: THE MASK (THE FACE) ---
+        // The white fur is rendered as a light-emitting gradient.
+        const maskGrad = ctx.createLinearGradient(0, -150, 0, 100);
+        maskGrad.addColorStop(0, '#eef'); // White top
+        maskGrad.addColorStop(1, '#88a'); // Shadowed chin
+
+        ctx.fillStyle = maskGrad;
+        ctx.beginPath();
+        // The "Widow's Peak" Mask logic
+        ctx.moveTo(0, -40); // Forehead dip
+        ctx.quadraticCurveTo(40, -60, 60, -30); // R Brow
+        ctx.bezierCurveTo(90, 0, 70, 90, 0, 110); // R Face to Chin
+        ctx.bezierCurveTo(-70, 90, -90, 0, -60, -30); // L Face
+        ctx.quadraticCurveTo(-40, -60, 0, -40); // L Brow
+        ctx.fill();
+
+        // --- LAYER 3: THE SENSORS (EYES) ---
+        // The most important part. They must look like portals.
+        const drawEye = (x) => {
+            ctx.save();
+            ctx.translate(x, 0);
+            
+            // 1. The Glow (Bloom)
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = ENGINE.config.PALETTE.ACCENT;
+            
+            // 2. The Shape (Almond/Meditative)
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-28, 5);
+            ctx.quadraticCurveTo(0, -8, 28, 5); // Upper lid arch
+            ctx.stroke();
+            
+            // 3. The Pupil (The "Singularity")
+            ctx.fillStyle = '#fff'; // Pure white hot
+            ctx.beginPath();
+            ctx.arc(0, 2, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        };
+
+        drawEye(-45);
+        drawEye(45);
+
+        // --- LAYER 4: THE INTERFACE (NOSE) ---
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.moveTo(-15, 50);
+        ctx.quadraticCurveTo(0, 45, 15, 50); // Top
+        ctx.lineTo(0, 65); // Point
+        ctx.fill();
+        
+        // --- LAYER 5: THE THIRD EYE (CHAKRA) ---
+        ctx.globalCompositeOperation = 'screen';
+        const chakra = ctx.createRadialGradient(0, -60, 0, 0, -60, 30);
+        chakra.addColorStop(0, 'rgba(0, 247, 255, 0.8)');
+        chakra.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = chakra;
+        ctx.beginPath(); ctx.arc(0, -60, 30, 0, Math.PI*2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    applyBloom(ctx, w, h) {
+        // We simulate a camera lens flare/bloom by overlaying a giant
+        // screen-blended gradient.
+        ctx.globalCompositeOperation = 'screen';
+        
+        const bloom = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w);
+        // Core hotspot
+        bloom.addColorStop(0, 'rgba(0, 247, 255, 0.1)');
+        // Falloff
+        bloom.addColorStop(0.5, 'rgba(100, 0, 255, 0.05)');
+        // Edge darkness
+        bloom.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        ctx.fillStyle = bloom;
+        ctx.fillRect(0,0,w,h);
+        
+        ctx.globalCompositeOperation = 'source-over';
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════
+// SYSTEM IGNITION
+// ═════════════════════════════════════════════════════════════════════════
+ENGINE.init();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BIO_PAINTER_KERNEL v4.0 | THE PROFOUND CONSTRUCT</title>
+<style>
+    body { 
+        margin: 0; 
+        background: #050505; 
+        overflow: hidden; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        height: 100vh; 
+        font-family: monospace;
+    }
+    canvas { 
+        box-shadow: 0 0 50px rgba(0,0,0,0.8); 
+        background: #0b0b0b; 
+    }
+    #status {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: #444;
+        font-size: 12px;
+        pointer-events: none;
+    }
+    .active-layer { color: #00f7ff !important; text-shadow: 0 0 10px #00f7ff; }
+</style>
+</head>
+<body>
+
+<div id="status">
+    <div id="l-bone">1. OSTEOLOGICAL FRAMEWORK [WAITING]</div>
+    <div id="l-thermal">2. THERMAL UNDERCOAT [WAITING]</div>
+    <div id="l-guard">3. AERODYNAMIC GUARD [WAITING]</div>
+    <div id="l-sense">4. SENSORY ARRAY [WAITING]</div>
+    <br>
+    <div id="counter">STRANDS: 0</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * BIO_PAINTER_KERNEL v4.0
+ * -----------------------
+ * A deterministic biological rendering engine.
+ * * ARCHITECTURE:
+ * 1. THE GEOMETRY KERNEL: Defines the underlying bone/muscle mesh.
+ * 2. THE GROWTH ENGINE: Calculates vector flow fields for hair direction.
+ * 3. THE BRUSH: A Bezier-based rendering agent with alpha-blending physics.
+ */
+
+const CONFIG = {
+    SCALE: 0.9,
+    DENSITY: {
+        UNDERCOAT: 35000,
+        GUARD: 15000,
+        SENSORY: 200
+    },
+    SPEED: 200 // Strands painted per frame (Lower = Slower/More detailed to watch)
+};
+
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+const ui = {
+    bone: document.getElementById('l-bone'),
+    thermal: document.getElementById('l-thermal'),
+    guard: document.getElementById('l-guard'),
+    sense: document.getElementById('l-sense'),
+    counter: document.getElementById('counter')
+};
+
+// SETUP HIGH-DPI
+const dpr = window.devicePixelRatio || 1;
+const size = Math.min(window.innerWidth, window.innerHeight) * 0.95;
+cvs.width = size * dpr;
+cvs.height = size * dpr;
+cvs.style.width = size + 'px';
+cvs.style.height = size + 'px';
+ctx.scale(dpr, dpr);
+ctx.translate(size/2, size/2);
+ctx.scale(CONFIG.SCALE, CONFIG.SCALE);
+
+// ═══════════════════════════════════════════════════════════════
+// 1. THE GEOMETRY KERNEL (THE MAP)
+// ═══════════════════════════════════════════════════════════════
+
+// Calculates the growth angle for any point (x,y) on the face
+function getGrowthVector(x, y) {
+    const dist = Math.sqrt(x*x + y*y);
+    
+    // NOSE BRIDGE (The Fulcrum): Radiates upward and outward
+    if (y > -50 && y < 50 && Math.abs(x) < 40) {
+        return -Math.PI/2 + (x * 0.01);
+    }
+    
+    // ORBITAL RIDGE (Eyes): Circular flow
+    if (y > -60 && y < 10 && Math.abs(x) > 30 && Math.abs(x) < 80) {
+        const eyeX = x > 0 ? 50 : -50;
+        const eyeY = -20;
+        const angleToEye = Math.atan2(y - eyeY, x - eyeX);
+        return angleToEye + Math.PI/2; // Tangential flow
+    }
+
+    // FOREHEAD: Upward fan
+    if (y < -60) {
+        return -Math.PI/2 + (x * 0.005);
+    }
+
+    // CHEEKS (Zygomatic Arch): Sweeping down and back
+    if (Math.abs(x) > 50) {
+        const side = x > 0 ? 1 : -1;
+        return Math.PI/2 + (side * 0.5); 
+    }
+    
+    // MUZZLE SIDES: Downward
+    return Math.PI/2 + (x * 0.002);
+}
+
+// Determines if a pixel is inside the "Husky Shape"
+function isInMask(x, y) {
+    // A composite set of SDFs (Signed Distance Fields)
+    
+    // Main Head
+    const head = (x*x)/(130*130) + (y+50)*(y+50)/(120*120);
+    if (head < 1) return true;
+
+    // Ears
+    const earL = Math.abs(x - -70) < 30 && y < -100 && y > -200;
+    const earR = Math.abs(x - 70) < 30 && y < -100 && y > -200;
+    if (earL || earR) return true;
+
+    // Cheeks (Fluff)
+    const cheekL = (x - -100)*(x - -100) + (y - 50)*(y - 50) < 60*60;
+    const cheekR = (x - 100)*(x - 100) + (y - 50)*(y - 50) < 60*60;
+    if (cheekL || cheekR) return true;
+
+    return false;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. THE GROWTH ENGINE (THE PAINTER)
+// ═══════════════════════════════════════════════════════════════
+
+const RENDER_QUEUE = [];
+let TOTAL_STRANDS = 0;
+
+function queueTask(fn) { RENDER_QUEUE.push(fn); }
+
+function paintStrand(x, y, layer) {
+    const angle = getGrowthVector(x, y);
+    const noise = Math.random();
+    
+    let len, width, colorS, colorE, curve;
+
+    if (layer === 'UNDERCOAT') {
+        // MECHANIC: Thermal Insulation
+        // Short, dense, chaotic (traps air)
+        len = 15 + noise * 10;
+        width = 2.0;
+        curve = (noise - 0.5) * 1.5; // High turbulence
+        
+        // Color Logic (The Markings)
+        const isDark = (y < -50 && Math.abs(x) < 150) || (y > -50 && Math.abs(x) > 90); // Cap & Cheeks
+        if (isDark) {
+            colorS = '#1a1a1a'; colorE = '#333';
+        } else {
+            colorS = '#ddd'; colorE = '#fff';
+        }
+
+    } else if (layer === 'GUARD') {
+        // MECHANIC: Aerodynamics & Weatherproofing
+        // Long, straight, aligned (sheds water/wind)
+        len = 40 + noise * 30;
+        width = 0.8;
+        curve = (noise - 0.5) * 0.2; // Low turbulence
+        
+        const isDark = (y < -50 && Math.abs(x) < 150) || (y > -50 && Math.abs(x) > 90);
+        if (isDark) {
+            colorS = '#000'; colorE = 'rgba(50,50,50,0.5)';
+        } else {
+            colorS = '#fff'; colorE = 'rgba(255,255,255,0.8)';
+        }
+    }
+
+    // DRAW THE HAIR (Quadratic Bezier)
+    const endX = x + Math.cos(angle + curve) * len;
+    const endY = y + Math.sin(angle + curve) * len;
+    const midX = (x + endX) / 2 + (Math.random()-0.5) * 5;
+    const midY = (y + endY) / 2 + (Math.random()-0.5) * 5;
+
+    const grad = ctx.createLinearGradient(x, y, endX, endY);
+    grad.addColorStop(0, colorS);
+    grad.addColorStop(1, colorE);
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(midX, midY, endX, endY);
+    ctx.stroke();
+
+    TOTAL_STRANDS++;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THE PHASES (THE TIMELINE)
+// ═══════════════════════════════════════════════════════════════
+
+// PHASE 1: OSTEOLOGY (The Skull Shadow)
+function phase_Bone() {
+    ui.bone.className = 'active-layer';
+    
+    // Draw the dark void of the skull shape first
+    ctx.fillStyle = '#111';
+    
+    // Skull
+    ctx.beginPath();
+    ctx.ellipse(0, -30, 110, 100, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Snout
+    ctx.beginPath(); ctx.ellipse(0, 60, 45, 40, 0, 0, Math.PI*2); ctx.fill();
+    // Ears
+    ctx.beginPath(); ctx.moveTo(-60,-80); ctx.lineTo(-90,-200); ctx.lineTo(-20,-80); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(60,-80); ctx.lineTo(90,-200); ctx.lineTo(20,-80); ctx.fill();
+
+    setTimeout(phase_Thermal, 1000);
+}
+
+// PHASE 2: THERMAL UNDERCOAT
+function phase_Thermal() {
+    ui.bone.className = '';
+    ui.thermal.className = 'active-layer';
+
+    // Generate thousands of points
+    const points = [];
+    for(let i=0; i<CONFIG.DENSITY.UNDERCOAT; i++) {
+        let x = (Math.random() - 0.5) * 400;
+        let y = (Math.random() - 0.5) * 400;
+        if (isInMask(x, y)) points.push({x, y});
+    }
+
+    // Sort by Y (Back to Front painting)
+    points.sort((a,b) => a.y - b.y);
+
+    // Queue them up
+    points.forEach(p => {
+        queueTask(() => paintStrand(p.x, p.y, 'UNDERCOAT'));
+    });
+
+    // Add a marker to trigger next phase when done
+    queueTask(() => setTimeout(phase_Guard, 500));
+}
+
+// PHASE 3: GUARD HAIRS
+function phase_Guard() {
+    ui.thermal.className = '';
+    ui.guard.className = 'active-layer';
+
+    const points = [];
+    for(let i=0; i<CONFIG.DENSITY.GUARD; i++) {
+        let x = (Math.random() - 0.5) * 420; // Slightly wider
+        let y = (Math.random() - 0.5) * 420;
+        if (isInMask(x, y)) points.push({x, y});
+    }
+    
+    // Z-Index sort creates "shingling" effect
+    points.sort((a,b) => a.y - b.y);
+
+    points.forEach(p => {
+        queueTask(() => paintStrand(p.x, p.y, 'GUARD'));
+    });
+
+    queueTask(() => setTimeout(phase_Sensory, 500));
+}
+
+// PHASE 4: SENSORY & OPTICS (Eyes, Nose, Whiskers)
+function phase_Sensory() {
+    ui.guard.className = '';
+    ui.sense.className = 'active-layer';
+
+    queueTask(() => {
+        // 1. NOSE (Tyrosinase Texture)
+        ctx.save();
+        ctx.translate(0, 80);
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath();
+        ctx.moveTo(-25, 0); ctx.quadraticCurveTo(0, -10, 25, 0);
+        ctx.lineTo(0, 35); ctx.fill();
+        
+        // Pebbling
+        ctx.fillStyle = '#333';
+        for(let i=0; i<50; i++) {
+            let rx = (Math.random()-0.5)*30;
+            let ry = Math.random()*25;
+            if(rx*rx + ry*ry < 200) {
+                ctx.beginPath(); ctx.arc(rx, ry, 1, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        ctx.restore();
+
+        // 2. EYES (The Soul)
+        const drawEye = (x) => {
+            ctx.save();
+            ctx.translate(x, -20);
+            
+            // Shadow
+            ctx.shadowBlur = 20; ctx.shadowColor = '#000';
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.ellipse(0,0, 25, 14, x<0?0.2:-0.2, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Iris (Ice Blue)
+            const grad = ctx.createRadialGradient(0,0, 5, 0,0, 20);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.5, '#0ff');
+            grad.addColorStop(1, '#00f');
+            
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(0,0, 11, 0, Math.PI*2); ctx.fill();
+            
+            // Pupil
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(0,0, 4, 0, Math.PI*2); ctx.fill();
+            
+            // Highlight
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(3,-3, 2, 0, Math.PI*2); ctx.fill();
+
+            ctx.restore();
+        };
+        drawEye(-50);
+        drawEye(50);
+    });
+
+    // 3. WHISKERS (Vibrissae)
+    // Painted last, white, long curves
+    for(let i=0; i<CONFIG.DENSITY.SENSORY; i++) {
+        queueTask(() => {
+            const side = i%2===0 ? 1 : -1;
+            const y = 80 + Math.random() * 20;
+            const x = side * (30 + Math.random() * 10);
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.bezierCurveTo(x + side*50, y+10, x + side*80, y+30, x + side*120, y+50 + (Math.random()*40));
+            ctx.strokeStyle = `rgba(255,255,255, ${Math.random()*0.5 + 0.2})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+        });
+    }
+
+    queueTask(() => {
+        ui.sense.className = '';
+        ui.counter.innerHTML = "SIMULATION COMPLETE | STRANDS: " + TOTAL_STRANDS;
+        ui.counter.style.color = "#0f0";
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENGINE LOOP
+// ═══════════════════════════════════════════════════════════════
+
+function tick() {
+    // Process a chunk of the queue
+    if (RENDER_QUEUE.length > 0) {
+        const batch = Math.min(RENDER_QUEUE.length, CONFIG.SPEED);
+        for(let i=0; i<batch; i++) {
+            const task = RENDER_QUEUE.shift();
+            task();
+        }
+        ui.counter.innerHTML = "PAINTING... STRANDS: " + TOTAL_STRANDS;
+    }
+    
+    requestAnimationFrame(tick);
+}
+
+// IGNITION
+ctx.fillStyle = '#0b0b0b'; // Void
+ctx.fillRect(-size, -size, size*2, size*2);
+
+// Start Phase 1
+phase_Bone();
+// Start Engine
+tick();
+
+</script>
+</body>
+</html>

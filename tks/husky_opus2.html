@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SIBERIAN HUSKY</title>
+<style>
+*{margin:0;padding:0}
+body{background:#000;height:100vh;display:flex;justify-content:center;align-items:center}
+canvas{box-shadow:0 0 60px rgba(60,120,170,0.05)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+const DPR = window.devicePixelRatio || 1;
+const S = Math.min(innerWidth, innerHeight) * 0.92;
+C.width = S * DPR; C.height = S * DPR;
+C.style.width = S + 'px'; C.style.height = S + 'px';
+X.scale(DPR, DPR);
+X.translate(S/2, S/2);
+X.scale(0.8, 0.8);
+
+// Noise setup
+const P = [];
+let seed = 42;
+for (let i = 0; i < 256; i++) P[i] = i;
+for (let i = 255; i > 0; i--) { seed = (seed * 16807) % 2147483647; [P[i], P[seed % (i+1)]] = [P[seed % (i+1)], P[i]]; }
+for (let i = 0; i < 256; i++) P[256+i] = P[i];
+
+function noise(x, y) {
+    const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
+    const v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const g = (h, a, b) => ((h & 1) ? -a : a) + ((h & 2) ? -b : b);
+    const aa = P[P[xi] + yi], ab = P[P[xi] + yi + 1], ba = P[P[xi + 1] + yi], bb = P[P[xi + 1] + yi + 1];
+    const l = (a, b, t) => a + t * (b - a);
+    return 0.5 + 0.5 * l(l(g(aa, xf, yf), g(ba, xf-1, yf), u), l(g(ab, xf, yf-1), g(bb, xf-1, yf-1), u), v);
+}
+
+// ========== GEOMETRY ==========
+function inFace(x, y) {
+    const skull = (x*x)/(135*135) + ((y+25)*(y+25))/(155*155) < 1;
+    const muzzle = (x*x)/(48*48) + ((y-95)*(y-95))/(55*55) < 1;
+    const cheekL = ((x+105)*(x+105))/(55*55) + ((y+10)*(y+10))/(65*65) < 1;
+    const cheekR = ((x-105)*(x-105))/(55*55) + ((y+10)*(y+10))/(65*65) < 1;
+    return skull || muzzle || cheekL || cheekR;
+}
+
+function inEar(x, y) {
+    // Left ear
+    if (x >= -130 && x <= -60 && y >= -290 && y <= -85) {
+        const cx = -95, baseY = -85, tipY = -280, baseHalfW = 35;
+        const t = (y - baseY) / (tipY - baseY);
+        if (Math.abs(x - cx) <= baseHalfW * (1 - t * 0.92)) return 'left';
+    }
+    // Right ear
+    if (x >= 60 && x <= 130 && y >= -290 && y <= -85) {
+        const cx = 95, baseY = -85, tipY = -280, baseHalfW = 35;
+        const t = (y - baseY) / (tipY - baseY);
+        if (Math.abs(x - cx) <= baseHalfW * (1 - t * 0.92)) return 'right';
+    }
+    return false;
+}
+
+function inside(x, y) { return inFace(x, y) || inEar(x, y); }
+
+// ========== THE MASK ==========
+function getMask(x, y) {
+    const n = (noise(x * 0.008, y * 0.008) - 0.5) * 0.08;
+    const ear = inEar(x, y);
+    
+    if (ear) {
+        const cx = ear === 'left' ? -95 : 95;
+        if (Math.abs(x - cx) < 15 && y > -250 && y < -110) return 0.1 + n;
+        if (Math.abs(x - cx) > 28) return 0.7 + n;
+        return 0.85 + n;
+    }
+    
+    let dark = 0;
+    
+    // FOREHEAD CAP
+    if (y < -10) {
+        const intensity = Math.min(1, (-y - 10) / 90);
+        const blazeWidth = 12 + Math.max(0, (y + 80)) * 0.22;
+        if (Math.abs(x) > blazeWidth) {
+            dark = intensity * Math.min(1, (Math.abs(x) - blazeWidth) / 18) * 0.88;
+        }
+    }
+    
+    // EYE MASK - connects to cap
+    for (const eye of [{x: -52, y: -15}, {x: 52, y: -15}]) {
+        const dx = x - eye.x, dy = y - eye.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 25 && dist < 65) {
+            const aboveBonus = dy < 0 ? 0.3 : 0;
+            const outerBonus = (eye.x < 0 ? dx < 0 : dx > 0) ? 0.15 : 0;
+            const strength = (1 - (dist - 25) / 40) * (0.5 + aboveBonus + outerBonus);
+            dark = Math.max(dark, strength * 0.85);
+        }
+    }
+    
+    // MUZZLE - white
+    if (y > 30 && Math.abs(x) < 52) dark = Math.min(dark, 0.03);
+    
+    // CHEEKS - white
+    if (Math.abs(x) > 60 && y > -30 && y < 60) {
+        dark = Math.min(dark, Math.max(0, (Math.abs(x) - 85) / 30) * 0.15 + 0.02);
+    }
+    
+    // Under eyes - white
+    if (y > 5 && y < 45 && Math.abs(x) < 70) dark = Math.min(dark, 0.05);
+    
+    return Math.max(0, Math.min(1, dark + n));
+}
+
+// ========== FUR DIRECTION ==========
+function getAngle(x, y) {
+    const n = (noise(x * 0.012, y * 0.012) - 0.5) * 0.25;
+    
+    if (inEar(x, y)) return -Math.PI/2 + n * 0.3;
+    if (y < -30 && Math.abs(x) < 100) return -Math.PI/2 + x * 0.002 + n;
+    if (Math.abs(x) < 30 && y > -30 && y < 50) return Math.PI/2 + n * 0.5;
+    
+    for (const ex of [-52, 52]) {
+        const dx = x - ex, dy = y - (-15);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 55 && dist > 20) return Math.atan2(dy, dx) + n * 0.4;
+    }
+    
+    if (Math.abs(x) > 50 && y > -40) return Math.PI/2 + (x > 0 ? 0.55 : -0.55) + n;
+    if (y > 45) return Math.PI/2 + n * 0.5;
+    
+    return Math.PI/2 + n;
+}
+
+// ========== FUR LENGTH ==========
+function getLen(x, y, guard) {
+    const base = guard ? 28 : 10;
+    const n = noise(x * 0.015, y * 0.015);
+    
+    if (inEar(x, y)) return base * 0.5 + n * 5;
+    if (y > 60 && Math.abs(x) < 50) return base * 0.28 + n * 3;
+    if (y < -30) return base * 0.7 + n * 8;
+    if (Math.abs(x) > 70 || y > 80) return base * 1.4 + n * 15;
+    return base + n * 10;
+}
+
+// ========== COLOR ==========
+function getColor(m) {
+    if (m > 0.65) return `rgb(${Math.round(30 - (m-0.65)*70)},${Math.round(30 - (m-0.65)*70)},${Math.round(32 - (m-0.65)*70)})`;
+    if (m > 0.3) return `rgb(${Math.round(160 - (m-0.3)*370)},${Math.round(160 - (m-0.3)*370)},${Math.round(163 - (m-0.3)*370)})`;
+    return `rgb(${Math.round(250 - m*300)},${Math.round(250 - m*300)},${Math.round(Math.min(255, 256 - m*300))})`;
+}
+
+// ========== PAINT FUR ==========
+function fur(x, y, guard) {
+    if (!inside(x, y)) return;
+    
+    const ang = getAngle(x, y);
+    const len = getLen(x, y, guard);
+    const col = getColor(getMask(x, y));
+    
+    const curve = (noise(x * 0.03, y * 0.03) - 0.5) * (guard ? 0.12 : 0.3);
+    const ex = x + Math.cos(ang + curve) * len;
+    const ey = y + Math.sin(ang + curve) * len;
+    const cx = (x + ex)/2 + (noise(x*0.05, y*0.05) - 0.5) * len * 0.18;
+    const cy = (y + ey)/2 + (noise(x*0.05+50, y*0.05) - 0.5) * len * 0.18;
+    
+    X.beginPath();
+    X.moveTo(x, y);
+    X.quadraticCurveTo(cx, cy, ex, ey);
+    X.strokeStyle = col;
+    X.lineWidth = guard ? 0.7 : 1.4;
+    X.globalAlpha = guard ? 0.78 : 0.42;
+    X.stroke();
+}
+
+// ========== EYES ==========
+function eye(cx, cy, left) {
+    X.save();
+    X.translate(cx, cy);
+    X.rotate(left ? 0.12 : -0.12);
+    X.globalAlpha = 1;
+    
+    X.fillStyle = '#000';
+    X.shadowColor = '#000';
+    X.shadowBlur = 10;
+    X.beginPath();
+    X.ellipse(0, 0, 24, 14, 0, 0, Math.PI*2);
+    X.fill();
+    X.shadowBlur = 0;
+    
+    X.fillStyle = '#c8ccd2';
+    X.beginPath();
+    X.ellipse(0, 0, 22, 12, 0, 0, Math.PI*2);
+    X.fill();
+    
+    const ig = X.createRadialGradient(0, 0, 0, 0, 0, 12);
+    ig.addColorStop(0, '#fff');
+    ig.addColorStop(0.1, '#e5faff');
+    ig.addColorStop(0.25, '#6ecef0');
+    ig.addColorStop(0.5, '#2a9fd4');
+    ig.addColorStop(0.7, '#1a6a99');
+    ig.addColorStop(0.85, '#0e4568');
+    ig.addColorStop(1, '#072030');
+    X.fillStyle = ig;
+    X.beginPath();
+    X.arc(0, 0, 12, 0, Math.PI*2);
+    X.fill();
+    
+    X.strokeStyle = 'rgba(255,255,255,0.07)';
+    X.lineWidth = 0.3;
+    for (let i = 0; i < 24; i++) {
+        const a = i / 24 * Math.PI * 2;
+        X.beginPath();
+        X.moveTo(Math.cos(a) * 3, Math.sin(a) * 3);
+        X.lineTo(Math.cos(a) * 11, Math.sin(a) * 11);
+        X.stroke();
+    }
+    
+    X.fillStyle = '#000';
+    X.beginPath();
+    X.arc(0, 0, 4, 0, Math.PI*2);
+    X.fill();
+    
+    const lg = X.createLinearGradient(0, -14, 0, 3);
+    lg.addColorStop(0, 'rgba(0,0,0,0.55)');
+    lg.addColorStop(0.5, 'rgba(0,0,0,0.12)');
+    lg.addColorStop(1, 'rgba(0,0,0,0)');
+    X.fillStyle = lg;
+    X.beginPath();
+    X.ellipse(0, -3, 18, 10, 0, 0, Math.PI*2);
+    X.fill();
+    
+    X.fillStyle = '#fff';
+    X.beginPath(); X.arc(3, -3, 2.5, 0, Math.PI*2); X.fill();
+    X.beginPath(); X.arc(5, 0.5, 1, 0, Math.PI*2); X.fill();
+    
+    X.restore();
+}
+
+// ========== NOSE ==========
+function drawNose() {
+    X.globalAlpha = 1;
+    const ny = 105;
+    
+    X.fillStyle = '#080808';
+    X.beginPath();
+    X.moveTo(-26, ny - 8);
+    X.bezierCurveTo(-30, ny + 14, -14, ny + 34, 0, ny + 36);
+    X.bezierCurveTo(14, ny + 34, 30, ny + 14, 26, ny - 8);
+    X.bezierCurveTo(10, ny - 13, -10, ny - 13, -26, ny - 8);
+    X.fill();
+    
+    X.fillStyle = 'rgba(30,30,35,0.4)';
+    for (let i = 0; i < 120; i++) {
+        const px = (Math.random() - 0.5) * 44, py = ny + 3 + Math.random() * 26;
+        if (px*px/450 + (py-ny-12)*(py-ny-12)/300 < 1) { X.beginPath(); X.arc(px, py, 0.6, 0, Math.PI*2); X.fill(); }
+    }
+    
+    const sg = X.createRadialGradient(-6, ny + 3, 0, -6, ny + 3, 12);
+    sg.addColorStop(0, 'rgba(255,255,255,0.18)');
+    sg.addColorStop(1, 'rgba(255,255,255,0)');
+    X.fillStyle = sg;
+    X.beginPath();
+    X.ellipse(-6, ny + 3, 10, 6, -0.25, 0, Math.PI*2);
+    X.fill();
+    
+    X.fillStyle = '#000';
+    X.beginPath(); X.ellipse(-10, ny + 12, 5.5, 3.5, -0.3, 0, Math.PI*2); X.fill();
+    X.beginPath(); X.ellipse(10, ny + 12, 5.5, 3.5, 0.3, 0, Math.PI*2); X.fill();
+    
+    X.strokeStyle = 'rgba(0,0,0,0.2)';
+    X.lineWidth = 1.5;
+    X.beginPath(); X.moveTo(0, ny + 36); X.lineTo(0, ny + 50); X.stroke();
+}
+
+// ========== WHISKERS ==========
+function whiskers() {
+    X.strokeStyle = 'rgba(255,255,255,0.4)';
+    X.lineWidth = 0.8;
+    for (const side of [-1, 1]) {
+        for (let i = 0; i < 12; i++) {
+            const rx = side * (22 + Math.random() * 12), ry = 105 + Math.random() * 16;
+            const len = 40 + Math.random() * 35, ang = (side === 1 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.5;
+            const droop = 10 + Math.random() * 22;
+            X.globalAlpha = 0.22 + Math.random() * 0.25;
+            X.beginPath();
+            X.moveTo(rx, ry);
+            X.bezierCurveTo(rx + side*len*0.35, ry, rx + side*len*0.65, ry + droop*0.5, rx + Math.cos(ang)*len, ry + droop);
+            X.stroke();
+        }
+    }
+    X.globalAlpha = 1;
+}
+
+// ========== RENDER ==========
+const bg = X.createRadialGradient(0, -30, 15, 0, 20, 380);
+bg.addColorStop(0, '#090c10');
+bg.addColorStop(0.4, '#050608');
+bg.addColorStop(1, '#000');
+X.fillStyle = bg;
+X.fillRect(-500, -500, 1000, 1000);
+
+X.fillStyle = '#020303';
+X.beginPath(); X.ellipse(0, 10, 160, 175, 0, 0, Math.PI*2); X.fill();
+X.beginPath(); X.moveTo(-130, -85); X.lineTo(-95, -280); X.lineTo(-60, -85); X.fill();
+X.beginPath(); X.moveTo(130, -85); X.lineTo(95, -280); X.lineTo(60, -85); X.fill();
+
+const pts = [];
+for (let i = 0; i < 100000; i++) {
+    const x = (Math.random() - 0.5) * 480, y = (Math.random() - 0.5) * 650;
+    if (inside(x, y)) pts.push({x, y});
+}
+pts.sort((a, b) => a.y - b.y);
+
+for (let i = 0; i < 52000 && i < pts.length; i++) fur(pts[i].x, pts[i].y, false);
+
+const pts2 = [];
+for (let i = 0; i < 70000; i++) {
+    const x = (Math.random() - 0.5) * 500, y = (Math.random() - 0.5) * 670;
+    if (inside(x, y)) pts2.push({x, y});
+}
+pts2.sort((a, b) => a.y - b.y);
+
+for (let i = 0; i < 32000 && i < pts2.length; i++) fur(pts2[i].x, pts2[i].y, true);
+
+X.globalAlpha = 1;
+for (let i = 0; i < 500; i++) {
+    const x = (Math.random() - 0.5) * 280, y = -80 - Math.random() * 180;
+    if (inside(x, y)) {
+        const ang = getAngle(x, y), len = 6 + Math.random() * 14;
+        X.beginPath(); X.moveTo(x, y); X.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+        X.strokeStyle = `rgba(255,255,255,${0.02 + Math.random() * 0.04})`; X.lineWidth = 0.4; X.stroke();
+    }
+}
+
+drawNose();
+eye(-52, -15, true);
+eye(52, -15, false);
+whiskers();
+
+X.globalCompositeOperation = 'screen';
+const rl = X.createLinearGradient(-180, 0, -110, 0);
+rl.addColorStop(0, 'rgba(65,125,175,0.08)');
+rl.addColorStop(1, 'rgba(65,125,175,0)');
+X.fillStyle = rl;
+X.beginPath(); X.ellipse(-145, 0, 38, 180, 0.03, 0, Math.PI*2); X.fill();
+
+const rr = X.createLinearGradient(180, 0, 110, 0);
+rr.addColorStop(0, 'rgba(175,145,110,0.045)');
+rr.addColorStop(1, 'rgba(175,145,110,0)');
+X.fillStyle = rr;
+X.beginPath(); X.ellipse(145, 0, 38, 180, -0.03, 0, Math.PI*2); X.fill();
+
+X.globalCompositeOperation = 'source-over';
+const vg = X.createRadialGradient(0, 0, S * 0.2, 0, 0, S * 0.5);
+vg.addColorStop(0, 'rgba(0,0,0,0)');
+vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+X.fillStyle = vg;
+X.fillRect(-S, -S, S*2, S*2);
+</script>
+</body>
+</html>

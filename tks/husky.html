@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CANVAS ENGINE v2.0 | ZEN HUSKY</title>
+<style>
+    body { margin: 0; background: #050505; overflow: hidden; }
+    canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="viewport"></canvas>
+
+<script>
+/**
+ * CANVAS ENGINE v2.0 TECHNICAL REFERENCE
+ * --------------------------------------
+ * ARCHITECTURE:
+ * 1. CORE: Time & Context Management
+ * 2. KINETICS: LFOs and Modulation (The Sequencer)
+ * 3. GEOMETRY: Procedural Shapes (The Oscillators)
+ * 4. TEXTURE: Fur Synthesis (The Tone)
+ * 5. VFX: Particle Systems (The Effects Chain)
+ */
+
+// ═══════════════════════════════════════════════════════════════
+// 1. CORE CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    FPS: 60,
+    PALETTE: {
+        BG_TOP: '#0a0a12',
+        BG_BOT: '#1a0b2e',
+        FUR_BASE: '#e0e5eb',
+        FUR_SHADOW: '#8a9bb8',
+        FUR_DARK: '#2c3e50',
+        EYE_GLOW: '#00f7ff',
+        AURA: '#b300ff'
+    },
+    FUR_DENSITY: 1800 // Strands per layer
+};
+
+const cvs = document.getElementById('viewport');
+const ctx = cvs.getContext('2d');
+let w, h, cx, cy;
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════════════
+// 2. KINETICS ENGINE (MODULATION)
+// ═══════════════════════════════════════════════════════════════
+const Kinetics = {
+    start: Date.now(),
+    
+    // LFO: Low Frequency Oscillator
+    // Returns value between -amplitude and +amplitude
+    lfo: (freq, amp, phase = 0) => {
+        const t = (Date.now() - Kinetics.start) / 1000;
+        return Math.sin(t * freq + phase) * amp;
+    },
+
+    // Noise: Simple pseudo-randomness
+    noise: (seed) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 3. VFX ENGINE (PARTICLES / REVERB)
+// ═══════════════════════════════════════════════════════════════
+class ParticleSystem {
+    constructor(count) {
+        this.particles = [];
+        for(let i=0; i<count; i++) this.reset(i, true);
+    }
+
+    reset(i, randomY = false) {
+        this.particles[i] = {
+            x: (Math.random() - 0.5) * w,
+            y: randomY ? (Math.random() - 0.5) * h : h/2 + 100,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: -Math.random() * 1.5 - 0.2, // Rise up
+            size: Math.random() * 3,
+            life: Math.random(),
+            color: Math.random() > 0.5 ? CONFIG.PALETTE.EYE_GLOW : CONFIG.PALETTE.AURA
+        };
+    }
+
+    update() {
+        ctx.globalCompositeOperation = 'screen';
+        this.particles.forEach((p, i) => {
+            p.x += p.vx + Kinetics.lfo(0.5, 0.1); // Wind sway
+            p.y += p.vy;
+            p.life -= 0.005;
+
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life * 0.5;
+            ctx.beginPath();
+            ctx.arc(cx + p.x, cy + p.y, p.size, 0, Math.PI*2);
+            ctx.fill();
+
+            if(p.life <= 0) this.reset(i);
+        });
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
+    }
+}
+
+const SpiritMotes = new ParticleSystem(100);
+
+// ═══════════════════════════════════════════════════════════════
+// 4. TEXTURE ENGINE (FUR SYNTHESIS)
+// ═══════════════════════════════════════════════════════════════
+// Generates stylized fur strands along a path or area
+function renderFurLayer(offsetX, offsetY, scale, color, rangeX, rangeY, density, direction) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1 * scale;
+    
+    const time = (Date.now() - Kinetics.start) / 1000;
+    
+    // Batch draw for performance
+    ctx.beginPath();
+    for (let i = 0; i < density; i++) {
+        // Procedural distribution
+        const n = Kinetics.noise(i); 
+        const x = (n - 0.5) * rangeX;
+        const y = (Kinetics.noise(i * 2) - 0.5) * rangeY;
+        
+        // Fur Logic
+        const wind = Math.sin(time + y * 0.05) * 5;
+        const len = 15 + Kinetics.noise(i * 3) * 15;
+        const ang = direction + (Kinetics.noise(i * 4) - 0.5) * 0.5; // Jitter angle
+        
+        const startX = offsetX + x;
+        const startY = offsetY + y;
+        const endX = startX + Math.cos(ang) * len + wind;
+        const endY = startY + Math.sin(ang) * len;
+
+        // Culling (optimization)
+        const dist = x*x + y*y;
+        if(dist < (rangeX/2)*(rangeX/2)) { 
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(startX + 5, startY + 5, endX, endY);
+        }
+    }
+    ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. GEOMETRY ENGINE (THE COMPOSITION)
+// ═══════════════════════════════════════════════════════════════
+
+function drawZenHusky() {
+    // MODULATION SOURCES
+    const breath = Kinetics.lfo(0.4, 0.015) + 1.0; // Slow breathing
+    const float = Kinetics.lfo(0.5, 15, 1);       // Levitation
+    const twitchL = Kinetics.lfo(3.0, 0.05) > 0.04 ? 0.1 : 0; // Random ear twitch
+
+    ctx.save();
+    ctx.translate(cx, cy + float);
+    ctx.scale(breath, breath);
+
+    // --- A. SILHOUETTE (Base Body) ---
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.ellipse(0, 150, 140, 100, 0, 0, Math.PI*2); // Shoulders
+    ctx.fill();
+
+    // --- B. FUR SYNTHESIS (The Coat) ---
+    // Dark Undercoat (Chest)
+    renderFurLayer(0, 140, 1, CONFIG.PALETTE.FUR_DARK, 200, 120, 800, Math.PI/2);
+    // White Ruff (Neck)
+    renderFurLayer(0, 80, 1, CONFIG.PALETTE.FUR_SHADOW, 180, 80, 600, Math.PI/2);
+    renderFurLayer(0, 80, 1, CONFIG.PALETTE.FUR_BASE, 170, 70, 600, Math.PI/2);
+
+    // --- C. HEAD GEOMETRY ---
+    ctx.save();
+    ctx.translate(0, -50); // Head pivot
+    
+    // Ears
+    const drawEar = (x, rot) => {
+        ctx.save();
+        ctx.translate(x, -60);
+        ctx.rotate(rot);
+        ctx.fillStyle = CONFIG.PALETTE.FUR_BASE;
+        ctx.beginPath();
+        ctx.moveTo(-30, 0);
+        ctx.lineTo(0, -90); // Tip
+        ctx.lineTo(30, 0);
+        ctx.fill();
+        // Inner Ear
+        ctx.fillStyle = '#pink'; // Placeholder, overlay with fur
+        renderFurLayer(0, -20, 0.8, '#ffb8c9', 30, 50, 50, -Math.PI/2);
+        ctx.restore();
+    }
+    drawEar(-50, -0.2 + twitchL);
+    drawEar(50, 0.2);
+
+    // Face Shape (Mask)
+    ctx.fillStyle = CONFIG.PALETTE.FUR_BASE; // White mask
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 85, 75, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Widow's Peak (Dark Cap)
+    ctx.fillStyle = CONFIG.PALETTE.FUR_DARK;
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.quadraticCurveTo(30, -50, 60, -20); // Right brow
+    ctx.quadraticCurveTo(80, 10, 50, -60);  // Right side
+    ctx.lineTo(0, -90); // Top
+    ctx.lineTo(-50, -60); // Left side
+    ctx.quadraticCurveTo(-80, 10, -60, -20); // Left brow
+    ctx.quadraticCurveTo(-30, -50, 0, -20); // Center
+    ctx.fill();
+
+    // --- D. FACE DETAILS ---
+    // Snout
+    ctx.fillStyle = '#ddd';
+    ctx.beginPath(); ctx.ellipse(0, 30, 25, 20, 0, 0, Math.PI*2); ctx.fill();
+    // Nose
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); 
+    ctx.moveTo(-12, 25); ctx.quadraticCurveTo(0, 20, 12, 25); 
+    ctx.lineTo(0, 38); ctx.fill();
+
+    // Closed Eyes (The "Zen")
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#333';
+    
+    // Left Eye
+    ctx.beginPath();
+    ctx.moveTo(-50, 0);
+    ctx.quadraticCurveTo(-35, 10, -20, 0);
+    ctx.stroke();
+
+    // Right Eye
+    ctx.beginPath();
+    ctx.moveTo(20, 0);
+    ctx.quadraticCurveTo(35, 10, 50, 0);
+    ctx.stroke();
+
+    // --- E. POST-PROCESSING (Glow/Bloom) ---
+    // Third Eye Chakra
+    const pulse = Kinetics.lfo(2, 5) + 10;
+    ctx.globalCompositeOperation = 'screen';
+    
+    const glow = ctx.createRadialGradient(0, -30, 2, 0, -30, 40);
+    glow.addColorStop(0, CONFIG.PALETTE.EYE_GLOW);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, -30, 40, 0, Math.PI*2); ctx.fill();
+
+    // Face Glow
+    ctx.strokeStyle = CONFIG.PALETTE.AURA;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath(); ctx.arc(0, 0, 100 + pulse, 0, Math.PI*2); ctx.stroke();
+
+    ctx.restore(); // End Head
+    ctx.restore(); // End Body
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. RENDER LOOP (THE MASTER OUT)
+// ═══════════════════════════════════════════════════════════════
+function render() {
+    // A. CLEAR
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, w, h);
+
+    // B. BACKGROUND (Atmosphere)
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, CONFIG.PALETTE.BG_TOP);
+    bgGrad.addColorStop(1, CONFIG.PALETTE.BG_BOT);
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // C. MIDGROUND (Spirit Motes)
+    SpiritMotes.update();
+
+    // D. FOREGROUND (The Subject)
+    drawZenHusky();
+
+    // E. VIGNETTE (Master Bus Compressor)
+    ctx.globalCompositeOperation = 'multiply';
+    const vig = ctx.createRadialGradient(cx, cy, h*0.3, cx, cy, h);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.8)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0,0,w,h);
+    ctx.globalCompositeOperation = 'source-over';
+
+    requestAnimationFrame(render);
+}
+
+// Start Engine
+render();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OMNI_KERNEL | LIVING HUSKY</title>
+<style>
+    body { 
+        margin: 0; 
+        background: #050505; 
+        overflow: hidden; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        height: 100vh;
+        cursor: crosshair;
+    }
+    canvas { 
+        box-shadow: 0 0 100px rgba(0, 200, 255, 0.15); 
+    }
+    #loader {
+        position: absolute;
+        color: #468cc8;
+        font-family: monospace;
+        letter-spacing: 2px;
+        transition: opacity 0.5s;
+    }
+</style>
+</head>
+<body>
+
+<div id="loader">INITIALIZING NEURAL MESH...</div>
+<canvas id="c"></canvas>
+
+<script>
+/**
+ * OMNI_KERNEL v1.0
+ * ----------------
+ * ARCHITECTURE:
+ * 1. CACHE SYSTEM: Pre-renders high-density fur to offscreen canvases to enable real-time FPS.
+ * 2. RIGGING SYSTEM: Separates anatomy into Parallax Layers (Back, Mid, Front).
+ * 3. BEHAVIOR ENGINE: Handles Blinking, Breathing, and Gaze Tracking.
+ */
+
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+const loader = document.getElementById('loader');
+
+// SETUP
+const DPR = window.devicePixelRatio || 1;
+const SIZE = Math.min(window.innerWidth, window.innerHeight) * 0.95;
+C.width = SIZE * DPR;
+C.height = SIZE * DPR;
+C.style.width = SIZE + 'px';
+C.style.height = SIZE + 'px';
+ctx.scale(DPR, DPR);
+ctx.translate(SIZE/2, SIZE/2);
+const SCALE = SIZE / 1000;
+ctx.scale(SCALE, SCALE);
+
+// INTERACTION STATE
+const INPUT = { x: 0, y: 0, active: false };
+window.addEventListener('mousemove', e => {
+    const rect = C.getBoundingClientRect();
+    // Normalize -1 to 1
+    INPUT.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    INPUT.y = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+    INPUT.active = true;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 1. PROCEDURAL MATH CORE
+// ═══════════════════════════════════════════════════════════════
+
+// Fast Pseudo-Noise
+const PERLIN = new Float32Array(4096);
+for(let i=0; i<4096; i++) PERLIN[i] = Math.random();
+const noise = (x, y) => {
+    const idx = (Math.floor(x * 100) & 255) + (Math.floor(y * 100) & 255) * 256;
+    return PERLIN[idx & 4095];
+};
+
+// Vector Field Logic
+function getFlow(x, y) {
+    const d = Math.sqrt(x*x + y*y);
+    const a = Math.atan2(y, x);
+    // Ears Up
+    if (y < -150 && Math.abs(x) > 40) return -Math.PI/2 + x*0.002;
+    // Eyes Radiate
+    if (y > -100 && y < 50 && Math.abs(x) < 150) {
+        if (Math.abs(x) < 30) return Math.PI/2; // Nose bridge
+        return a + Math.PI/2;
+    }
+    // Cheeks Sweep
+    if (x < -100) return Math.PI*0.8;
+    if (x > 100) return Math.PI*0.2;
+    return Math.PI/2;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. LAYER CACHING SYSTEM (The Optimization)
+// ═══════════════════════════════════════════════════════════════
+
+class Layer {
+    constructor(w, h, renderFn) {
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = w * DPR;
+        this.canvas.height = h * DPR;
+        this.ctx = this.canvas.getContext('2d');
+        this.ctx.scale(DPR, DPR);
+        this.ctx.translate(w/2, h/2);
+        this.ctx.scale(SCALE, SCALE);
+        this.renderFn = renderFn;
+        this.rendered = false;
+    }
+
+    render() {
+        if (this.rendered) return;
+        this.renderFn(this.ctx);
+        this.rendered = true;
+    }
+
+    draw(targetCtx, offsetX, offsetY) {
+        if (!this.rendered) this.render();
+        // Reset transform to draw image in screen space
+        targetCtx.save();
+        targetCtx.setTransform(1,0,0,1,0,0); 
+        targetCtx.drawImage(this.canvas, offsetX * DPR, offsetY * DPR);
+        targetCtx.restore();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. GENERATORS (The Art)
+// ═══════════════════════════════════════════════════════════════
+
+function paintFur(gx, count, regionFn) {
+    gx.lineCap = 'round';
+    for(let i=0; i<count; i++) {
+        const x = (Math.random() - 0.5) * 900;
+        const y = (Math.random() - 0.5) * 900;
+        
+        if (regionFn(x,y)) {
+            const ang = getFlow(x, y);
+            const n = noise(x*0.01, y*0.01);
+            
+            // Texture Logic
+            let len = 20 + n * 40;
+            let width = 1.5;
+            let alpha = 0.6;
+            let col = '#ddd';
+
+            // Markings
+            const isDark = (y < -80 && Math.abs(x) < 200) || (y < -200) || (Math.abs(x)>120 && y > -50);
+            if (isDark) { col = `rgb(${20+n*20}, ${20+n*20}, ${25+n*20})`; alpha = 0.8; }
+            else { col = `rgb(${220+n*30}, ${220+n*30}, ${230+n*30})`; }
+
+            // Geometry
+            const ex = x + Math.cos(ang)*len;
+            const ey = y + Math.sin(ang)*len;
+            const cx = (x+ex)/2 + (Math.random()-0.5)*10;
+            const cy = (y+ey)/2 + (Math.random()-0.5)*10;
+
+            gx.strokeStyle = col;
+            gx.lineWidth = width;
+            gx.globalAlpha = alpha;
+            gx.beginPath();
+            gx.moveTo(x,y);
+            gx.quadraticCurveTo(cx,cy, ex,ey);
+            gx.stroke();
+        }
+    }
+}
+
+// LAYER 1: BACK (Ruff & Ears)
+const L_BACK = new Layer(SIZE, SIZE, (gx) => {
+    // Ears
+    paintFur(gx, 15000, (x,y) => {
+        return (Math.abs(x) > 60 && Math.abs(x) < 140 && y < -100 && y > -350);
+    });
+    // Neck Ruff
+    paintFur(gx, 30000, (x,y) => {
+        const d = Math.sqrt(x*x + y*y);
+        return (d > 220 && d < 420);
+    });
+});
+
+// LAYER 2: FACE (Head shape)
+const L_FACE = new Layer(SIZE, SIZE, (gx) => {
+    paintFur(gx, 40000, (x,y) => {
+        const d = Math.sqrt(x*x + y*y);
+        // Exclude snout area
+        const snout = (Math.abs(x) < 80 && y > 50 && y < 200);
+        return (d < 230 && !snout);
+    });
+});
+
+// LAYER 3: SNOUT (Front projection)
+const L_SNOUT = new Layer(SIZE, SIZE, (gx) => {
+    paintFur(gx, 12000, (x,y) => {
+        return (Math.abs(x) < 85 && y > 40 && y < 220);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 4. REAL-TIME RENDERER (The Life)
+// ═══════════════════════════════════════════════════════════════
+
+let TICK = 0;
+let BLINK = 0;
+let NEXT_BLINK = 100;
+
+function drawEye(x, y, side) {
+    ctx.save();
+    
+    // Parallax Shift for Eyes
+    const pX = x + INPUT.x * 15;
+    const pY = y + INPUT.y * 15;
+    
+    ctx.translate(pX, pY);
+
+    // 1. Socket Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.ellipse(0, 5, 35, 20, 0, 0, Math.PI*2); ctx.fill();
+
+    // 2. Sclera
+    ctx.fillStyle = '#ccc';
+    ctx.beginPath(); 
+    // Almond shape clip
+    ctx.moveTo(-35, 0); 
+    ctx.quadraticCurveTo(0, -25, 35, 0);
+    ctx.quadraticCurveTo(0, 25, -35, 0);
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+
+    // 3. Iris (Tracking)
+    // Limit look range
+    const lookX = Math.max(-15, Math.min(15, INPUT.x * 20));
+    const lookY = Math.max(-10, Math.min(10, INPUT.y * 10));
+    
+    ctx.translate(lookX, lookY);
+    
+    // Iris Gradient (Ice Blue)
+    const grad = ctx.createRadialGradient(0,0, 5, 0,0, 18);
+    grad.addColorStop(0, '#fff');
+    grad.addColorStop(0.3, '#3dd');
+    grad.addColorStop(0.9, '#048');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(0,0, 16, 0, Math.PI*2); ctx.fill();
+    
+    // Iris Fibers
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    for(let i=0; i<10; i++) {
+        ctx.beginPath(); ctx.arc(0,0, 8+Math.random()*8, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // Pupil (Dilates based on mouse distance)
+    const dist = Math.sqrt(INPUT.x*INPUT.x + INPUT.y*INPUT.y); // 0 (center) to 1.4
+    const dilate = 6 + (1-Math.min(1, dist)) * 3; // Bigger when closer
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(0,0, dilate, 0, Math.PI*2); ctx.fill();
+
+    // Catchlight (Fixed reflection)
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(5, -5, 3, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore(); // End Clip
+
+    // 4. Eyelids (Blink)
+    // Blink animation curve
+    let lidH = 0;
+    if (BLINK > 0) {
+        lidH = Math.sin((BLINK/10) * Math.PI) * 25;
+        BLINK--;
+    } else {
+        // Random blink trigger
+        if (Math.random() * 1000 < 5) BLINK = 10; 
+    }
+
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.rect(-40, -30, 80, lidH); // Top lid
+    ctx.rect(-40, 30 - lidH*0.5, 80, lidH); // Bottom lid (moves less)
+    ctx.fill();
+    
+    // Lid Rim
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-35, 0); 
+    ctx.quadraticCurveTo(0, -25 + lidH, 35, 0);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawNose() {
+    ctx.save();
+    // Frontmost layer parallax
+    const nX = INPUT.x * 25;
+    const nY = 150 + INPUT.y * 25;
+    ctx.translate(nX, nY);
+
+    // Nose Shape
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.moveTo(-35, -10);
+    ctx.quadraticCurveTo(0, -20, 35, -10);
+    ctx.quadraticCurveTo(20, 45, 0, 50);
+    ctx.quadraticCurveTo(-20, 45, -35, -10);
+    ctx.fill();
+
+    // Wet Shine
+    const shineX = -10 + INPUT.x * -5; // Shine moves opposite to light
+    const shineY = 5 + INPUT.y * -5;
+    
+    const grad = ctx.createRadialGradient(shineX, shineY, 0, shineX, shineY, 15);
+    grad.addColorStop(0, 'rgba(255,255,255,0.2)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Nostrils (Breathing)
+    const breath = Math.sin(TICK * 0.05) * 2;
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); 
+    ctx.ellipse(-15 - breath, 20, 6+breath/2, 4+breath/2, -0.2, 0, Math.PI*2); 
+    ctx.fill();
+    ctx.beginPath(); 
+    ctx.ellipse(15 + breath, 20, 6+breath/2, 4+breath/2, 0.2, 0, Math.PI*2); 
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function animate() {
+    TICK++;
+    
+    // Clear
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0,0, C.width, C.height);
+
+    // Background Gradient (Dynamic Vibe)
+    const bg = ctx.createRadialGradient(C.width/2, C.height/2, SIZE*0.2, C.width/2, C.height/2, SIZE*0.8);
+    bg.addColorStop(0, '#101820');
+    bg.addColorStop(1, '#000');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0,0, C.width, C.height);
+
+    // --- COMPOSITING PARALLAX LAYERS ---
+    // Calculate movement based on mouse
+    const mx = INPUT.x * SIZE * 0.05; // 5% shift
+    const my = INPUT.y * SIZE * 0.05;
+
+    // 1. Draw Back (Moves least)
+    L_BACK.draw(ctx, mx * -0.5, my * -0.5);
+
+    // 2. Draw Face (Moves mid)
+    L_FACE.draw(ctx, mx * 0.0, my * 0.0);
+
+    // 3. Draw Eyes (Real-time vector)
+    // Reset to center space for vector drawing
+    ctx.setTransform(DPR, 0, 0, DPR, C.width/2, C.height/2);
+    ctx.scale(SCALE, SCALE);
+    
+    drawEye(-70, -30, -1);
+    drawEye(70, -30, 1);
+
+    // 4. Draw Snout (Moves most - Foreground)
+    // We have to draw the snout layer, then the nose vector on top
+    // Reset to screen space for image draw
+    ctx.setTransform(1,0,0,1,0,0); 
+    L_SNOUT.draw(ctx, mx * 0.8, my * 0.8);
+    
+    // Draw Vector Nose
+    ctx.setTransform(DPR, 0, 0, DPR, C.width/2, C.height/2);
+    ctx.scale(SCALE, SCALE);
+    drawNose();
+
+    // 5. Atmosphere (Snow)
+    ctx.fillStyle = '#fff';
+    const snowX = Math.sin(TICK*0.01) * 50;
+    for(let i=0; i<50; i++) {
+        const sx = ((i * 137.5) % 1000) - 500 + snowX;
+        const sy = ((TICK * 2 + i * 50) % 1000) - 500;
+        const sa = Math.abs(Math.sin(i+TICK*0.05));
+        ctx.globalAlpha = sa * 0.5;
+        ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1.0;
+
+    // Hide loader once running
+    if (TICK === 5) loader.style.opacity = 0;
+
+    requestAnimationFrame(animate);
+}
+
+// IGNITION
+animate();
+
+</script>
+</body>
+</html>

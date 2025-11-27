@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BIO_KERNEL | HUSKY SIMULATION</title>
+<style>
+    body { margin: 0; background: #0b0b0b; overflow: hidden; font-family: monospace; color: #00ffcc; }
+    canvas { display: block; }
+    #readout { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div id="readout">
+    BIO_KERNEL ACTIVE<br>
+    -----------------<br>
+    TEMP: <span id="temp-disp">0°C</span><br>
+    TYROSINASE: <span id="tyro-disp">ACTIVE</span><br>
+    EAR_L: <span id="ear-l-disp">SCANNING</span><br>
+    EAR_R: <span id="ear-r-disp">LOCKED</span>
+</div>
+
+<canvas id="viewport"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. OSTEOLOGICAL CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const BIO_CFG = {
+    CEPHALIC_INDEX: 0.6, // Ratio for skull width
+    EYE_SLANT: 0.15,     // The "Almond" mechanical shutter angle
+    EAR_ROT_SPEED: 0.1,  // Servo speed for ear turrets
+    TURBINATE_EFF: 0.9   // Heat exchange efficiency
+};
+
+const cvs = document.getElementById('viewport');
+const ctx = cvs.getContext('2d');
+let w, h, cx, cy;
+let mouseX = 0, mouseY = 0;
+
+// Simulation State
+const STATE = {
+    temp: 0,           // Ambient Temperature (C)
+    time: 0,
+    breath: 0,         // 0 to 1 (Inhale/Exhale cycle)
+    earAngleL: 0,
+    earAngleR: 0
+};
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+resize();
+
+// ═══════════════════════════════════════════════════════════════
+// 2. MYOLOGICAL & OSTEOLOGICAL ENGINE (Drawing the Chassis)
+// ═══════════════════════════════════════════════════════════════
+
+function drawMesocephalicSkull(x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // -- CRANIUM (The Anchor) --
+    ctx.fillStyle = '#e5e5e5';
+    ctx.beginPath();
+    // Tapered shape (not round) for aerodynamics
+    ctx.ellipse(0, -20, 100, 90, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // -- MAXILLA/MANDIBLE (The Fulcrum) --
+    // Elongated snout for heat exchange surface area
+    ctx.beginPath();
+    ctx.moveTo(-45, 0);
+    ctx.quadraticCurveTo(-35, 120, 0, 130); // Taper to nose
+    ctx.quadraticCurveTo(35, 120, 45, 0);
+    ctx.fillStyle = '#dcdcdc';
+    ctx.fill();
+
+    // -- MYOLOGY: EARS (Swivel Turrets) --
+    // Right Ear: Locks to Forward (Prey)
+    // Left Ear: Tracks Input (Musher/Mouse)
+    
+    // Calculate mechanical rotation
+    const dx = (mouseX - cx) / scale;
+    const dy = (mouseY - cy) / scale;
+    const targetAngle = Math.atan2(dy + 150, dx); // Offset for head position
+    
+    // Smooth servo interpolation
+    STATE.earAngleL += (targetAngle - STATE.earAngleL - Math.PI/2) * BIO_CFG.EAR_ROT_SPEED;
+    
+    // Draw Ear Function
+    const renderEar = (bx, by, angle, label) => {
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(angle);
+        
+        ctx.beginPath();
+        ctx.moveTo(-35, 0);
+        ctx.lineTo(0, -110); // High set, aerodynamic
+        ctx.lineTo(35, 0);
+        ctx.fillStyle = '#eee';
+        ctx.fill();
+        
+        // Inner auricle (Heat vent)
+        ctx.fillStyle = '#pink';
+        ctx.beginPath();
+        ctx.moveTo(-20, 0); ctx.lineTo(0, -80); ctx.lineTo(20, 0);
+        ctx.fillStyle = 'rgba(255, 180, 180, 0.4)';
+        ctx.fill();
+        
+        ctx.restore();
+    };
+
+    renderEar(-60, -60, STATE.earAngleL, "L"); // Tracking
+    renderEar(60, -60, 0.1 * Math.sin(STATE.time), "R"); // Scanning/Fixed
+
+    // -- MYOLOGY: EYES (The Shutter Mechanism) --
+    // NO RAOL: Brows are static. Eyes are almond.
+    const drawEye = (ex, ey) => {
+        ctx.save();
+        ctx.translate(ex, ey);
+        ctx.rotate(ex < 0 ? BIO_CFG.EYE_SLANT : -BIO_CFG.EYE_SLANT); // Almond tilt
+        
+        // Mechanical Shutter (Almond shape)
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 25, 14, 0, 0, Math.PI*2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#111';
+        ctx.stroke();
+
+        // Tapetum Lucidum (Retroreflector)
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI*2);
+        ctx.fillStyle = '#aee'; // Ice blue reflection
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#0ff';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
+    };
+    drawEye(-50, -10);
+    drawEye(50, -10);
+    
+    // -- SENSORY: VIBRISSAE (Raycasts) --
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    for(let i=0; i<12; i++) {
+        const yOff = (i % 3) * 5;
+        const xOff = (i < 6) ? -35 : 35;
+        const len = 60 + Math.random()*10;
+        ctx.beginPath();
+        ctx.moveTo(xOff, 90 + yOff);
+        ctx.lineTo(xOff * 3, 90 + yOff + (i%2==0?10:-10));
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THERMODYNAMIC ENGINE (Nose & Breath)
+// ═══════════════════════════════════════════════════════════════
+
+function runThermodynamics(x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // --- TYROSINASE LOGIC (Snow Nose) ---
+    // If Temp < -5, Enzyme fails -> Pigment fades (Pink)
+    // If Temp > -5, Enzyme works -> Pigment dark (Black)
+    let pigment;
+    if (STATE.temp < -5) {
+        // Linear interpolation to pink
+        pigment = `rgb(${160 - STATE.temp*2}, ${100 - STATE.temp*2}, ${100 - STATE.temp*2})`;
+        document.getElementById('tyro-disp').innerText = "INACTIVE (FADING)";
+        document.getElementById('tyro-disp').style.color = "#ff8888";
+    } else {
+        pigment = '#111';
+        document.getElementById('tyro-disp').innerText = "ACTIVE (PIGMENTING)";
+        document.getElementById('tyro-disp').style.color = "#00ffcc";
+    }
+
+    // Draw Planum Nasale
+    ctx.fillStyle = pigment;
+    ctx.beginPath();
+    ctx.moveTo(-15, 115); 
+    ctx.lineTo(15, 115);
+    ctx.lineTo(0, 135);
+    ctx.fill();
+    
+    // Texture (Roughness)
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath(); ctx.arc(-5, 120, 3, 0, Math.PI*2); ctx.fill();
+
+    // --- TURBINATE EXHAUST (Breath) ---
+    // Exhale triggers when breath cycle > 0.5
+    if (Math.sin(STATE.time * 2) > 0.5 && STATE.temp < 10) {
+        const alpha = (Math.sin(STATE.time * 2) - 0.5) * 2; // Normalize 0-1
+        
+        // Heat Cloud
+        ctx.globalCompositeOperation = 'screen';
+        const grad = ctx.createRadialGradient(0, 140, 5, 0, 180, 40);
+        grad.addColorStop(0, `rgba(200, 230, 255, ${0.6 * alpha})`);
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(0, 160, 30 + Math.random()*5, 50, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. MAIN LOOP (The Operating System)
+// ═══════════════════════════════════════════════════════════════
+
+function OS_Cycle() {
+    // Update State
+    STATE.time += 0.05;
+    
+    // Simulate Environmental Temp Cycle (Sine wave from -20C to +10C)
+    STATE.temp = Math.floor(Math.sin(STATE.time * 0.2) * 25 - 5); 
+    
+    // Update DOM Readout
+    const tSpan = document.getElementById('temp-disp');
+    tSpan.innerText = STATE.temp + "°C";
+    tSpan.style.color = STATE.temp < 0 ? '#aaf' : '#faa';
+    
+    // Calculate Breath Cycle
+    STATE.breath = (Math.sin(STATE.time * 2) + 1) / 2;
+
+    // --- RENDER PASS ---
+    ctx.fillStyle = '#0b0b0b'; // Void
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw Fur/Atmosphere (Simplified for focus on mechanics)
+    const grad = ctx.createRadialGradient(cx, cy, 100, cx, cy, 600);
+    grad.addColorStop(0, '#1a222a');
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    // EXECUTE MODULES
+    drawMesocephalicSkull(cx, cy - 50, 1.5);
+    runThermodynamics(cx, cy - 50, 1.5);
+
+    requestAnimationFrame(OS_Cycle);
+}
+
+OS_Cycle();
+
+</script>
+</body>
+</html>
