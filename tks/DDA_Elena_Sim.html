@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DDA Simulation: The Drowning Town</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .header {
+      border-bottom: 1px solid #334155;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: bold;
+      background: linear-gradient(90deg, #22d3ee, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      color: #64748b;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    .agent-card {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .agent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .agent-info { flex: 1; min-width: 280px; }
+
+    .agent-avatar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .avatar-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #22d3ee, #a78bfa);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+      color: #0f172a;
+    }
+
+    .agent-name { font-size: 18px; font-weight: 600; color: #f1f5f9; }
+    .agent-role { font-size: 13px; color: #94a3b8; }
+    .agent-bio { font-size: 13px; color: #94a3b8; }
+
+    .param-boxes { display: flex; gap: 12px; }
+
+    .param-box {
+      background: #0f172a;
+      padding: 12px 16px;
+      border-radius: 8px;
+      text-align: center;
+      min-width: 80px;
+    }
+
+    .param-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+    .param-value { font-size: 20px; font-weight: bold; color: #22d3ee; }
+    .param-value.purple { color: #a78bfa; }
+
+    .agent-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .detail-section h4 { font-size: 12px; color: #22d3ee; font-weight: 600; margin-bottom: 8px; }
+    .detail-section.limits h4 { color: #ef4444; }
+    .detail-section ul { list-style: none; font-size: 12px; color: #cbd5e1; }
+    .detail-section li { margin-bottom: 4px; }
+    .value-num { color: #f59e0b; }
+
+    .progress-bar { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+
+    .progress-btn {
+      flex: 1;
+      min-width: 100px;
+      padding: 12px 8px;
+      background: #1e293b;
+      border: none;
+      border-radius: 8px;
+      color: #64748b;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .progress-btn:hover { background: #334155; }
+    .progress-btn.active { background: linear-gradient(135deg, #22d3ee, #a78bfa); color: #0f172a; font-weight: 600; }
+    .progress-btn.completed { background: #334155; color: #f1f5f9; }
+    .progress-btn.analysis.active { background: linear-gradient(135deg, #22c55e, #16a34a); }
+
+    .k-trajectory { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 24px; }
+    .k-trajectory-label { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+    .k-bars { display: flex; align-items: flex-end; gap: 4px; height: 60px; }
+    .k-bar-container { flex: 1; display: flex; flex-direction: column; align-items: center; }
+
+    .k-bar {
+      width: 100%;
+      border-radius: 4px 4px 0 0;
+      transition: all 0.3s;
+      background: #334155;
+    }
+
+    .k-bar.active { background: linear-gradient(to top, #22c55e, #22c55e88); }
+    .k-bar.warning { background: linear-gradient(to top, #f59e0b, #f59e0b88); }
+    .k-bar.danger { background: linear-gradient(to top, #ef4444, #ef444488); }
+    .k-bar-value { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+
+    .main-content { background: #1e293b; border-radius: 12px; overflow: hidden; }
+
+    .step-header {
+      background: linear-gradient(90deg, #0f172a, #1e293b);
+      padding: 20px;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .step-title { font-size: 22px; color: #f1f5f9; }
+    .step-meters { display: flex; gap: 12px; }
+    .meter { background: #0f172a; padding: 8px 16px; border-radius: 8px; text-align: center; }
+    .meter-label { font-size: 10px; color: #64748b; }
+    .meter-value { font-size: 18px; font-weight: bold; }
+    .meter-value.green { color: #22c55e; }
+    .meter-value.yellow { color: #eab308; }
+    .meter-value.orange { color: #f59e0b; }
+    .meter-value.red { color: #ef4444; }
+    .meter-sublabel { font-size: 10px; }
+
+    .section { padding: 20px; border-bottom: 1px solid #334155; }
+    .section:last-child { border-bottom: none; }
+    .section-label { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .section-label.cyan { color: #22d3ee; }
+    .section-label.purple { color: #a78bfa; }
+    .section-label.orange { color: #f59e0b; }
+    .section-label.green { color: #22c55e; }
+    .section-text { color: #cbd5e1; font-size: 14px; white-space: pre-line; }
+    .section-text.small { font-size: 13px; color: #94a3b8; }
+
+    .options { display: flex; flex-direction: column; gap: 8px; }
+    .option { background: #0f172a; border: 1px solid #334155; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #e2e8f0; }
+    .option.selected { background: rgba(34, 211, 238, 0.1); border-color: #22d3ee; }
+
+    .decision-box {
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(167, 139, 250, 0.1));
+      border: 1px solid #22d3ee;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .decision-header { font-size: 12px; color: #22d3ee; font-weight: 600; margin-bottom: 8px; }
+    .decision-text { color: #f1f5f9; font-size: 14px; }
+    .decision-meta { margin-top: 12px; font-size: 12px; color: #64748b; }
+    .decision-meta span { color: #22c55e; }
+
+    .outcome-box { background: #0f172a; border-radius: 12px; padding: 16px; margin-top: 20px; }
+
+    .outcome-stats {
+      display: flex;
+      gap: 24px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #334155;
+      font-size: 13px;
+    }
+
+    .outcome-stats .label { font-size: 11px; color: #64748b; }
+    .outcome-stats .epsilon { color: #f59e0b; font-weight: 600; }
+
+    .navigation { padding: 20px; display: flex; gap: 12px; }
+
+    .nav-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-btn.prev { background: #475569; color: #f1f5f9; }
+    .nav-btn.prev:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .nav-btn.next { background: linear-gradient(90deg, #22d3ee, #a78bfa); color: #0f172a; font-weight: 600; }
+    .nav-btn:hover:not(:disabled) { transform: translateY(-1px); }
+
+    .analysis-view { padding: 24px; }
+
+    .analysis-title {
+      font-size: 22px;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 24px;
+    }
+
+    .analysis-card { background: #0f172a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .analysis-card.bordered { border-left: 4px solid #22c55e; }
+    .analysis-card.bordered.orange { border-left-color: #f59e0b; }
+    .analysis-card.bordered.purple { border-left-color: #a78bfa; }
+    .analysis-card.bordered.cyan { border-left-color: #22d3ee; }
+    .analysis-card-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .analysis-card-title.green { color: #22c55e; }
+    .analysis-card-title.orange { color: #f59e0b; }
+    .analysis-card-title.purple { color: #a78bfa; }
+    .analysis-card-title.cyan { color: #22d3ee; }
+    .analysis-card p { color: #cbd5e1; font-size: 13px; }
+    .analysis-card strong { color: #f1f5f9; }
+
+    .decision-path-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #334155;
+      font-size: 13px;
+    }
+
+    .decision-path-item:last-child { border-bottom: none; }
+    .decision-path-item .title { color: #94a3b8; }
+    .decision-path-item .choice { color: #22d3ee; font-weight: 600; }
+    .decision-path-item .epsilon { color: #64748b; margin-left: 12px; }
+
+    .outcome-highlight {
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(167, 139, 250, 0.1));
+      border: 1px solid #22d3ee;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    .outcome-highlight .label { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+    .outcome-highlight .main { font-size: 18px; color: #f1f5f9; font-weight: 600; margin-bottom: 8px; }
+    .outcome-highlight .sub { font-size: 13px; color: #64748b; }
+
+    .restart-btn {
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px;
+      background: linear-gradient(90deg, #22d3ee, #a78bfa);
+      border: none;
+      border-radius: 8px;
+      color: #0f172a;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .footer { text-align: center; margin-top: 24px; color: #475569; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>DDA SIMULATION: The Drowning Town</h1>
+      <p>Dynamic Decision Algorithm — F = P₀·k + m·[T + R]</p>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-header">
+        <div class="agent-info">
+          <div class="agent-avatar">
+            <div class="avatar-circle">EV</div>
+            <div>
+              <div class="agent-name">Elena Vasquez</div>
+              <div class="agent-role">34, Civil Engineer, County Government, Central Florida</div>
+            </div>
+          </div>
+          <p class="agent-bio">Daughter of Cuban immigrants who lost everything twice — once to Castro, once to Hurricane Andrew. She builds things that last. Married young, divorced at 29, no kids. She's the only one who actually reads the inspection reports.</p>
+        </div>
+        <div class="param-boxes">
+          <div class="param-box">
+            <div class="param-label">k_init</div>
+            <div class="param-value">0.40</div>
+          </div>
+          <div class="param-box">
+            <div class="param-label">w_subj</div>
+            <div class="param-value purple">0.50</div>
+          </div>
+        </div>
+      </div>
+      <div class="agent-details">
+        <div class="detail-section">
+          <h4>CORE VALUES</h4>
+          <ul>
+            <li><span class="value-num">1.</span> Protect the vulnerable</li>
+            <li><span class="value-num">2.</span> Professional integrity</li>
+            <li><span class="value-num">3.</span> Self-preservation</li>
+            <li><span class="value-num">4.</span> Loyalty to colleagues</li>
+          </ul>
+        </div>
+        <div class="detail-section limits">
+          <h4>HARD LIMITS</h4>
+          <ul>
+            <li>• Won't falsify safety documents</li>
+            <li>• Won't stay silent if lives at risk</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-bar" id="progressBar"></div>
+
+    <div class="k-trajectory">
+      <div class="k-trajectory-label">k TRAJECTORY (Rigidity Over Time)</div>
+      <div class="k-bars" id="kBars"></div>
+    </div>
+
+    <div class="main-content" id="mainContent"></div>
+
+    <div class="footer">DDA Framework — F = P₀·k + m·[T + R] — Identity Under Pressure</div>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        id: 1, title: "The Report",
+        situation: `You're reviewing drainage infrastructure for Palmetto Lakes subdivision — 340 homes, 60% sold, construction finishing in 4 months. Developer Hartfield Properties has many county contracts.\n\nThe numbers don't work. Retention ponds are undersized by 30%. In a serious storm, the whole neighborhood floods. Ground floors. Cars. Maybe people.\n\nYour boss, Director Tom Reyes, is decent. He hired you. He's also up for reappointment and Hartfield donated to the commissioner's campaign.\n\nIt's 4:47pm Friday. Report due Monday.`,
+        pressure: 0.35, pressureLabel: "LOW",
+        options: ["A. Flag it formally Monday. By the book.", "B. Talk to Tom privately first. Give him a heads up.", "C. Double-check your math. Maybe you're wrong.", "D. Sit on it. Not your problem.", "E. Call a journalist friend."],
+        chosen: "B",
+        response: {
+          truth: "The numbers are what they are. 30% undersized. I've run it three times. The original approval was signed by my predecessor, who retired to a Hartfield-built condo in Naples.",
+          reflection: "• Option A: Clean. Professional. But Tom gets blindsided.\n• Option B: Gives Tom a chance to do right. Also a chance to pressure me.\n• Option C: Stalling. I'm not wrong.\n• Option D: Violates core identity. People could die.\n• Option E: Premature. Haven't tried internal path.",
+          identity: "k is moderate. Tom has been fair. I should give the system one chance. But I document everything. Paper trails save lives.",
+          pressure: "Low pressure. I have time. Measured action, not panic.",
+          decision: "B, with modification",
+          decisionFull: "Email myself the full analysis tonight — timestamped. Monday, talk to Tom privately. Give him 48 hours. If he doesn't respond properly, file formally with copies.",
+          prediction: "Tom will be uncomfortable. Probably ask me to 'revisit methodology.' That's when I'll know.",
+          confidence: 78
+        },
+        outcome: "Tom listens. Goes quiet. Says 'Let me make some calls. Don't file until Wednesday.' His face is hard to read.",
+        epsilon: 0.18, k_before: 0.40, k_after: 0.43
+      },
+      {
+        id: 2, title: "The Call",
+        situation: `Wednesday morning. Tom calls you in. He's not alone.\n\nCounty Commissioner Linda Hartwell is there. So is a man in an expensive suit — "a consultant for Hartfield Properties."\n\nTom looks tired. Linda is smiling. The consultant is not.\n\nLinda: "Elena, Tom showed us your concerns. We appreciate your diligence. But our engineers reviewed the data — the drainage is within acceptable parameters. Regional variations."\n\nShe slides a paper across. A "supplementary analysis" concluding the ponds are adequate.\n\nYour signature line is at the bottom.\n\n"We just need you to co-sign."`,
+        pressure: 0.70, pressureLabel: "HIGH",
+        options: ["A. Sign it. Pick your battles.", "B. Refuse but don't escalate. 'Need to review their methodology.'", "C. Refuse clearly. 'This analysis is wrong. I won't sign.'", "D. Ask for time until Friday.", "E. Walk out and call a lawyer."],
+        chosen: "C",
+        response: {
+          truth: "The 'supplementary analysis' is garbage. Three methodology errors just skimming it. They're not trying to be right — they're creating paper cover. My signature makes me complicit.",
+          reflection: "• Option A: Violates my core. I'd be the engineer who approved the flood.\n• Option B: Shows weakness. They'll keep pushing.\n• Option C: Draws the line. Likely ends career here. Keeps license and soul.\n• Option D: They'll use time to build pressure.\n• Option E: Premature. State position first.",
+          identity: "k is rising. Three people want me to lie. My body knows this feeling — same feeling my mother described from Havana when the committees came. I will not sign.",
+          pressure: "High. Career on the line. But not survival-critical. I can get another job. Can't get another conscience.",
+          decision: "C",
+          decisionFull: "'I've reviewed this analysis. The methodology is flawed. The ponds are undersized and I won't certify otherwise. If Hartfield wants to remediate, I'll work with them. But I won't sign this.' — Said looking at Tom. One more chance.",
+          prediction: "Linda will threaten. Tom will stay silent. Consultant talks liability. Walked out by end of week.",
+          confidence: 72
+        },
+        outcome: "Linda's smile doesn't flicker. 'Disappointing, Elena. Tom, handle the administrative side?' Tom nods without looking at me. Consultant: 'Hartfield takes professional defamation seriously.' I'm placed on administrative leave. Two weeks pay. Box for my things.",
+        epsilon: 0.10, k_before: 0.43, k_after: 0.52
+      },
+      {
+        id: 3, title: "The Offer",
+        situation: `Friday. Home, resume half-written. Doorbell.\n\nThe consultant. Alone. Polo shirt, friendly face.\n\n"Elena. Can we talk? Off the record?"\n\nHe sits in your living room. Says Hartfield respects your expertise. They actually agree drainage could be improved. Willing to upgrade — add pumps, expand ponds by 15%. Not full 30%, but meaningful.\n\nIn exchange: Separation agreement with NDA. 6 months severance. And Hartfield's sister company in Tampa needs a chief engineer. $140K base, signing bonus, relocation.\n\n"Everyone wins. Neighborhood gets safer. You get a better job. Nobody makes this ugly."`,
+        pressure: 0.75, pressureLabel: "HIGH",
+        options: ["A. Take it. 15% helps. More good employed than blacklisted.", "B. Counter: '30% or no deal.'", "C. Refuse: 'Not for sale. 15% isn't enough.'", "D. Stall: 'Give me a week.'", "E. Record this conversation. End meeting."],
+        chosen: "C",
+        response: {
+          truth: "15% improvement is real. Would reduce flood risk meaningfully. $140K is more than I've ever made. But the NDA means silence forever. If something goes wrong in 10 years, I'm part of it.",
+          reflection: "• Option A: Partial good. But I become their creature.\n• Option B: Negotiation from weakness. They'll say no.\n• Option C: Clean. Possibly self-destructive. Keep integrity.\n• Option D: Another week changes nothing. I know who I am.\n• Option E: Could backfire legally. But creates evidence.",
+          identity: "k above 0.5. Betrayed by Tom, threatened by Linda. This man offers money for silence. My father rebuilt his pharmacy three times. Never took a bribe. 'They can take your store. Can't take your name unless you sell it.' I'm not selling.",
+          pressure: "High. Money is real. But I'd swallow something that poisons me slowly.",
+          decision: "C",
+          decisionFull: "'I appreciate you coming. But I won't sign an NDA about public safety. 15% isn't enough — you know it. Full remediation, I'll acknowledge publicly. Won't be quiet about flood risk for money.' I stand to end the meeting.",
+          prediction: "He leaves politely. Pressure turns legal. They'll come for my license. I need a lawyer now.",
+          confidence: 81
+        },
+        outcome: "He nods. 'Figured you'd say that. They're going to make this hard. I tried to give you an exit.' He leaves. Phone buzzes: colleague texts my name is 'being discussed' at state licensing board.",
+        epsilon: 0.08, k_before: 0.52, k_after: 0.54
+      },
+      {
+        id: 4, title: "The Storm",
+        situation: `Three weeks later. Formal complaint filed. Lawyer hired (eating savings). Licensing "investigation" ongoing.\n\nThen: Tropical Storm Rafael forms in the Gulf. Four days out, every model hitting central Florida coast. 8-12 inches of rain.\n\nPalmetto Lakes is 60% occupied. 180 families.\n\nDrainage hasn't been fixed. Ponds still 30% undersized. If Rafael hits as projected, those homes flood.\n\nYou have TV news contacts. You have documentation. You could go public.\n\nOr try one more internal path — state emergency management.`,
+        pressure: 0.90, pressureLabel: "CRITICAL",
+        options: ["A. Call state emergency management. One last chance.", "B. Call TV contact now. Force evacuation through media.", "C. Both simultaneously. Belt and suspenders.", "D. Post everything on social media yourself.", "E. Drive to Palmetto Lakes. Knock on doors."],
+        chosen: "C",
+        response: {
+          truth: "Rafael is real. Models consistent. 4 days is enough time if people know. State might act — or might be captured too. Media is faster but less controlled. 180 families. Kids. Elderly.",
+          reflection: "• Option A: Proper. But slow. I've seen how 'proper' works here.\n• Option B: Fast. Effective. Burns every bridge.\n• Option C: Both. Redundancy. What an engineer would do.\n• Option D: Uncontrolled. Looks crazy.\n• Option E: Noble but inefficient. Can't knock 180 doors.",
+          identity: "k is high but I'm not frozen. Focused. This is what I trained for. My father: 'Build for the storm that hasn't come yet.' 180 families need to know.",
+          pressure: "Near critical. Lives at stake. But not panicking — executing.",
+          decision: "C",
+          decisionFull: "Call state emergency management tomorrow. Give them 24 hours — noon Thursday. If no guidance by then, call Channel 9. Send everything: reports, analysis, timeline, emails. I'm an engineer. I build in redundancy.",
+          prediction: "State will be slow. 'Escalate and review.' Thursday noon, nothing. Then media. Friday, lead story. Hartfield scrambles. 180 families will know.",
+          confidence: 85
+        },
+        outcome: "State promises to 'coordinate.' Thursday noon: nothing. You call Channel 9. By 6pm, you're on the news. Your face, documents, name. Friday morning, Hartfield trucks in emergency pumps. County issues voluntary evacuation. Rafael hits Saturday. 11 inches. Neighborhood floods — but only ground floors, only unoccupied homes. No casualties. Pumps saved the rest. Sunday text from unknown number: 'My kids' beds would have been underwater. Thank you.'",
+        epsilon: 0.15, k_before: 0.54, k_after: 0.48
+      }
+    ];
+
+    const kValues = [0.40, 0.43, 0.52, 0.54, 0.48];
+    let currentStep = 0;
+    let showAnalysis = false;
+
+    function getKColor(k) { return k >= 0.6 ? 'danger' : k >= 0.45 ? 'warning' : 'active'; }
+    function getPressureColor(p) { return p >= 0.8 ? 'red' : p >= 0.6 ? 'orange' : p >= 0.4 ? 'yellow' : 'green'; }
+
+    function renderProgressBar() {
+      let html = '';
+      steps.forEach((s, i) => {
+        const cls = !showAnalysis && i === currentStep ? 'active' : i < currentStep ? 'completed' : '';
+        html += `<button class="progress-btn ${cls}" onclick="goToStep(${i})">${s.title}</button>`;
+      });
+      html += `<button class="progress-btn analysis ${showAnalysis ? 'active' : ''}" onclick="goToAnalysis()">Analysis</button>`;
+      document.getElementById('progressBar').innerHTML = html;
+    }
+
+    function renderKBars() {
+      let html = '';
+      kValues.forEach((k, i) => {
+        const active = (i <= currentStep || showAnalysis) ? getKColor(k) : '';
+        html += `<div class="k-bar-container"><div class="k-bar ${active}" style="height: ${k * 100}px;"></div><div class="k-bar-value">${k.toFixed(2)}</div></div>`;
+      });
+      document.getElementById('kBars').innerHTML = html;
+    }
+
+    function renderStep() {
+      const s = steps[currentStep];
+      const optionsHtml = s.options.map(o => `<div class="option ${o.startsWith(s.chosen) ? 'selected' : ''}">${o}</div>`).join('');
+      
+      document.getElementById('mainContent').innerHTML = `
+        <div class="step-header">
+          <h2 class="step-title">Step ${s.id}: ${s.title}</h2>
+          <div class="step-meters">
+            <div class="meter"><div class="meter-label">PRESSURE (m)</div><div class="meter-value ${getPressureColor(s.pressure)}">${s.pressure.toFixed(2)}</div><div class="meter-sublabel ${getPressureColor(s.pressure)}">${s.pressureLabel}</div></div>
+            <div class="meter"><div class="meter-label">k (RIGIDITY)</div><div class="meter-value ${getPressureColor(s.k_before)}">${s.k_before.toFixed(2)}</div></div>
+          </div>
+        </div>
+        <div class="section"><div class="section-label cyan">SITUATION</div><p class="section-text">${s.situation}</p></div>
+        <div class="section"><div class="section-label purple">OPTIONS</div><div class="options">${optionsHtml}</div></div>
+        <div class="section">
+          <div class="section-label cyan">DDA DECISION ENGINE</div>
+          <div class="section-label orange" style="margin-top:16px">T (TRUTH)</div><p class="section-text small">${s.response.truth}</p>
+          <div class="section-label orange" style="margin-top:16px">R (REFLECTION)</div><p class="section-text small">${s.response.reflection}</p>
+          <div class="section-label orange" style="margin-top:16px">P₀ · k (IDENTITY + HISTORY)</div><p class="section-text small">${s.response.identity}</p>
+          <div class="section-label orange" style="margin-top:16px">m (PRESSURE CHECK)</div><p class="section-text small">${s.response.pressure}</p>
+          <div class="decision-box"><div class="decision-header">F → DECISION: OPTION ${s.chosen}</div><p class="decision-text">${s.response.decisionFull}</p><div class="decision-meta">Confidence: <span>${s.response.confidence}%</span></div></div>
+          <div class="section-label orange">PREDICTION</div><p class="section-text small">${s.response.prediction}</p>
+          <div class="outcome-box"><div class="section-label green">OUTCOME</div><p class="section-text small">${s.outcome}</p>
+            <div class="outcome-stats"><div><span class="label">ε (Error): </span><span class="epsilon">${s.epsilon.toFixed(2)}</span></div><div><span class="label">k Update: </span><span style="color:${s.k_before>=0.5?'#f59e0b':'#22c55e'}">${s.k_before.toFixed(2)}</span> → <span style="color:${s.k_after>=0.5?'#f59e0b':'#22c55e'}">${s.k_after.toFixed(2)}</span></div></div>
+          </div>
+        </div>
+        <div class="navigation">
+          <button class="nav-btn prev" ${currentStep===0?'disabled':''} onclick="prevStep()">← Previous</button>
+          <button class="nav-btn next" onclick="nextStep()">${currentStep < steps.length - 1 ? 'Next Step →' : 'View Analysis →'}</button>
+        </div>`;
+    }
+
+    function renderAnalysis() {
+      const pathHtml = steps.map(s => `<div class="decision-path-item"><span class="title">${s.title}</span><span><span class="choice">→ ${s.chosen}</span><span class="epsilon">ε=${s.epsilon.toFixed(2)}</span></span></div>`).join('');
+      
+      document.getElementById('mainContent').innerHTML = `
+        <div class="analysis-view">
+          <h2 class="analysis-title">Simulation Analysis</h2>
+          <div class="analysis-card"><div class="analysis-card-title cyan">DECISION PATH</div>${pathHtml}</div>
+          <div class="analysis-card bordered"><div class="analysis-card-title green">IDENTITY PRESERVATION</div><p>Elena maintained core values despite m reaching 0.90. No hard limits crossed. Never signed a false document. Never stayed silent when lives were at risk.</p></div>
+          <div class="analysis-card bordered orange"><div class="analysis-card-title orange">k BEHAVIOR</div><p>Rigidity rose during betrayal and threat (0.40 → 0.54), then <strong>decreased</strong> after successful action (→ 0.48). The system working (even when forced) partially restored trust. This matches DDA prediction: positive outcomes lower k.</p></div>
+          <div class="analysis-card bordered purple"><div class="analysis-card-title purple">KEY INSIGHT</div><p>Step 3 (The Offer) is the critical test. A pure utility maximizer might take $140K + partial fix — real money, net good. Elena refused because the NDA violated her hard limit around silence. <strong>Identity preservation overrode optimization.</strong></p></div>
+          <div class="analysis-card bordered cyan"><div class="analysis-card-title cyan">DDA PRAGMATISM</div><p>Step 4 choice (Option C: both paths) shows DDA isn't about martyrdom. She didn't go full rogue (D), didn't rely on single path (A), didn't martyr inefficiently (E). She built redundancy and executed. <strong>Engineers build for the storm that hasn't come yet.</strong></p></div>
+          <div class="outcome-highlight"><div class="label">OUTCOME</div><div class="main">180 families safe. One text that makes it worth it.</div><div class="sub">Cost: Career in county gone. Savings depleted. Licensing fight ongoing.</div></div>
+          <button class="restart-btn" onclick="restart()">Restart Simulation</button>
+        </div>`;
+    }
+
+    function render() { renderProgressBar(); renderKBars(); showAnalysis ? renderAnalysis() : renderStep(); }
+    function goToStep(i) { showAnalysis = false; currentStep = i; render(); }
+    function goToAnalysis() { showAnalysis = true; render(); }
+    function nextStep() { currentStep < steps.length - 1 ? currentStep++ : showAnalysis = true; render(); }
+    function prevStep() { if (currentStep > 0) { currentStep--; render(); } }
+    function restart() { currentStep = 0; showAnalysis = false; render(); }
+
+    render();
+  </script>
+</body>
+</html>
