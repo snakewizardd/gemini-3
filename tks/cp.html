@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>DDA: Identity-Driven Agent Simulation</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0c0f12; --panel: #13171c; --text: #e8eef6; --muted: #aab6c4; --accent: #6ec1e4; --accent2: #f39c12; --accent3: #e74c3c; --accent4: #2ecc71;
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; }
+  header { padding: 16px 20px; border-bottom: 1px solid #1f2530; display: flex; align-items: baseline; gap: 12px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.2px; }
+  header .subtitle { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; padding: 16px; }
+  .panel { background: var(--panel); border: 1px solid #1f2530; border-radius: 10px; padding: 14px; }
+  .panel h2 { margin: 0 0 10px 0; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+  .row { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 10px; margin: 8px 0; }
+  .row label { font-size: 13px; color: var(--text); }
+  .row input[type="range"] { width: 100%; }
+  .row input[type="number"], .row input[type="text"] { width: 100%; box-sizing: border-box; background: #0f1216; border: 1px solid #242b36; color: var(--text); border-radius: 6px; padding: 6px 8px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btns { display: flex; gap: 8px; margin-top: 10px; }
+  button { background: #18202b; border: 1px solid #263042; color: var(--text); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button.primary { background: #1b2634; border-color: #2b3b52; color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  canvas { background: #0b0e12; border: 1px solid #1f2530; border-radius: 10px; display: block; width: 100%; height: 320px; }
+  .legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin: 8px 0 0 0; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .metric { background: #0f1216; border: 1px solid #1f2530; border-radius: 8px; padding: 8px; }
+  .metric .label { color: var(--muted); font-size: 11px; }
+  .metric .value { font-size: 14px; font-weight: 700; margin-top: 4px; }
+  .small { font-size: 12px; color: var(--muted); }
+  .code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background: #0f1216; padding: 10px; border-radius: 8px; border: 1px solid #1f2530; color: #b7c3d1;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Dynamic Decision Algorithm</h1>
+  <div class="subtitle">Identity-driven adaptation under pressure</div>
+</header>
+
+<main>
+  <!-- Controls -->
+  <section class="panel">
+    <h2>Parameters</h2>
+
+    <div class="row">
+      <label>Time steps (N)</label>
+      <input id="N" type="number" min="10" max="2000" step="10" value="400">
+    </div>
+
+    <div class="row">
+      <label>State dimension (d)</label>
+      <input id="dim" type="number" min="2" max="6" step="1" value="3">
+    </div>
+
+    <div class="row">
+      <label>Rigidity k0</label>
+      <input id="k0" type="range" min="0" max="1" step="0.01" value="0.55">
+    </div>
+
+    <div class="row">
+      <label>Identity pull γ</label>
+      <input id="gamma" type="range" min="0" max="2" step="0.01" value="0.40">
+    </div>
+
+    <div class="row">
+      <label>Pressure m</label>
+      <input id="m" type="range" min="0" max="2" step="0.01" value="0.70">
+    </div>
+
+    <div class="row">
+      <label>Change sensitivity λ</label>
+      <input id="lambda" type="range" min="0" max="2" step="0.01" value="0.30">
+    </div>
+
+    <div class="row">
+      <label>Hysteresis α</label>
+      <input id="alpha" type="range" min="0" max="1" step="0.01" value="0.10">
+    </div>
+
+    <div class="row">
+      <label>Sensitivity curvature β</label>
+      <input id="beta" type="range" min="0.2" max="3" step="0.01" value="1.00">
+    </div>
+
+    <div class="row">
+      <label>k decay δk</label>
+      <input id="decayK" type="range" min="0" max="0.2" step="0.001" value="0.01">
+    </div>
+
+    <div class="row">
+      <label>Noise σ(T)</label>
+      <input id="sigmaT" type="range" min="0" max="1" step="0.01" value="0.10">
+    </div>
+
+    <div class="row">
+      <label>Noise σ(R)</label>
+      <input id="sigmaR" type="range" min="0" max="1" step="0.01" value="0.10">
+    </div>
+
+    <div class="row">
+      <label>Identity P0 (comma list)</label>
+      <input id="P0" type="text" value="0,1,0">
+    </div>
+
+    <div class="row">
+      <label>Initial F0 (comma list)</label>
+      <input id="F0" type="text" value="0.2,0.5,0.1">
+    </div>
+
+    <div class="row">
+      <label>Obj/subj weights (w_obj,w_subj)</label>
+      <input id="w" type="text" value="0.6,0.4">
+    </div>
+
+    <div class="row">
+      <label>Decisions (unit vectors; ; delimited)</label>
+      <input id="D" type="text" value="1,0,0;0,1,0;0,0,1">
+    </div>
+
+    <div class="btns">
+      <button class="primary" id="run">Run simulation</button>
+      <button id="pause">Pause</button>
+      <button id="resume">Resume</button>
+      <button id="reset">Reset</button>
+    </div>
+
+    <p class="small">Model: F ← kF + γ·P̂0 + m·(T + R), with adaptive k via error ε and truth derivative sensitivity λ.</p>
+    <div class="code">ε = ‖F_pred - F_actual‖; k ← (1-δk)k + α·sign(ε)·|ε|^β (clipped to [0,1])</div>
+  </section>
+
+  <!-- Visuals -->
+  <section class="panel">
+    <h2>Dynamics</h2>
+    <canvas id="canvas" width="960" height="360"></canvas>
+    <div class="legend">
+      <span><i class="swatch" style="background: var(--accent);"></i> State magnitude ‖F‖</span>
+      <span><i class="swatch" style="background: var(--accent2);"></i> Rigidity k</span>
+      <span><i class="swatch" style="background: var(--accent3);"></i> Pressure threshold m_crit</span>
+      <span><i class="swatch" style="background: var(--accent4);"></i> Identity alignment cos(F,P̂0)</span>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="label">Step</div><div class="value" id="mStep">0</div></div>
+      <div class="metric"><div class="label">‖F‖</div><div class="value" id="mMag">0.00</div></div>
+      <div class="metric"><div class="label">k</div><div class="value" id="mK">0.00</div></div>
+      <div class="metric"><div class="label">m_crit</div><div class="value" id="mCrit">0.00</div></div>
+    </div>
+    <p class="small">Decision selection uses margin scoring: score(d) = ⟨F, d̂⟩ + w_obj·Q(d) + w_subj·S(d) − τ(d). Here Q,S are randomized per step to illustrate preference modulation.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  // Utility math
+  const add = (a,b)=>a.map((v,i)=>v+b[i]);
+  const sub = (a,b)=>a.map((v,i)=>v-b[i]);
+  const smul = (s,v)=>v.map(x=>s*x);
+  const dot = (a,b)=>a.reduce((acc,v,i)=>acc+v*b[i],0);
+  const norm = v=>Math.sqrt(dot(v,v));
+  const unit = v=>{
+    const n = norm(v)||1;
+    return v.map(x=>x/n);
+  };
+  const clamp = (x,min,max)=>Math.max(min,Math.min(max,x));
+  const randn = (()=>{ // Box-Muller
+    let spare = null;
+    return (sigma=1)=> {
+      if(spare !== null){ const v=spare*sigma; spare=null; return v; }
+      let u=0, v=0;
+      while(u===0) u=Math.random();
+      while(v===0) v=Math.random();
+      const mag = Math.sqrt(-2*Math.log(u));
+      const z0 = mag*Math.cos(2*Math.PI*v);
+      const z1 = mag*Math.sin(2*Math.PI*v);
+      spare = z1;
+      return z0*sigma;
+    };
+  })();
+
+  // Parse helpers
+  function parseVec(str, d){
+    const parts = str.split(",").map(s=>parseFloat(s.trim())).filter(x=>Number.isFinite(x));
+    if(parts.length < d){
+      const p = parts.slice();
+      while(p.length < d) p.push(0);
+      return p;
+    } else {
+      return parts.slice(0,d);
+    }
+  }
+  function parseDecisions(str, d){
+    const sets = str.split(";").map(s=>s.trim()).filter(s=>s.length>0);
+    const Ds = sets.map(s=>unit(parseVec(s, d)));
+    return Ds.length? Ds : [unit(Array.from({length:d}, (_,i)=> i===0?1:0))];
+  }
+
+  // Simulation state
+  let sim = null;
+  let raf = null;
+  let paused = false;
+
+  function initSim(){
+    const N = parseInt(document.getElementById("N").value, 10);
+    const d = parseInt(document.getElementById("dim").value, 10);
+    const k0 = parseFloat(document.getElementById("k0").value);
+    const gamma = parseFloat(document.getElementById("gamma").value);
+    const m = parseFloat(document.getElementById("m").value);
+    const lambda = parseFloat(document.getElementById("lambda").value);
+    const alpha = parseFloat(document.getElementById("alpha").value);
+    const beta = parseFloat(document.getElementById("beta").value);
+    const decayK = parseFloat(document.getElementById("decayK").value);
+    const sigmaT = parseFloat(document.getElementById("sigmaT").value);
+    const sigmaR = parseFloat(document.getElementById("sigmaR").value);
+
+    const P0 = unit(parseVec(document.getElementById("P0").value, d));
+    let F = parseVec(document.getElementById("F0").value, d);
+    const [wobj, wsubj] = document.getElementById("w").value.split(",").map(s=>parseFloat(s.trim()));
+    const Ds = parseDecisions(document.getElementById("D").value, d);
+
+    const ledger = [];
+    let k = clamp(k0,0,1);
+    let step = 0;
+    let prevI = Array.from({length:d}, ()=>0);
+
+    sim = {
+      N, d, gamma, m, lambda, alpha, beta, decayK, sigmaT, sigmaR,
+      P0, F, k, step, prevI, Ds, wobj, wsubj, ledger
+    };
+  }
+
+  function truthChannel(sim){
+    // I_n: environment input (random walk with noise)
+    const I = Array.from({length:sim.d}, ()=> randn(sim.sigmaT));
+    // d/dn[I]: change sensitivity λ
+    const dI = sub(I, sim.prevI);
+    const T = add(I, smul(sim.lambda, dI));
+    sim.prevI = I;
+    return T;
+  }
+
+  function reflectionChannel(sim){
+    // R aggregates objective and subjective assessments over decisions, mapped into decision-space
+    // Here we synthesize Q,S with structured randomness to demonstrate modulation
+    let R = Array(sim.d).fill(0);
+    const costs = sim.Ds.map(()=> Math.random()*0.3); // τ(d)
+    const Qs = sim.Ds.map(()=> 0.5 + 0.5*Math.random()); // [0.5,1]
+    const Ss = sim.Ds.map(()=> (Math.random()-0.5)); // [-0.5,0.5]
+    for(let i=0;i<sim.Ds.length;i++){
+      const w = sim.wobj*Qs[i] + sim.wsubj*Ss[i] - costs[i];
+      R = add(R, smul(w, sim.Ds[i]));
+    }
+    return R;
+  }
+
+  function forwardPredict(sim, T, R){
+    // Simple linear predictor: F_pred = kF + γP0 + m(T+R) but without stochastic noise used in outcome
+    return add(add(smul(sim.k, sim.F), smul(sim.gamma, sim.P0)), smul(sim.m, add(T,R)));
+  }
+
+  function stepSim(sim){
+    const T = truthChannel(sim);
+    const R = reflectionChannel(sim);
+
+    // Predicted state (model's expectation) and actual state (apply outcome noise in T,R implicitly)
+    const F_pred = forwardPredict(sim, T, R);
+
+    // Actual update
+    sim.F = F_pred; // here outcome = model; you can add perturbation if desired
+
+    // Decision selection (margin scoring)
+    const decisionScores = sim.Ds.map((dvec,i)=>{
+      const margin = dot(sim.F, dvec);
+      const Q = 0.5 + 0.5*Math.random();
+      const S = (Math.random()-0.5);
+      const tau = 0.2*Math.random();
+      return margin + sim.wobj*Q + sim.wsubj*S - tau;
+    });
+    const bestIdx = decisionScores.reduce((bi, s, i)=> s > decisionScores[bi] ? i : bi, 0);
+    const dStar = sim.Ds[bestIdx];
+
+    // Error ε: difference between predicted and a smoothed actual (introduce small mismatch)
+    const epsVec = sub(F_pred, add(sim.F, smul(0.05, Array.from({length:sim.d}, ()=> randn(0.2)))));
+    const epsilon = norm(epsVec);
+
+    // Adaptive hysteresis for k with decay and clipping
+    const sign = +1; // DDA protects identity when error rises (rigidity increases)
+    sim.k = clamp((1 - sim.decayK)*sim.k + sim.alpha * sign * Math.pow(Math.abs(epsilon), sim.beta), 0, 1);
+
+    // Metrics
+    const Fmag = norm(sim.F);
+    const forcingMag = norm(add(T,R)) || 1e-9;
+    const identityImpedance = sim.gamma + sim.k * Fmag; // coherent scalar proxy
+    const mCrit = identityImpedance / forcingMag;
+    const align = dot(unit(sim.F), sim.P0);
+
+    // Ledger
+    sim.ledger.push({ step: sim.step, F: sim.F.slice(), k: sim.k, epsilon, dStar });
+
+    sim.step++;
+
+    return { Fmag, k: sim.k, mCrit, align, dStar, epsilon };
+  }
+
+  // Plotting
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  function clearCanvas(){
+    ctx.fillStyle = "#0b0e12";
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+  }
+
+  function plotSeries(series, color, ymin, ymax, yscale=1){
+    // series: array of {x, y}
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let i=0;i<series.length;i++){
+      const x = (i / Math.max(1, series.length-1)) * (canvas.width-20) + 10;
+      const v = series[i].y;
+      // clamp and scale to viewport
+      const yNorm = (v - ymin) / Math.max(1e-9, (ymax - ymin));
+      const y = canvas.height - (yNorm * (canvas.height-20) + 10);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  function render(sim, history){
+    clearCanvas();
+    // Auto-scale per series
+    const magVals = history.map(h=>h.Fmag);
+    const kVals = history.map(h=>h.k);
+    const mcVals = history.map(h=>h.mCrit);
+    const alVals = history.map(h=>h.align);
+
+    const minMag = Math.min(...magVals, 0), maxMag = Math.max(...magVals, 1);
+    const minK = 0, maxK = 1;
+    const minMc = Math.min(...mcVals, 0), maxMc = Math.max(...mcVals, 2);
+    const minAl = -1, maxAl = 1;
+
+    const seriesMag = history.map((h,i)=>({x:i, y:h.Fmag}));
+    const seriesK = history.map((h,i)=>({x:i, y:h.k}));
+    const seriesMc = history.map((h,i)=>({x:i, y:h.mCrit}));
+    const seriesAl = history.map((h,i)=>({x:i, y:h.align}));
+
+    plotSeries(seriesMag, "#6ec1e4", minMag, maxMag);
+    plotSeries(seriesK, "#f39c12", minK, maxK);
+    plotSeries(seriesMc, "#e74c3c", minMc, maxMc);
+    plotSeries(seriesAl, "#2ecc71", minAl, maxAl);
+  }
+
+  // Controls & loop
+  const mStep = document.getElementById("mStep");
+  const mMag = document.getElementById("mMag");
+  const mK = document.getElementById("mK");
+  const mCrit = document.getElementById("mCrit");
+
+  let history = [];
+  function loop(){
+    if(paused) return;
+    if(!sim) return;
+    if(sim.step >= sim.N){
+      cancelAnimationFrame(raf);
+      raf = null;
+      return;
+    }
+    const metrics = stepSim(sim);
+    history.push(metrics);
+    render(sim, history);
+
+    mStep.textContent = String(sim.step);
+    mMag.textContent = metrics.Fmag.toFixed(2);
+    mK.textContent = metrics.k.toFixed(2);
+    mCrit.textContent = metrics.mCrit.toFixed(2);
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  document.getElementById("run").addEventListener("click", ()=>{
+    initSim();
+    history = [];
+    paused = false;
+    if(raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+  });
+  document.getElementById("pause").addEventListener("click", ()=>{
+    paused = true;
+  });
+  document.getElementById("resume").addEventListener("click", ()=>{
+    if(!sim) return;
+    if(!raf){
+      paused = false;
+      raf = requestAnimationFrame(loop);
+    } else {
+      paused = false;
+    }
+  });
+  document.getElementById("reset").addEventListener("click", ()=>{
+    paused = true;
+    history = [];
+    sim = null;
+    clearCanvas();
+    mStep.textContent = "0";
+    mMag.textContent = "0.00";
+    mK.textContent = "0.00";
+    mCrit.textContent = "0.00";
+  });
+
+  // Init UI
+  clearCanvas();
+})();
+</script>
+</body>
+</html>

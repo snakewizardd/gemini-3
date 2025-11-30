@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE ANCHOR PROTOCOL // VISUALIZED</title>
+    <style>
+        body {
+            background-color: #050505;
+            color: #a0a0a0;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 14px;
+            letter-spacing: 2px;
+            color: #fff;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+        }
+
+        .stat {
+            font-size: 11px;
+            margin-bottom: 4px;
+            color: #555;
+        }
+
+        .stat span {
+            color: #0ff;
+        }
+
+        .stat.alert span {
+            color: #f0f;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        /* HUD Elements */
+        .grid-line { stroke: #1a1a1a; stroke-width: 1; }
+        .core { fill: #111; stroke: #fff; stroke-width: 2; }
+        .tether { stroke: #333; stroke-width: 1; stroke-dasharray: 4 2; }
+        .particle { fill: #000; stroke: #0ff; stroke-width: 2; }
+        .trail { fill: none; stroke: #0ff; stroke-width: 1; opacity: 0.3; }
+        
+        /* Interactive Button */
+        #trigger-btn {
+            position: absolute;
+            bottom: 40px;
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid #333;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            z-index: 20;
+        }
+
+        #trigger-btn:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        }
+
+        #trigger-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Dynamic Classes */
+        .high-tension { stroke: #ff0055 !important; filter: drop-shadow(0 0 8px #ff0055); }
+        .core-active { stroke: #ff0055 !important; fill: #1a0005 !important; }
+        .particle-stressed { stroke: #fff !important; }
+
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <h1>// THE ANCHOR PROTOCOL</h1>
+        <div class="stat">SYSTEM STATUS: <span id="status-text">EQUILIBRIUM</span></div>
+        <div class="stat">CHAOS LEVEL (ε): <span id="chaos-val">0.00</span></div>
+        <div class="stat">RIGIDITY (k): <span id="k-val">0.15</span></div>
+        <div class="stat">MODE: <span id="mode-val">OBSERVATION</span></div>
+    </div>
+
+    <div id="canvas-container">
+        <svg id="main-svg" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <filter id="glow">
+                    <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+            
+            <g id="grid-group"></g>
+
+            <line id="tether" x1="0" y1="0" x2="0" y2="0" class="tether" />
+
+            <circle id="core" cx="0" cy="0" r="20" class="core" />
+            <circle id="core-pulse" cx="0" cy="0" r="20" fill="none" stroke="#333" stroke-width="1" opacity="0" />
+
+            <path id="trail" class="trail" d="" />
+
+            <circle id="particle" cx="0" cy="0" r="8" class="particle" />
+        </svg>
+    </div>
+
+    <button id="trigger-btn">INJECT ENTROPY</button>
+
+    <script>
+        // DDA CONSTANTS
+        const BASE_K = 0.02; // Standard flexibility
+        const MAX_K = 0.25;  // Maximum rigidity (The Concrete Floor)
+        const FRICTION = 0.92;
+        const M_CRIT = 250;  // Distance threshold for critical response
+        
+        // STATE
+        let center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        let particle = { x: center.x, y: center.y - 100, vx: 5, vy: 0 };
+        let mouse = { x: center.x, y: center.y, active: false };
+        let trailPoints = [];
+        let currentK = BASE_K;
+        let isStressed = false;
+
+        // DOM ELEMENTS
+        const svg = document.getElementById('main-svg');
+        const elTether = document.getElementById('tether');
+        const elCore = document.getElementById('core');
+        const elCorePulse = document.getElementById('core-pulse');
+        const elParticle = document.getElementById('particle');
+        const elTrail = document.getElementById('trail');
+        const elGrid = document.getElementById('grid-group');
+        
+        // UI ELEMENTS
+        const uiStatus = document.getElementById('status-text');
+        const uiChaos = document.getElementById('chaos-val');
+        const uiK = document.getElementById('k-val');
+        const uiMode = document.getElementById('mode-val');
+
+        // SETUP GRID
+        function drawGrid() {
+            elGrid.innerHTML = '';
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const step = 50;
+            
+            for(let x = 0; x < width; x += step) {
+                let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', x); line.setAttribute('y1', 0);
+                line.setAttribute('x2', x); line.setAttribute('y2', height);
+                line.setAttribute('class', 'grid-line');
+                elGrid.appendChild(line);
+            }
+            for(let y = 0; y < height; y += step) {
+                let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', 0); line.setAttribute('y1', y);
+                line.setAttribute('x2', width); line.setAttribute('y2', y);
+                line.setAttribute('class', 'grid-line');
+                elGrid.appendChild(line);
+            }
+        }
+        drawGrid();
+
+        // MOUSE HANDLERS (The "Pull" of Humanity)
+        window.addEventListener('resize', () => {
+            center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+            drawGrid();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            mouse.active = true;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            mouse.active = false;
+        });
+
+        document.getElementById('trigger-btn').addEventListener('click', () => {
+            // Chaos Injection: Massive random velocity
+            particle.vx += (Math.random() - 0.5) * 100;
+            particle.vy += (Math.random() - 0.5) * 100;
+            uiMode.innerHTML = "CRISIS SIMULATION";
+            uiMode.style.color = "#f0f";
+        });
+
+        // ANIMATION LOOP
+        function animate() {
+            // 1. Calculate Vector from Center (P0) to Particle (Fn)
+            let dx = particle.x - center.x;
+            let dy = particle.y - center.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+
+            // 2. THE DDA LOGIC: Adaptive Hysteresis
+            // If distance (Error) is high, K increases.
+            // We become rigid to protect the system.
+            
+            let targetK = BASE_K;
+            
+            // If dragging or high velocity chaos
+            if (mouse.active) {
+                // Dragging logic - Particle tries to follow mouse
+                let mdx = mouse.x - particle.x;
+                let mdy = mouse.y - particle.y;
+                particle.vx += mdx * 0.05;
+                particle.vy += mdy * 0.05;
+            }
+
+            // DDA CALCULATION:
+            // As 'dist' (Error) approaches critical levels, 'k' scales up non-linearly.
+            let errorFactor = Math.min(dist / 400, 1); 
+            // In DDA: k = k_prev + alpha * error^beta
+            targetK = BASE_K + (MAX_K - BASE_K) * Math.pow(errorFactor, 2); 
+
+            // Smooth transition of K
+            currentK += (targetK - currentK) * 0.1;
+
+            // 3. Apply Forces
+            // Spring Force (The Anchor pulling back)
+            let forceX = -currentK * dx;
+            let forceY = -currentK * dy;
+
+            particle.vx += forceX;
+            particle.vy += forceY;
+            
+            // Friction (Damping)
+            particle.vx *= FRICTION;
+            particle.vy *= FRICTION;
+
+            // Update Position
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+
+            // 4. Update Visuals
+            updateVisuals(dist, currentK);
+
+            requestAnimationFrame(animate);
+        }
+
+        function updateVisuals(dist, k) {
+            // Update Coordinates
+            elParticle.setAttribute('cx', particle.x);
+            elParticle.setAttribute('cy', particle.y);
+            
+            elCore.setAttribute('cx', center.x);
+            elCore.setAttribute('cy', center.y);
+            elCorePulse.setAttribute('cx', center.x);
+            elCorePulse.setAttribute('cy', center.y);
+
+            elTether.setAttribute('x1', center.x);
+            elTether.setAttribute('y1', center.y);
+            elTether.setAttribute('x2', particle.x);
+            elTether.setAttribute('y2', particle.y);
+
+            // Trail Logic
+            trailPoints.push({x: particle.x, y: particle.y});
+            if(trailPoints.length > 20) trailPoints.shift();
+            let pathD = `M ${trailPoints[0].x} ${trailPoints[0].y}`;
+            for(let i=1; i<trailPoints.length; i++) pathD += ` L ${trailPoints[i].x} ${trailPoints[i].y}`;
+            elTrail.setAttribute('d', pathD);
+
+            // STATE VISUALIZATION (The "Manifesto" part)
+            isStressed = k > (BASE_K * 2);
+
+            if (isStressed) {
+                // High Tension / High K Mode
+                elTether.classList.add('high-tension');
+                elCore.classList.add('core-active');
+                elParticle.classList.add('particle-stressed');
+                
+                // Pulse the core visually to show effort
+                let pulseR = 20 + (Math.sin(Date.now() / 50) * 5);
+                elCorePulse.setAttribute('r', pulseR);
+                elCorePulse.setAttribute('opacity', (k / MAX_K));
+                elCorePulse.setAttribute('stroke', '#ff0055');
+
+                uiStatus.innerHTML = "INVERSE HYSTERESIS ACTIVE";
+                uiStatus.classList.add('alert');
+            } else {
+                // Equilibrium Mode
+                elTether.classList.remove('high-tension');
+                elCore.classList.remove('core-active');
+                elParticle.classList.remove('particle-stressed');
+                elCorePulse.setAttribute('opacity', 0);
+                
+                uiStatus.innerHTML = "EQUILIBRIUM MAINTAINED";
+                uiStatus.classList.remove('alert');
+            }
+
+            // Update Stats
+            uiChaos.innerHTML = dist.toFixed(2);
+            uiK.innerHTML = k.toFixed(4);
+            
+            // Update Colors based on stress
+            let redVal = Math.min(255, (k / MAX_K) * 255);
+            let blueVal = 255 - redVal;
+            uiK.style.color = `rgb(${redVal}, ${blueVal}, ${blueVal})`;
+        }
+
+        animate();
+
+    </script>
+</body>
+</html>

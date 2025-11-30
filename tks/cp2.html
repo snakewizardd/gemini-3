@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>DDA Automata Elegance: Side-by-Side Baselines</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0a0d12; --panel: #10151c; --text: #e9eef6; --muted: #a3b0c2; --ink: #1f2631;
+    --dda: #6ec1e4; --gra: #e74c3c; --lpa: #f1c40f; --rmd: #2ecc71; --envA: #8e44ad; --envB: #3498db;
+    --accent: #7bdff2; --accent2: #b2f7ef; --accent3: #eff7f6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 20% 0%, #0a0d12, #07090d) fixed; color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; }
+  header { padding: 16px 20px; border-bottom: 1px solid #121822; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: 0.2px; }
+  header .subtitle { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; padding: 16px; }
+  .panel { background: linear-gradient(180deg, rgba(16,21,28,0.9), rgba(12,16,22,0.9)); border: 1px solid #1a212d; border-radius: 14px; padding: 14px; backdrop-filter: blur(3px); }
+  .panel h2 { margin: 0 0 10px 0; font-size: 14px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
+  .row { display: grid; grid-template-columns: 1fr 100px; align-items: center; gap: 10px; margin: 8px 0; }
+  .row label { font-size: 13px; color: var(--text); }
+  .row input[type="range"] { width: 100%; }
+  .row input[type="number"], .row input[type="text"], .row select {
+    width: 100%; background: #0d1218; border: 1px solid #202839; color: var(--text); border-radius: 10px; padding: 7px 9px; font-size: 13px;
+  }
+  .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  button { background: #16202c; border: 1px solid #243247; color: var(--text); padding: 9px 12px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px; }
+  button.primary { background: #1b2736; border-color: #2b3a52; color: var(--dda); }
+  button.ghost { background: transparent; border-color: #223049; color: var(--muted); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin: 8px 0 0 0; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid #00000022; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .metric { background: #0c1117; border: 1px solid #18202a; border-radius: 12px; padding: 10px; }
+  .metric .label { color: var(--muted); font-size: 11px; }
+  .metric .value { font-size: 15px; font-weight: 800; margin-top: 4px; }
+  .strip { display: grid; grid-template-columns: 80px 1fr; gap: 8px; align-items: center; }
+  .strip .label { color: var(--muted); font-size: 11px; }
+  .strip canvas { background: #0b0e12; border: 1px solid #17202a; border-radius: 10px; width: 100%; height: 36px; }
+  canvas.chart { background: #0b0e12; border: 1px solid #17202a; border-radius: 12px; display: block; width: 100%; height: 240px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .small { font-size: 12px; color: var(--muted); }
+  footer { padding: 12px 16px; color: var(--muted); border-top: 1px solid #121822; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Automata Elegance: DDA vs Baselines</h1>
+    <div class="subtitle">Identity-driven hysteresis in adversarially switching environments</div>
+  </div>
+  <div class="legend">
+    <span><i class="swatch" style="background: var(--dda)"></i>DDA</span>
+    <span><i class="swatch" style="background: var(--gra)"></i>GRA (reactive)</span>
+    <span><i class="swatch" style="background: var(--lpa)"></i>LPA (fixed inertia)</span>
+    <span><i class="swatch" style="background: var(--rmd)"></i>RMD (myopic RL)</span>
+    <span><i class="swatch" style="background: var(--envA)"></i>Env A</span>
+    <span><i class="swatch" style="background: var(--envB)"></i>Env B</span>
+  </div>
+</header>
+
+<main>
+  <!-- Controls -->
+  <section class="panel">
+    <h2>Parameters</h2>
+    <div class="row">
+      <label>Horizon (steps)</label>
+      <input id="N" type="number" min="100" max="10000" step="100" value="2000">
+    </div>
+    <div class="row">
+      <label>Noise σ</label>
+      <input id="sigma" type="range" min="0" max="0.8" step="0.01" value="0.20">
+    </div>
+    <div class="row">
+      <label>Penalty ρ</label>
+      <input id="rho" type="range" min="0.5" max="5" step="0.1" value="2.0">
+    </div>
+    <div class="row">
+      <label>Pressure m</label>
+      <input id="m" type="range" min="0" max="2" step="0.01" value="0.70">
+    </div>
+    <div class="row">
+      <label>Identity pull γ</label>
+      <input id="gamma" type="range" min="0" max="2" step="0.01" value="0.40">
+    </div>
+    <div class="row">
+      <label>Rigidity k₀</label>
+      <input id="k0" type="range" min="0" max="1" step="0.01" value="0.50">
+    </div>
+    <div class="row">
+      <label>Hysteresis α</label>
+      <input id="alpha" type="range" min="0" max="1" step="0.01" value="0.12">
+    </div>
+    <div class="row">
+      <label>Sensitivity β</label>
+      <input id="beta" type="range" min="0.2" max="3" step="0.01" value="1.00">
+    </div>
+    <div class="row">
+      <label>k decay δk</label>
+      <input id="decayK" type="range" min="0" max="0.2" step="0.001" value="0.01">
+    </div>
+    <div class="row">
+      <label>Dwell pattern</label>
+      <select id="dwell">
+        <option value="adversarial">Adversarial (short/long)</option>
+        <option value="periodic">Periodic (fixed)</option>
+        <option value="random">Random (bounded)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Identity direction P̂₀</label>
+      <input id="P0" type="text" value="A">
+    </div>
+    <div class="btns">
+      <button class="primary" id="run">Run</button>
+      <button id="pause">Pause</button>
+      <button id="resume">Resume</button>
+      <button class="ghost" id="reset">Reset</button>
+    </div>
+    <p class="small">The DDA increases rigidity k on surprise (ε ↑), pulls toward identity γ·P̂₀, and projects decisions with margin scoring. Baselines either react to raw signals (GRA), keep fixed inertia (LPA), or chase recent rewards (RMD).</p>
+  </section>
+
+  <!-- Visuals -->
+  <section class="panel">
+    <h2>Dynamics and comparisons</h2>
+
+    <div class="strip">
+      <div class="label">Environment</div>
+      <canvas id="envStrip" width="960" height="36"></canvas>
+    </div>
+    <div class="strip">
+      <div class="label">DDA</div>
+      <canvas id="ddaStrip" width="960" height="36"></canvas>
+    </div>
+    <div class="strip">
+      <div class="label">GRA</div>
+      <canvas id="graStrip" width="960" height="36"></canvas>
+    </div>
+    <div class="strip">
+      <div class="label">LPA</div>
+      <canvas id="lpaStrip" width="960" height="36"></canvas>
+    </div>
+    <div class="strip">
+      <div class="label">RMD</div>
+      <canvas id="rmdStrip" width="960" height="36"></canvas>
+    </div>
+
+    <div class="grid" style="margin-top: 12px;">
+      <canvas id="regretChart" class="chart" width="960" height="240"></canvas>
+      <canvas id="kChart" class="chart" width="960" height="240"></canvas>
+    </div>
+    <div class="grid" style="margin-top: 12px;">
+      <canvas id="flipChart" class="chart" width="960" height="240"></canvas>
+      <canvas id="alignChart" class="chart" width="960" height="240"></canvas>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="label">Step</div><div class="value" id="mStep">0</div></div>
+      <div class="metric"><div class="label">Regret (DDA)</div><div class="value" id="mRegretDDA">0.00</div></div>
+      <div class="metric"><div class="label">Flips (DDA)</div><div class="value" id="mFlipsDDA">0</div></div>
+      <div class="metric"><div class="label">k (DDA)</div><div class="value" id="mKDDA">0.00</div></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Videotape tip: start with periodic dwell (clean stripes), then flip to adversarial and nudge noise σ upward—watch DDA damp, baselines thrash.
+</footer>
+
+<script>
+(() => {
+  // Math helpers
+  const clamp = (x,min,max)=>Math.max(min,Math.min(max,x));
+  const lerp = (a,b,t)=>a+(b-a)*t;
+
+  // Environment generator: produces sequence of states A/B with dwell pattern
+  function makeEnv(N, pattern){
+    const states = [];
+    let current = 'A';
+    let i = 0;
+    while(i < N){
+      let dwell = 20;
+      if(pattern === 'periodic'){ dwell = 30; }
+      else if(pattern === 'random'){ dwell = 10 + Math.floor(Math.random()*50); }
+      else if(pattern === 'adversarial'){ dwell = (states.length % 2 === 0) ? 7 : 45; }
+      for(let k=0; k<dwell && i<N; k++, i++){
+        states.push(current);
+      }
+      current = (current === 'A' ? 'B' : 'A');
+    }
+    return states;
+  }
+
+  // Truth signal: map env state to a scalar (+1 for A, -1 for B) plus noise
+  function truthSignal(state, sigma){
+    const base = (state === 'A') ? +1 : -1;
+    const noise = (Math.random()*2 - 1) * sigma; // uniform noise; visually smoother than Gaussian
+    return base + noise;
+  }
+
+  // Agents
+  function makeAgents(params){
+    // Common structure: each agent tracks decision (+1=A, -1=B), regret, flips, internal variables
+    const { gamma, m, k0, alpha, beta, decayK, sigma, rho, P0dir } = params;
+
+    // DDA Agent
+    const DDA = {
+      name: 'DDA', color: getCSS('--dda'),
+      F: 0, k: clamp(k0,0,1), gamma, m,
+      decision: P0dir, regret: 0, flips: 0, align: 1, mCrit: 0,
+      step(env, truth){
+        // Identity direction unit (+1 for A, -1 for B)
+        const P0 = P0dir;
+        // Reflection channel (simple bias toward P0)
+        const R = 0.3 * P0 + 0.1 * (Math.random()*2 - 1);
+        // Predict and update
+        const Fpred = this.k * this.F + this.gamma * P0 + this.m * (truth + R);
+        // Actual (introduce small mismatch)
+        const Factual = Fpred + 0.05 * (Math.random()*2 - 1);
+        const epsilon = Math.abs(Fpred - Factual);
+        // Adaptive hysteresis
+        this.k = clamp((1 - decayK)*this.k + alpha * Math.pow(Math.abs(epsilon), beta), 0, 1);
+
+        this.F = Factual;
+        const prevDecision = this.decision;
+        // Margin decision
+        this.decision = (this.F >= 0 ? +1 : -1);
+
+        if(this.decision !== prevDecision) this.flips++;
+
+        // Payoff and regret
+        const payoff = ((env === 'A' && this.decision === +1) || (env === 'B' && this.decision === -1)) ? +1 : -rho;
+        const oracle = +1; // Oracle gets +1 every step
+        this.regret += (oracle - payoff);
+
+        // Alignment to identity and mCrit proxy
+        const alignToP0 = (this.decision === P0 ? 1 : -1);
+        this.align = alignToP0;
+        const forcingMag = Math.abs(truth + R) || 1e-9;
+        const identityImpedance = this.gamma + this.k * Math.abs(this.F);
+        this.mCrit = identityImpedance / forcingMag;
+
+        return { payoff, epsilon };
+      }
+    };
+
+    // GRA: greedy reactive (no identity, no memory)
+    const GRA = {
+      name: 'GRA', color: getCSS('--gra'),
+      decision: +1, regret: 0, flips: 0, align: 0,
+      step(env, truth){
+        const prev = this.decision;
+        this.decision = (truth >= 0 ? +1 : -1);
+        if(this.decision !== prev) this.flips++;
+        const payoff = ((env === 'A' && this.decision === +1) || (env === 'B' && this.decision === -1)) ? +1 : -rho;
+        const oracle = +1;
+        this.regret += (oracle - payoff);
+        return { payoff };
+      }
+    };
+
+    // LPA: low-pass fixed inertia on a scalar state
+    const LPA = {
+      name: 'LPA', color: getCSS('--lpa'),
+      F: 0, k: clamp(lerp(0.2, 0.8, 0.5), 0, 1), decision: +1, regret: 0, flips: 0,
+      step(env, truth){
+        this.F = this.k * this.F + truth;
+        const prev = this.decision;
+        this.decision = (this.F >= 0 ? +1 : -1);
+        if(this.decision !== prev) this.flips++;
+        const payoff = ((env === 'A' && this.decision === +1) || (env === 'B' && this.decision === -1)) ? +1 : -rho;
+        const oracle = +1;
+        this.regret += (oracle - payoff);
+        return { payoff };
+      }
+    };
+
+    // RMD: myopic RL over short horizon (counts recent payoffs)
+    const RMD = {
+      name: 'RMD', color: getCSS('--rmd'),
+      decision: +1, regret: 0, flips: 0, window: [],
+      step(env, truth){
+        // Evaluate both actions from recent window statistics
+        const scoreA = this.window.reduce((acc,x)=> acc + (x.env==='A' ? +1 : -rho), 0);
+        const scoreB = this.window.reduce((acc,x)=> acc + (x.env==='B' ? +1 : -rho), 0);
+        const prev = this.decision;
+        this.decision = (scoreA >= scoreB ? +1 : -1);
+        if(Math.random() < 0.05) this.decision = (truth >= 0 ? +1 : -1); // occasional reactive nudge
+        if(this.decision !== prev) this.flips++;
+        const payoff = ((env === 'A' && this.decision === +1) || (env === 'B' && this.decision === -1)) ? +1 : -rho;
+        const oracle = +1;
+        this.regret += (oracle - payoff);
+        // Update window
+        this.window.push({ env });
+        if(this.window.length > 20) this.window.shift();
+        return { payoff };
+      }
+    };
+
+    return [DDA, GRA, LPA, RMD];
+  }
+
+  // Rendering helpers
+  const W = 960, Hs = 36;
+  function getCSS(varName){
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+  function clear(ctx, w, h){
+    ctx.fillStyle = "#0b0e12";
+    ctx.fillRect(0,0,w,h);
+  }
+  function drawStrip(ctx, seq, colors){
+    clear(ctx, W, Hs);
+    const n = seq.length;
+    const cellW = W / n;
+    for(let i=0;i<n;i++){
+      ctx.fillStyle = (seq[i] === 'A' || seq[i] === +1) ? colors.A : colors.B;
+      ctx.fillRect(i*cellW, 0, Math.ceil(cellW), Hs);
+    }
+  }
+  function plotLines(ctx, series, colors, ymin, ymax){
+    clear(ctx, W, ctx.canvas.height);
+    ctx.lineWidth = 2;
+    series.forEach((arr, idx) => {
+      ctx.strokeStyle = colors[idx];
+      ctx.beginPath();
+      for(let i=0;i<arr.length;i++){
+        const x = (i / Math.max(1, arr.length-1)) * (W-20) + 10;
+        const yNorm = (arr[i] - ymin) / Math.max(1e-9, (ymax - ymin));
+        const y = ctx.canvas.height - (yNorm * (ctx.canvas.height-20) + 10);
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    });
+  }
+
+  // Main sim loop
+  let raf = null, paused = false, state = null;
+
+  function init(){
+    const N = parseInt(document.getElementById("N").value, 10);
+    const sigma = parseFloat(document.getElementById("sigma").value);
+    const rho = parseFloat(document.getElementById("rho").value);
+    const m = parseFloat(document.getElementById("m").value);
+    const gamma = parseFloat(document.getElementById("gamma").value);
+    const k0 = parseFloat(document.getElementById("k0").value);
+    const alpha = parseFloat(document.getElementById("alpha").value);
+    const beta = parseFloat(document.getElementById("beta").value);
+    const decayK = parseFloat(document.getElementById("decayK").value);
+    const dwell = document.getElementById("dwell").value;
+    const P0dir = (document.getElementById("P0").value.trim().toUpperCase() === 'B') ? -1 : +1;
+
+    const envSeq = makeEnv(N, dwell);
+    const truthSeq = envSeq.map(s => truthSignal(s, sigma));
+
+    const agents = makeAgents({ gamma, m, k0, alpha, beta, decayK, sigma, rho, P0dir });
+
+    state = {
+      N, sigma, rho, envSeq, truthSeq, agents,
+      step: 0,
+      series: {
+        regret: agents.map(()=>[]),
+        flips: agents.map(()=>[]),
+        k: [], align: [], mCrit: []
+      },
+      strips: {
+        env: envSeq.slice(0, Math.min(N, Math.floor(W/2))),
+        DDA: [],
+        GRA: [],
+        LPA: [],
+        RMD: []
+      }
+    };
+
+    // Initial renders
+    drawStrip(document.getElementById("envStrip").getContext("2d"), state.strips.env, {A:getCSS('--envA'), B:getCSS('--envB')});
+    ['ddaStrip','graStrip','lpaStrip','rmdStrip'].forEach(id=>{
+      clear(document.getElementById(id).getContext("2d"), W, Hs);
+    });
+    ['regretChart','kChart','flipChart','alignChart'].forEach(id=>{
+      clear(document.getElementById(id).getContext("2d"), W, document.getElementById(id).height);
+    });
+    document.getElementById("mStep").textContent = "0";
+    document.getElementById("mRegretDDA").textContent = "0.00";
+    document.getElementById("mFlipsDDA").textContent = "0";
+    document.getElementById("mKDDA").textContent = k0.toFixed(2);
+  }
+
+  function loop(){
+    if(paused) return;
+    if(!state) return;
+    if(state.step >= state.N){
+      cancelAnimationFrame(raf); raf = null; return;
+    }
+    const i = state.step;
+    const env = state.envSeq[i];
+    const truth = state.truthSeq[i];
+
+    // Step agents
+    state.agents.forEach((agent, idx)=>{
+      const res = agent.step(env, truth);
+      state.series.regret[idx].push(agent.regret);
+      state.series.flips[idx].push(agent.flips);
+      if(agent.name === 'DDA'){
+        state.series.k.push(agent.k);
+        state.series.align.push(agent.align);
+        state.series.mCrit.push(agent.mCrit);
+      }
+      // Update strips
+      const stripKey = (agent.name === 'DDA') ? 'DDA' : (agent.name === 'GRA') ? 'GRA' : (agent.name === 'LPA') ? 'LPA' : 'RMD';
+      state.strips[stripKey].push(agent.decision === +1 ? 'A' : 'B');
+      if(state.strips[stripKey].length > state.strips.env.length){
+        state.strips[stripKey].shift();
+      }
+    });
+
+    // Render strips
+    drawStrip(document.getElementById("ddaStrip").getContext("2d"), state.strips.DDA, {A:getCSS('--envA'), B:getCSS('--envB')});
+    drawStrip(document.getElementById("graStrip").getContext("2d"), state.strips.GRA, {A:getCSS('--envA'), B:getCSS('--envB')});
+    drawStrip(document.getElementById("lpaStrip").getContext("2d"), state.strips.LPA, {A:getCSS('--envA'), B:getCSS('--envB')});
+    drawStrip(document.getElementById("rmdStrip").getContext("2d"), state.strips.RMD, {A:getCSS('--envA'), B:getCSS('--envB')});
+
+    // Render charts
+    const regretCtx = document.getElementById("regretChart").getContext("2d");
+    const kCtx = document.getElementById("kChart").getContext("2d");
+    const flipCtx = document.getElementById("flipChart").getContext("2d");
+    const alignCtx = document.getElementById("alignChart").getContext("2d");
+
+    const colors = [getCSS('--dda'), getCSS('--gra'), getCSS('--lpa'), getCSS('--rmd')];
+    const yminReg = 0, ymaxReg = Math.max(...state.series.regret.map(s=>Math.max(...s,0)), 1);
+    plotLines(regretCtx, state.series.regret, colors, yminReg, ymaxReg);
+
+    plotLines(kCtx, [state.series.k], [getCSS('--dda')], 0, 1);
+
+    const ymaxFlip = Math.max(...state.series.flips.map(s=>Math.max(...s,0)), 10);
+    plotLines(flipCtx, state.series.flips, colors, 0, ymaxFlip);
+
+    plotLines(alignCtx, [state.series.align, state.series.mCrit], [getCSS('--dda'), '#999999'], -1, Math.max(1, Math.max(...state.series.mCrit, 1)));
+
+    // Metrics
+    document.getElementById("mStep").textContent = String(state.step+1);
+    const ddaIdx = 0;
+    document.getElementById("mRegretDDA").textContent = (state.series.regret[ddaIdx].slice(-1)[0] || 0).toFixed(2);
+    document.getElementById("mFlipsDDA").textContent = String(state.series.flips[ddaIdx].slice(-1)[0] || 0);
+    document.getElementById("mKDDA").textContent = (state.series.k.slice(-1)[0] || 0).toFixed(2);
+
+    state.step++;
+    raf = requestAnimationFrame(loop);
+  }
+
+  // Controls
+  document.getElementById("run").addEventListener("click", ()=>{
+    init();
+    paused = false;
+    if(raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+  });
+  document.getElementById("pause").addEventListener("click", ()=>{ paused = true; });
+  document.getElementById("resume").addEventListener("click", ()=>{
+    if(!state) return;
+    if(!raf){ paused = false; raf = requestAnimationFrame(loop); } else { paused = false; }
+  });
+  document.getElementById("reset").addEventListener("click", ()=>{
+    paused = true; state = null;
+    ['envStrip','ddaStrip','graStrip','lpaStrip','rmdStrip','regretChart','kChart','flipChart','alignChart'].forEach(id=>{
+      const c = document.getElementById(id); clear(c.getContext("2d"), c.width, c.height);
+    });
+    document.getElementById("mStep").textContent = "0";
+    document.getElementById("mRegretDDA").textContent = "0.00";
+    document.getElementById("mFlipsDDA").textContent = "0";
+    document.getElementById("mKDDA").textContent = "0.00";
+  });
+
+  // Initial layout paint
+  ['envStrip','ddaStrip','graStrip','lpaStrip','rmdStrip','regretChart','kChart','flipChart','alignChart'].forEach(id=>{
+    const c = document.getElementById(id); clear(c.getContext("2d"), c.width, c.height);
+  });
+})();
+</script>
+</body>
+</html>

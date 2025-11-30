@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OUROBOROS | THE ETERNAL CYCLE</title>
+<style>
+    *{margin:0;padding:0}
+    body{background:#020202;height:100vh;display:flex;justify-content:center;align-items:center;overflow:hidden;cursor:crosshair}
+    canvas{box-shadow:0 0 120px rgba(40, 220, 160, 0.05)}
+    #info{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.15);font:10px monospace;letter-spacing:3px;text-transform:uppercase;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">The End is the Beginning</div>
+<script>
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+// -- SETUP & SCALING --
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const S = Math.min(innerWidth, innerHeight) * 0.95;
+C.width = S * DPR; C.height = S * DPR;
+C.style.width = S + 'px'; C.style.height = S + 'px';
+X.scale(DPR, DPR);
+X.translate(S/2, S/2);
+const SC = 0.65; // Zoom level
+X.scale(SC, SC);
+
+// -- INPUT STATE --
+const MOUSE = { x: 0, y: 0, sx: 0, sy: 0, dist: 0 };
+window.addEventListener('mousemove', e => {
+    const r = C.getBoundingClientRect();
+    MOUSE.x = (e.clientX - r.left) / r.width * 2 - 1;
+    MOUSE.y = (e.clientY - r.top) / r.height * 2 - 1;
+});
+
+// -- NOISE FUNCTION (Perlin-ish) --
+const P = [];
+let seed = 1337;
+for (let i = 0; i < 256; i++) P[i] = i;
+for (let i = 255; i > 0; i--) { seed = (seed * 16807) % 2147483647; [P[i], P[seed % (i+1)]] = [P[seed % (i+1)], P[i]]; }
+for (let i = 0; i < 256; i++) P[256+i] = P[i];
+
+function noise(x, y) {
+    const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
+    const v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const g = (h, a, b) => ((h & 1) ? -a : a) + ((h & 2) ? -b : b);
+    const l = (a, b, t) => a + t * (b - a);
+    return 0.5 + 0.5 * l(l(g(P[P[xi]+yi], xf, yf), g(P[P[xi+1]+yi], xf-1, yf), u), 
+                           l(g(P[P[xi]+yi+1], xf, yf-1), g(P[P[xi+1]+yi+1], xf-1, yf-1), u), v);
+}
+
+// -- GEOMETRY UTILS --
+const PI = Math.PI;
+const PI2 = PI * 2;
+const R_MAIN = 240; // Main ring radius
+const R_BODY = 45;  // Thickness of snake
+
+// -- TEXTURE GENERATION --
+
+function getScaleColor(n, angleNorm) {
+    // n = noise value, angleNorm = position along body width (0=center, 1=edge)
+    const shine = Math.max(0, 1 - Math.abs(angleNorm * 2.5)); 
+    
+    // Pattern logic
+    if (n > 0.65) { // Gold/Bronze spots
+        const v = 180 + (n-0.65)*200;
+        return `rgba(${v}, ${v*0.7}, ${v*0.1}, 0.9)`;
+    }
+    if (n < 0.35) { // Deep Abyssal Blue/Black
+        const v = 10 + n * 40;
+        return `rgba(${v}, ${v+10}, ${v+20}, 0.95)`;
+    }
+    // Main scales: Emerald/Cyan
+    const g = 60 + n * 100 + shine * 60;
+    const b = 60 + n * 60 + shine * 40;
+    return `rgba(${10 + shine*20}, ${g}, ${b}, ${0.8 + shine * 0.2})`;
+}
+
+// Create the endless body texture
+function createBodyLayer() {
+    const cv = document.createElement('canvas');
+    const PAD = 50; // Padding for render bounds
+    const SIZE = (R_MAIN + R_BODY + PAD) * 2;
+    cv.width = SIZE * DPR; 
+    cv.height = SIZE * DPR;
+    const cx = cv.getContext('2d');
+    cx.scale(DPR, DPR);
+    cx.translate(SIZE/2, SIZE/2);
+
+    // Draw thousands of scales
+    const DENSITY = 9000;
+    
+    for (let i = 0; i < DENSITY; i++) {
+        // Polar distribution
+        const theta = Math.random() * PI2;
+        // Distribute within body thickness (using bias for roundness illusion)
+        const thicknessBias = (Math.random() - 0.5) * 2;
+        const rOffset = thicknessBias * R_BODY; 
+        
+        const x = Math.cos(theta) * (R_MAIN + rOffset);
+        const y = Math.sin(theta) * (R_MAIN + rOffset);
+
+        // Scale properties
+        const n = noise(x * 0.015, y * 0.015); // Pattern noise
+        const scaleSize = 4 + n * 3;
+        
+        // Orientation: Tangent to the circle
+        const rot = theta + PI/2 + (noise(x*0.05, y*0.05)-0.5)*0.3;
+
+        cx.save();
+        cx.translate(x, y);
+        cx.rotate(rot);
+        
+        cx.fillStyle = getScaleColor(n, thicknessBias);
+        cx.beginPath();
+        // Diamond/Hex scale shape
+        cx.moveTo(0, -scaleSize);
+        cx.lineTo(scaleSize*0.6, 0);
+        cx.lineTo(0, scaleSize*1.2);
+        cx.lineTo(-scaleSize*0.6, 0);
+        cx.fill();
+        
+        // Slight highlight on top of scale
+        cx.fillStyle = 'rgba(255,255,255,0.1)';
+        cx.beginPath();
+        cx.ellipse(0, -scaleSize*0.3, scaleSize*0.3, scaleSize*0.2, 0, 0, PI2);
+        cx.fill();
+        
+        cx.restore();
+    }
+    return cv;
+}
+
+const LAYER_BODY = createBodyLayer();
+
+// -- ANIMATION STATE --
+let T = 0;
+let breath = 0;
+
+// -- DRAWING FUNCTIONS --
+
+function drawEye(x, y, scale, rotation) {
+    X.save();
+    X.translate(x, y);
+    X.rotate(rotation);
+    X.scale(scale, scale);
+
+    // Socket
+    X.fillStyle = '#05080a';
+    X.beginPath();
+    X.ellipse(0, 0, 14, 8, 0, 0, PI2);
+    X.fill();
+
+    // Eyeball
+    const lookX = MOUSE.sx * 6;
+    const lookY = MOUSE.sy * 4;
+    
+    X.fillStyle = '#dbb000'; // Gold eye
+    X.beginPath();
+    X.ellipse(lookX*0.3, lookY*0.3, 10, 6, 0, 0, PI2);
+    X.fill();
+    
+    // Slit Pupil
+    X.fillStyle = '#000';
+    X.beginPath();
+    X.ellipse(lookX + (noise(T*0.1,0)-0.5), lookY, 1.5, 5.5, 0, 0, PI2);
+    X.fill();
+
+    // Shine
+    X.fillStyle = '#fff';
+    X.beginPath();
+    X.arc(lookX - 3, lookY - 2, 1.5, 0, PI2);
+    X.fill();
+
+    X.restore();
+}
+
+function drawHead(angleOffset) {
+    X.save();
+    // Position head on the ring
+    const headAngle = -PI/2 + angleOffset; 
+    const hx = Math.cos(headAngle) * R_MAIN;
+    const hy = Math.sin(headAngle) * R_MAIN;
+    
+    X.translate(hx, hy);
+    X.rotate(headAngle + PI/2); // Face forward along tangent
+
+    // Head breathing
+    const scale = 1 + breath * 0.05;
+    X.scale(scale, scale);
+
+    // Tongue Flick
+    if (Math.sin(T*0.08) > 0.96) {
+        const tLen = 40 + Math.sin(T*0.8)*15;
+        const tWag = Math.sin(T*1.5) * 5;
+        X.save();
+        X.translate(0, 50);
+        X.strokeStyle = '#a31d2e';
+        X.lineWidth = 2;
+        X.beginPath();
+        X.moveTo(0,0);
+        X.quadraticCurveTo(tWag, tLen/2, 0, tLen);
+        X.lineTo(-4, tLen+10); // Fork L
+        X.moveTo(0, tLen);
+        X.lineTo(4, tLen+10); // Fork R
+        X.stroke();
+        X.restore();
+    }
+
+    // Jaw/Head shape
+    X.fillStyle = '#081412';
+    X.beginPath();
+    X.moveTo(-25, -20); // Back of head
+    X.quadraticCurveTo(-35, 10, -15, 50); // L cheek
+    X.quadraticCurveTo(0, 65, 15, 50); // Snout tip
+    X.quadraticCurveTo(35, 10, 25, -20); // R cheek
+    X.closePath();
+    X.fill();
+
+    // Scaly texture on head
+    X.fillStyle = 'rgba(40, 220, 160, 0.15)';
+    for(let i=0; i<30; i++) {
+        const px = (noise(i, T*0.01)-0.5)*50;
+        const py = (noise(i+10, T*0.01)-0.5)*60;
+        if(Math.abs(px) < 20 && py > -10 && py < 40) {
+            X.beginPath();
+            X.arc(px, py, 2, 0, PI2);
+            X.fill();
+        }
+    }
+
+    // Eyes
+    drawEye(-14, 15, 1, 0.2); // L
+    drawEye(14, 15, 1, -0.2); // R
+
+    // Nostrils
+    X.fillStyle = '#000';
+    X.beginPath();
+    X.ellipse(-6, 52 + breath*2, 1, 2, 0.2, 0, PI2);
+    X.ellipse(6, 52 + breath*2, 1, 2, -0.2, 0, PI2);
+    X.fill();
+
+    X.restore();
+}
+
+function drawTail(angleOffset) {
+    X.save();
+    // Tail is exactly where the mouth is, but tucked in
+    const tailAngle = -PI/2 + angleOffset; 
+    const tx = Math.cos(tailAngle) * R_MAIN;
+    const ty = Math.sin(tailAngle) * R_MAIN;
+
+    X.translate(tx, ty);
+    X.rotate(tailAngle + PI/2);
+    
+    // Draw the tip fading into the mouth
+    X.fillStyle = '#0d2b24';
+    X.beginPath();
+    X.moveTo(-10, 0);
+    X.quadraticCurveTo(0, 40, 10, 0); // Pointy tail
+    X.lineTo(10, -20);
+    X.lineTo(-10, -20);
+    X.fill();
+    
+    X.restore();
+}
+
+function animate() {
+    T++;
+    
+    // Smooth Input
+    MOUSE.sx += (MOUSE.x - MOUSE.sx) * 0.05;
+    MOUSE.sy += (MOUSE.y - MOUSE.sy) * 0.05;
+    MOUSE.dist = Math.sqrt(MOUSE.sx**2 + MOUSE.sy**2);
+
+    breath = Math.sin(T * 0.04);
+    
+    // Clear & BG
+    X.fillStyle = '#020202';
+    X.fillRect(-C.width, -C.height, C.width*2, C.height*2);
+    
+    // Ambient Glow
+    const glow = X.createRadialGradient(0, 0, R_MAIN * 0.5, 0, 0, R_MAIN * 1.5);
+    glow.addColorStop(0, 'rgba(0,0,0,0)');
+    glow.addColorStop(0.5, 'rgba(10, 40, 30, 0.3)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    X.fillStyle = glow;
+    X.fillRect(-S, -S, S*2, S*2);
+
+    // -- PARALLAX & ROTATION --
+    X.save();
+    
+    // Mouse Parallax influence
+    const px = MOUSE.sx * 30;
+    const py = MOUSE.sy * 30;
+    X.translate(px, py);
+
+    // 1. Draw The Loop (Body)
+    // We rotate the CANVAS context, then draw the pre-rendered ring.
+    // This makes the scales "flow".
+    X.save();
+    const slitherSpeed = T * 0.005; // Constant flow
+    X.rotate(slitherSpeed);
+    
+    // Draw cached body layer
+    const layerSize = LAYER_BODY.width / DPR;
+    X.drawImage(LAYER_BODY, -layerSize/2, -layerSize/2, layerSize, layerSize);
+    X.restore();
+
+    // 2. Draw Connection Points (Head & Tail)
+    // The head stays relatively fixed visually (at top), but moves slightly with parallax/noise
+    // to hide the seam of the rotating body.
+    
+    // We reverse rotation for head/tail so they stay "up" while body flows "through" them
+    // But we add a little drift
+    const headDrift = Math.sin(T * 0.02) * 0.05;
+    
+    // The tail tip (being eaten)
+    drawTail(headDrift);
+    
+    // The Head (eating) - Drawn last to overlap
+    drawHead(headDrift);
+
+    X.restore(); // End Parallax
+
+    // Vignette
+    const vig = X.createRadialGradient(0, 0, S*0.5, 0, 0, S);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.8)');
+    X.fillStyle = vig;
+    X.fillRect(-S, -S, S*2, S*2);
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
