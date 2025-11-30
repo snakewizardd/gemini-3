@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Magnum Opus Harp — Fixed</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body{height:100%;margin:0;background:#021018;color:#e6f0f6;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+  .wrap{display:flex;height:100vh;gap:16px;padding:18px;box-sizing:border-box;}
+  .left{width:320px;display:flex;flex-direction:column;gap:12px;}
+  .panel{background:rgba(255,255,255,0.02);border-radius:12px;padding:12px;}
+  button{background:#0b2230;border:1px solid #123040;color:#6ec1e4;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;}
+  canvas{flex:1;border-radius:12px;background:linear-gradient(180deg,#021018,#001018);display:block;width:100%;height:100%;}
+  .tele{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .stat{background:#07151d;padding:8px;border-radius:8px;font-weight:700}
+  .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);z-index:40}
+  .card{background:#07151d;padding:20px;border-radius:12px;text-align:center}
+  .small{font-size:12px;color:#9fb0c4;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left">
+    <div class="panel">
+      <h3 style="margin:0;color:#9fb0c4">Magnum Opus Harp</h3>
+      <p class="small">One-click Play. Eleven strings. Endless evolving harp. Light DDA steering.</p>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button id="playBtn">Play</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+      <div class="tele" style="margin-top:12px">
+        <div class="stat">k: <span id="kVal">0.55</span></div>
+        <div class="stat">ε: <span id="eVal">0.00</span></div>
+        <div class="stat">m: <span id="mVal">0.60</span></div>
+      </div>
+    </div>
+    <div class="panel" style="flex:1;display:flex;align-items:center;justify-content:center">
+      <div style="text-align:center;color:#9fb0c4">
+        <div style="font-weight:700">Tips</div>
+        <div class="small">If audio doesn't start, click Play on the overlay. If still broken, open DevTools and paste any console errors here.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <div class="panel" style="flex:1;padding:8px;">
+      <canvas id="vis"></canvas>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" class="overlay">
+  <div class="card">
+    <h2 style="margin:0;color:#6ec1e4">Magnum Opus Harp</h2>
+    <p class="small">Click to start the endless harp symphony</p>
+    <div style="margin-top:12px"><button id="overlayPlay">Play</button></div>
+  </div>
+</div>
+
+<script>
+/* Minimal, robust autoplay harp with light DDA.
+   If you see nothing, open Console (F12) and tell me the error. */
+
+const STRINGS = 11;
+const BASE_FREQS = (() => {
+  const low = 55;
+  const freqs = [];
+  for(let i=0;i<STRINGS;i++) freqs.push(low * Math.pow(2, i * (4/(STRINGS-1))));
+  return freqs;
+})();
+
+let audioCtx = null;
+const Audio = {
+  master: null,
+  reverb: null,
+  reverbGain: null,
+  async init(){
+    if(audioCtx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+    this.master = audioCtx.createGain();
+    this.master.gain.value = 0.8;
+    this.master.connect(audioCtx.destination);
+    // simple impulse reverb
+    this.reverb = audioCtx.createConvolver();
+    this.reverb.buffer = this.createImpulse(1.6, 2.0);
+    this.reverbGain = audioCtx.createGain();
+    this.reverbGain.gain.value = 0.16;
+    this.reverb.connect(this.reverbGain);
+    this.reverbGain.connect(this.master);
+  },
+  createImpulse(duration=1.6, decay=2.0){
+    const rate = audioCtx.sampleRate;
+    const length = Math.floor(rate * duration);
+    const impulse = audioCtx.createBuffer(2, length, rate);
+    for(let ch=0; ch<2; ch++){
+      const data = impulse.getChannelData(ch);
+      for(let i=0;i<length;i++){
+        data[i] = (Math.random()*2-1) * Math.pow(1 - i/length, decay);
+      }
+    }
+    return impulse;
+  },
+  pluck(freq, time, amp=0.5, decay=1.8, pan=0){
+    const ctx = audioCtx;
+    // short noise burst
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate*0.06), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 1.8);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value = freq; bp.Q.value = 8 + Math.random()*6;
+    const partial = ctx.createOscillator(); partial.type='triangle'; partial.frequency.value = freq;
+    const pg = ctx.createGain(); pg.gain.setValueAtTime(0.0001, time); pg.gain.linearRampToValueAtTime(amp*0.28, time+0.006); pg.gain.exponentialRampToValueAtTime(0.0005, time+decay);
+    const panner = ctx.createStereoPanner(); panner.pan.value = pan;
+    src.connect(bp); bp.connect(pg);
+    partial.connect(pg);
+    pg.connect(panner); panner.connect(this.master); panner.connect(this.reverb);
+    src.start(time); src.stop(time+0.08);
+    partial.start(time); partial.stop(time+decay+0.05);
+  }
+};
+
+/* Light DDA */
+const DDA = {
+  F:[0.2,0.5], P0:[0.2,0.5], k:0.55, alpha:0.08, beta:1.0, decayK:0.01, m:0.6, ledger:[],
+  predict(Fprev, action){ return [Fprev[0]*0.88 + action[0]*0.6, Fprev[1]*0.88 + action[1]*0.6]; },
+  update(Fpred, Factual){
+    const eps = Math.hypot(Fpred[0]-Factual[0], Fpred[1]-Factual[1]);
+    this.k = Math.max(0, Math.min(1, (1-this.decayK)*this.k + this.alpha * Math.pow(Math.abs(eps), this.beta)));
+    this.F = Factual.slice();
+    this.ledger.push({F:this.F.slice(), k:this.k, eps});
+    if(this.ledger.length>200) this.ledger.shift();
+    return eps;
+  },
+  project(cands){
+    let best=cands[0], bestScore=-Infinity;
+    for(const c of cands){
+      const dot = this.F[0]*c.vec[0] + this.F[1]*c.vec[1];
+      const score = dot + (c.obj||0) + (c.sub||0);
+      if(score>bestScore){ bestScore=score; best=c; }
+    }
+    return best;
+  }
+};
+
+/* Scales and motif generation */
+const SCALES = { major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,3,5,7,10], lydian:[0,2,4,6,7,9,11] };
+let currentScale = 'major', rootIdx = 4;
+function chooseScale(){ const keys=Object.keys(SCALES); currentScale = keys[Math.floor(Math.random()*keys.length)]; rootIdx = Math.floor(Math.random()*(STRINGS-1)); }
+function genMotif(len=5){
+  const scale = SCALES[currentScale];
+  const motif=[];
+  const density = Math.max(0.4, 0.8 + (DDA.F[1]-0.5)*1.2);
+  for(let i=0;i<len;i++){
+    const step = scale[Math.floor(Math.random()*scale.length)];
+    const octave = Math.floor(Math.random()*3);
+    const sIdx = Math.max(0, Math.min(STRINGS-1, rootIdx + (Math.floor(Math.random()*3)-1) + octave));
+    const dur = (Math.random()*0.6 + 0.2)/density;
+    motif.push({sIdx, step, dur});
+  }
+  return motif;
+}
+function evFreq(ev){ return BASE_FREQS[ev.sIdx] * Math.pow(2, ev.step/12); }
+
+/* Scheduler / conductor */
+let running=false, lastConductor=0, tempoBase=72;
+async function start(){
+  await Audio.init();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+  running=true; tempoBase = parseInt(document.getElementById('bpm').value,10)||72;
+  requestAnimationFrame(loop);
+}
+function stop(){ running=false; }
+function resetAll(){ DDA.F = DDA.P0.slice(); DDA.k=0.55; DDA.ledger=[]; chooseScale(); tempoBase = parseInt(document.getElementById('bpm').value,10)||72; }
+
+function conductor(){
+  const cands = [
+    {name:'core', vec:[0.18,0.5], obj:0.2, sub:0.05},
+    {name:'explore', vec:[0.6,0.25], obj:0.05, sub:0.02},
+    {name:'lush', vec:[0.2,0.9], obj:0.05, sub:0.12}
+  ];
+  const choice = DDA.project(cands);
+  const Fpred = DDA.predict(DDA.F, choice.vec);
+  const identityPull = DDA.P0.map(v=>v*(1-DDA.k));
+  const forcing = choice.vec.map(v=> v * DDA.m * (0.6 + Math.random()*0.9));
+  const Factual = [ identityPull[0] + forcing[0] + (Math.random()-0.5)*0.02, identityPull[1] + forcing[1] + (Math.random()-0.5)*0.02 ];
+  const eps = DDA.update(Fpred, Factual);
+  const tempo = Math.max(40, Math.min(140, tempoBase * (1 + (DDA.m - DDA.k)*0.18)));
+  const motif = genMotif(4 + Math.floor(Math.abs(DDA.F[0])*5));
+  const now = audioCtx.currentTime + 0.06;
+  let beat=0;
+  for(const ev of motif){
+    const t = now + beat*(60/tempo);
+    const freq = evFreq(ev);
+    const amp = Math.max(0.12, Math.min(0.9, 0.28 + (DDA.F[1]-0.5)*0.4 + (Math.random()-0.5)*0.06));
+    const pan = (ev.sIdx - (STRINGS-1)/2)/((STRINGS-1)/2);
+    Audio.pluck(freq, t, amp, 1.6 + Math.random()*1.2, pan);
+    scheduleVisualPluck(t, ev.sIdx, amp);
+    beat += ev.dur;
+  }
+  if(DDA.m > 0.9 && eps < 0.02 && Math.random()<0.35) chooseScale();
+  if(Math.random()<0.06) chooseScale();
+  document.getElementById('kVal').textContent = DDA.k.toFixed(2);
+  document.getElementById('eVal').textContent = eps.toFixed(3);
+  document.getElementById('mVal').textContent = DDA.m.toFixed(2);
+}
+
+/* Visuals */
+const canvas = document.getElementById('vis'), ctx = canvas.getContext('2d');
+function resize(){ canvas.width = canvas.clientWidth * devicePixelRatio; canvas.height = canvas.clientHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+window.addEventListener('resize', resize); resize();
+const plucks = [];
+function scheduleVisualPluck(t, sIdx, amp){ plucks.push({t,sIdx,amp}); if(plucks.length>300) plucks.shift(); }
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const g = ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'#021018'); g.addColorStop(1,'#001018');
+  ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+  const margin=80, spacing=(h-2*margin)/(STRINGS-1);
+  ctx.lineWidth=2;
+  for(let i=0;i<STRINGS;i++){
+    const y = margin + i*spacing;
+    ctx.strokeStyle = '#0f2b36'; ctx.beginPath(); ctx.moveTo(40,y); ctx.lineTo(w-40,y); ctx.stroke();
+    ctx.fillStyle = '#7fb6d6'; ctx.font='12px Inter'; ctx.fillText('S'+(i+1),12,y+4);
+  }
+  const now = audioCtx ? audioCtx.currentTime : 0;
+  for(let i=plucks.length-1;i>=0;i--){
+    const e = plucks[i]; const age = now - e.t;
+    if(age>2.4){ plucks.splice(i,1); continue; }
+    const y = margin + e.sIdx*spacing;
+    const prog = Math.min(1, Math.max(0, age/1.6));
+    const radius = 8 + prog*120;
+    const alpha = Math.max(0, 1-prog) * (0.6 + e.amp*0.6);
+    ctx.beginPath(); ctx.strokeStyle = `rgba(110,193,228,${alpha.toFixed(3)})`; ctx.lineWidth = 2 + e.amp*2; ctx.arc(w/2,y,radius,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle = `rgba(243,181,98,${(0.6+e.amp*0.4).toFixed(3)})`; ctx.beginPath(); ctx.arc(w/2 + Math.sin(age*6)*20, y, 3 + e.amp*3, 0, Math.PI*2); ctx.fill();
+  }
+  // HUD
+  ctx.fillStyle='rgba(10,20,28,0.6)'; ctx.fillRect(w-260,20,240,110);
+  ctx.fillStyle='#bfe6f8'; ctx.font='700 14px Inter'; ctx.fillText('DDA Telemetry', w-240,44);
+  ctx.font='12px Inter'; ctx.fillStyle='#cfe6f6'; ctx.fillText('k: '+DDA.k.toFixed(3), w-240,70);
+  const lastE = DDA.ledger.length? DDA.ledger[DDA.ledger.length-1].eps.toFixed(3):'0.000';
+  ctx.fillText('ε: '+lastE, w-240,92); ctx.fillText('m: '+DDA.m.toFixed(3), w-240,114);
+  requestAnimationFrame(draw);
+}
+
+/* Main loop */
+let lastConductor = 0;
+function loop(){
+  if(!running) return;
+  const now = audioCtx.currentTime;
+  if(now - lastConductor > 0.8 + Math.random()*0.4){ conductor(); lastConductor = now; }
+  requestAnimationFrame(loop);
+}
+
+/* UI wiring */
+document.getElementById('playBtn').addEventListener('click', async ()=>{
+  if(!audioCtx) await Audio.init();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+  DDA.m = parseFloat(document.getElementById('m').value);
+  DDA.alpha = parseFloat(document.getElementById('alpha')?.value || 0.08);
+  tempoBase = parseInt(document.getElementById('bpm').value,10) || 72;
+  document.getElementById('overlay').style.display='none';
+  start();
+});
+document.getElementById('overlayPlay').addEventListener('click', ()=> document.getElementById('playBtn').click());
+document.getElementById('pauseBtn').addEventListener('click', async ()=>{ if(audioCtx) await audioCtx.suspend(); running=false; });
+document.getElementById('resetBtn').addEventListener('click', ()=>{ resetAll(); });
+document.getElementById('m').addEventListener('input', (e)=>{ DDA.m = parseFloat(e.target.value); });
+document.getElementById('bpm').addEventListener('input', (e)=>{ tempoBase = parseInt(e.target.value,10) || 72; });
+
+/* init visuals and state */
+chooseScale(); resetAll(); requestAnimationFrame(draw);
+</script>
+</body>
+</html>
