@@ -1,0 +1,405 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦉 Cosmic Owl - Big Brain Energy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(138, 43, 226, 0.8);
+        }
+        #title {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 40px rgba(138, 43, 226, 0.6);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">🦉 COSMIC OWL 🦉</div>
+    <canvas id="canvas"></canvas>
+    <div id="info">move ur mouse around • click to make it go brrrr • scroll to zoom the vibe</div>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        let mouseX = width / 2;
+        let mouseY = height / 2;
+        let clicking = false;
+        let zoom = 1;
+        let time = 0;
+        
+        // Stars background
+        const stars = [];
+        for (let i = 0; i < 300; i++) {
+            stars.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                size: Math.random() * 2,
+                speed: Math.random() * 0.5 + 0.1,
+                brightness: Math.random()
+            });
+        }
+        
+        // Nebula particles
+        const nebula = [];
+        for (let i = 0; i < 50; i++) {
+            nebula.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                size: Math.random() * 200 + 100,
+                hue: Math.random() * 60 + 240,
+                speed: Math.random() * 0.2
+            });
+        }
+        
+        // Owl particles
+        class OwlParticle {
+            constructor(x, y, type) {
+                this.baseX = x;
+                this.baseY = y;
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 3 + 1;
+                this.type = type;
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * 0.02 + 0.01;
+                this.range = Math.random() * 20 + 10;
+                this.hue = type === 'eye' ? 180 : (type === 'body' ? 270 : 45);
+            }
+            
+            update() {
+                this.angle += this.speed;
+                
+                const dx = mouseX - this.baseX;
+                const dy = mouseY - this.baseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const maxDist = 200;
+                
+                let offsetX = Math.cos(this.angle) * this.range;
+                let offsetY = Math.sin(this.angle) * this.range;
+                
+                if (dist < maxDist) {
+                    const force = (maxDist - dist) / maxDist;
+                    if (clicking) {
+                        offsetX += dx * force * 0.3;
+                        offsetY += dy * force * 0.3;
+                    } else {
+                        offsetX -= dx * force * 0.2;
+                        offsetY -= dy * force * 0.2;
+                    }
+                }
+                
+                this.x = this.baseX + offsetX;
+                this.y = this.baseY + offsetY;
+            }
+            
+            draw() {
+                const pulse = Math.sin(time * 0.05 + this.angle) * 0.5 + 0.5;
+                const alpha = 0.6 + pulse * 0.4;
+                const glow = this.size * (clicking ? 3 : 1.5);
+                
+                ctx.beginPath();
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glow);
+                gradient.addColorStop(0, `hsla(${this.hue + pulse * 30}, 100%, 70%, ${alpha})`);
+                gradient.addColorStop(1, `hsla(${this.hue}, 100%, 50%, 0)`);
+                ctx.fillStyle = gradient;
+                ctx.arc(this.x, this.y, glow, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 90%, ${alpha})`;
+                ctx.arc(this.x, this.y, this.size * zoom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // Create owl shape
+        const owlParticles = [];
+        const centerX = width / 2;
+        const centerY = height / 2;
+        
+        function createOwl() {
+            owlParticles.length = 0;
+            const cx = width / 2;
+            const cy = height / 2;
+            const scale = Math.min(width, height) / 800 * zoom;
+            
+            // Body (oval)
+            for (let i = 0; i < 80; i++) {
+                const angle = (i / 80) * Math.PI * 2;
+                const rx = 120 * scale;
+                const ry = 150 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx + Math.cos(angle) * rx,
+                    cy + Math.sin(angle) * ry + 30 * scale,
+                    'body'
+                ));
+            }
+            
+            // Body fill
+            for (let i = 0; i < 100; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const r = Math.random();
+                owlParticles.push(new OwlParticle(
+                    cx + Math.cos(angle) * 100 * r * scale,
+                    cy + Math.sin(angle) * 130 * r * scale + 30 * scale,
+                    'body'
+                ));
+            }
+            
+            // Head (circle)
+            for (let i = 0; i < 60; i++) {
+                const angle = (i / 60) * Math.PI * 2;
+                const r = 80 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx + Math.cos(angle) * r,
+                    cy - 100 * scale + Math.sin(angle) * r * 0.9,
+                    'body'
+                ));
+            }
+            
+            // Left ear tuft
+            for (let i = 0; i < 15; i++) {
+                const t = i / 15;
+                owlParticles.push(new OwlParticle(
+                    cx - 60 * scale - t * 30 * scale,
+                    cy - 150 * scale - t * 50 * scale,
+                    'body'
+                ));
+            }
+            
+            // Right ear tuft
+            for (let i = 0; i < 15; i++) {
+                const t = i / 15;
+                owlParticles.push(new OwlParticle(
+                    cx + 60 * scale + t * 30 * scale,
+                    cy - 150 * scale - t * 50 * scale,
+                    'body'
+                ));
+            }
+            
+            // Left eye
+            for (let i = 0; i < 30; i++) {
+                const angle = (i / 30) * Math.PI * 2;
+                const r = 35 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx - 40 * scale + Math.cos(angle) * r,
+                    cy - 100 * scale + Math.sin(angle) * r,
+                    'eye'
+                ));
+            }
+            // Eye center
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const r = 12 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx - 40 * scale + Math.cos(angle) * r,
+                    cy - 100 * scale + Math.sin(angle) * r,
+                    'eye'
+                ));
+            }
+            
+            // Right eye
+            for (let i = 0; i < 30; i++) {
+                const angle = (i / 30) * Math.PI * 2;
+                const r = 35 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx + 40 * scale + Math.cos(angle) * r,
+                    cy - 100 * scale + Math.sin(angle) * r,
+                    'eye'
+                ));
+            }
+            // Eye center
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const r = 12 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx + 40 * scale + Math.cos(angle) * r,
+                    cy - 100 * scale + Math.sin(angle) * r,
+                    'eye'
+                ));
+            }
+            
+            // Beak
+            for (let i = 0; i < 15; i++) {
+                const t = i / 15;
+                owlParticles.push(new OwlParticle(
+                    cx + (Math.random() - 0.5) * 20 * scale * (1 - t),
+                    cy - 70 * scale + t * 40 * scale,
+                    'beak'
+                ));
+            }
+            
+            // Wings
+            for (let i = 0; i < 40; i++) {
+                const t = i / 40;
+                const wingY = Math.sin(t * Math.PI) * 60 * scale;
+                owlParticles.push(new OwlParticle(
+                    cx - 120 * scale - t * 80 * scale,
+                    cy + wingY,
+                    'body'
+                ));
+                owlParticles.push(new OwlParticle(
+                    cx + 120 * scale + t * 80 * scale,
+                    cy + wingY,
+                    'body'
+                ));
+            }
+        }
+        
+        createOwl();
+        
+        // Energy trails
+        const trails = [];
+        
+        function animate() {
+            time++;
+            
+            // Dark background with slight fade
+            ctx.fillStyle = 'rgba(5, 5, 20, 0.15)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw nebula
+            nebula.forEach(n => {
+                n.x += Math.sin(time * 0.01 + n.y * 0.01) * n.speed;
+                const gradient = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.size);
+                gradient.addColorStop(0, `hsla(${n.hue + Math.sin(time * 0.02) * 20}, 70%, 30%, 0.03)`);
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(n.x - n.size, n.y - n.size, n.size * 2, n.size * 2);
+            });
+            
+            // Draw stars
+            stars.forEach(star => {
+                star.brightness = Math.sin(time * 0.05 + star.x) * 0.3 + 0.7;
+                ctx.beginPath();
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness})`;
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Add energy trails on click
+            if (clicking && Math.random() > 0.5) {
+                trails.push({
+                    x: mouseX + (Math.random() - 0.5) * 100,
+                    y: mouseY + (Math.random() - 0.5) * 100,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    life: 1,
+                    hue: Math.random() * 60 + 180
+                });
+            }
+            
+            // Update and draw trails
+            for (let i = trails.length - 1; i >= 0; i--) {
+                const t = trails[i];
+                t.x += t.vx;
+                t.y += t.vy;
+                t.life -= 0.02;
+                
+                if (t.life <= 0) {
+                    trails.splice(i, 1);
+                    continue;
+                }
+                
+                ctx.beginPath();
+                ctx.fillStyle = `hsla(${t.hue}, 100%, 60%, ${t.life})`;
+                ctx.arc(t.x, t.y, 3 * t.life, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Update and draw owl
+            owlParticles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            
+            // Draw connections between nearby particles
+            ctx.strokeStyle = `hsla(270, 100%, 60%, 0.1)`;
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < owlParticles.length; i++) {
+                for (let j = i + 1; j < owlParticles.length; j++) {
+                    const dx = owlParticles[i].x - owlParticles[j].x;
+                    const dy = owlParticles[i].y - owlParticles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 30 * zoom) {
+                        ctx.beginPath();
+                        ctx.moveTo(owlParticles[i].x, owlParticles[i].y);
+                        ctx.lineTo(owlParticles[j].x, owlParticles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Event listeners
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+        
+        canvas.addEventListener('mousedown', () => clicking = true);
+        canvas.addEventListener('mouseup', () => clicking = false);
+        canvas.addEventListener('mouseleave', () => clicking = false);
+        
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            zoom += e.deltaY * -0.001;
+            zoom = Math.max(0.5, Math.min(2, zoom));
+            createOwl();
+        });
+        
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            createOwl();
+        });
+        
+        // Touch support
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        });
+        canvas.addEventListener('touchstart', () => clicking = true);
+        canvas.addEventListener('touchend', () => clicking = false);
+        
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Classical Romance - String Engine</title>
+<style>
+    body { margin: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); overflow: hidden; color: #fff; font-family: 'Georgia', serif; }
+    #canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+               display: flex; flex-direction: column; justify-content: center; align-items: center;
+               background: rgba(0,0,0,0.9); z-index: 10; transition: opacity 0.5s; }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { font-size: 3em; margin-bottom: 0; letter-spacing: 0.1em; color: #d4af37; }
+    p { font-size: 1.2em; color: #888; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Romance in E Minor</h1>
+    <p>A Classical Guitar Piece</p>
+    <p style="margin-top: 40px; color: #666;">[ Click anywhere to begin ]</p>
+</div>
+<canvas id="canvas"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG - Classical tempo
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 84,
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO ENGINE - Clean Acoustic / Nylon tone
+// ═══════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    isPlaying: false,
+
+    init: async () => {
+        AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Master output
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.6;
+        
+        // Large Hall Reverb for classical ambiance
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(3.0, 2.0);
+        
+        AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.35;
+        
+        // Dry path
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        // Wet path (reverb)
+        AudioEngine.master.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.ctx.destination);
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        
+        for (let i = 0; i < length; i++) {
+            L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+        return impulse;
+    },
+
+    // Nylon Classical Guitar Tone
+    playString: (stringIdx, fret, time, duration = 2.0) => {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        // Triangle body + sine harmonics for warm nylon sound
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const osc3 = ctx.createOscillator();
+        
+        osc1.type = 'triangle';
+        osc2.type = 'sine';
+        osc3.type = 'sine';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2;
+        osc3.frequency.value = freq * 3;
+        
+        // Mix ratios
+        const g1 = ctx.createGain(); g1.gain.value = 0.5;
+        const g2 = ctx.createGain(); g2.gain.value = 0.25;
+        const g3 = ctx.createGain(); g3.gain.value = 0.15;
+        
+        // Warm lowpass filter with decay
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2500, time);
+        filter.frequency.exponentialRampToValueAtTime(600, time + 0.3);
+        filter.Q.value = 1;
+        
+        // Classical envelope - soft attack, natural decay
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.4, time + 0.015);
+        amp.gain.exponentialRampToValueAtTime(0.2, time + 0.2);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Connect
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        osc3.connect(g3); g3.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.master);
+        
+        osc1.start(time); osc1.stop(time + duration);
+        osc2.start(time); osc2.stop(time + duration);
+        osc3.start(time); osc3.stop(time + duration);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// TAB DATA & COMPOSITION
+// ═══════════════════════════════════════════════════════════════
+const TAB = [];
+function addNote(beat, string, fret) { TAB.push({ beat, string, fret }); }
+
+const S = 0.25, E = 0.5, Q = 1.0, H = 2.0, W = 4.0;
+const T = 1/3; // Triplet
+
+// Arpeggio helper
+function arpeggio(beat, chord, speed = 0.167) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1]);
+    });
+}
+
+// Tremolo helper for melody
+function tremolo(beat, string, fret, duration, speed = 0.1) {
+    let t = beat;
+    while (t < beat + duration) {
+        addNote(t, string, fret);
+        t += speed;
+    }
+}
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════
+// "ROMANCE IN E MINOR" - Classical Guitar Piece
+// ═══════════════════════════════════════════════════════════════
+
+// --- Section A: Main Theme (Romance style triplet arpeggios) ---
+
+// Em - Measure 1
+addNote(b, 5, 0);  // Bass E
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 4, 2);  // Bass B
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+
+// Em - Measure 2 (melody on top)
+addNote(b, 5, 0);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 3);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 4, 2);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 2);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+
+// Am - Measure 3
+addNote(b, 4, 0);  // Bass A
+addNote(b + T, 2, 2); addNote(b + T*2, 1, 1); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 1, 1); addNote(b + T*5, 2, 2);
+b += H;
+addNote(b, 5, 0);
+addNote(b + T, 2, 2); addNote(b + T*2, 1, 1); addNote(b + T*3, 0, 2);
+addNote(b + T*4, 1, 1); addNote(b + T*5, 2, 2);
+b += H;
+
+// B7 - Measure 4 (tension)
+addNote(b, 4, 2);  // Bass B
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 2);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 5, 2);
+addNote(b + T, 3, 1); addNote(b + T*2, 2, 2); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 2, 2); addNote(b + T*5, 3, 1);
+b += H;
+
+// --- Section B: Variation with higher melody ---
+
+// Em - Measure 5
+addNote(b, 5, 0);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 5);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 4, 2);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 7);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+
+// G - Measure 6
+addNote(b, 5, 3);  // Bass G
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 5);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 4, 2);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 3);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+
+// C - Measure 7
+addNote(b, 4, 3);  // Bass C
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 1); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 1, 1); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 5, 3);
+addNote(b + T, 3, 2); addNote(b + T*2, 2, 0); addNote(b + T*3, 0, 3);
+addNote(b + T*4, 2, 0); addNote(b + T*5, 3, 2);
+b += H;
+
+// Em resolution - Measure 8
+addNote(b, 5, 0);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+// Final chord
+addNote(b, 5, 0); addNote(b + 0.02, 4, 2); addNote(b + 0.04, 3, 2);
+addNote(b + 0.06, 2, 0); addNote(b + 0.08, 1, 0); addNote(b + 0.1, 0, 0);
+b += H;
+
+const LOOP_LENGTH = b + 2;
+
+// ═══════════════════════════════════════════════════════════════
+// SEQUENCER
+// ═══════════════════════════════════════════════════════════════
+let currentBeat = 0, startTime = 0, nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.1) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        AudioEngine.playString(note.string, note.fret, playTime, 2.0);
+        triggerVisual(note);
+        nextNoteIdx++;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VISUAL ENGINE - Elegant classical style
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+
+function resize() { w = cvs.width = innerWidth; h = cvs.height = innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) { activeNotes.push({ ...note, life: 1.0 }); }
+
+function draw() {
+    // Soft fade trail for elegance
+    ctx.fillStyle = 'rgba(26, 26, 46, 0.12)';
+    ctx.fillRect(0, 0, w, h);
+    
+    const STAFF_Y = h / 2, SPACING = 35, HIT_X = w * 0.18;
+    
+    // Strings - golden tint
+    ctx.lineWidth = 1;
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        ctx.strokeStyle = `rgba(212, 175, 55, ${0.3 - i * 0.03})`;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        ctx.fillStyle = '#665522'; 
+        ctx.font = '14px Georgia';
+        ctx.fillText(name, 10, y + 5);
+    });
+    
+    // Hit line - elegant gold
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(HIT_X, STAFF_Y - 100); ctx.lineTo(HIT_X, STAFF_Y + 100); ctx.stroke();
+    
+    // Notes
+    const pixelsPerBeat = 120;
+    ctx.font = '12px Georgia';
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -2) dist += LOOP_LENGTH;
+        const x = HIT_X + dist * pixelsPerBeat;
+        if (x > 0 && x < w) {
+            const y = STAFF_Y + (note.string - 2.5) * SPACING;
+            
+            // Note circle
+            ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2);
+            ctx.fillStyle = '#1a1a2e'; ctx.fill();
+            ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1.5; ctx.stroke();
+            
+            // Fret number
+            ctx.fillStyle = '#fff';
+            ctx.fillText(note.fret, x - 4, y + 4);
+        }
+    });
+    
+    // Hit animations - expanding golden rings
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string - 2.5) * SPACING;
+        const radius = 14 + (1 - n.life) * 60;
+        
+        ctx.beginPath(); ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(212, 175, 55, ${n.life * 0.8})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        n.life -= 0.025;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) { AudioEngine.init().then(() => togglePlay()); }
+    else { togglePlay(); }
+});
+
+document.addEventListener('keydown', e => { 
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); } 
+});
+
+function togglePlay() {
+    if (!AudioEngine.ctx) return;
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+</script>
+</body>
+</html>

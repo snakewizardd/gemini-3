@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic Jellyfish</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+    let mouseX = w / 2, mouseY = h / 2;
+    let jellyX = w / 2, jellyY = h / 2;
+    let time = 0;
+    
+    // Particles
+    const particles = [];
+    for (let i = 0; i < 150; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        size: Math.random() * 3 + 1,
+        speedX: (Math.random() - 0.5) * 0.5,
+        speedY: Math.random() * -1 - 0.5,
+        hue: Math.random() * 60 + 180
+      });
+    }
+    
+    // Tentacles
+    const tentacles = [];
+    for (let i = 0; i < 12; i++) {
+      tentacles.push({ angle: (i / 12) * Math.PI * 2, segments: [] });
+      for (let j = 0; j < 20; j++) {
+        tentacles[i].segments.push({ x: 0, y: 0 });
+      }
+    }
+    
+    function drawBackground() {
+      const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h));
+      gradient.addColorStop(0, '#0a1628');
+      gradient.addColorStop(0.5, '#050d18');
+      gradient.addColorStop(1, '#000005');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+    }
+    
+    function drawParticles() {
+      particles.forEach(p => {
+        const dx = p.x - jellyX;
+        const dy = p.y - jellyY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < 200) {
+          p.x += dx / dist * 2;
+          p.y += dy / dist * 2;
+        }
+        
+        p.x += p.speedX;
+        p.y += p.speedY;
+        
+        if (p.y < -10) { p.y = h + 10; p.x = Math.random() * w; }
+        if (p.x < -10) p.x = w + 10;
+        if (p.x > w + 10) p.x = -10;
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 100%, 70%, ${0.3 + Math.sin(time * 0.05 + p.x) * 0.2})`;
+        ctx.fill();
+      });
+    }
+    
+    function drawJellyfish() {
+      // Smooth follow
+      jellyX += (mouseX - jellyX) * 0.03;
+      jellyY += (mouseY - jellyY) * 0.03;
+      
+      const pulse = Math.sin(time * 0.08) * 0.2 + 1;
+      const baseRadius = 80 * pulse;
+      
+      // Glow
+      const glowGradient = ctx.createRadialGradient(jellyX, jellyY, 0, jellyX, jellyY, baseRadius * 3);
+      glowGradient.addColorStop(0, 'rgba(138, 43, 226, 0.3)');
+      glowGradient.addColorStop(0.5, 'rgba(75, 0, 130, 0.1)');
+      glowGradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(jellyX, jellyY, baseRadius * 3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Tentacles
+      tentacles.forEach((t, i) => {
+        const startX = jellyX + Math.cos(t.angle + time * 0.02) * baseRadius * 0.6;
+        const startY = jellyY + Math.sin(t.angle * 0.5 + Math.PI/2) * baseRadius * 0.3 + baseRadius * 0.5;
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        
+        let prevX = startX, prevY = startY;
+        t.segments.forEach((seg, j) => {
+          const wave = Math.sin(time * 0.1 + j * 0.5 + i) * (15 + j * 2);
+          const targetX = startX + wave + Math.cos(t.angle) * j * 3;
+          const targetY = startY + j * 12 + Math.sin(time * 0.05 + j * 0.3) * 5;
+          
+          seg.x += (targetX - seg.x) * 0.1;
+          seg.y += (targetY - seg.y) * 0.1;
+          
+          ctx.lineTo(seg.x, seg.y);
+          prevX = seg.x; prevY = seg.y;
+        });
+        
+        const hue = 260 + i * 5;
+        ctx.strokeStyle = `hsla(${hue}, 80%, 60%, 0.6)`;
+        ctx.lineWidth = 4 - (i % 3);
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      });
+      
+      // Bell (dome)
+      ctx.beginPath();
+      ctx.ellipse(jellyX, jellyY, baseRadius, baseRadius * 0.7, 0, Math.PI, 0);
+      const bellGradient = ctx.createRadialGradient(jellyX, jellyY - 20, 0, jellyX, jellyY, baseRadius);
+      bellGradient.addColorStop(0, 'rgba(200, 150, 255, 0.9)');
+      bellGradient.addColorStop(0.5, 'rgba(138, 43, 226, 0.7)');
+      bellGradient.addColorStop(1, 'rgba(75, 0, 130, 0.5)');
+      ctx.fillStyle = bellGradient;
+      ctx.fill();
+      
+      // Inner glow
+      ctx.beginPath();
+      ctx.ellipse(jellyX, jellyY - 10, baseRadius * 0.5, baseRadius * 0.35, 0, Math.PI, 0);
+      ctx.fillStyle = `rgba(255, 200, 255, ${0.3 + Math.sin(time * 0.1) * 0.2})`;
+      ctx.fill();
+      
+      // Bioluminescent spots
+      for (let i = 0; i < 8; i++) {
+        const spotX = jellyX + Math.cos(i + time * 0.02) * baseRadius * 0.6;
+        const spotY = jellyY - 20 + Math.sin(i * 2) * baseRadius * 0.3;
+        ctx.beginPath();
+        ctx.arc(spotX, spotY, 5 + Math.sin(time * 0.15 + i) * 2, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${280 + i * 10}, 100%, 80%, ${0.5 + Math.sin(time * 0.1 + i) * 0.3})`;
+        ctx.fill();
+      }
+    }
+    
+    function animate() {
+      time++;
+      drawBackground();
+      drawParticles();
+      drawJellyfish();
+      requestAnimationFrame(animate);
+    }
+    
+    canvas.addEventListener('mousemove', e => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+    
+    canvas.addEventListener('touchmove', e => {
+      mouseX = e.touches[0].clientX;
+      mouseY = e.touches[0].clientY;
+    });
+    
+    window.addEventListener('resize', () => {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    });
+    
+    animate();
+  </script>
+</body>
+</html>
