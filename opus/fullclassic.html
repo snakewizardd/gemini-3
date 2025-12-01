@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Suite in E Minor - A Classical Guitar Journey</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 50%, #0d0d1a 100%); 
+           overflow: hidden; color: #fff; font-family: 'Georgia', serif; }
+    #canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+               display: flex; flex-direction: column; justify-content: center; align-items: center;
+               background: rgba(0,0,0,0.92); z-index: 10; transition: opacity 0.8s; }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { font-size: 3.5em; margin-bottom: 10px; letter-spacing: 0.15em; color: #d4af37; 
+         text-shadow: 0 0 30px rgba(212,175,55,0.3); }
+    h2 { font-size: 1.5em; color: #888; font-weight: normal; font-style: italic; margin-bottom: 30px; }
+    .movements { color: #666; font-size: 1em; line-height: 2; }
+    .movements span { color: #997722; }
+    p.click { margin-top: 50px; color: #444; font-size: 1.1em; }
+    #info { position: fixed; bottom: 20px; left: 20px; color: #555; font-size: 14px; z-index: 5; }
+    #section { position: fixed; top: 20px; right: 20px; color: #d4af37; font-size: 18px; 
+               z-index: 5; text-align: right; opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Suite in E Minor</h1>
+    <h2>for Classical Guitar</h2>
+    <div class="movements">
+        <span>I.</span> Preludio — Andante con moto<br>
+        <span>II.</span> Romanza — Larghetto espressivo<br>
+        <span>III.</span> Intermezzo — Allegretto grazioso<br>
+        <span>IV.</span> Fantasia — Rubato e appassionato<br>
+        <span>V.</span> Finale — Allegro brillante
+    </div>
+    <p class="click">[ Click to Begin Performance ]</p>
+</div>
+
+<canvas id="canvas"></canvas>
+<div id="info">SPACE to pause | Move mouse for reverb</div>
+<div id="section">Suite in E Minor</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 80,
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE - Full Classical Nylon Guitar with Effects
+// ═══════════════════════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    dryGain: null,
+    compressor: null,
+    isPlaying: false,
+
+    init: async () => {
+        AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const actx = AudioEngine.ctx;
+        
+        // Compressor for smooth dynamics
+        AudioEngine.compressor = actx.createDynamicsCompressor();
+        AudioEngine.compressor.threshold.value = -24;
+        AudioEngine.compressor.knee.value = 30;
+        AudioEngine.compressor.ratio.value = 4;
+        AudioEngine.compressor.attack.value = 0.003;
+        AudioEngine.compressor.release.value = 0.25;
+        
+        // Master output
+        AudioEngine.master = actx.createGain();
+        AudioEngine.master.gain.value = 0.7;
+        
+        // Dry path
+        AudioEngine.dryGain = actx.createGain();
+        AudioEngine.dryGain.gain.value = 0.65;
+        
+        // Large Concert Hall Reverb
+        AudioEngine.reverb = actx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createHallReverb(4.0, 1.8);
+        
+        AudioEngine.reverbGain = actx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.35;
+        
+        // EQ - Body warmth
+        AudioEngine.bodyEQ = actx.createBiquadFilter();
+        AudioEngine.bodyEQ.type = 'peaking';
+        AudioEngine.bodyEQ.frequency.value = 220;
+        AudioEngine.bodyEQ.gain.value = 3;
+        AudioEngine.bodyEQ.Q.value = 1.5;
+        
+        // EQ - Presence
+        AudioEngine.presenceEQ = actx.createBiquadFilter();
+        AudioEngine.presenceEQ.type = 'peaking';
+        AudioEngine.presenceEQ.frequency.value = 3200;
+        AudioEngine.presenceEQ.gain.value = 2;
+        AudioEngine.presenceEQ.Q.value = 1;
+        
+        // Signal routing
+        AudioEngine.master.connect(AudioEngine.bodyEQ);
+        AudioEngine.bodyEQ.connect(AudioEngine.presenceEQ);
+        AudioEngine.presenceEQ.connect(AudioEngine.compressor);
+        
+        // Dry path
+        AudioEngine.compressor.connect(AudioEngine.dryGain);
+        AudioEngine.dryGain.connect(actx.destination);
+        
+        // Wet path (reverb)
+        AudioEngine.compressor.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(actx.destination);
+    },
+
+    createHallReverb: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        
+        for (let i = 0; i < length; i++) {
+            const env = Math.pow(1 - i / length, decay);
+            // Early reflections
+            const early = i < rate * 0.08 ? Math.sin(i * 0.01) * 0.3 : 0;
+            L[i] = ((Math.random() * 2 - 1) + early) * env;
+            R[i] = ((Math.random() * 2 - 1) - early) * env;
+        }
+        return impulse;
+    },
+    
+    setReverb: (val) => {
+        if (AudioEngine.reverbGain) {
+            AudioEngine.reverbGain.gain.setTargetAtTime(val * 0.5, AudioEngine.ctx.currentTime, 0.1);
+        }
+    },
+
+    // Premium Nylon Classical Guitar Tone
+    playString: (stringIdx, fret, time, duration = 2.0, velocity = 1.0) => {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        
+        // Fundamental (Triangle - warm body)
+        const osc1 = ctx.createOscillator();
+        osc1.type = 'triangle';
+        osc1.frequency.value = freq;
+        
+        // 2nd Harmonic (Sine - sweetness)
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = freq * 2;
+        
+        // 3rd Harmonic (Sine - presence)
+        const osc3 = ctx.createOscillator();
+        osc3.type = 'sine';
+        osc3.frequency.value = freq * 3;
+        
+        // 4th Harmonic (very subtle brightness)
+        const osc4 = ctx.createOscillator();
+        osc4.type = 'sine';
+        osc4.frequency.value = freq * 4;
+        
+        // String-dependent tonal character
+        const stringBrightness = [1.0, 0.95, 0.85, 0.75, 0.65, 0.55][stringIdx];
+        
+        // Gain mixing
+        const g1 = ctx.createGain(); g1.gain.value = 0.45 * velocity;
+        const g2 = ctx.createGain(); g2.gain.value = 0.28 * velocity * stringBrightness;
+        const g3 = ctx.createGain(); g3.gain.value = 0.18 * velocity * stringBrightness;
+        const g4 = ctx.createGain(); g4.gain.value = 0.08 * velocity * stringBrightness;
+        
+        // Lowpass filter with pluck decay
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        const baseCutoff = 2000 + (stringIdx * 300);
+        filter.frequency.setValueAtTime(baseCutoff + 1500, time);
+        filter.frequency.exponentialRampToValueAtTime(baseCutoff * 0.4, time + 0.25);
+        filter.frequency.exponentialRampToValueAtTime(baseCutoff * 0.2, time + duration * 0.7);
+        filter.Q.value = 0.8;
+        
+        // Body resonance simulation
+        const bodyFilter = ctx.createBiquadFilter();
+        bodyFilter.type = 'peaking';
+        bodyFilter.frequency.value = 180 + (stringIdx * 20);
+        bodyFilter.gain.value = 4;
+        bodyFilter.Q.value = 3;
+        
+        // Amplitude envelope - classical pluck
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.42 * velocity, time + 0.012);
+        amp.gain.exponentialRampToValueAtTime(0.25 * velocity, time + 0.08);
+        amp.gain.exponentialRampToValueAtTime(0.15 * velocity, time + 0.3);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Connect oscillators through gains to filter
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        osc3.connect(g3); g3.connect(filter);
+        osc4.connect(g4); g4.connect(filter);
+        
+        filter.connect(bodyFilter);
+        bodyFilter.connect(amp);
+        amp.connect(AudioEngine.master);
+        
+        // Start and stop
+        const oscs = [osc1, osc2, osc3, osc4];
+        oscs.forEach(o => { o.start(time); o.stop(time + duration + 0.1); });
+    },
+    
+    // Harmonic / Natural harmonic sound
+    playHarmonic: (stringIdx, fret, time, duration = 3.0) => {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        
+        // Harmonics ring at integer multiples
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        let harmMultiple = 1;
+        if (fret === 12) harmMultiple = 2;
+        else if (fret === 7 || fret === 19) harmMultiple = 3;
+        else if (fret === 5 || fret === 24) harmMultiple = 4;
+        
+        const freq = baseFreq * harmMultiple;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        
+        // Bell-like envelope
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.35, time + 0.005);
+        amp.gain.exponentialRampToValueAtTime(0.2, time + 0.1);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(amp);
+        amp.connect(AudioEngine.master);
+        osc.start(time);
+        osc.stop(time + duration);
+    },
+    
+    // Rasgueado strum effect
+    playRasgueado: (chord, time, direction = 'down', speed = 0.015) => {
+        const notes = direction === 'down' ? [...chord].reverse() : chord;
+        notes.forEach((note, i) => {
+            AudioEngine.playString(note[0], note[1], time + i * speed, 2.5, 0.7);
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  TAB DATA STRUCTURE
+// ═══════════════════════════════════════════════════════════════════════════════
+const TAB = [];
+const SECTIONS = [];
+let currentSectionName = "";
+
+function setSection(name, beat) {
+    currentSectionName = name;
+    SECTIONS.push({ name, beat });
+}
+
+function addNote(beat, string, fret, type = 'normal', velocity = 1.0) { 
+    TAB.push({ beat, string, fret, type, velocity, section: currentSectionName }); 
+}
+
+function addHarmonic(beat, string, fret) {
+    TAB.push({ beat, string, fret, type: 'harmonic', section: currentSectionName });
+}
+
+// Duration constants
+const X = 0.125;   // 32nd note
+const S = 0.25;    // 16th note
+const T = 1/3;     // Triplet
+const E = 0.5;     // 8th note
+const Q = 1.0;     // Quarter note
+const H = 2.0;     // Half note
+const W = 4.0;     // Whole note
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CHORD LIBRARY
+// ═══════════════════════════════════════════════════════════════════════════════
+const CHORDS = {
+    // Open position
+    Em:     [[5,0], [4,2], [3,2], [2,0], [1,0], [0,0]],
+    Em7:    [[5,0], [4,2], [3,0], [2,0], [1,0], [0,0]],
+    Am:     [[4,0], [3,2], [2,2], [1,1], [0,0]],
+    Am7:    [[4,0], [3,2], [2,0], [1,1], [0,0]],
+    E:      [[5,0], [4,2], [3,2], [2,1], [1,0], [0,0]],
+    E7:     [[5,0], [4,2], [3,0], [2,1], [1,0], [0,0]],
+    G:      [[5,3], [4,2], [3,0], [2,0], [1,0], [0,3]],
+    Gmaj7:  [[5,3], [4,2], [3,0], [2,0], [1,0], [0,2]],
+    C:      [[4,3], [3,2], [2,0], [1,1], [0,0]],
+    Cmaj7:  [[4,3], [3,2], [2,0], [1,0], [0,0]],
+    D:      [[3,0], [2,2], [1,3], [0,2]],
+    Dm:     [[3,0], [2,2], [1,3], [0,1]],
+    Dm7:    [[3,0], [2,2], [1,1], [0,1]],
+    F:      [[5,1], [4,3], [3,3], [2,2], [1,1], [0,1]],
+    Fmaj7:  [[5,1], [4,3], [3,2], [2,2], [1,1], [0,0]],
+    B7:     [[4,2], [3,1], [2,2], [1,0], [0,2]],
+    Bm:     [[4,2], [3,4], [2,4], [1,3], [0,2]],
+    
+    // Barre chords
+    Bm7:    [[4,2], [3,4], [2,2], [1,3], [0,2]],
+    F_m:    [[5,2], [4,4], [3,4], [2,2], [1,2], [0,2]],
+    
+    // Extended voicings
+    Em9:    [[5,0], [4,2], [3,0], [2,0], [1,0], [0,2]],
+    Amadd9: [[4,0], [3,2], [2,2], [1,0], [0,0]],
+    Gadd9:  [[5,3], [4,2], [3,0], [2,2], [1,0], [0,3]],
+    Dsus4:  [[3,0], [2,2], [1,3], [0,3]],
+    Dsus2:  [[3,0], [2,2], [1,3], [0,0]],
+    Asus4:  [[4,0], [3,2], [2,2], [1,3], [0,0]],
+    Asus2:  [[4,0], [3,2], [2,2], [1,0], [0,0]],
+    
+    // Spanish/Flamenco
+    E7b9:   [[5,0], [4,2], [3,0], [2,1], [1,0], [0,1]],
+    Am6:    [[4,0], [3,2], [2,2], [1,1], [0,2]],
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSITION HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Basic arpeggio pattern (low to high)
+function arpUp(beat, chord, speed = T) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1]);
+    });
+}
+
+// Reverse arpeggio (high to low)
+function arpDown(beat, chord, speed = T) {
+    const rev = [...chord].reverse();
+    rev.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1]);
+    });
+}
+
+// Romantic triplet pattern (bass + upper triplet)
+function romanceTriplet(beat, bass, treble1, treble2, treble3) {
+    addNote(beat, bass[0], bass[1], 'normal', 0.9);
+    addNote(beat + T, treble1[0], treble1[1], 'normal', 0.7);
+    addNote(beat + T*2, treble2[0], treble2[1], 'normal', 0.7);
+    addNote(beat + T*3, treble3[0], treble3[1], 'normal', 0.75);
+    addNote(beat + T*4, treble2[0], treble2[1], 'normal', 0.65);
+    addNote(beat + T*5, treble1[0], treble1[1], 'normal', 0.6);
+}
+
+// Tremolo pattern
+function tremolo(beat, bass, melody, duration, speed = 0.08) {
+    addNote(beat, bass[0], bass[1], 'normal', 0.85);
+    let t = beat + 0.1;
+    while (t < beat + duration) {
+        addNote(t, melody[0], melody[1], 'normal', 0.6);
+        t += speed;
+    }
+}
+
+// Full chord strum
+function strum(beat, chord, speed = 0.02) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1], 'normal', 0.8);
+    });
+}
+
+// Soft rolled chord
+function roll(beat, chord, speed = 0.06) {
+    chord.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1], 'normal', 0.7);
+    });
+}
+
+// Fingerpicking pattern
+function fingerPick(beat, chord, pattern = [5, 2, 4, 1, 5, 0, 4, 2]) {
+    pattern.forEach((strIdx, i) => {
+        const note = chord.find(n => n[0] === strIdx);
+        if (note) addNote(beat + i * S, note[0], note[1], 'normal', 0.75);
+    });
+}
+
+// Bass run (scale fragment)
+function bassRun(beat, string, frets, speed = S) {
+    frets.forEach((fret, i) => {
+        addNote(beat + i * speed, string, fret, 'normal', 0.8);
+    });
+}
+
+// Melody line
+function melodyLine(beat, notes, speed = E) {
+    notes.forEach((note, i) => {
+        addNote(beat + i * speed, note[0], note[1], 'normal', 0.85);
+    });
+}
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ╔═══════════════════════════════════════════════════════════════════════════╗
+//  ║                    MOVEMENT I: PRELUDIO                                   ║
+//  ║                    Andante con moto (♩= 80)                               ║
+//  ╚═══════════════════════════════════════════════════════════════════════════╝
+// ═══════════════════════════════════════════════════════════════════════════════
+
+setSection("I. Preludio", b);
+
+// --- Introduction: Harmonics ---
+addHarmonic(b, 5, 12); addHarmonic(b, 4, 12); addHarmonic(b, 3, 12);
+b += H;
+addHarmonic(b, 2, 12); addHarmonic(b, 1, 12); addHarmonic(b, 0, 12);
+b += H;
+addHarmonic(b, 0, 7); addHarmonic(b + Q, 1, 7); addHarmonic(b + H, 2, 7);
+b += W;
+
+// --- Theme A: Arpeggiated Em ---
+// Measure 1-2
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,0]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,0]); b += H;
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,3]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,0]); b += H;
+
+// Measure 3-4: Am variation
+romanceTriplet(b, [4,0], [2,2], [1,1], [0,0]); b += H;
+romanceTriplet(b, [5,0], [2,2], [1,1], [0,2]); b += H;
+romanceTriplet(b, [4,0], [2,2], [1,1], [0,0]); b += H;
+// B7 tension
+addNote(b, 4, 2); addNote(b + T, 3, 1); addNote(b + T*2, 2, 2);
+addNote(b + T*3, 1, 0); addNote(b + T*4, 0, 2); addNote(b + T*5, 1, 0);
+b += H;
+
+// Measure 5-6: Return Em with melody
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,5]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,7]); b += H;
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,8]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,7]); b += H;
+
+// Measure 7-8: G major brightness
+romanceTriplet(b, [5,3], [2,0], [1,0], [0,5]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,3]); b += H;
+// C major warmth
+romanceTriplet(b, [4,3], [2,0], [1,1], [0,0]); b += H;
+romanceTriplet(b, [5,3], [3,2], [2,0], [0,3]); b += H;
+
+// Measure 9-10: D suspended resolution
+romanceTriplet(b, [3,0], [2,2], [1,3], [0,3]); b += H;
+romanceTriplet(b, [4,0], [2,2], [1,3], [0,2]); b += H;
+// Back to Em
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,0]); b += H;
+roll(b, CHORDS.Em); b += H;
+
+// --- Bridge: Descending bass line ---
+// Em -> Em/D# -> Em/D -> Em/C#
+addNote(b, 5, 0); addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0); b += Q;
+addNote(b, 5, 1); addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0); b += Q;
+addNote(b, 5, 2); addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0); b += Q;
+addNote(b, 5, 4); addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0); b += Q;
+
+// Am passage
+romanceTriplet(b, [4,0], [2,2], [1,1], [0,0]); b += H;
+romanceTriplet(b, [5,0], [2,2], [1,1], [0,3]); b += H;
+
+// B7 -> Em cadence
+addNote(b, 4, 2, 'normal', 0.9);
+addNote(b + S, 3, 1); addNote(b + S*2, 2, 2); addNote(b + S*3, 1, 0);
+addNote(b + S*4, 0, 2); addNote(b + S*5, 1, 0); addNote(b + S*6, 2, 2);
+b += H;
+roll(b, CHORDS.Em); b += W;
+
+// --- Preludio Coda: Return of harmonics ---
+addHarmonic(b, 5, 12); b += E;
+addHarmonic(b, 4, 12); b += E;
+addHarmonic(b, 3, 12); b += E;
+addHarmonic(b, 2, 12); b += E;
+addHarmonic(b, 1, 12); b += E;
+addHarmonic(b, 0, 12); b += H + E;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ╔═══════════════════════════════════════════════════════════════════════════╗
+//  ║                    MOVEMENT II: ROMANZA                                   ║
+//  ║                    Larghetto espressivo (♩= 66)                           ║
+//  ╚═══════════════════════════════════════════════════════════════════════════╝
+// ═══════════════════════════════════════════════════════════════════════════════
+
+setSection("II. Romanza", b);
+
+// --- Main Theme: Classic Romance pattern ---
+// The famous Romance/Jeux Interdits style
+
+// A Section - E minor
+// Phrase 1
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,0]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,0]); b += H;
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,0]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,3]); b += H;
+
+// Phrase 2 - ascending melody
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,5]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,7]); b += H;
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,8]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,7]); b += H;
+
+// Phrase 3 - Am
+romanceTriplet(b, [4,0], [2,2], [1,1], [0,5]); b += H;
+romanceTriplet(b, [5,0], [2,2], [1,1], [0,5]); b += H;
+romanceTriplet(b, [4,0], [2,2], [1,1], [0,3]); b += H;
+romanceTriplet(b, [5,0], [2,2], [1,1], [0,2]); b += H;
+
+// Phrase 4 - B7 resolution to Em
+addNote(b, 4, 2, 'normal', 0.85);
+addNote(b + T, 2, 0); addNote(b + T*2, 1, 0); addNote(b + T*3, 0, 0);
+addNote(b + T*4, 1, 0); addNote(b + T*5, 2, 0);
+b += H;
+addNote(b, 4, 2, 'normal', 0.85);
+addNote(b + T, 3, 1); addNote(b + T*2, 2, 2); addNote(b + T*3, 0, 2);
+addNote(b + T*4, 2, 2); addNote(b + T*5, 3, 1);
+b += H;
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,0]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,0]); b += H;
+
+// B Section - E Major (brightening)
+romanceTriplet(b, [5,0], [2,1], [1,0], [0,0]); b += H;
+romanceTriplet(b, [4,2], [2,1], [1,0], [0,0]); b += H;
+romanceTriplet(b, [5,0], [2,1], [1,0], [0,4]); b += H;
+romanceTriplet(b, [4,2], [2,1], [1,0], [0,5]); b += H;
+
+// Climbing melody in E major
+romanceTriplet(b, [5,0], [2,1], [1,0], [0,7]); b += H;
+romanceTriplet(b, [4,2], [2,1], [1,0], [0,9]); b += H;
+romanceTriplet(b, [5,0], [2,1], [1,0], [0,11]); b += H;
+romanceTriplet(b, [4,2], [2,1], [1,0], [0,12]); b += H;
+
+// Peak and descent
+romanceTriplet(b, [4,0], [2,2], [1,2], [0,12]); b += H;
+romanceTriplet(b, [5,0], [2,2], [1,2], [0,11]); b += H;
+romanceTriplet(b, [4,2], [2,1], [1,0], [0,9]); b += H;
+romanceTriplet(b, [5,0], [2,1], [1,0], [0,7]); b += H;
+
+// Return to A (E minor) - recapitulation
+romanceTriplet(b, [5,0], [2,0], [1,0], [0,5]); b += H;
+romanceTriplet(b, [4,2], [2,0], [1,0], [0,3]); b += H;
+romanceTriplet(b, [4,0], [2,2], [1,1], [0,2]); b += H;
+romanceTriplet(b, [5,0], [2,2], [1,1], [0,0]); b += H;
+
+// Final cadence
+addNote(b, 4, 2, 'normal', 0.8);
+addNote(b + T, 3, 1); addNote(b + T*2, 2, 2); addNote(b + T*3, 1, 0);
+b += H;
+// Em final chord rolled
+roll(b, CHORDS.Em, 0.08); b += W;
+
+// Breath
+b += Q;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ╔═══════════════════════════════════════════════════════════════════════════╗
+//  ║                    MOVEMENT III: INTERMEZZO                               ║
+//  ║                    Allegretto grazioso (♩= 100)                           ║
+//  ╚═══════════════════════════════════════════════════════════════════════════╝
+// ═══════════════════════════════════════════════════════════════════════════════
+
+setSection("III. Intermezzo", b);
+
+// Lighter, dance-like character in G major
+
+// Theme A - Playful melody
+// Measure 1-2
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 3);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 0);
+b += Q;
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 2);
+b += Q;
+addNote(b, 4, 0); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 3);
+b += Q;
+
+// Measure 3-4
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 5);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 7);
+b += Q;
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 5);
+b += Q;
+addNote(b, 4, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 3);
+b += Q;
+
+// Theme B - D major answer
+// Measure 5-6
+addNote(b, 3, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 2);
+b += Q;
+addNote(b, 4, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 3);
+b += Q;
+addNote(b, 3, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 5);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 2); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 3);
+b += Q;
+
+// Measure 7-8
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 2);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 0);
+b += Q;
+// Cadence to G
+addNote(b, 3, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 2);
+b += Q;
+roll(b, CHORDS.G); b += Q;
+
+// C Section - Contrasting (Am)
+// Measure 9-10
+addNote(b, 4, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 1); addNote(b + S*3, 0, 0);
+b += Q;
+addNote(b, 5, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 1); addNote(b + S*3, 0, 2);
+b += Q;
+addNote(b, 4, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 1); addNote(b + S*3, 0, 3);
+b += Q;
+addNote(b, 5, 3); addNote(b + S, 3, 2); addNote(b + S*2, 2, 0); addNote(b + S*3, 0, 5);
+b += Q;
+
+// Measure 11-12
+addNote(b, 5, 0); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 3);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 2);
+b += Q;
+// B7 -> Em
+addNote(b, 4, 2); addNote(b + S, 3, 1); addNote(b + S*2, 2, 2); addNote(b + S*3, 1, 0);
+b += Q;
+roll(b, CHORDS.Em); b += Q;
+
+// Return to Theme A (abbreviated)
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 3);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + S*2, 1, 0); addNote(b + S*3, 0, 5);
+b += Q;
+addNote(b, 5, 3); addNote(b + S, 2, 0); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 7);
+b += Q;
+addNote(b, 4, 0); addNote(b + S, 2, 2); addNote(b + S*2, 1, 3); addNote(b + S*3, 0, 5);
+b += Q;
+
+// Final G chord
+roll(b, CHORDS.G, 0.04); b += H;
+addHarmonic(b, 5, 12); addHarmonic(b, 4, 12);
+b += H;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ╔═══════════════════════════════════════════════════════════════════════════╗
+//  ║                    MOVEMENT IV: FANTASIA                                  ║
+//  ║                    Rubato e appassionato                                  ║
+//  ╚═══════════════════════════════════════════════════════════════════════════╝
+// ═══════════════════════════════════════════════════════════════════════════════
+
+setSection("IV. Fantasia", b);
+
+// Free-form, expressive movement with tremolo
+
+// Opening statement - dramatic Am
+roll(b, CHORDS.Am, 0.03); b += Q;
+addNote(b, 0, 5, 'normal', 0.9); b += E;
+addNote(b, 0, 7, 'normal', 0.85); b += E;
+addNote(b, 0, 8, 'normal', 0.9); b += Q;
+addNote(b, 0, 7, 'normal', 0.8); b += H;
+
+// Tremolo passage 1 - Am
+tremolo(b, [4, 0], [0, 5], Q * 3, 0.09); b += Q * 3;
+tremolo(b, [5, 0], [0, 7], Q * 3, 0.09); b += Q * 3;
+
+// E7 dramatic chord
+roll(b, CHORDS.E7, 0.02); b += Q;
+addNote(b, 0, 8, 'normal', 0.9); b += E;
+addNote(b, 0, 7, 'normal', 0.85); b += E;
+addNote(b, 0, 5, 'normal', 0.8); b += E;
+addNote(b, 0, 3, 'normal', 0.75); b += E;
+
+// Tremolo passage 2 - descending
+tremolo(b, [4, 0], [0, 5], Q * 2.5, 0.08); b += Q * 2.5;
+tremolo(b, [5, 3], [0, 3], Q * 2.5, 0.08); b += Q * 2.5;
+
+// Dm - emotional turn
+roll(b, CHORDS.Dm, 0.04); b += H;
+addNote(b, 0, 1, 'normal', 0.85); b += E;
+addNote(b, 0, 3, 'normal', 0.9); b += E;
+addNote(b, 0, 5, 'normal', 0.95); b += Q;
+tremolo(b, [3, 0], [0, 6], Q * 3, 0.07); b += Q * 3;
+
+// G major - hopeful
+roll(b, CHORDS.G, 0.03); b += Q;
+addNote(b, 0, 7, 'normal', 0.9); b += E;
+addNote(b, 0, 8, 'normal', 0.85); b += E;
+addNote(b, 0, 10, 'normal', 0.9); b += H;
+
+// Climax tremolo on high E
+tremolo(b, [5, 0], [0, 12], Q * 4, 0.065); b += Q * 4;
+
+// Descent
+addNote(b, 0, 12, 'normal', 0.9); b += S;
+addNote(b, 0, 10, 'normal', 0.85); b += S;
+addNote(b, 0, 8, 'normal', 0.8); b += S;
+addNote(b, 0, 7, 'normal', 0.75); b += S;
+addNote(b, 0, 5, 'normal', 0.7); b += S;
+addNote(b, 0, 3, 'normal', 0.65); b += S;
+addNote(b, 0, 2, 'normal', 0.6); b += S;
+addNote(b, 0, 0, 'normal', 0.55); b += S;
+
+// Final Am resolution with tremolo
+tremolo(b, [4, 0], [0, 0], Q * 4, 0.08); b += Q * 4;
+
+// Quiet ending
+roll(b, CHORDS.Am, 0.1); b += W;
+addHarmonic(b, 4, 12); b += H;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ╔═══════════════════════════════════════════════════════════════════════════╗
+//  ║                    MOVEMENT V: FINALE                                     ║
+//  ║                    Allegro brillante (♩= 120)                             ║
+//  ╚═══════════════════════════════════════════════════════════════════════════╝
+// ═══════════════════════════════════════════════════════════════════════════════
+
+setSection("V. Finale", b);
+
+// Energetic conclusion bringing back themes
+
+// Opening fanfare - Em power
+strum(b, CHORDS.Em, 0.015); b += E;
+strum(b, CHORDS.Em, 0.015); b += E;
+strum(b, CHORDS.Em, 0.015); b += Q;
+
+// Quick arpeggios
+arpUp(b, CHORDS.Em, S); b += Q;
+arpDown(b, CHORDS.Em, S); b += Q;
+arpUp(b, CHORDS.Am, S); b += Q;
+arpDown(b, CHORDS.Am, S); b += Q;
+
+// Scalar run ascending
+bassRun(b, 5, [0, 2, 3, 5, 7, 8, 10, 12], X); b += Q;
+bassRun(b, 4, [0, 2, 3, 5, 7, 9, 10, 12], X); b += Q;
+
+// Theme from Preludio - fast version
+addNote(b, 5, 0); addNote(b + S, 2, 0); addNote(b + E, 1, 0); addNote(b + E + S, 0, 0);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + E, 1, 0); addNote(b + E + S, 0, 3);
+b += Q;
+addNote(b, 5, 0); addNote(b + S, 2, 0); addNote(b + E, 1, 0); addNote(b + E + S, 0, 5);
+b += Q;
+addNote(b, 4, 2); addNote(b + S, 2, 0); addNote(b + E, 1, 0); addNote(b + E + S, 0, 7);
+b += Q;
+
+// Chord progression - triumphant
+strum(b, CHORDS.G, 0.02); b += E;
+strum(b, CHORDS.G, 0.02); b += Q + E;
+strum(b, CHORDS.C, 0.02); b += E;
+strum(b, CHORDS.C, 0.02); b += Q + E;
+strum(b, CHORDS.D, 0.02); b += E;
+strum(b, CHORDS.D, 0.02); b += Q + E;
+strum(b, CHORDS.Em, 0.02); b += H;
+
+// Intermezzo theme callback - quick
+addNote(b, 5, 3); addNote(b + S, 0, 3); b += E;
+addNote(b, 4, 2); addNote(b + S, 0, 5); b += E;
+addNote(b, 5, 3); addNote(b + S, 0, 7); b += E;
+addNote(b, 4, 0); addNote(b + S, 0, 5); b += E;
+addNote(b, 5, 3); addNote(b + S, 0, 3); b += E;
+addNote(b, 4, 2); addNote(b + S, 0, 2); b += E;
+addNote(b, 3, 0); addNote(b + S, 0, 0); b += Q;
+
+// Building intensity
+arpUp(b, CHORDS.Am, X); b += E;
+arpUp(b, CHORDS.E7, X); b += E;
+arpUp(b, CHORDS.Am, X); b += E;
+arpUp(b, CHORDS.Dm, X); b += E;
+arpUp(b, CHORDS.G, X); b += E;
+arpUp(b, CHORDS.C, X); b += E;
+arpUp(b, CHORDS.B7, X); b += E;
+
+// Dramatic pause
+b += Q;
+
+// Final Em statement
+strum(b, CHORDS.Em, 0.01); b += S;
+strum(b, CHORDS.Em, 0.01); b += S;
+strum(b, CHORDS.Em, 0.01); b += E;
+b += E;
+
+// Virtuosic run to climax
+melodyLine(b, [[5,0], [5,2], [5,3], [5,5], [4,0], [4,2], [4,3], [4,5]], X);
+b += Q;
+melodyLine(b, [[3,0], [3,2], [3,4], [3,5], [2,0], [2,2], [2,4], [2,5]], X);
+b += Q;
+melodyLine(b, [[1,0], [1,1], [1,3], [1,5], [0,0], [0,3], [0,5], [0,7]], X);
+b += Q;
+
+// High point
+addNote(b, 0, 12, 'normal', 1.0); b += E;
+addNote(b, 0, 12, 'normal', 0.95); b += E;
+addNote(b, 0, 12, 'normal', 0.9); b += Q;
+
+// Descending cascade
+melodyLine(b, [[0,12], [0,10], [0,8], [0,7], [0,5], [0,3], [0,2], [0,0]], X);
+b += Q;
+
+// Penultimate chord - B7 tension
+strum(b, CHORDS.B7, 0.02); b += Q;
+b += E; // breath
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GRAND FINALE - Em resolution
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Rolled Em chord
+CHORDS.Em.forEach((note, i) => {
+    addNote(b + i * 0.08, note[0], note[1], 'normal', 0.9);
+});
+b += H;
+
+// Final harmonics - bells
+addHarmonic(b, 5, 12); b += E;
+addHarmonic(b, 4, 12); b += E;
+addHarmonic(b, 3, 12); b += E;
+addHarmonic(b, 2, 12); b += E;
+addHarmonic(b, 1, 12); b += E;
+addHarmonic(b, 0, 12); b += H;
+
+// Very final Em - letting ring
+CHORDS.Em.forEach((note, i) => {
+    addNote(b + i * 0.12, note[0], note[1], 'normal', 0.85);
+});
+b += W;
+
+// Silence before loop
+b += W;
+
+const LOOP_LENGTH = b;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEQUENCER ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+let currentBeat = 0, startTime = 0, nextNoteIdx = 0;
+let currentSection = "Suite in E Minor";
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Update current section display
+    for (let i = SECTIONS.length - 1; i >= 0; i--) {
+        if (currentBeat >= SECTIONS[i].beat) {
+            if (currentSection !== SECTIONS[i].name) {
+                currentSection = SECTIONS[i].name;
+                document.getElementById('section').textContent = currentSection;
+            }
+            break;
+        }
+    }
+    
+    if (currentBeat >= LOOP_LENGTH) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.15) {
+        const note = TAB[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        
+        if (note.type === 'harmonic') {
+            AudioEngine.playHarmonic(note.string, note.fret, playTime);
+        } else {
+            AudioEngine.playString(note.string, note.fret, playTime, 2.5, note.velocity || 1.0);
+        }
+        
+        triggerVisual(note);
+        nextNoteIdx++;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VISUAL ENGINE - Concert Hall Aesthetic
+// ═══════════════════════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+const particles = [];
+
+function resize() { 
+    w = cvs.width = innerWidth; 
+    h = cvs.height = innerHeight; 
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) { 
+    activeNotes.push({ ...note, life: 1.0, x: w * 0.15 }); 
+    
+    // Spawn particles on hit
+    const y = h/2 + (note.string - 2.5) * 38;
+    for (let i = 0; i < 5; i++) {
+        particles.push({
+            x: w * 0.15,
+            y: y,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            life: 1.0,
+            color: note.type === 'harmonic' ? '#88ddff' : '#d4af37'
+        });
+    }
+}
+
+function draw() {
+    // Trail effect
+    ctx.fillStyle = 'rgba(13, 13, 26, 0.12)';
+    ctx.fillRect(0, 0, w, h);
+    
+    const STAFF_Y = h / 2;
+    const SPACING = 38;
+    const HIT_X = w * 0.15;
+    const pixelsPerBeat = 100;
+    
+    // Background glow at hit line
+    const gradient = ctx.createRadialGradient(HIT_X, STAFF_Y, 0, HIT_X, STAFF_Y, 200);
+    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.08)');
+    gradient.addColorStop(1, 'rgba(212, 175, 55, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, STAFF_Y - 200, w * 0.3, 400);
+    
+    // Draw strings with golden tint
+    ctx.lineWidth = 1;
+    ctx.font = '15px Georgia';
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i - 2.5) * SPACING;
+        const alpha = 0.35 - i * 0.03;
+        ctx.strokeStyle = `rgba(212, 175, 55, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillStyle = '#554422';
+        ctx.fillText(name, 12, y + 5);
+    });
+    
+    // Hit line
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#d4af37';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 120);
+    ctx.lineTo(HIT_X, STAFF_Y + 120);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Draw incoming notes
+    ctx.font = '13px Georgia';
+    TAB.forEach(note => {
+        let dist = note.beat - currentBeat;
+        if (dist < -3) dist += LOOP_LENGTH;
+        
+        const x = HIT_X + dist * pixelsPerBeat;
+        
+        if (x > -20 && x < w + 20) {
+            const y = STAFF_Y + (note.string - 2.5) * SPACING;
+            const approaching = dist < 0.5;
+            
+            // Note circle
+            ctx.beginPath();
+            ctx.arc(x, y, approaching ? 14 : 12, 0, Math.PI * 2);
+            
+            if (note.type === 'harmonic') {
+                // Harmonic - diamond shape glow
+                ctx.fillStyle = '#0a1520';
+                ctx.fill();
+                ctx.strokeStyle = approaching ? '#aaddff' : '#5599bb';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Diamond overlay
+                ctx.beginPath();
+                ctx.moveTo(x, y - 8);
+                ctx.lineTo(x + 8, y);
+                ctx.lineTo(x, y + 8);
+                ctx.lineTo(x - 8, y);
+                ctx.closePath();
+                ctx.strokeStyle = approaching ? '#aaddff' : '#5599bb';
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = '#1a1a2e';
+                ctx.fill();
+                ctx.strokeStyle = approaching ? '#ffcc44' : '#d4af37';
+                ctx.lineWidth = approaching ? 2.5 : 1.5;
+                ctx.stroke();
+            }
+            
+            // Fret number
+            ctx.fillStyle = note.type === 'harmonic' ? '#aaddff' : '#fff';
+            const fretText = note.fret.toString();
+            ctx.fillText(fretText, x - (fretText.length > 1 ? 7 : 4), y + 5);
+        }
+    });
+    
+    // Hit animations - expanding rings
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string - 2.5) * SPACING;
+        const radius = 16 + (1 - n.life) * 80;
+        
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        
+        const color = n.type === 'harmonic' ? 
+            `rgba(136, 221, 255, ${n.life * 0.7})` : 
+            `rgba(212, 175, 55, ${n.life * 0.8})`;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        n.life -= 0.02;
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+    
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.025;
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = p.color.replace(')', `, ${p.life})`).replace('rgb', 'rgba').replace('#', 'rgba(');
+        
+        // Quick hex to rgba
+        if (p.color.startsWith('#')) {
+            const hex = p.color.slice(1);
+            const r = parseInt(hex.substr(0,2), 16);
+            const g = parseInt(hex.substr(2,2), 16);
+            const b = parseInt(hex.substr(4,2), 16);
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.life})`;
+        }
+        ctx.fill();
+        
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    
+    // Progress bar
+    const progress = currentBeat / LOOP_LENGTH;
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.3)';
+    ctx.fillRect(0, h - 4, w * progress, 4);
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) { 
+        AudioEngine.init().then(() => togglePlay()); 
+    } else { 
+        togglePlay(); 
+    }
+});
+
+document.addEventListener('keydown', e => { 
+    if (e.code === 'Space') { 
+        e.preventDefault(); 
+        togglePlay(); 
+    } 
+});
+
+// Mouse control for reverb
+document.addEventListener('mousemove', e => {
+    if (!AudioEngine.ctx) return;
+    const y = 1 - (e.clientY / window.innerHeight);
+    AudioEngine.setReverb(0.2 + y * 0.5);
+});
+
+function togglePlay() {
+    if (!AudioEngine.ctx) return;
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+// Start visual loop
+draw();
+
+console.log(`
+═══════════════════════════════════════════════════════════
+  SUITE IN E MINOR - Classical Guitar
+  Total notes: ${TAB.length}
+  Duration: ~${Math.round(LOOP_LENGTH * (60/CONFIG.BPM) / 60)} minutes
+  Movements: ${SECTIONS.length}
+═══════════════════════════════════════════════════════════
+`);
+</script>
+</body>
+</html>
