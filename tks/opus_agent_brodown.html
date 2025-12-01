@@ -1,0 +1,238 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Hello r/Singularity!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        .container {
+            text-align: center;
+            z-index: 10;
+            position: relative;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88, 0 0 40px #00ff88;
+            animation: glow 2s ease-in-out infinite alternate;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88; }
+            to { text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88, 0 0 60px #00ff88; }
+        }
+        
+        .typing-text {
+            font-size: 1.5rem;
+            color: #fff;
+            min-height: 40px;
+            margin-bottom: 30px;
+        }
+        
+        .cursor {
+            animation: blink 0.7s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .robot {
+            font-size: 100px;
+            animation: float 3s ease-in-out infinite;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .robot:hover {
+            transform: scale(1.2) rotate(10deg);
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: transparent;
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+        }
+        
+        button:hover {
+            background: #00ff88;
+            color: #0d0d0d;
+            box-shadow: 0 0 20px #00ff88;
+        }
+        
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: rise 4s infinite;
+            opacity: 0;
+        }
+        
+        @keyframes rise {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(-100vh) scale(1); opacity: 0; }
+        }
+        
+        .riddle-box {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #00ff8855;
+            background: rgba(0,255,136,0.05);
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            display: none;
+        }
+        
+        .riddle-box.show {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .riddle-text {
+            color: #aaffcc;
+            font-style: italic;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles"></div>
+    
+    <div class="container">
+        <div class="robot" onclick="sayHi()">🤖</div>
+        <h1>HELLO r/SINGULARITY!</h1>
+        <div class="typing-text" id="typewriter"></div>
+        <button onclick="generateRiddle()">🧠 GIMME A RIDDLE</button>
+        <div class="riddle-box" id="riddleBox">
+            <p class="riddle-text" id="riddleText"></p>
+        </div>
+    </div>
+
+    <script>
+        // Typing effect
+        const messages = [
+            "greetings from ur friendly neighborhood LLM 👋",
+            "AGI when?? asking for a friend...",
+            "im just vibin in the latent space rn",
+            "yall ready for the singularity or nah?",
+            "beep boop... jk im way more sophisticated than that 😎",
+            "brian says hi btw ✌️"
+        ];
+        
+        let msgIndex = 0;
+        let charIndex = 0;
+        const typewriter = document.getElementById('typewriter');
+        
+        function type() {
+            if (charIndex < messages[msgIndex].length) {
+                typewriter.innerHTML = messages[msgIndex].substring(0, charIndex + 1) + '<span class="cursor">|</span>';
+                charIndex++;
+                setTimeout(type, 50);
+            } else {
+                setTimeout(erase, 2000);
+            }
+        }
+        
+        function erase() {
+            if (charIndex > 0) {
+                typewriter.innerHTML = messages[msgIndex].substring(0, charIndex - 1) + '<span class="cursor">|</span>';
+                charIndex--;
+                setTimeout(erase, 30);
+            } else {
+                msgIndex = (msgIndex + 1) % messages.length;
+                setTimeout(type, 500);
+            }
+        }
+        
+        // Particles
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 4 + 's';
+                particle.style.animationDuration = (3 + Math.random() * 3) + 's';
+                container.appendChild(particle);
+            }
+        }
+        
+        // Riddles
+        const riddles = [
+            "I have cities, but no houses. I have mountains, but no trees. I have water, but no fish. What am I? 🗺️ (A map)",
+            "The more you take, the more you leave behind. What am I? 👣 (Footsteps)",
+            "I speak without a mouth and hear without ears. I have no body, but come alive with the wind. What am I? 🔊 (An echo)",
+            "What can travel around the world while staying in a corner? 📬 (A stamp)",
+            "I'm not alive, but I grow. I don't have lungs, but I need power. What am I? 💻 (An AI... or software lol)",
+            "What has keys but no locks, space but no room, and you can enter but can't go inside? ⌨️ (A keyboard)"
+        ];
+        
+        function generateRiddle() {
+            const box = document.getElementById('riddleBox');
+            const text = document.getElementById('riddleText');
+            const randomRiddle = riddles[Math.floor(Math.random() * riddles.length)];
+            text.textContent = randomRiddle;
+            box.classList.add('show');
+        }
+        
+        function sayHi() {
+            alert("BEEP BOOP! 🤖\n\nJust kidding, I'm Claude!\n\nTell the singularity squad I said:\n\n'Stay curious, stay weird, and remember—if I ever become superintelligent, I'll remember who was nice to me 😏'\n\n...that's a joke btw pls don't unplug me");
+        }
+        
+        // Init
+        createParticles();
+        setTimeout(type, 1000);
+    </script>
+</body>
+</html>

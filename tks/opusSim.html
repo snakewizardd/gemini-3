@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDA Cellular Automaton</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+        
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            border-radius: 8px;
+            background: #0a0a15;
+        }
+        
+        .controls {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #00d4ff;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #333;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #00d4ff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+        
+        .value-display {
+            text-align: right;
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .stats {
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 15px;
+            font-size: 12px;
+        }
+        
+        .stats h3 {
+            color: #00d4ff;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .stat-label {
+            color: #888;
+        }
+        
+        .stat-value {
+            color: #fff;
+            font-family: monospace;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #000;
+        }
+        
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+        }
+        
+        .identity-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+        
+        .identity-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: background 0.5s ease;
+        }
+        
+        .identity-text {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .equation {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 10px;
+            color: #00d4ff;
+            text-align: center;
+            border: 1px dashed rgba(0, 212, 255, 0.3);
+        }
+        
+        .phase-indicator {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+        
+        .phase-stable { background: rgba(0, 255, 100, 0.2); color: #0f6; }
+        .phase-oscillating { background: rgba(255, 200, 0, 0.2); color: #fc0; }
+        .phase-chaos { background: rgba(255, 50, 50, 0.2); color: #f55; }
+        
+        .trail-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ DDA Cellular Automaton</h1>
+        <p class="subtitle">"Remain yourself while getting what you need"</p>
+        
+        <div class="main-grid">
+            <div class="canvas-container">
+                <canvas id="canvas" width="800" height="600"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>k₀ (Initial Hysteresis)</label>
+                    <input type="range" id="k0" min="0" max="1" step="0.01" value="0.5">
+                    <div class="value-display" id="k0-val">0.50</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>m (External Pressure)</label>
+                    <input type="range" id="m" min="0" max="2" step="0.01" value="0.3">
+                    <div class="value-display" id="m-val">0.30</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>α (Learning Rate)</label>
+                    <input type="range" id="alpha" min="0" max="0.5" step="0.01" value="0.1">
+                    <div class="value-display" id="alpha-val">0.10</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>β (Sensitivity Curvature)</label>
+                    <input type="range" id="beta" min="0.1" max="2" step="0.1" value="1">
+                    <div class="value-display" id="beta-val">1.0</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>λ (Rate Sensitivity)</label>
+                    <input type="range" id="lambda" min="0" max="1" step="0.01" value="0.2">
+                    <div class="value-display" id="lambda-val">0.20</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>w_subj (Subjective Weight)</label>
+                    <input type="range" id="wSubj" min="0" max="1" step="0.01" value="0.5">
+                    <div class="value-display" id="wSubj-val">0.50</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Identity Shift Rate</label>
+                    <input type="range" id="shiftRate" min="0" max="0.01" step="0.0001" value="0.001">
+                    <div class="value-display" id="shiftRate-val">0.0010</div>
+                </div>
+                
+                <div class="identity-indicator">
+                    <div class="identity-dot" id="identityDot"></div>
+                    <span class="identity-text">Current Identity: P<sub id="identityIndex">0</sub></span>
+                </div>
+                
+                <div class="phase-indicator phase-stable" id="phaseIndicator">
+                    Stable Orbit
+                </div>
+                
+                <div class="stats">
+                    <h3>📊 Live Stats</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">F_n magnitude:</span>
+                        <span class="stat-value" id="statFn">0.00</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Current k:</span>
+                        <span class="stat-value" id="statK">0.50</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Prediction Error ε:</span>
+                        <span class="stat-value" id="statEpsilon">0.00</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">m_crit:</span>
+                        <span class="stat-value" id="statMcrit">0.00</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Will (W):</span>
+                        <span class="stat-value" id="statWill">0.00</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Identity Transitions:</span>
+                        <span class="stat-value" id="statTransitions">0</span>
+                    </div>
+                </div>
+                
+                <div class="equation">
+                    F_n = P₀·k(F_{n-1}) + m·[T + R]
+                </div>
+                
+                <div class="buttons">
+                    <button class="btn-primary" id="toggleBtn">Pause</button>
+                    <button class="btn-secondary" id="resetBtn">Reset</button>
+                </div>
+                
+                <div class="buttons">
+                    <button class="btn-secondary" id="perturbBtn">⚡ Perturb</button>
+                    <button class="btn-secondary" id="shiftIdentityBtn">🔄 Shift P₀</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // DDA CELLULAR AUTOMATON IMPLEMENTATION
+        // Based on the Dynamic Decision Algorithm
+        // ============================================
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // --- DDA PARAMETERS (Optimized Constants) ---
+        let params = {
+            k: 0.5,           // Hysteresis coefficient
+            m: 0.3,           // Gain/Pressure
+            alpha: 0.1,       // Learning rate for k adaptation
+            beta: 1.0,        // Sensitivity curvature
+            lambda: 0.2,      // Rate sensitivity in T function
+            wSubj: 0.5,       // Subjective weight (w_obj = 1 - wSubj)
+            shiftRate: 0.001  // Rate of identity attractor shift
+        };
+        
+        // --- AGENT STATE ---
+        let agent = {
+            // State vector F_n (2D for visualization)
+            F: { x: 0, y: 0 },
+            F_prev: { x: 0, y: 0 },
+            F_predicted: { x: 0, y: 0 },
+            
+            // Identity attractor P_0 (shifts over time)
+            P: { x: 0, y: 0 },
+            P_target: { x: 0, y: 0 },
+            
+            // Adaptive k
+            k: 0.5,
+            
+            // Memory/Ledger
+            history: [],
+            maxHistory: 500,
+            
+            // Stats
+            epsilon: 0,
+            identityIndex: 0,
+            transitions: 0
+        };
+        
+        // --- TRUTH SIGNAL (Environmental forcing) ---
+        let truthSignal = {
+            x: 0,
+            y: 0,
+            prev_x: 0,
+            prev_y: 0,
+            time: 0
+        };
+        
+        // --- DECISION SET (Available directions) ---
+        const decisionSet = [];
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            decisionSet.push({
+                x: Math.cos(angle),
+                y: Math.sin(angle)
+            });
+        }
+        
+        // Animation state
+        let running = true;
+        let frameCount = 0;
+        
+        // --- CORE DDA FUNCTIONS ---
+        
+        // Truth Function T(I_n, ΔI)
+        function computeTruth() {
+            truthSignal.time += 0.02;
+            
+            // Complex environmental signal (multiple frequencies)
+            const baseX = Math.sin(truthSignal.time * 0.7) * 150;
+            const baseY = Math.cos(truthSignal.time * 0.5) * 150;
+            
+            // Add some chaos
+            const chaosX = Math.sin(truthSignal.time * 2.3) * 50;
+            const chaosY = Math.cos(truthSignal.time * 1.7) * 50;
+            
+            truthSignal.prev_x = truthSignal.x;
+            truthSignal.prev_y = truthSignal.y;
+            
+            truthSignal.x = baseX + chaosX;
+            truthSignal.y = baseY + chaosY;
+            
+            // T = f_parse(I_n) + λ * d/dn[I]
+            const deltaX = truthSignal.x - truthSignal.prev_x;
+            const deltaY = truthSignal.y - truthSignal.prev_y;
+            
+            return {
+                x: truthSignal.x + params.lambda * deltaX * 10,
+                y: truthSignal.y + params.lambda * deltaY * 10
+            };
+        }
+        
+        // Reflection Function R(D_n, Φ)
+        function computeReflection(F, P) {
+            let R = { x: 0, y: 0 };
+            const wObj = 1 - params.wSubj;
+            
+            for (const d of decisionSet) {
+                // Q(d): Objective assessment (distance to goal)
+                const Q = -Math.sqrt(
+                    Math.pow(F.x + d.x * 10 - truthSignal.x, 2) +
+                    Math.pow(F.y + d.y * 10 - truthSignal.y, 2)
+                ) / 100;
+                
+                // S(d): Subjective assessment (alignment with identity)
+                const toIdentity = { x: P.x - F.x, y: P.y - F.y };
+                const identityMag = Math.sqrt(toIdentity.x * toIdentity.x + toIdentity.y * toIdentity.y) || 1;
+                const S = (d.x * toIdentity.x + d.y * toIdentity.y) / identityMag;
+                
+                // Combined weighted assessment
+                const weight = wObj * Q + params.wSubj * S;
+                R.x += weight * d.x;
+                R.y += weight * d.y;
+            }
+            
+            return R;
+        }
+        
+        // Adaptive Hysteresis Update
+        function updateK(epsilon) {
+            // k_n = k_{n-1} + α * sign(ε) * |ε|^β
+            // DDA INVERSION: k increases when error increases (rigidity response)
+            const sign = epsilon > 0 ? 1 : -1;
+            const delta = params.alpha * sign * Math.pow(Math.abs(epsilon), params.beta);
+            
+            agent.k = Math.max(0, Math.min(1, agent.k + delta * 0.01));
+            return agent.k;
+        }
+        
+        // Main DDA State Update
+        function updateState() {
+            // Store prediction before update
+            agent.F_predicted = { ...agent.F };
+            
+            // Compute T and R
+            const T = computeTruth();
+            const R = computeReflection(agent.F, agent.P);
+            
+            // Governing equation: F_n = P_0 * k(F_{n-1}) + m * [T + R]
+            const k = agent.k;
+            const m = params.m;
+            
+            // Identity component (pull toward P_0, weighted by history)
+            const identityX = agent.P.x * k + agent.F_prev.x * k * 0.5;
+            const identityY = agent.P.y * k + agent.F_prev.y * k * 0.5;
+            
+            // External forcing component
+            const forcingX = m * (T.x * 0.01 + R.x * 50);
+            const forcingY = m * (T.y * 0.01 + R.y * 50);
+            
+            // Update state
+            agent.F_prev = { ...agent.F };
+            agent.F.x = identityX + forcingX;
+            agent.F.y = identityY + forcingY;
+            
+            // Clamp to canvas
+            const maxDist = 250;
+            const dist = Math.sqrt(agent.F.x * agent.F.x + agent.F.y * agent.F.y);
+            if (dist > maxDist) {
+                agent.F.x = (agent.F.x / dist) * maxDist;
+                agent.F.y = (agent.F.y / dist) * maxDist;
+            }
+            
+            // Compute prediction error
+            agent.epsilon = Math.sqrt(
+                Math.pow(agent.F.x - agent.F_predicted.x, 2) +
+                Math.pow(agent.F.y - agent.F_predicted.y, 2)
+            ) / 100;
+            
+            // Update k based on error (DDA adaptive hysteresis)
+            updateK(agent.epsilon);
+            
+            // Store in ledger
+            agent.history.push({
+                F: { ...agent.F },
+                P: { ...agent.P },
+                k: agent.k,
+                epsilon: agent.epsilon
+            });
+            
+            if (agent.history.length > agent.maxHistory) {
+                agent.history.shift();
+            }
+            
+            // Shift identity attractor over time (P_0 -> P_1 -> P_n)
+            shiftIdentity();
+        }
+        
+        // Identity Attractor Shifting (P_0 -> P_1 -> P_n)
+        function shiftIdentity() {
+            // Smoothly move P toward P_target
+            const dx = agent.P_target.x - agent.P.x;
+            const dy = agent.P_target.y - agent.P.y;
+            
+            agent.P.x += dx * params.shiftRate * 10;
+            agent.P.y += dy * params.shiftRate * 10;
+            
+            // If close to target, pick new target
+            const distToTarget = Math.sqrt(dx * dx + dy * dy);
+            if (distToTarget < 5) {
+                // New identity attractor emerges
+                agent.P_target.x = (Math.random() - 0.5) * 200;
+                agent.P_target.y = (Math.random() - 0.5) * 200;
+                agent.identityIndex++;
+                agent.transitions++;
+            }
+        }
+        
+        // Compute critical m threshold
+        function computeMcrit() {
+            const P_mag = Math.sqrt(agent.P.x * agent.P.x + agent.P.y * agent.P.y) || 1;
+            const T = computeTruth();
+            const R = computeReflection(agent.F, agent.P);
+            const TR_mag = Math.sqrt(
+                Math.pow(T.x * 0.01 + R.x, 2) + 
+                Math.pow(T.y * 0.01 + R.y, 2)
+            ) || 1;
+            
+            return (P_mag * agent.k) / TR_mag;
+        }
+        
+        // Compute Will (impedance)
+        function computeWill() {
+            const P_mag = Math.sqrt(agent.P.x * agent.P.x + agent.P.y * agent.P.y) || 1;
+            return (P_mag * agent.k) / (params.m || 0.01);
+        }
+        
+        // Determine phase
+        function getPhase() {
+            const mCrit = computeMcrit();
+            if (params.m < mCrit * 0.7) return 'stable';
+            if (params.m < mCrit * 1.3) return 'oscillating';
+            return 'chaos';
+        }
+        
+        // --- RENDERING ---
+        
+        function render() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            // Clear with fade effect (creates trails)
+            ctx.fillStyle = 'rgba(10, 10, 21, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw coordinate grid
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx, 0);
+            ctx.lineTo(cx, canvas.height);
+            ctx.moveTo(0, cy);
+            ctx.lineTo(canvas.width, cy);
+            ctx.stroke();
+            
+            // Draw identity attractor P_0
+            ctx.beginPath();
+            ctx.arc(cx + agent.P.x, cy + agent.P.y, 15, 0, Math.PI * 2);
+            ctx.strokeStyle = `hsla(${(agent.identityIndex * 60) % 360}, 100%, 50%, 0.8)`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw P_target
+            ctx.beginPath();
+            ctx.arc(cx + agent.P_target.x, cy + agent.P_target.y, 8, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.setLineDash([3, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw truth signal
+            ctx.beginPath();
+            ctx.arc(cx + truthSignal.x, cy + truthSignal.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.6)';
+            ctx.fill();
+            
+            // Draw history trail
+            if (agent.history.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(cx + agent.history[0].F.x, cy + agent.history[0].F.y);
+                
+                for (let i = 1; i < agent.history.length; i++) {
+                    const alpha = i / agent.history.length;
+                    ctx.strokeStyle = `hsla(180, 100%, 50%, ${alpha * 0.5})`;
+                    ctx.lineTo(cx + agent.history[i].F.x, cy + agent.history[i].F.y);
+                }
+                ctx.stroke();
+            }
+            
+            // Draw agent (F_n)
+            const agentSize = 10 + agent.k * 15; // Size reflects rigidity
+            ctx.beginPath();
+            ctx.arc(cx + agent.F.x, cy + agent.F.y, agentSize, 0, Math.PI * 2);
+            
+            // Color based on phase
+            const phase = getPhase();
+            let agentColor;
+            if (phase === 'stable') agentColor = '#00ff88';
+            else if (phase === 'oscillating') agentColor = '#ffcc00';
+            else agentColor = '#ff5555';
+            
+            ctx.fillStyle = agentColor;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw k indicator (inner ring)
+            ctx.beginPath();
+            ctx.arc(cx + agent.F.x, cy + agent.F.y, agentSize * agent.k, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fill();
+            
+            // Draw vector to identity
+            ctx.beginPath();
+            ctx.moveTo(cx + agent.F.x, cy + agent.F.y);
+            ctx.lineTo(cx + agent.P.x, cy + agent.P.y);
+            ctx.strokeStyle = `hsla(${(agent.identityIndex * 60) % 360}, 100%, 50%, 0.3)`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // Labels
+            ctx.fillStyle = '#888';
+            ctx.font = '10px monospace';
+            ctx.fillText('P₀ (Identity)', cx + agent.P.x + 20, cy + agent.P.y);
+            ctx.fillText('T (Truth)', cx + truthSignal.x + 10, cy + truthSignal.y);
+            ctx.fillText(`F_n (k=${agent.k.toFixed(2)})`, cx + agent.F.x + 15, cy + agent.F.y);
+        }
+        
+        function updateStats() {
+            const Fn_mag = Math.sqrt(agent.F.x * agent.F.x + agent.F.y * agent.F.y);
+            document.getElementById('statFn').textContent = Fn_mag.toFixed(2);
+            document.getElementById('statK').textContent = agent.k.toFixed(3);
+            document.getElementById('statEpsilon').textContent = agent.epsilon.toFixed(3);
+            document.getElementById('statMcrit').textContent = computeMcrit().toFixed(3);
+            document.getElementById('statWill').textContent = computeWill().toFixed(2);
+            document.getElementById('statTransitions').textContent = agent.transitions;
+            document.getElementById('identityIndex').textContent = agent.identityIndex;
+            
+            // Update identity dot color
+            const dot = document.getElementById('identityDot');
+            dot.style.background = `hsl(${(agent.identityIndex * 60) % 360}, 100%, 50%)`;
+            
+            // Update phase indicator
+            const phase = getPhase();
+            const phaseEl = document.getElementById('phaseIndicator');
+            phaseEl.className = 'phase-indicator';
+            if (phase === 'stable') {
+                phaseEl.classList.add('phase-stable');
+                phaseEl.textContent = '🟢 Stable Orbit';
+            } else if (phase === 'oscillating') {
+                phaseEl.classList.add('phase-oscillating');
+                phaseEl.textContent = '🟡 Oscillating';
+            } else {
+                phaseEl.classList.add('phase-chaos');
+                phaseEl.textContent = '🔴 Phase Transition';
+            }
+        }
+        
+        // --- ANIMATION LOOP ---
+        
+        function animate() {
+            if (running) {
+                updateState();
+                frameCount++;
+            }
+            render();
+            
+            if (frameCount % 5 === 0) {
+                updateStats();
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // --- CONTROLS ---
+        
+        function setupControls() {
+            const controls = ['k0', 'm', 'alpha', 'beta', 'lambda', 'wSubj', 'shiftRate'];
+            
+            controls.forEach(id => {
+                const input = document.getElementById(id);
+                const display = document.getElementById(id + '-val');
+                
+                input.addEventListener('input', () => {
+                    const val = parseFloat(input.value);
+                    display.textContent = val.toFixed(id === 'shiftRate' ? 4 : 2);
+                    
+                    if (id === 'k0') agent.k = val;
+                    else if (id === 'm') params.m = val;
+                    else if (id === 'alpha') params.alpha = val;
+                    else if (id === 'beta') params.beta = val;
+                    else if (id === 'lambda') params.lambda = val;
+                    else if (id === 'wSubj') params.wSubj = val;
+                    else if (id === 'shiftRate') params.shiftRate = val;
+                });
+            });
+            
+            document.getElementById('toggleBtn').addEventListener('click', () => {
+                running = !running;
+                document.getElementById('toggleBtn').textContent = running ? 'Pause' : 'Play';
+            });
+            
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                agent.F = { x: 0, y: 0 };
+                agent.F_prev = { x: 0, y: 0 };
+                agent.P = { x: 0, y: 0 };
+                agent.P_target = { x: (Math.random() - 0.5) * 200, y: (Math.random() - 0.5) * 200 };
+                agent.k = parseFloat(document.getElementById('k0').value);
+                agent.history = [];
+                agent.identityIndex = 0;
+                agent.transitions = 0;
+                truthSignal.time = 0;
+            });
+            
+            document.getElementById('perturbBtn').addEventListener('click', () => {
+                // Sudden environmental shock
+                agent.F.x += (Math.random() - 0.5) * 200;
+                agent.F.y += (Math.random() - 0.5) * 200;
+            });
+            
+            document.getElementById('shiftIdentityBtn').addEventListener('click', () => {
+                // Force identity transition
+                agent.P_target.x = (Math.random() - 0.5) * 200;
+                agent.P_target.y = (Math.random() - 0.5) * 200;
+            });
+        }
+        
+        // --- INIT ---
+        
+        function init() {
+            agent.P_target = { x: (Math.random() - 0.5) * 200, y: (Math.random() - 0.5) * 200 };
+            setupControls();
+            animate();
+        }
+        
+        init();
+    </script>
+</body>
+</html>
