@@ -1,2 +1,106 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
 /python/venv
 /venv
+ENV/
+env/
+.venv
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+.emacs.desktop
+
+# Generated audio/video
+*.wav
+*.mp3
+*.mp4
+*.webm
+*.ogg
+output/
+renders/
+
+# Large model files (unless tracked with Git LFS)
+*.pt
+*.pth
+*.onnx
+*.pb
+models/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.lnk
+.Spotlight-V100
+.Trashes
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*._*
+
+# Archive staging (before committing)
+archive_staging/
+temp_archive/
+
+# Node (if using npm in future)
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+logs/
+
+# Local configuration
+.env
+.env.local
+config_local.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
