@@ -1,0 +1,3062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Duality - A Classical Composition for Three Voices</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+        background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 50%, #0d0d18 100%); 
+        color: #e0e0e0; 
+        font-family: 'Georgia', 'Times New Roman', serif;
+        min-height: 100vh;
+    }
+    
+    #overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.95);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        transition: opacity 0.8s;
+    }
+    .hidden { opacity: 0; pointer-events: none; }
+    
+    #overlay h1 {
+        font-size: 4em;
+        color: #d4af37;
+        text-shadow: 0 0 40px rgba(212,175,55,0.3);
+        margin-bottom: 10px;
+        letter-spacing: 0.2em;
+    }
+    #overlay h2 {
+        font-size: 1.4em;
+        color: #888;
+        font-weight: normal;
+        font-style: italic;
+        margin-bottom: 40px;
+    }
+    #overlay .info {
+        color: #666;
+        font-size: 1em;
+        line-height: 1.8;
+        text-align: center;
+        max-width: 500px;
+    }
+    #overlay .click {
+        margin-top: 50px;
+        color: #444;
+        font-size: 1.1em;
+    }
+    
+    #canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+    }
+    
+    #score-container {
+        position: relative;
+        z-index: 10;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        display: none;
+    }
+    
+    #score-container.visible { display: block; }
+    
+    #score-header {
+        text-align: center;
+        margin-bottom: 40px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid #333;
+    }
+    
+    #score-header h1 {
+        font-size: 2.5em;
+        color: #d4af37;
+        margin-bottom: 10px;
+    }
+    
+    #score-header h2 {
+        font-size: 1.2em;
+        color: #888;
+        font-weight: normal;
+        font-style: italic;
+    }
+    
+    .lilypond-section {
+        background: rgba(20, 20, 30, 0.8);
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 30px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #aaa;
+        overflow-x: auto;
+        white-space: pre-wrap;
+    }
+    
+    .lilypond-section h3 {
+        font-family: Georgia, serif;
+        font-size: 1.1em;
+        color: #d4af37;
+        margin-bottom: 15px;
+        font-weight: normal;
+    }
+    
+    .lilypond-code {
+        color: #8bc;
+    }
+    
+    .motif-label {
+        color: #e88;
+        font-weight: bold;
+    }
+    
+    .motif-label.gentle {
+        color: #8e8;
+    }
+    
+    #controls {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    #controls button {
+        background: rgba(212, 175, 55, 0.2);
+        border: 1px solid #d4af37;
+        color: #d4af37;
+        padding: 12px 30px;
+        font-family: Georgia, serif;
+        font-size: 14px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.3s;
+    }
+    
+    #controls button:hover {
+        background: rgba(212, 175, 55, 0.4);
+    }
+    
+    #time-display {
+        color: #888;
+        font-size: 14px;
+        min-width: 120px;
+        text-align: center;
+    }
+    
+    #current-section {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        color: #d4af37;
+        font-size: 16px;
+        z-index: 50;
+        text-align: right;
+        opacity: 0.8;
+    }
+    
+    #motif-indicator {
+        position: fixed;
+        top: 60px;
+        right: 20px;
+        font-size: 14px;
+        z-index: 50;
+        text-align: right;
+    }
+    
+    .motif-a { color: #ff6b6b; }
+    .motif-b { color: #6bffb8; }
+    
+    #progress {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #ff6b6b, #d4af37, #6bffb8);
+        z-index: 50;
+        transition: width 0.1s linear;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>DUALITY</h1>
+    <h2>A Composition for Three Voices</h2>
+    <div class="info">
+        <em>Two souls in conflict —</em><br>
+        <span style="color: #ff6b6b;">Motif A: Intense, Angry, Restless</span><br>
+        <span style="color: #6bffb8;">Motif B: Sweet, Gentle, Yearning</span><br><br>
+        Scored for Soprano, Alto, and Bass voices<br>
+        Duration: ~3:30
+    </div>
+    <p class="click">[ Click anywhere to begin ]</p>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="score-container">
+    <div id="score-header">
+        <h1>DUALITY</h1>
+        <h2>for Three Voices — Lilypond Notation Reference</h2>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>Header & Global Settings</h3>
+<span class="lilypond-code">\version "2.24.0"
+\header {
+  title = "DUALITY"
+  subtitle = "A Composition for Three Voices"
+  composer = "Composed for a Friend"
+  tagline = ##f
+}
+
+\paper {
+  #(set-paper-size "a4")
+}
+
+global = {
+  \key d \minor
+  \time 4/4
+  \tempo "Adagio espressivo" 4 = 66
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>Motif Definitions</h3>
+<span class="motif-label">% MOTIF A - Intense, Angry (D minor, dotted rhythms, chromatic)</span>
+<span class="lilypond-code">motifA = \relative c'' {
+  d8.-> e16 f8 g~ g f e d |
+  cis8.-> d16 e8 f~ f e d cis |
+  d4-> r8 a' g f e d |
+  cis8 d e4-> d8 cis d4 |
+}
+
+motifABass = \relative c {
+  d4-> a d,8 e f g |
+  a4-> e a,8 b cis d |
+  d'4-> d, g8 a bes c |
+  a4 a, d2-> |
+}</span>
+
+<span class="motif-label gentle">% MOTIF B - Sweet, Gentle (F major, legato, stepwise)</span>
+<span class="lilypond-code">motifB = \relative c'' {
+  f4( e8 d c4 d8 e |
+  f4 g a2) |
+  g4( f8 e d4 e8 f |
+  g2 f4) r |
+}
+
+motifBBass = \relative c {
+  f2( a,4 c |
+  d2 f) |
+  c2( g4 a |
+  bes2 f) |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>I. Introduction — Gentle Awakening</h3>
+<span class="lilypond-code">% Bars 1-16: Motif B fragments emerge from silence
+
+sopranoIntro = \relative c'' {
+  R1*2 |
+  f4(\pp e8 d c4 d8 e |
+  f2.) r4 |
+  R1 |
+  g4(\p f8 e d4 e8 f |
+  g2 f4 e |
+  d1)\< |
+  
+  % Building
+  f4(\mf e8 d c4 d8 e |
+  f4 g a2) |
+  g4( f8 e d4 e8 f |
+  g2 f4) r |
+  a4(\f g8 f e4 f8 g |
+  a4 bes c2) |
+  bes4( a8 g f4 g8 a |
+  bes2 a4) r |
+}
+
+altoIntro = \relative c' {
+  R1*4 |
+  a4(\pp g8 f e4 f8 g |
+  a2.) r4 |
+  bes4( a8 g f4 g8 a |
+  bes2 a4) r |
+  
+  a4(\mf g8 f e4 f8 g |
+  a4 bes c2) |
+  bes4( a8 g f4 g8 a |
+  bes2 a4) r |
+  c4( bes8 a g4 a8 bes |
+  c4 d e2) |
+  d4( c8 bes a4 bes8 c |
+  d2 c4) r |
+}
+
+bassIntro = \relative c {
+  f1~\pp |
+  f1 |
+  f2( a,4 c |
+  d2 f) |
+  c1~ |
+  c1 |
+  c2( g4 a |
+  bes2 f) |
+  
+  f'2(\mf a,4 c |
+  d2 f) |
+  c2( g4 a |
+  bes2 f) |
+  f'2( c4 e |
+  f2 a) |
+  g2( d4 e |
+  f2 c) |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>II. First Storm — Motif A Emerges</h3>
+<span class="lilypond-code">% Bars 17-32: Motif A interrupts with fury
+
+sopranoStorm = \relative c'' {
+  \key d \minor
+  d8.->[\ff e16] f8 g~ g f e d |
+  cis8.->[ d16] e8 f~ f e d cis |
+  d4-> r8 a' g f e d |
+  cis8 d e4-> d8 cis d4 |
+  
+  % Intensification
+  d8.->[ e16] f8 g~ g a bes a |
+  g8.->[ a16] bes8 c~ c bes a g |
+  f4-> r8 d' c bes a g |
+  f8 g a4-> g8 f g4 |
+  
+  % Peak
+  a8.->[\fff bes16] c8 d~ d c bes a |
+  g8.->[ a16] bes8 c~ c bes a g |
+  f8.->[ g16] a8 bes~ bes a g f |
+  e8.->[ f16] g8 a~ a g f e |
+  d4->( e8 f g4 a |
+  bes4 a g f |
+  e4 d cis d |
+  e2 d4) r |
+}
+
+altoStorm = \relative c' {
+  \key d \minor
+  f8.->[\ff g16] a8 bes~ bes a g f |
+  e8.->[ f16] g8 a~ a g f e |
+  f4-> r8 f e d cis d |
+  e8 f g4-> f8 e f4 |
+  
+  a8.->[ bes16] c8 d~ d c bes a |
+  bes8.->[ c16] d8 e~ e d c bes |
+  a4-> r8 a g f e d |
+  c8 d e4-> d8 c d4 |
+  
+  f8.->[\fff g16] a8 bes~ bes a g f |
+  e8.->[ f16] g8 a~ a g f e |
+  d8.->[ e16] f8 g~ g f e d |
+  cis8.->[ d16] e8 f~ f e d cis |
+  d4->( cis8 d e4 f |
+  g4 f e d |
+  cis4 d e f |
+  g2 f4) r |
+}
+
+bassStorm = \relative c {
+  \key d \minor
+  d4->[\ff] a d,8 e f g |
+  a4->[ ] e a,8 b cis d |
+  d'4-> d, g8 a bes c |
+  a4 a, d2-> |
+  
+  d'4-> a d,8 e f g |
+  g'4-> d g,8 a bes c |
+  f4-> c f,8 g a bes |
+  c4 g c,2-> |
+  
+  f4->[\fff] c f,8 g a bes |
+  c4-> g c,8 d e f |
+  d'4-> a d,8 e f g |
+  a4-> e a,8 b cis d |
+  d'4->( cis8 d e4 f |
+  g4 f e d |
+  a4 bes a g |
+  a2 d,4) r |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>III. Respite — Motif B Returns</h3>
+<span class="lilypond-code">% Bars 33-48: Gentleness soothes the storm
+
+sopranoRespite = \relative c'' {
+  \key f \major
+  R1 |
+  r2 f4(\p e8 d |
+  c4 d8 e f4 g |
+  a2.) r4 |
+  
+  g4(\mp f8 e d4 e8 f |
+  g2 f4 e |
+  d4 c8 bes a4 bes8 c |
+  d2 c4) r |
+  
+  f4(\mf e8 d c4 d8 e |
+  f4 g a bes |
+  c4 bes8 a g4 a8 bes |
+  c2 bes4 a |
+  g4 f8 e d4 e8 f |
+  g4 a bes2 |
+  a4 g8 f e4 f8 g |
+  a2 f4) r |
+}
+
+altoRespite = \relative c' {
+  \key f \major
+  a4(\p g8 f e4 f8 g |
+  a2.) r4 |
+  R1 |
+  r2 c4( bes8 a |
+  
+  bes4 a8 g f4 g8 a |
+  bes2 a4 g |
+  f4 e8 d c4 d8 e |
+  f2 e4) r |
+  
+  a4(\mf g8 f e4 f8 g |
+  a4 bes c d |
+  e4 d8 c bes4 c8 d |
+  e2 d4 c |
+  bes4 a8 g f4 g8 a |
+  bes4 c d2 |
+  c4 bes8 a g4 a8 bes |
+  c2 a4) r |
+}
+
+bassRespite = \relative c {
+  \key f \major
+  f2(\p a,4 c |
+  d2 f) |
+  f2( a,4 c |
+  d2 f4) r |
+  
+  c2( g4 a |
+  bes2 f) |
+  f'2( c4 d |
+  bes2 c4) r |
+  
+  f2(\mf a,4 c |
+  d2 f) |
+  c2( g4 a |
+  bes2 f) |
+  c'2( g4 a |
+  bes2 g) |
+  f2( c4 e |
+  f2.) r4 |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>IV. Development — Motifs Interweave</h3>
+<span class="lilypond-code">% Bars 49-80: Both motifs appear simultaneously, transformed
+
+sopranoDev = \relative c'' {
+  % Motif A in soprano, B in lower voices
+  \key d \minor
+  d8.->[\f e16] f8 g~ g f e d |
+  cis8.->[ d16] e8 f~ f4 r |
+  % Motif B answers
+  \key f \major
+  f4(\mp e8 d c4 d8 e |
+  f2.) r4 |
+  
+  % Fragmentation
+  \key d \minor
+  d8.->[\mf e16] f8 g~ g4 r |
+  \key f \major
+  r4 f( e8 d c4) |
+  \key d \minor
+  cis8.->[ d16] e8 f~ f4 r |
+  \key f \major
+  r4 g( f8 e d4) |
+  
+  % Synthesis begins
+  d8.(\f e16 f8 g~ g f e d |
+  c4 d8 e f4 g |
+  a8. bes16 c8 d~ d c bes a |
+  g4 a8 bes c2) |
+  
+  % Climactic interweaving  
+  d,8.->[\ff e16] f4( e8 d c d |
+  e8. f16 g4 f8 e d e |
+  f8. g16 a4 g8 f e f |
+  g8. a16 bes4 a8 g f g |
+  
+  a8. bes16 c8 d~ d c bes a) |
+  g4(\fff f8 e d4 e8 f |
+  g4 a bes c |
+  d1) |
+  
+  % Transformation
+  f,4(\mf e8 d c4 d8 e |
+  f4 g a2) |
+  g4( f8 e d4 e8 f |
+  g2 f4) r |
+  
+  % Motif A transformed to major
+  \key f \major
+  f8.(\p g16 a8 bes~ bes a g f |
+  e8. f16 g8 a~ a g f e |
+  f4 e8 d c4 d8 e |
+  f2.) r4 |
+  
+  a8.(\pp bes16 c8 d~ d c bes a |
+  g8. a16 bes8 c~ c bes a g |
+  f4 e8 d c4 d8 e |
+  f1) |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>V. Climax — The Struggle</h3>
+<span class="lilypond-code">% Bars 81-104: Maximum intensity, both motifs fight for dominance
+
+sopranoClimax = \relative c'' {
+  \key d \minor
+  % Motif A at full force
+  d8.->[\fff e16] f8 g~ g a bes c |
+  d8.->[ e16] f8 g~ g f e d |
+  cis8.->[ d16] e8 f~ f g a bes |
+  a8.->[ bes16] c8 d~ d c bes a |
+  
+  % Descending fury
+  g8.->[ a16] bes8 c~ c bes a g |
+  f8.->[ g16] a8 bes~ bes a g f |
+  e8.->[ f16] g8 a~ a g f e |
+  d8.->[ e16] f8 g~ g f e d |
+  
+  % Motif B tries to emerge
+  f4(\ff e8 d c4 d8 e) |
+  d8.->[ e16] f8 g~ g f e d |
+  g4( f8 e d4 e8 f) |
+  cis8.->[ d16] e8 f~ f e d cis |
+  
+  % Final conflict
+  f4->( e8 d) d8.->[ e16] f8 g~ |
+  g4( f8 e) cis8.->[ d16] e8 f~ |
+  f4( e8 d c4 d8 e |
+  f4 g a bes |
+  
+  c4-> bes8 a g4 f8 e |
+  d4 c8 bes a4 g8 f |
+  e4 d8 cis d4 e8 f |
+  g4 a bes c |
+  
+  d8.->[ e16] f8 g~ g f e d |
+  cis8 d e f g a bes a |
+  g f e d cis d e f |
+  d1->) |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>VI. Resolution — Peace Prevails</h3>
+<span class="lilypond-code">% Bars 105-128: Motif B transforms Motif A
+
+sopranoResolution = \relative c'' {
+  \key f \major
+  % Motif A now gentle
+  f8.(\p\< g16 a8 bes~ bes a g f |
+  e8. f16 g8 a~\> a g f e)\! |
+  f4(\pp e8 d c4 d8 e |
+  f2.) r4 |
+  
+  % Pure Motif B
+  f4(\p e8 d c4 d8 e |
+  f4 g a2) |
+  g4( f8 e d4 e8 f |
+  g2 f4 e) |
+  
+  d4( c8 bes a4 bes8 c |
+  d4 e f2) |
+  e4( d8 c bes4 c8 d |
+  e2 d4 c) |
+  
+  % Rising hope
+  f4(\mp e8 d c4 d8 e |
+  f4 g a bes |
+  c4 bes8 a g4 a8 bes |
+  c2 bes4 a) |
+  
+  g4(\mf f8 e d4 e8 f |
+  g4 a bes c |
+  d4 c8 bes a4 bes8 c |
+  d2 c4 bes) |
+  
+  % Final statement
+  a4(\p g8 f e4 f8 g |
+  a2 g4 f |
+  e4 d8 c d4 e8 f |
+  g2 f4 e |
+  d4 c8 bes a4 bes8 c |
+  d2 c4) r |
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>VII. Coda — Transfiguration</h3>
+<span class="lilypond-code">% Bars 129-144: Final synthesis and peace
+
+sopranoCoda = \relative c'' {
+  \key f \major
+  % Motif A and B unified
+  f8.(\pp g16 a8 bes~ bes a g f |
+  e4 f8 g a2) |
+  g8.( a16 bes8 c~ c bes a g |
+  f4 g8 a bes2) |
+  
+  % Final Motif B
+  f4(\ppp e8 d c4 d8 e |
+  f4 g a2~ |
+  a4 g8 f e4 f8 g |
+  a2 g4 f~ |
+  
+  f4 e8 d c4 d8 e |
+  f2~ f8 g a bes |
+  c4 bes8 a g4 f8 e |
+  f1~ |
+  f1~ |
+  f1~ |
+  f2. r4) |
+  R1 \bar "|."
+}
+
+altoCoda = \relative c' {
+  \key f \major
+  c4(\pp bes8 a g4 a8 bes |
+  c2 a) |
+  e'4( d8 c bes4 c8 d |
+  e2 d4 c) |
+  
+  a4(\ppp g8 f e4 f8 g |
+  a4 bes c2~ |
+  c4 bes8 a g4 a8 bes |
+  c2 bes4 a~ |
+  
+  a4 g8 f e4 f8 g |
+  a2~ a8 bes c d |
+  e4 d8 c bes4 a8 g |
+  a1~ |
+  a1~ |
+  a1~ |
+  a2. r4) |
+  R1 \bar "|."
+}
+
+bassCoda = \relative c {
+  \key f \major
+  f2(\pp a,4 c |
+  d2 f) |
+  c2( g4 a |
+  bes2 f4 g) |
+  
+  f2(\ppp a,4 c |
+  d2 f~ |
+  f c4 d |
+  e2 c4 d~ |
+  
+  d c8 bes a4 bes8 c |
+  d2~ d8 e f g |
+  a4 g8 f e4 d8 c |
+  f,1~ |
+  f1~ |
+  f1~ |
+  f2. r4) |
+  R1 \bar "|."
+}</span>
+    </div>
+
+    <div class="lilypond-section">
+        <h3>Score Assembly</h3>
+<span class="lilypond-code">\score {
+  \new StaffGroup <<
+    \new Staff \with { instrumentName = "Soprano" } {
+      \global
+      \sopranoIntro
+      \sopranoStorm
+      \sopranoRespite
+      \sopranoDev
+      \sopranoClimax
+      \sopranoResolution
+      \sopranoCoda
+    }
+    \new Staff \with { instrumentName = "Alto" } {
+      \global
+      \altoIntro
+      \altoStorm
+      \altoRespite
+      \altoDev
+      \altoClimax
+      \altoResolution
+      \altoCoda
+    }
+    \new Staff \with { instrumentName = "Bass" } {
+      \global
+      \clef bass
+      \bassIntro
+      \bassStorm
+      \bassRespite
+      \bassDev
+      \bassClimax
+      \bassResolution
+      \bassCoda
+    }
+  >>
+  \layout { }
+  \midi { }
+}</span>
+    </div>
+</div>
+
+<div id="controls">
+    <button id="playBtn">▶ Play</button>
+    <button id="scoreBtn">📜 Toggle Score</button>
+    <div id="time-display">0:00 / 3:30</div>
+</div>
+
+<div id="current-section">DUALITY</div>
+<div id="motif-indicator">
+    <span class="motif-a">● Motif A</span> · 
+    <span class="motif-b">● Motif B</span>
+</div>
+<div id="progress"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 66,
+    // Voice ranges (base frequencies for middle of range)
+    VOICES: {
+        soprano: { base: 523.25, name: 'Soprano' },  // C5
+        alto: { base: 329.63, name: 'Alto' },        // E4
+        bass: { base: 130.81, name: 'Bass' }         // C3
+    }
+};
+
+// Note frequencies (C4 = 261.63 Hz)
+const NOTE_FREQS = {
+    'C2': 65.41, 'C#2': 69.30, 'D2': 73.42, 'D#2': 77.78, 'E2': 82.41, 'F2': 87.31,
+    'F#2': 92.50, 'G2': 98.00, 'G#2': 103.83, 'A2': 110.00, 'A#2': 116.54, 'B2': 123.47,
+    'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81, 'F3': 174.61,
+    'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
+    'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63, 'F4': 349.23,
+    'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
+    'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.26, 'F5': 698.46,
+    'F#5': 739.99, 'G5': 783.99, 'G#5': 830.61, 'A5': 880.00, 'A#5': 932.33, 'B5': 987.77,
+    'C6': 1046.50, 'D6': 1174.66, 'E6': 1318.51, 'F6': 1396.91, 'G6': 1567.98
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE - Orchestral Synths with Natural Sound
+// ═══════════════════════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    compressor: null,
+    isPlaying: false,
+    voices: {},
+
+    init: async () => {
+        AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const actx = AudioEngine.ctx;
+        
+        // Compressor for smooth dynamics
+        AudioEngine.compressor = actx.createDynamicsCompressor();
+        AudioEngine.compressor.threshold.value = -20;
+        AudioEngine.compressor.knee.value = 25;
+        AudioEngine.compressor.ratio.value = 4;
+        AudioEngine.compressor.attack.value = 0.005;
+        AudioEngine.compressor.release.value = 0.2;
+        
+        // Master output
+        AudioEngine.master = actx.createGain();
+        AudioEngine.master.gain.value = 0.7;
+        
+        // Concert Hall Reverb (long, lush)
+        AudioEngine.reverb = actx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createConcertHall(4.5, 1.6);
+        
+        AudioEngine.reverbGain = actx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.4;
+        
+        // Dry gain
+        AudioEngine.dryGain = actx.createGain();
+        AudioEngine.dryGain.gain.value = 0.6;
+        
+        // EQ for warmth
+        AudioEngine.warmth = actx.createBiquadFilter();
+        AudioEngine.warmth.type = 'lowshelf';
+        AudioEngine.warmth.frequency.value = 300;
+        AudioEngine.warmth.gain.value = 3;
+        
+        // EQ for air
+        AudioEngine.air = actx.createBiquadFilter();
+        AudioEngine.air.type = 'highshelf';
+        AudioEngine.air.frequency.value = 8000;
+        AudioEngine.air.gain.value = 2;
+        
+        // Create voice buses
+        AudioEngine.voices = {
+            soprano: AudioEngine.createVoiceBus(),
+            alto: AudioEngine.createVoiceBus(),
+            bass: AudioEngine.createVoiceBus()
+        };
+        
+        // Signal routing
+        Object.values(AudioEngine.voices).forEach(bus => {
+            bus.connect(AudioEngine.master);
+        });
+        
+        AudioEngine.master.connect(AudioEngine.warmth);
+        AudioEngine.warmth.connect(AudioEngine.air);
+        AudioEngine.air.connect(AudioEngine.compressor);
+        
+        // Dry path
+        AudioEngine.compressor.connect(AudioEngine.dryGain);
+        AudioEngine.dryGain.connect(actx.destination);
+        
+        // Wet path
+        AudioEngine.compressor.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(actx.destination);
+    },
+
+    createVoiceBus: () => {
+        const bus = AudioEngine.ctx.createGain();
+        bus.gain.value = 1.0;
+        return bus;
+    },
+
+    createConcertHall: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        
+        // Early reflections timing
+        const earlyReflections = [0.012, 0.024, 0.035, 0.048, 0.062, 0.078];
+        
+        for (let i = 0; i < length; i++) {
+            const t = i / rate;
+            let env = Math.pow(1 - i / length, decay);
+            
+            // Add early reflections
+            let early = 0;
+            earlyReflections.forEach((delay, idx) => {
+                if (Math.abs(t - delay) < 0.002) {
+                    early += (0.3 - idx * 0.04) * Math.sin(t * 1000);
+                }
+            });
+            
+            // Diffuse tail with modulation
+            const mod = Math.sin(t * 2.3) * 0.1 + 1;
+            L[i] = ((Math.random() * 2 - 1) * mod + early) * env;
+            R[i] = ((Math.random() * 2 - 1) * mod - early * 0.8) * env;
+        }
+        return impulse;
+    },
+
+    // Natural String/Voice Synth
+    playNote: (voice, note, time, duration, velocity = 0.8, motif = 'B') => {
+        if (!AudioEngine.ctx) return;
+        const ctx = AudioEngine.ctx;
+        const freq = NOTE_FREQS[note];
+        if (!freq) return;
+        
+        const voiceBus = AudioEngine.voices[voice];
+        if (!voiceBus) return;
+        
+        // Different timbres for different motifs
+        const isIntense = motif === 'A';
+        
+        // Create multiple detuned oscillators for rich acoustic sound
+        const oscCount = 4;
+        const oscs = [];
+        const gains = [];
+        
+        for (let i = 0; i < oscCount; i++) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            // Mix of wave types for natural timbre
+            if (i === 0) osc.type = 'sine';           // Fundamental
+            else if (i === 1) osc.type = 'triangle';   // Warmth
+            else if (i === 2) osc.type = 'sine';       // 2nd harmonic
+            else osc.type = 'triangle';                // Slight brightness
+            
+            // Detune for chorus effect (more for intensity)
+            const detuneAmount = isIntense ? 8 : 4;
+            const detunes = [-detuneAmount, detuneAmount, -detuneAmount/2, detuneAmount/2];
+            osc.detune.value = detunes[i];
+            
+            // Frequency with harmonics
+            const freqMults = [1, 1, 2, 3];
+            osc.frequency.value = freq * freqMults[i];
+            
+            // Gain mixing
+            const gainVals = isIntense ? 
+                [0.4, 0.3, 0.2, 0.1] :   // Intense: more harmonics
+                [0.5, 0.35, 0.1, 0.05];  // Gentle: more fundamental
+            gain.gain.value = gainVals[i] * velocity;
+            
+            osc.connect(gain);
+            oscs.push(osc);
+            gains.push(gain);
+        }
+        
+        // Vibrato
+        const vib = ctx.createOscillator();
+        const vibGain = ctx.createGain();
+        vib.frequency.value = isIntense ? 6 : 4.5;  // Faster vibrato for intensity
+        vibGain.gain.value = isIntense ? 6 : 3;      // Deeper vibrato for intensity
+        vib.connect(vibGain);
+        
+        // Connect vibrato to oscillators (delayed onset)
+        oscs.forEach(osc => {
+            vibGain.connect(osc.frequency);
+        });
+        
+        // Filter for tone shaping
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        const baseCutoff = voice === 'bass' ? 1500 : (voice === 'alto' ? 3000 : 4500);
+        
+        if (isIntense) {
+            // Brighter, more aggressive
+            filter.frequency.setValueAtTime(baseCutoff * 1.5, time);
+            filter.frequency.exponentialRampToValueAtTime(baseCutoff * 0.8, time + duration * 0.3);
+        } else {
+            // Warmer, gentler
+            filter.frequency.setValueAtTime(baseCutoff, time);
+            filter.frequency.exponentialRampToValueAtTime(baseCutoff * 0.6, time + duration * 0.5);
+        }
+        filter.Q.value = isIntense ? 1.5 : 0.8;
+        
+        // Main amplitude envelope
+        const amp = ctx.createGain();
+        const attackTime = isIntense ? 0.02 : 0.08;  // Sharp vs soft attack
+        const releaseTime = duration * 0.3;
+        
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(velocity * 0.5, time + attackTime);
+        
+        if (isIntense) {
+            // More percussive envelope
+            amp.gain.exponentialRampToValueAtTime(velocity * 0.35, time + 0.1);
+            amp.gain.setValueAtTime(velocity * 0.35, time + duration - releaseTime);
+        } else {
+            // Sustained envelope
+            amp.gain.exponentialRampToValueAtTime(velocity * 0.4, time + 0.15);
+            amp.gain.setValueAtTime(velocity * 0.4, time + duration - releaseTime);
+        }
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Connect signal chain
+        gains.forEach(g => g.connect(filter));
+        filter.connect(amp);
+        amp.connect(voiceBus);
+        
+        // Start everything
+        oscs.forEach(osc => {
+            osc.start(time);
+            osc.stop(time + duration + 0.1);
+        });
+        
+        vib.start(time + (isIntense ? 0.05 : 0.15)); // Delayed vibrato onset
+        vib.stop(time + duration + 0.1);
+    },
+
+    // Chord (multiple notes at once)
+    playChord: (voice, notes, time, duration, velocity = 0.7, motif = 'B') => {
+        notes.forEach((note, i) => {
+            AudioEngine.playNote(voice, note, time + i * 0.015, duration, velocity * 0.8, motif);
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSITION DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+const SCORE = [];
+const SECTIONS = [];
+
+function addSection(name, beat) {
+    SECTIONS.push({ name, beat });
+}
+
+function addNote(beat, voice, note, duration, velocity = 0.8, motif = 'B') {
+    SCORE.push({ beat, voice, note, duration, velocity, motif, type: 'note' });
+}
+
+function addChord(beat, voice, notes, duration, velocity = 0.7, motif = 'B') {
+    SCORE.push({ beat, voice, notes, duration, velocity, motif, type: 'chord' });
+}
+
+// Duration values (in beats at 66 BPM)
+const W = 4.0;    // Whole note
+const H = 2.0;    // Half note
+const Q = 1.0;    // Quarter note
+const E = 0.5;    // Eighth note
+const S = 0.25;   // Sixteenth note
+const DH = 3.0;   // Dotted half
+const DQ = 1.5;   // Dotted quarter
+const DE = 0.75;  // Dotted eighth
+
+let b = 0;  // Current beat position
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  I. INTRODUCTION — Gentle Awakening (Bars 1-16)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("I. Introduction", b);
+
+// Bars 1-2: Bass pedal, silence in upper voices
+addNote(b, 'bass', 'F2', W * 2, 0.4, 'B');
+b += W * 2;
+
+// Bars 3-4: Soprano enters with Motif B fragment
+addNote(b, 'bass', 'F2', W, 0.45, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.5, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.45, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.45, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.5, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.45, 'B');
+b += W;
+
+addNote(b, 'bass', 'A2', H, 0.45, 'B');
+addNote(b, 'soprano', 'E5', E, 0.45, 'B');
+addNote(b + E, 'soprano', 'F5', DH, 0.55, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.45, 'B');
+b += W;
+
+// Bars 5-6: Alto enters
+addNote(b, 'bass', 'C3', W, 0.45, 'B');
+addNote(b, 'alto', 'A4', Q, 0.45, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.4, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.4, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.45, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.4, 'B');
+b += W;
+
+addNote(b, 'bass', 'G2', H, 0.45, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.5, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.45, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.45, 'B');
+addNote(b, 'alto', 'G4', E, 0.4, 'B');
+addNote(b + E, 'alto', 'A4', DH + E, 0.5, 'B');
+addNote(b + H, 'bass', 'A2', H, 0.45, 'B');
+addNote(b + H, 'soprano', 'D5', Q, 0.5, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.45, 'B');
+b += W;
+
+// Bars 7-8: Building
+addNote(b, 'bass', 'C3', H, 0.5, 'B');
+addNote(b, 'soprano', 'F5', E, 0.55, 'B');
+addNote(b + E, 'soprano', 'G5', DH + E, 0.6, 'B');
+addNote(b, 'alto', 'B4', Q, 0.45, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.4, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.4, 'B');
+addNote(b + H, 'bass', 'G2', H, 0.5, 'B');
+addNote(b + H, 'alto', 'F4', Q, 0.45, 'B');
+addNote(b + DH, 'alto', 'G4', E, 0.4, 'B');
+b += W;
+
+addNote(b, 'bass', 'A2', H, 0.5, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.55, 'B');
+addNote(b + Q, 'soprano', 'E5', Q, 0.55, 'B');
+addNote(b, 'alto', 'A4', H, 0.5, 'B');
+addNote(b + H, 'bass', 'B2', H, 0.5, 'B');
+addNote(b + H, 'soprano', 'D5', H, 0.6, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.5, 'B');
+addNote(b + DH, 'alto', 'A4', Q, 0.5, 'B');
+b += W;
+
+// Bars 9-12: Full texture Motif B
+addNote(b, 'bass', 'F2', H, 0.55, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.55, 'B');
+addNote(b, 'alto', 'A4', Q, 0.5, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.45, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.45, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.5, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.45, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.45, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.55, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.65, 'B');
+addNote(b, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + H, 'bass', 'F3', H, 0.55, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.7, 'B');
+addNote(b + H, 'alto', 'C5', H, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.55, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.6, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'G2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'D5', Q, 0.65, 'B');
+addNote(b + H, 'alto', 'F4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'A2', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.6, 'B');
+addNote(b + DH, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'A4', E, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'B2', H, 0.55, 'B');
+addNote(b, 'soprano', 'G5', H, 0.7, 'B');
+addNote(b, 'alto', 'B4', H, 0.6, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.6, 'B');
+addNote(b + H, 'soprano', 'F5', H, 0.7, 'B');
+addNote(b + H, 'alto', 'A4', H, 0.6, 'B');
+b += W;
+
+// Bars 13-16: Rising, preparing for storm
+addNote(b, 'bass', 'F2', H, 0.6, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.7, 'B');
+addNote(b + Q, 'soprano', 'G5', E, 0.65, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.65, 'B');
+addNote(b, 'alto', 'C5', Q, 0.6, 'B');
+addNote(b + Q, 'alto', 'B4', E, 0.55, 'B');
+addNote(b + Q + E, 'alto', 'A4', E, 0.55, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.6, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.7, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.65, 'B');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.65, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'A4', E, 0.55, 'B');
+addNote(b + DH + E, 'alto', 'B4', E, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'E3', H, 0.65, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'B5', Q, 0.75, 'B');
+addNote(b, 'alto', 'C5', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'D5', Q, 0.65, 'B');
+addNote(b + H, 'bass', 'A3', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'C6', H, 0.8, 'B');
+addNote(b + H, 'alto', 'E5', H, 0.7, 'B');
+b += W;
+
+addNote(b, 'bass', 'G3', H, 0.65, 'B');
+addNote(b, 'soprano', 'B5', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b, 'alto', 'D5', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'C5', E, 0.6, 'B');
+addNote(b + Q + E, 'alto', 'B4', E, 0.6, 'B');
+addNote(b + H, 'bass', 'D3', Q, 0.65, 'B');
+addNote(b + H, 'soprano', 'F5', Q, 0.75, 'B');
+addNote(b + H, 'alto', 'A4', Q, 0.65, 'B');
+addNote(b + DH, 'bass', 'E3', Q, 0.65, 'B');
+addNote(b + DH, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + DH, 'alto', 'B4', E, 0.6, 'B');
+addNote(b + DH + E, 'alto', 'C5', E, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'F3', H, 0.7, 'B');
+addNote(b, 'soprano', 'B5', H, 0.8, 'B');
+addNote(b, 'alto', 'D5', H, 0.7, 'B');
+addNote(b + H, 'bass', 'G3', Q, 0.7, 'B');
+addNote(b + DH, 'bass', 'A3', Q, 0.75, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.8, 'B');
+addNote(b + H, 'alto', 'C5', Q, 0.7, 'B');
+addNote(b + DH, 'alto', 'B4', Q, 0.7, 'B');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  II. FIRST STORM — Motif A Emerges (Bars 17-32)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("II. First Storm", b);
+
+// Bar 17-18: Motif A bursts in - D minor, dotted rhythms
+addNote(b, 'bass', 'D3', Q, 0.85, 'A');
+addNote(b, 'soprano', 'D5', DE, 0.9, 'A');
+addNote(b + DE, 'soprano', 'E5', S, 0.85, 'A');
+addNote(b + Q, 'soprano', 'F5', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.8, 'A');
+addNote(b + Q + E, 'soprano', 'G5', Q + E, 0.9, 'A');
+addNote(b, 'alto', 'F4', DE, 0.8, 'A');
+addNote(b + DE, 'alto', 'G4', S, 0.75, 'A');
+addNote(b + Q, 'alto', 'A4', E, 0.75, 'A');
+addNote(b + Q + E, 'alto', 'B4', Q + E, 0.8, 'A');
+addNote(b + H, 'bass', 'D2', E, 0.85, 'A');
+addNote(b + H + E, 'bass', 'E2', E, 0.8, 'A');
+addNote(b + DH, 'bass', 'F2', E, 0.8, 'A');
+addNote(b + DH + E, 'bass', 'G2', E, 0.8, 'A');
+addNote(b + H, 'soprano', 'F5', E, 0.85, 'A');
+addNote(b + H + E, 'soprano', 'E5', E, 0.85, 'A');
+addNote(b + DH, 'soprano', 'D5', H, 0.9, 'A');
+addNote(b + H, 'alto', 'A4', E, 0.75, 'A');
+addNote(b + H + E, 'alto', 'G4', E, 0.75, 'A');
+addNote(b + DH, 'alto', 'F4', H, 0.8, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.85, 'A');
+addNote(b, 'soprano', 'C#5', DE, 0.9, 'A');
+addNote(b + DE, 'soprano', 'D5', S, 0.85, 'A');
+addNote(b + Q, 'soprano', 'E5', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'E2', Q, 0.8, 'A');
+addNote(b + Q + E, 'soprano', 'F5', Q + E, 0.9, 'A');
+addNote(b, 'alto', 'E4', DE, 0.8, 'A');
+addNote(b + DE, 'alto', 'F4', S, 0.75, 'A');
+addNote(b + Q, 'alto', 'G4', E, 0.75, 'A');
+addNote(b + Q + E, 'alto', 'A4', Q + E, 0.8, 'A');
+addNote(b + H, 'bass', 'A2', E, 0.85, 'A');
+addNote(b + H + E, 'bass', 'B2', E, 0.8, 'A');
+addNote(b + DH, 'bass', 'C#3', E, 0.8, 'A');
+addNote(b + DH + E, 'bass', 'D3', E, 0.8, 'A');
+addNote(b + H, 'soprano', 'E5', E, 0.85, 'A');
+addNote(b + H + E, 'soprano', 'D5', E, 0.85, 'A');
+addNote(b + DH, 'soprano', 'C#5', H, 0.9, 'A');
+addNote(b + H, 'alto', 'G4', E, 0.75, 'A');
+addNote(b + H + E, 'alto', 'F4', E, 0.75, 'A');
+addNote(b + DH, 'alto', 'E4', H, 0.8, 'A');
+b += W;
+
+// Bars 19-20: Continuation
+addNote(b, 'bass', 'D3', Q, 0.85, 'A');
+addNote(b, 'soprano', 'D5', Q, 0.9, 'A');
+addNote(b + Q, 'bass', 'D2', Q, 0.85, 'A');
+addNote(b + Q, 'soprano', 'A5', E, 0.85, 'A');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.85, 'A');
+addNote(b, 'alto', 'F4', Q, 0.8, 'A');
+addNote(b + Q, 'alto', 'F4', E, 0.75, 'A');
+addNote(b + Q + E, 'alto', 'E4', E, 0.75, 'A');
+addNote(b + H, 'bass', 'G2', E, 0.85, 'A');
+addNote(b + H + E, 'bass', 'A2', E, 0.8, 'A');
+addNote(b + DH, 'bass', 'B2', E, 0.8, 'A');
+addNote(b + DH + E, 'bass', 'C3', E, 0.8, 'A');
+addNote(b + H, 'soprano', 'F5', E, 0.85, 'A');
+addNote(b + H + E, 'soprano', 'E5', E, 0.85, 'A');
+addNote(b + DH, 'soprano', 'D5', E, 0.85, 'A');
+addNote(b + DH + E, 'soprano', 'C#5', E, 0.85, 'A');
+addNote(b + H, 'alto', 'D4', E, 0.75, 'A');
+addNote(b + H + E, 'alto', 'C#4', E, 0.75, 'A');
+addNote(b + DH, 'alto', 'D4', E, 0.75, 'A');
+addNote(b + DH + E, 'alto', 'E4', E, 0.75, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.85, 'A');
+addNote(b, 'soprano', 'C#5', E, 0.9, 'A');
+addNote(b + E, 'soprano', 'D5', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.8, 'A');
+addNote(b + Q, 'soprano', 'E5', Q, 0.9, 'A');
+addNote(b, 'alto', 'E4', E, 0.8, 'A');
+addNote(b + E, 'alto', 'F4', E, 0.75, 'A');
+addNote(b + Q, 'alto', 'G4', Q, 0.8, 'A');
+addNote(b + H, 'bass', 'D3', H, 0.9, 'A');
+addNote(b + H, 'soprano', 'D5', E, 0.85, 'A');
+addNote(b + H + E, 'soprano', 'C#5', E, 0.85, 'A');
+addNote(b + DH, 'soprano', 'D5', Q, 0.9, 'A');
+addNote(b + H, 'alto', 'F4', E, 0.75, 'A');
+addNote(b + H + E, 'alto', 'E4', E, 0.75, 'A');
+addNote(b + DH, 'alto', 'F4', Q, 0.8, 'A');
+b += W;
+
+// Bars 21-24: Intensification
+addNote(b, 'bass', 'D3', Q, 0.9, 'A');
+addNote(b, 'soprano', 'D5', DE, 0.95, 'A');
+addNote(b + DE, 'soprano', 'E5', S, 0.9, 'A');
+addNote(b + Q, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.85, 'A');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.9, 'A');
+addNote(b, 'alto', 'A4', DE, 0.85, 'A');
+addNote(b + DE, 'alto', 'B4', S, 0.8, 'A');
+addNote(b + Q, 'alto', 'C5', E, 0.8, 'A');
+addNote(b + Q + E, 'alto', 'D5', E, 0.85, 'A');
+addNote(b + H, 'bass', 'D2', E, 0.9, 'A');
+addNote(b + H + E, 'bass', 'E2', E, 0.85, 'A');
+addNote(b + DH, 'bass', 'F2', E, 0.85, 'A');
+addNote(b + DH + E, 'bass', 'G2', E, 0.85, 'A');
+addNote(b + H, 'soprano', 'A5', E, 0.9, 'A');
+addNote(b + H + E, 'soprano', 'B5', E, 0.9, 'A');
+addNote(b + DH, 'soprano', 'A5', Q, 0.95, 'A');
+addNote(b + H, 'alto', 'C5', E, 0.8, 'A');
+addNote(b + H + E, 'alto', 'D5', E, 0.8, 'A');
+addNote(b + DH, 'alto', 'C5', Q, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'G2', Q, 0.9, 'A');
+addNote(b, 'soprano', 'G5', DE, 0.95, 'A');
+addNote(b + DE, 'soprano', 'A5', S, 0.9, 'A');
+addNote(b + Q, 'soprano', 'B5', E, 0.9, 'A');
+addNote(b + Q, 'bass', 'D3', Q, 0.85, 'A');
+addNote(b + Q + E, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b, 'alto', 'B4', DE, 0.85, 'A');
+addNote(b + DE, 'alto', 'C5', S, 0.8, 'A');
+addNote(b + Q, 'alto', 'D5', E, 0.8, 'A');
+addNote(b + Q + E, 'alto', 'E5', E, 0.85, 'A');
+addNote(b + H, 'bass', 'G2', E, 0.9, 'A');
+addNote(b + H + E, 'bass', 'A2', E, 0.85, 'A');
+addNote(b + DH, 'bass', 'B2', E, 0.85, 'A');
+addNote(b + DH + E, 'bass', 'C3', E, 0.85, 'A');
+addNote(b + H, 'soprano', 'B5', E, 0.9, 'A');
+addNote(b + H + E, 'soprano', 'A5', E, 0.9, 'A');
+addNote(b + DH, 'soprano', 'G5', Q, 0.95, 'A');
+addNote(b + H, 'alto', 'D5', E, 0.8, 'A');
+addNote(b + H + E, 'alto', 'C5', E, 0.8, 'A');
+addNote(b + DH, 'alto', 'B4', Q, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'F2', Q, 0.9, 'A');
+addNote(b, 'soprano', 'F5', Q, 0.95, 'A');
+addNote(b + Q, 'bass', 'C3', Q, 0.85, 'A');
+addNote(b + Q, 'soprano', 'D6', E, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'C6', E, 0.9, 'A');
+addNote(b, 'alto', 'A4', Q, 0.85, 'A');
+addNote(b + Q, 'alto', 'A4', E, 0.8, 'A');
+addNote(b + Q + E, 'alto', 'G4', E, 0.8, 'A');
+addNote(b + H, 'bass', 'F2', E, 0.9, 'A');
+addNote(b + H + E, 'bass', 'G2', E, 0.85, 'A');
+addNote(b + DH, 'bass', 'A2', E, 0.85, 'A');
+addNote(b + DH + E, 'bass', 'B2', E, 0.85, 'A');
+addNote(b + H, 'soprano', 'B5', E, 0.9, 'A');
+addNote(b + H + E, 'soprano', 'A5', E, 0.9, 'A');
+addNote(b + DH, 'soprano', 'G5', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + H, 'alto', 'F4', E, 0.8, 'A');
+addNote(b + H + E, 'alto', 'E4', E, 0.8, 'A');
+addNote(b + DH, 'alto', 'D4', E, 0.8, 'A');
+addNote(b + DH + E, 'alto', 'C4', E, 0.8, 'A');
+b += W;
+
+addNote(b, 'bass', 'C3', Q, 0.9, 'A');
+addNote(b, 'soprano', 'E5', E, 0.95, 'A');
+addNote(b + E, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + Q, 'bass', 'G2', Q, 0.85, 'A');
+addNote(b + Q, 'soprano', 'G5', Q, 0.95, 'A');
+addNote(b, 'alto', 'C4', E, 0.85, 'A');
+addNote(b + E, 'alto', 'D4', E, 0.8, 'A');
+addNote(b + Q, 'alto', 'E4', Q, 0.85, 'A');
+addNote(b + H, 'bass', 'C3', H, 0.9, 'A');
+addNote(b + H, 'soprano', 'G5', E, 0.9, 'A');
+addNote(b + H + E, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + DH, 'soprano', 'G5', Q, 0.95, 'A');
+addNote(b + H, 'alto', 'D4', E, 0.8, 'A');
+addNote(b + H + E, 'alto', 'C4', E, 0.8, 'A');
+addNote(b + DH, 'alto', 'D4', Q, 0.85, 'A');
+b += W;
+
+// Bars 25-28: Peak intensity
+addNote(b, 'bass', 'F2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'A5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'B5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + Q, 'bass', 'C3', Q, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b, 'alto', 'F4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'G4', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'A4', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'B4', E, 0.9, 'A');
+addNote(b + H, 'bass', 'F2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'G2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'A2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'B2', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'B4', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'A4', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'G4', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'F4', E, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'C3', Q, 0.95, 'A');
+addNote(b, 'soprano', 'G5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'A5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + Q, 'bass', 'G2', Q, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b, 'alto', 'E4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'F4', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'G4', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'A4', E, 0.9, 'A');
+addNote(b + H, 'bass', 'C2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'D2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'E2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'F2', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'A4', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'G4', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'F4', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'E4', E, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'D3', Q, 0.95, 'A');
+addNote(b, 'soprano', 'F5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'G5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b, 'alto', 'D4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'E4', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'F4', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'G4', E, 0.9, 'A');
+addNote(b + H, 'bass', 'D2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'E2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'F2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'G2', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'G4', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'F4', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'E4', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'D4', E, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'E5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'F5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b + Q, 'bass', 'E2', Q, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b, 'alto', 'C#4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'D4', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'E4', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'F4', E, 0.9, 'A');
+addNote(b + H, 'bass', 'A2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'B2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'C#3', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'D3', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'F5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'F4', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'E4', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'D4', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'C#4', E, 0.85, 'A');
+b += W;
+
+// Bars 29-32: Motif A subsides
+addNote(b, 'bass', 'D3', Q, 0.9, 'A');
+addNote(b, 'soprano', 'D5', Q, 0.95, 'A');
+addNote(b + Q, 'soprano', 'E5', E, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b, 'alto', 'D4', Q, 0.85, 'A');
+addNote(b + Q, 'alto', 'C#4', E, 0.8, 'A');
+addNote(b + Q + E, 'alto', 'D4', E, 0.8, 'A');
+addNote(b + Q, 'bass', 'C#3', E, 0.85, 'A');
+addNote(b + Q + E, 'bass', 'D3', E, 0.85, 'A');
+addNote(b + H, 'bass', 'E3', Q, 0.85, 'A');
+addNote(b + H, 'soprano', 'G5', Q, 0.9, 'A');
+addNote(b + H, 'alto', 'E4', Q, 0.8, 'A');
+addNote(b + DH, 'bass', 'F3', Q, 0.85, 'A');
+addNote(b + DH, 'soprano', 'A5', Q, 0.9, 'A');
+addNote(b + DH, 'alto', 'F4', Q, 0.8, 'A');
+b += W;
+
+addNote(b, 'bass', 'B2', Q, 0.85, 'A');
+addNote(b, 'soprano', 'B5', Q, 0.9, 'A');
+addNote(b, 'alto', 'G4', Q, 0.8, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.8, 'A');
+addNote(b + Q, 'soprano', 'A5', Q, 0.85, 'A');
+addNote(b + Q, 'alto', 'F4', Q, 0.75, 'A');
+addNote(b + H, 'bass', 'G2', Q, 0.8, 'A');
+addNote(b + H, 'soprano', 'G5', Q, 0.85, 'A');
+addNote(b + H, 'alto', 'E4', Q, 0.75, 'A');
+addNote(b + DH, 'bass', 'F2', Q, 0.75, 'A');
+addNote(b + DH, 'soprano', 'F5', Q, 0.8, 'A');
+addNote(b + DH, 'alto', 'D4', Q, 0.7, 'A');
+b += W;
+
+addNote(b, 'bass', 'E2', Q, 0.75, 'A');
+addNote(b, 'soprano', 'E5', Q, 0.8, 'A');
+addNote(b, 'alto', 'C#4', Q, 0.7, 'A');
+addNote(b + Q, 'bass', 'D2', Q, 0.7, 'A');
+addNote(b + Q, 'soprano', 'D5', Q, 0.75, 'A');
+addNote(b + Q, 'alto', 'D4', Q, 0.65, 'A');
+addNote(b + H, 'bass', 'C#2', Q, 0.7, 'A');
+addNote(b + H, 'soprano', 'C#5', Q, 0.75, 'A');
+addNote(b + H, 'alto', 'E4', Q, 0.65, 'A');
+addNote(b + DH, 'bass', 'D2', Q, 0.65, 'A');
+addNote(b + DH, 'soprano', 'D5', Q, 0.7, 'A');
+addNote(b + DH, 'alto', 'F4', Q, 0.6, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.65, 'A');
+addNote(b, 'soprano', 'E5', H, 0.7, 'A');
+addNote(b, 'alto', 'G4', H, 0.6, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.6, 'A');
+addNote(b + H, 'bass', 'D2', H, 0.65, 'A');
+addNote(b + H, 'soprano', 'D5', H, 0.7, 'A');
+addNote(b + H, 'alto', 'F4', H, 0.6, 'A');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  III. RESPITE — Motif B Returns (Bars 33-48)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("III. Respite", b);
+
+// Motif B gently returns, soothing after the storm
+addNote(b, 'bass', 'F2', H, 0.5, 'B');
+addNote(b, 'alto', 'A4', Q, 0.5, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.45, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.45, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.5, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.5, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.5, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.45, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.45, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.5, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.55, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.5, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.5, 'B');
+addNote(b, 'alto', 'A4', H, 0.5, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.55, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.5, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.5, 'B');
+addNote(b + H, 'alto', 'G4', H, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.55, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.6, 'B');
+addNote(b, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.65, 'B');
+addNote(b + H, 'alto', 'C5', H, 0.6, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.55, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.6, 'B');
+addNote(b + H, 'soprano', 'D5', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.55, 'B');
+addNote(b + H, 'alto', 'F4', Q, 0.55, 'B');
+addNote(b + DH, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'A4', E, 0.5, 'B');
+b += W;
+
+// Continue Motif B - expanding
+addNote(b, 'bass', 'C3', H, 0.55, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'G2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'D5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'F4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'A2', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.55, 'B');
+addNote(b + DH, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'A4', E, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'B2', H, 0.55, 'B');
+addNote(b, 'soprano', 'G5', H, 0.65, 'B');
+addNote(b, 'alto', 'B4', H, 0.6, 'B');
+addNote(b + H, 'bass', 'F2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'F5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'E5', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'G4', Q, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.6, 'B');
+addNote(b, 'soprano', 'D5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'C5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'B4', E, 0.55, 'B');
+addNote(b, 'alto', 'F4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'E4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'D4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.6, 'B');
+addNote(b + H, 'soprano', 'A4', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'B4', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'C5', E, 0.55, 'B');
+addNote(b + H, 'alto', 'C4', Q, 0.55, 'B');
+addNote(b + DH, 'alto', 'D4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'E4', E, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.6, 'B');
+addNote(b, 'soprano', 'D5', H, 0.65, 'B');
+addNote(b, 'alto', 'F4', H, 0.6, 'B');
+addNote(b + H, 'bass', 'B2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'D5', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'F4', Q, 0.55, 'B');
+b += W;
+
+// Building gently
+addNote(b, 'bass', 'F2', H, 0.6, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.6, 'B');
+addNote(b, 'alto', 'A4', Q, 0.6, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.55, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.55, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.6, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.65, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.6, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.6, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.55, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.6, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.65, 'B');
+addNote(b, 'alto', 'A4', Q, 0.6, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.6, 'B');
+addNote(b + H, 'bass', 'F3', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'A5', Q, 0.7, 'B');
+addNote(b + DH, 'soprano', 'B5', Q, 0.7, 'B');
+addNote(b + H, 'alto', 'C5', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'D5', Q, 0.65, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.65, 'B');
+addNote(b, 'soprano', 'C6', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'B5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b, 'alto', 'E5', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'D5', E, 0.6, 'B');
+addNote(b + Q + E, 'alto', 'C5', E, 0.6, 'B');
+addNote(b + H, 'bass', 'G2', Q, 0.65, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.75, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.65, 'B');
+addNote(b + DH, 'bass', 'A2', Q, 0.65, 'B');
+addNote(b + DH, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'B5', E, 0.7, 'B');
+addNote(b + DH, 'alto', 'C5', E, 0.6, 'B');
+addNote(b + DH + E, 'alto', 'D5', E, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'B2', H, 0.65, 'B');
+addNote(b, 'soprano', 'C6', H, 0.75, 'B');
+addNote(b, 'alto', 'E5', H, 0.7, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.75, 'B');
+addNote(b + H, 'alto', 'C5', H, 0.7, 'B');
+b += W;
+
+// Bars 45-48: Motif B at height before development
+addNote(b, 'bass', 'F2', H, 0.7, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.7, 'B');
+addNote(b, 'alto', 'C5', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'B4', E, 0.6, 'B');
+addNote(b + Q + E, 'alto', 'A4', E, 0.6, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.75, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'A4', E, 0.6, 'B');
+addNote(b + DH + E, 'alto', 'B4', E, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.7, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'B5', Q, 0.75, 'B');
+addNote(b, 'alto', 'C5', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'D5', Q, 0.65, 'B');
+addNote(b + H, 'bass', 'F3', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'C6', H, 0.8, 'B');
+addNote(b + H, 'alto', 'E5', H, 0.7, 'B');
+b += W;
+
+addNote(b, 'bass', 'G3', H, 0.7, 'B');
+addNote(b, 'soprano', 'B5', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b, 'alto', 'D5', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'C5', E, 0.6, 'B');
+addNote(b + Q + E, 'alto', 'B4', E, 0.6, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'F5', Q, 0.75, 'B');
+addNote(b + DH, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + H, 'alto', 'A4', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'B4', E, 0.6, 'B');
+addNote(b + DH + E, 'alto', 'C5', E, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', W, 0.75, 'B');
+addNote(b, 'soprano', 'F5', W, 0.8, 'B');
+addNote(b, 'alto', 'A4', W, 0.7, 'B');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  IV. DEVELOPMENT — Motifs Interweave (Bars 49-80)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("IV. Development", b);
+
+// Motif A enters in soprano while B continues in lower voices
+addNote(b, 'bass', 'D2', Q, 0.7, 'A');
+addNote(b, 'soprano', 'D5', DE, 0.8, 'A');
+addNote(b + DE, 'soprano', 'E5', S, 0.75, 'A');
+addNote(b + Q, 'soprano', 'F5', E, 0.75, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.65, 'B');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.75, 'A');
+addNote(b, 'alto', 'F4', Q, 0.6, 'B');
+addNote(b + Q, 'alto', 'E4', E, 0.55, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.55, 'B');
+addNote(b + H, 'bass', 'D2', E, 0.7, 'A');
+addNote(b + H + E, 'bass', 'E2', E, 0.65, 'A');
+addNote(b + DH, 'bass', 'F2', E, 0.65, 'A');
+addNote(b + DH + E, 'bass', 'G2', E, 0.65, 'A');
+addNote(b + H, 'soprano', 'G5', E, 0.75, 'A');
+addNote(b + H + E, 'soprano', 'F5', E, 0.75, 'A');
+addNote(b + DH, 'soprano', 'E5', E, 0.75, 'A');
+addNote(b + DH + E, 'soprano', 'D5', E, 0.75, 'A');
+addNote(b + H, 'alto', 'G4', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'A4', Q, 0.6, 'B');
+b += W;
+
+// Motif B answers in soprano
+addNote(b, 'bass', 'F2', H, 0.65, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.7, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.65, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.65, 'B');
+addNote(b, 'alto', 'A4', Q, 0.6, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.55, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.55, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.65, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.7, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.6, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.65, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.65, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.65, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.55, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.65, 'B');
+addNote(b, 'soprano', 'F5', H, 0.7, 'B');
+addNote(b, 'alto', 'A4', H, 0.6, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'F5', H, 0.75, 'B');
+addNote(b + H, 'alto', 'A4', H, 0.65, 'B');
+b += W;
+
+// Fragmentation - motifs alternate rapidly
+addNote(b, 'bass', 'D3', Q, 0.75, 'A');
+addNote(b, 'soprano', 'D5', DE, 0.8, 'A');
+addNote(b + DE, 'soprano', 'E5', S, 0.75, 'A');
+addNote(b + Q, 'soprano', 'F5', E, 0.75, 'A');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.75, 'A');
+addNote(b, 'alto', 'F4', Q, 0.65, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.7, 'A');
+addNote(b + Q, 'alto', 'A4', Q, 0.65, 'A');
+addNote(b + H, 'bass', 'F2', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'F5', Q, 0.7, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.65, 'B');
+addNote(b + DH + E, 'soprano', 'D5', E, 0.65, 'B');
+addNote(b + H, 'alto', 'A4', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'G4', Q, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.75, 'A');
+addNote(b, 'soprano', 'C#5', DE, 0.8, 'A');
+addNote(b + DE, 'soprano', 'D5', S, 0.75, 'A');
+addNote(b + Q, 'soprano', 'E5', E, 0.75, 'A');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.75, 'A');
+addNote(b, 'alto', 'E4', Q, 0.65, 'A');
+addNote(b + Q, 'bass', 'E2', Q, 0.7, 'A');
+addNote(b + Q, 'alto', 'G4', Q, 0.65, 'A');
+addNote(b + H, 'bass', 'C3', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.7, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.65, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.65, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'A4', Q, 0.55, 'B');
+b += W;
+
+// Synthesis begins - both motifs merge
+addNote(b, 'bass', 'D3', Q, 0.75, 'A');
+addNote(b, 'soprano', 'D5', E, 0.8, 'A');
+addNote(b + E, 'soprano', 'E5', S, 0.75, 'A');
+addNote(b + E + S, 'soprano', 'F5', S, 0.75, 'A');
+addNote(b + Q, 'soprano', 'G5', E, 0.75, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.7, 'B');
+addNote(b, 'alto', 'F4', Q, 0.7, 'A');
+addNote(b + Q, 'alto', 'E4', E, 0.6, 'B');
+addNote(b + Q + E, 'alto', 'D4', E, 0.6, 'B');
+addNote(b + Q, 'bass', 'A2', Q, 0.7, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.75, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + H, 'alto', 'C4', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'D4', E, 0.55, 'B');
+addNote(b + DH + E, 'alto', 'E4', E, 0.55, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.75, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.8, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.8, 'B');
+addNote(b, 'alto', 'F4', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'E4', Q, 0.65, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.7, 'A');
+addNote(b + H, 'soprano', 'A5', DE, 0.85, 'A');
+addNote(b + H + DE, 'soprano', 'B5', S, 0.8, 'A');
+addNote(b + DH, 'soprano', 'C6', E, 0.8, 'A');
+addNote(b + DH + E, 'soprano', 'D6', E, 0.8, 'A');
+addNote(b + H, 'alto', 'F4', Q, 0.7, 'A');
+addNote(b + DH, 'alto', 'G4', Q, 0.7, 'A');
+addNote(b + DH, 'bass', 'C3', Q, 0.7, 'A');
+b += W;
+
+addNote(b, 'bass', 'D3', Q, 0.8, 'A');
+addNote(b, 'soprano', 'D6', E, 0.9, 'A');
+addNote(b + E, 'soprano', 'C6', E, 0.85, 'A');
+addNote(b + Q, 'soprano', 'B5', E, 0.85, 'A');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.85, 'A');
+addNote(b, 'alto', 'A4', Q, 0.75, 'A');
+addNote(b + Q, 'alto', 'G4', Q, 0.7, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.75, 'A');
+addNote(b + H, 'bass', 'G2', H, 0.75, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.85, 'B');
+addNote(b + DH, 'soprano', 'A5', E, 0.8, 'B');
+addNote(b + DH + E, 'soprano', 'B5', E, 0.8, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.6, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.75, 'B');
+addNote(b, 'soprano', 'C6', H, 0.9, 'B');
+addNote(b, 'alto', 'A4', H, 0.7, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.8, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.85, 'B');
+addNote(b + H, 'alto', 'F4', H, 0.7, 'B');
+b += W;
+
+// Climactic interweaving - both motifs simultaneously
+addNote(b, 'bass', 'D3', Q, 0.85, 'A');
+addNote(b, 'soprano', 'D5', DE, 0.9, 'A');
+addNote(b + DE, 'soprano', 'E5', S, 0.85, 'A');
+addNote(b + Q, 'soprano', 'F5', Q, 0.85, 'B');
+addNote(b, 'alto', 'F4', Q, 0.75, 'B');
+addNote(b + Q, 'alto', 'E4', E, 0.7, 'B');
+addNote(b + Q + E, 'alto', 'D4', E, 0.7, 'B');
+addNote(b + Q, 'bass', 'A2', Q, 0.8, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.8, 'B');
+addNote(b + H, 'bass', 'D2', Q, 0.85, 'A');
+addNote(b + H, 'soprano', 'D5', Q, 0.85, 'A');
+addNote(b + H, 'alto', 'C4', Q, 0.7, 'B');
+addNote(b + DH, 'bass', 'E2', Q, 0.8, 'A');
+addNote(b + DH, 'soprano', 'E5', E, 0.85, 'A');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'D4', Q, 0.7, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', Q, 0.85, 'A');
+addNote(b, 'soprano', 'E5', DE, 0.9, 'A');
+addNote(b + DE, 'soprano', 'F5', S, 0.85, 'A');
+addNote(b + Q, 'soprano', 'G5', Q, 0.9, 'B');
+addNote(b, 'alto', 'G4', Q, 0.75, 'B');
+addNote(b + Q, 'alto', 'F4', E, 0.7, 'B');
+addNote(b + Q + E, 'alto', 'E4', E, 0.7, 'B');
+addNote(b + Q, 'bass', 'C3', Q, 0.8, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.85, 'B');
+addNote(b + H, 'bass', 'E2', Q, 0.85, 'A');
+addNote(b + H, 'soprano', 'E5', Q, 0.9, 'A');
+addNote(b + H, 'alto', 'D4', Q, 0.7, 'B');
+addNote(b + DH, 'bass', 'F2', Q, 0.8, 'A');
+addNote(b + DH, 'soprano', 'F5', E, 0.85, 'A');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'E4', Q, 0.7, 'B');
+b += W;
+
+addNote(b, 'bass', 'G2', Q, 0.85, 'A');
+addNote(b, 'soprano', 'F5', DE, 0.9, 'A');
+addNote(b + DE, 'soprano', 'G5', S, 0.85, 'A');
+addNote(b + Q, 'soprano', 'A5', Q, 0.9, 'B');
+addNote(b, 'alto', 'A4', Q, 0.75, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.7, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.7, 'B');
+addNote(b + Q, 'bass', 'D3', Q, 0.8, 'B');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.85, 'B');
+addNote(b + H, 'bass', 'F2', Q, 0.85, 'A');
+addNote(b + H, 'soprano', 'F5', Q, 0.9, 'A');
+addNote(b + H, 'alto', 'E4', Q, 0.7, 'B');
+addNote(b + DH, 'bass', 'G2', Q, 0.8, 'A');
+addNote(b + DH, 'soprano', 'G5', E, 0.85, 'A');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'F4', Q, 0.7, 'B');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.85, 'A');
+addNote(b, 'soprano', 'G5', DE, 0.9, 'A');
+addNote(b + DE, 'soprano', 'A5', S, 0.85, 'A');
+addNote(b + Q, 'soprano', 'B5', Q, 0.95, 'B');
+addNote(b, 'alto', 'B4', Q, 0.75, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.7, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.7, 'B');
+addNote(b + Q, 'bass', 'E3', Q, 0.8, 'B');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.9, 'B');
+addNote(b + H, 'bass', 'G2', Q, 0.85, 'A');
+addNote(b + H, 'soprano', 'G5', Q, 0.9, 'A');
+addNote(b + H, 'alto', 'F4', Q, 0.7, 'B');
+addNote(b + DH, 'bass', 'A2', Q, 0.8, 'A');
+addNote(b + DH, 'soprano', 'A5', E, 0.85, 'A');
+addNote(b + DH + E, 'soprano', 'B5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'G4', Q, 0.7, 'B');
+b += W;
+
+// Rising sequence
+addNote(b, 'bass', 'B2', Q, 0.9, 'A');
+addNote(b, 'soprano', 'A5', DE, 0.95, 'A');
+addNote(b + DE, 'soprano', 'B5', S, 0.9, 'A');
+addNote(b + Q, 'soprano', 'C6', E, 0.9, 'A');
+addNote(b + Q + E, 'soprano', 'D6', E, 0.9, 'A');
+addNote(b, 'alto', 'D5', Q, 0.8, 'A');
+addNote(b + Q, 'alto', 'E5', Q, 0.8, 'A');
+addNote(b + Q, 'bass', 'F3', Q, 0.85, 'A');
+addNote(b + H, 'bass', 'G3', Q, 0.85, 'A');
+addNote(b + H, 'soprano', 'D6', E, 0.9, 'A');
+addNote(b + H + E, 'soprano', 'C6', E, 0.9, 'A');
+addNote(b + DH, 'soprano', 'B5', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.9, 'A');
+addNote(b + H, 'alto', 'F5', Q, 0.8, 'A');
+addNote(b + DH, 'alto', 'E5', Q, 0.8, 'A');
+addNote(b + DH, 'bass', 'A3', Q, 0.85, 'A');
+b += W;
+
+// Gentle response
+addNote(b, 'bass', 'F3', H, 0.8, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.85, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.8, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.8, 'B');
+addNote(b, 'alto', 'D5', Q, 0.75, 'B');
+addNote(b + Q, 'alto', 'C5', E, 0.7, 'B');
+addNote(b + Q + E, 'alto', 'B4', E, 0.7, 'B');
+addNote(b + H, 'bass', 'A3', Q, 0.75, 'B');
+addNote(b + H, 'soprano', 'D5', Q, 0.85, 'B');
+addNote(b + H, 'alto', 'A4', Q, 0.75, 'B');
+addNote(b + DH, 'bass', 'B3', Q, 0.75, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.8, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.8, 'B');
+addNote(b + DH, 'alto', 'B4', E, 0.7, 'B');
+addNote(b + DH + E, 'alto', 'C5', E, 0.7, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.8, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.85, 'B');
+addNote(b + Q, 'soprano', 'A5', Q, 0.85, 'B');
+addNote(b, 'alto', 'D5', Q, 0.75, 'B');
+addNote(b + Q, 'alto', 'E5', Q, 0.75, 'B');
+addNote(b + H, 'bass', 'G2', H, 0.8, 'B');
+addNote(b + H, 'soprano', 'B5', Q, 0.9, 'B');
+addNote(b + DH, 'soprano', 'C6', Q, 0.9, 'B');
+addNote(b + H, 'alto', 'F5', Q, 0.8, 'B');
+addNote(b + DH, 'alto', 'G5', Q, 0.8, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', W, 0.85, 'B');
+addNote(b, 'soprano', 'D6', W, 0.95, 'B');
+addNote(b, 'alto', 'A5', W, 0.85, 'B');
+b += W;
+
+// Transformation - Motif A becomes gentle
+addNote(b, 'bass', 'F2', H, 0.7, 'B');
+addNote(b, 'soprano', 'F5', DE, 0.75, 'B');
+addNote(b + DE, 'soprano', 'G5', S, 0.7, 'B');
+addNote(b + Q, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'B5', E, 0.7, 'B');
+addNote(b, 'alto', 'A4', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'C5', Q, 0.65, 'B');
+addNote(b + H, 'bass', 'A2', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'B5', E, 0.7, 'B');
+addNote(b + H + E, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + DH, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.7, 'B');
+addNote(b + H, 'alto', 'D5', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'C5', Q, 0.65, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.7, 'B');
+addNote(b, 'soprano', 'E5', DE, 0.75, 'B');
+addNote(b + DE, 'soprano', 'F5', S, 0.7, 'B');
+addNote(b + Q, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b, 'alto', 'G4', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.65, 'B');
+addNote(b + H, 'bass', 'G2', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'A5', E, 0.7, 'B');
+addNote(b + H + E, 'soprano', 'G5', E, 0.7, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.7, 'B');
+addNote(b + H, 'alto', 'C5', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'B4', Q, 0.65, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.7, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.75, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.7, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.7, 'B');
+addNote(b, 'alto', 'A4', Q, 0.65, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.6, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.6, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.7, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.75, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.7, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.7, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.65, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.6, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', W, 0.75, 'B');
+addNote(b, 'soprano', 'F5', W, 0.8, 'B');
+addNote(b, 'alto', 'A4', W, 0.7, 'B');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  V. CLIMAX — The Struggle (Bars 81-104)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("V. Climax", b);
+
+// Motif A returns at maximum intensity
+addNote(b, 'bass', 'D2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'D5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'E5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'F5', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b, 'alto', 'F4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'G4', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'A4', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'B4', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'D2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'E2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'F2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'G2', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b + H, 'alto', 'C5', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'D5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'E5', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'F5', E, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'D6', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'E6', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'G6', E, 0.95, 'A');
+addNote(b, 'alto', 'F5', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'G5', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'A5', Q, 0.85, 'A');
+addNote(b + Q, 'bass', 'E3', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'A2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'B2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'C#3', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'D3', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'G6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'E6', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b + H, 'alto', 'B5', Q, 0.85, 'A');
+addNote(b + DH, 'alto', 'A5', Q, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'D3', Q, 0.95, 'A');
+addNote(b, 'soprano', 'C#6', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'D6', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'E6', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b, 'alto', 'E5', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'F5', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'G5', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'A5', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'D2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'E2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'F2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'G2', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'G6', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'A6', H, 1.0, 'A');
+addNote(b + H, 'alto', 'A5', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'B5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'C6', H, 0.9, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'A6', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'B6', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b, 'alto', 'C6', Q, 0.9, 'A');
+addNote(b + Q, 'alto', 'D6', Q, 0.9, 'A');
+addNote(b + Q, 'bass', 'E2', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'D3', H, 1.0, 'A');
+addNote(b + H, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'F5', Q, 0.85, 'A');
+addNote(b + DH, 'alto', 'E5', Q, 0.85, 'A');
+b += W;
+
+// Descending fury
+addNote(b, 'bass', 'G2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'G5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'A5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b, 'alto', 'B4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'C5', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'D5', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'E5', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'D3', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'G2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'A2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'B2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'C3', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'C6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'E5', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'D5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'C5', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'B4', E, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'F2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'F5', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'G5', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b, 'alto', 'A4', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'B4', S, 0.85, 'A');
+addNote(b + Q, 'alto', 'C5', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'D5', E, 0.85, 'A');
+addNote(b + Q, 'bass', 'C3', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'F2', E, 0.95, 'A');
+addNote(b + H + E, 'bass', 'G2', E, 0.9, 'A');
+addNote(b + DH, 'bass', 'A2', E, 0.9, 'A');
+addNote(b + DH + E, 'bass', 'B2', E, 0.9, 'A');
+addNote(b + H, 'soprano', 'B5', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'A5', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'G5', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.95, 'A');
+addNote(b + H, 'alto', 'D5', E, 0.85, 'A');
+addNote(b + H + E, 'alto', 'C5', E, 0.85, 'A');
+addNote(b + DH, 'alto', 'B4', E, 0.85, 'A');
+addNote(b + DH + E, 'alto', 'A4', E, 0.85, 'A');
+b += W;
+
+// Motif B tries to emerge
+addNote(b, 'bass', 'F2', H, 0.85, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.9, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.85, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.85, 'B');
+addNote(b, 'alto', 'A4', Q, 0.8, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.75, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.75, 'B');
+addNote(b + H, 'bass', 'D3', Q, 0.9, 'A');
+addNote(b + H, 'soprano', 'D5', DE, 0.95, 'A');
+addNote(b + H + DE, 'soprano', 'E5', S, 0.9, 'A');
+addNote(b + DH, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.9, 'A');
+addNote(b + H, 'alto', 'F4', Q, 0.85, 'A');
+addNote(b + DH, 'alto', 'A4', Q, 0.85, 'A');
+addNote(b + DH, 'bass', 'A2', Q, 0.85, 'A');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.85, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.9, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.85, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.85, 'B');
+addNote(b, 'alto', 'B4', Q, 0.8, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.75, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.75, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.9, 'A');
+addNote(b + H, 'soprano', 'C#5', DE, 0.95, 'A');
+addNote(b + H + DE, 'soprano', 'D5', S, 0.9, 'A');
+addNote(b + DH, 'soprano', 'E5', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + H, 'alto', 'E4', Q, 0.85, 'A');
+addNote(b + DH, 'alto', 'G4', Q, 0.85, 'A');
+addNote(b + DH, 'bass', 'E2', Q, 0.85, 'A');
+b += W;
+
+// Final conflict - both at once
+addNote(b, 'bass', 'D3', Q, 0.95, 'A');
+addNote(b, 'soprano', 'F5', Q, 0.95, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.9, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.9, 'B');
+addNote(b, 'alto', 'D5', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'E5', S, 0.85, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.9, 'A');
+addNote(b + Q, 'alto', 'F5', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'G5', E, 0.85, 'A');
+addNote(b + H, 'bass', 'D2', Q, 0.95, 'A');
+addNote(b + H, 'soprano', 'D5', DE, 0.95, 'A');
+addNote(b + H + DE, 'soprano', 'E5', S, 0.9, 'A');
+addNote(b + DH, 'soprano', 'F5', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.9, 'A');
+addNote(b + H, 'alto', 'A4', Q, 0.85, 'B');
+addNote(b + DH, 'alto', 'G4', Q, 0.8, 'B');
+addNote(b + DH, 'bass', 'E2', Q, 0.9, 'A');
+b += W;
+
+addNote(b, 'bass', 'F2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'G5', Q, 0.95, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.9, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.9, 'B');
+addNote(b, 'alto', 'E5', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'F5', S, 0.85, 'A');
+addNote(b + Q, 'bass', 'C3', Q, 0.9, 'A');
+addNote(b + Q, 'alto', 'G5', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'A5', E, 0.85, 'A');
+addNote(b + H, 'bass', 'E2', Q, 0.95, 'A');
+addNote(b + H, 'soprano', 'E5', DE, 0.95, 'A');
+addNote(b + H + DE, 'soprano', 'F5', S, 0.9, 'A');
+addNote(b + DH, 'soprano', 'G5', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'A5', E, 0.9, 'A');
+addNote(b + H, 'alto', 'B4', Q, 0.85, 'B');
+addNote(b + DH, 'alto', 'A4', Q, 0.8, 'B');
+addNote(b + DH, 'bass', 'F2', Q, 0.9, 'A');
+b += W;
+
+// Building to peak
+addNote(b, 'bass', 'G2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'F5', Q, 0.95, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.9, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.9, 'B');
+addNote(b, 'alto', 'F5', DE, 0.9, 'A');
+addNote(b + DE, 'alto', 'G5', S, 0.85, 'A');
+addNote(b + Q, 'bass', 'D3', Q, 0.9, 'A');
+addNote(b + Q, 'alto', 'A5', E, 0.85, 'A');
+addNote(b + Q + E, 'alto', 'B5', E, 0.85, 'A');
+addNote(b + H, 'bass', 'F2', Q, 1.0, 'A');
+addNote(b + H, 'soprano', 'C5', Q, 0.95, 'B');
+addNote(b + H, 'alto', 'C6', Q, 1.0, 'A');
+addNote(b + DH, 'bass', 'G2', Q, 1.0, 'A');
+addNote(b + DH, 'soprano', 'D5', E, 0.9, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.9, 'B');
+addNote(b + DH, 'alto', 'B5', Q, 0.95, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 1.0, 'A');
+addNote(b, 'soprano', 'F5', Q, 1.0, 'B');
+addNote(b, 'alto', 'A5', Q, 1.0, 'A');
+addNote(b + Q, 'bass', 'B2', Q, 1.0, 'A');
+addNote(b + Q, 'soprano', 'G5', Q, 1.0, 'B');
+addNote(b + Q, 'alto', 'G5', Q, 0.95, 'A');
+addNote(b + H, 'bass', 'C3', Q, 1.0, 'A');
+addNote(b + H, 'soprano', 'A5', Q, 1.0, 'B');
+addNote(b + H, 'alto', 'F5', Q, 0.95, 'A');
+addNote(b + DH, 'bass', 'D3', Q, 1.0, 'A');
+addNote(b + DH, 'soprano', 'B5', Q, 1.0, 'B');
+addNote(b + DH, 'alto', 'E5', Q, 0.95, 'A');
+b += W;
+
+// Maximum peak
+addNote(b, 'bass', 'D3', H, 1.0, 'A');
+addNote(b, 'soprano', 'D6', DE, 1.0, 'A');
+addNote(b + DE, 'soprano', 'E6', S, 0.95, 'A');
+addNote(b + Q, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'G6', E, 0.95, 'A');
+addNote(b, 'alto', 'F5', H, 0.95, 'A');
+addNote(b + H, 'bass', 'A2', Q, 1.0, 'A');
+addNote(b + H, 'soprano', 'G6', E, 1.0, 'A');
+addNote(b + H + E, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'E6', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b + H, 'alto', 'E5', Q, 0.95, 'A');
+addNote(b + DH, 'bass', 'E2', Q, 1.0, 'A');
+addNote(b + DH, 'alto', 'D5', Q, 0.9, 'A');
+b += W;
+
+addNote(b, 'bass', 'A2', Q, 1.0, 'A');
+addNote(b, 'soprano', 'C#6', E, 1.0, 'A');
+addNote(b + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b + Q, 'soprano', 'E6', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b, 'alto', 'C#5', Q, 0.95, 'A');
+addNote(b + Q, 'alto', 'D5', Q, 0.95, 'A');
+addNote(b + Q, 'bass', 'A2', Q, 0.95, 'A');
+addNote(b + H, 'bass', 'G2', Q, 0.95, 'A');
+addNote(b + H, 'soprano', 'G6', E, 0.95, 'A');
+addNote(b + H + E, 'soprano', 'A6', E, 0.95, 'A');
+addNote(b + DH, 'soprano', 'B6', E, 0.95, 'A');
+addNote(b + DH + E, 'soprano', 'A6', E, 0.95, 'A');
+addNote(b + H, 'alto', 'E5', Q, 0.9, 'A');
+addNote(b + DH, 'alto', 'F5', Q, 0.9, 'A');
+addNote(b + DH, 'bass', 'F2', Q, 0.95, 'A');
+b += W;
+
+addNote(b, 'bass', 'E2', Q, 0.95, 'A');
+addNote(b, 'soprano', 'G6', E, 0.95, 'A');
+addNote(b + E, 'soprano', 'F6', E, 0.95, 'A');
+addNote(b + Q, 'soprano', 'E6', E, 0.95, 'A');
+addNote(b + Q + E, 'soprano', 'D6', E, 0.95, 'A');
+addNote(b, 'alto', 'G5', Q, 0.9, 'A');
+addNote(b + Q, 'alto', 'F5', Q, 0.9, 'A');
+addNote(b + Q, 'bass', 'F2', Q, 0.9, 'A');
+addNote(b + H, 'bass', 'G2', Q, 0.9, 'A');
+addNote(b + H, 'soprano', 'C#6', E, 0.9, 'A');
+addNote(b + H + E, 'soprano', 'D6', E, 0.9, 'A');
+addNote(b + DH, 'soprano', 'E6', E, 0.9, 'A');
+addNote(b + DH + E, 'soprano', 'F6', E, 0.9, 'A');
+addNote(b + H, 'alto', 'E5', Q, 0.85, 'A');
+addNote(b + DH, 'alto', 'D5', Q, 0.85, 'A');
+addNote(b + DH, 'bass', 'A2', Q, 0.9, 'A');
+b += W;
+
+// Resolution begins - Motif B breaks through
+addNote(b, 'bass', 'D3', W, 0.95, 'A');
+addNote(b, 'soprano', 'D6', W, 1.0, 'A');
+addNote(b, 'alto', 'F5', W, 0.9, 'A');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VI. RESOLUTION — Peace Prevails (Bars 105-128)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("VI. Resolution", b);
+
+// Motif A transformed to gentle
+addNote(b, 'bass', 'F2', H, 0.65, 'B');
+addNote(b, 'soprano', 'F5', DE, 0.7, 'B');
+addNote(b + DE, 'soprano', 'G5', S, 0.65, 'B');
+addNote(b + Q, 'soprano', 'A5', E, 0.65, 'B');
+addNote(b + Q + E, 'soprano', 'B5', E, 0.65, 'B');
+addNote(b, 'alto', 'A4', Q, 0.6, 'B');
+addNote(b + Q, 'alto', 'C5', Q, 0.6, 'B');
+addNote(b + H, 'bass', 'A2', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'B5', E, 0.65, 'B');
+addNote(b + H + E, 'soprano', 'A5', E, 0.65, 'B');
+addNote(b + DH, 'soprano', 'G5', E, 0.65, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.65, 'B');
+addNote(b + H, 'alto', 'D5', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'C5', Q, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.6, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.6, 'B');
+addNote(b, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.6, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.65, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.6, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.55, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.6, 'B');
+addNote(b, 'soprano', 'F5', H, 0.65, 'B');
+addNote(b, 'alto', 'A4', H, 0.55, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'F5', H, 0.7, 'B');
+addNote(b + H, 'alto', 'A4', H, 0.6, 'B');
+b += W;
+
+// Pure Motif B
+addNote(b, 'bass', 'F2', H, 0.6, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.6, 'B');
+addNote(b, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.6, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.65, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.6, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.6, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.65, 'B');
+addNote(b, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.65, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.7, 'B');
+addNote(b + H, 'alto', 'C5', H, 0.6, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.6, 'B');
+addNote(b, 'soprano', 'G5', Q, 0.65, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.6, 'B');
+addNote(b + Q + E, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b, 'alto', 'B4', Q, 0.55, 'B');
+addNote(b + Q, 'alto', 'A4', E, 0.5, 'B');
+addNote(b + Q + E, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + H, 'bass', 'G2', Q, 0.6, 'B');
+addNote(b + H, 'soprano', 'D5', Q, 0.65, 'B');
+addNote(b + H, 'alto', 'F4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'A2', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'E5', E, 0.6, 'B');
+addNote(b + DH + E, 'soprano', 'F5', E, 0.6, 'B');
+addNote(b + DH, 'alto', 'G4', E, 0.5, 'B');
+addNote(b + DH + E, 'alto', 'A4', E, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'B2', H, 0.6, 'B');
+addNote(b, 'soprano', 'G5', H, 0.65, 'B');
+addNote(b, 'alto', 'B4', H, 0.55, 'B');
+addNote(b + H, 'bass', 'F2', Q, 0.6, 'B');
+addNote(b + H, 'soprano', 'F5', Q, 0.65, 'B');
+addNote(b + H, 'alto', 'A4', Q, 0.55, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'E5', Q, 0.6, 'B');
+addNote(b + DH, 'alto', 'G4', Q, 0.5, 'B');
+b += W;
+
+// Descending to peace
+addNote(b, 'bass', 'F2', H, 0.55, 'B');
+addNote(b, 'soprano', 'D5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'C5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'B4', E, 0.55, 'B');
+addNote(b, 'alto', 'F4', Q, 0.5, 'B');
+addNote(b + Q, 'alto', 'E4', E, 0.45, 'B');
+addNote(b + Q + E, 'alto', 'D4', E, 0.45, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.55, 'B');
+addNote(b + H, 'soprano', 'A4', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'B4', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'C5', E, 0.55, 'B');
+addNote(b + H, 'alto', 'C4', Q, 0.5, 'B');
+addNote(b + DH, 'alto', 'D4', E, 0.45, 'B');
+addNote(b + DH + E, 'alto', 'E4', E, 0.45, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.55, 'B');
+addNote(b, 'soprano', 'D5', H, 0.6, 'B');
+addNote(b, 'alto', 'F4', H, 0.5, 'B');
+addNote(b + H, 'bass', 'B2', Q, 0.5, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.55, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.45, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.5, 'B');
+addNote(b + DH, 'soprano', 'D5', Q, 0.55, 'B');
+addNote(b + DH, 'alto', 'F4', Q, 0.45, 'B');
+b += W;
+
+// Rising hope
+addNote(b, 'bass', 'F2', H, 0.55, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.55, 'B');
+addNote(b, 'alto', 'A4', Q, 0.5, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.45, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.45, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.5, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.55, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.45, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.45, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.55, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.6, 'B');
+addNote(b, 'alto', 'A4', Q, 0.5, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.5, 'B');
+addNote(b + H, 'bass', 'F3', H, 0.55, 'B');
+addNote(b + H, 'soprano', 'A5', Q, 0.6, 'B');
+addNote(b + DH, 'soprano', 'B5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'C5', Q, 0.5, 'B');
+addNote(b + DH, 'alto', 'D5', Q, 0.5, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.55, 'B');
+addNote(b, 'soprano', 'C6', Q, 0.6, 'B');
+addNote(b + Q, 'soprano', 'B5', E, 0.55, 'B');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.55, 'B');
+addNote(b, 'alto', 'E5', Q, 0.5, 'B');
+addNote(b + Q, 'alto', 'D5', E, 0.45, 'B');
+addNote(b + Q + E, 'alto', 'C5', E, 0.45, 'B');
+addNote(b + H, 'bass', 'G2', Q, 0.55, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.6, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.5, 'B');
+addNote(b + DH, 'bass', 'A2', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'A5', E, 0.55, 'B');
+addNote(b + DH + E, 'soprano', 'B5', E, 0.55, 'B');
+addNote(b + DH, 'alto', 'C5', E, 0.45, 'B');
+addNote(b + DH + E, 'alto', 'D5', E, 0.45, 'B');
+b += W;
+
+addNote(b, 'bass', 'B2', H, 0.55, 'B');
+addNote(b, 'soprano', 'C6', H, 0.6, 'B');
+addNote(b, 'alto', 'E5', H, 0.5, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.55, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.6, 'B');
+addNote(b + H, 'alto', 'C5', H, 0.5, 'B');
+b += W;
+
+// Final statement
+addNote(b, 'bass', 'F2', H, 0.5, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.55, 'B');
+addNote(b + Q, 'soprano', 'G5', E, 0.5, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.5, 'B');
+addNote(b, 'alto', 'C5', Q, 0.45, 'B');
+addNote(b + Q, 'alto', 'B4', E, 0.4, 'B');
+addNote(b + Q + E, 'alto', 'A4', E, 0.4, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.5, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.55, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.5, 'B');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.5, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.45, 'B');
+addNote(b + DH, 'alto', 'A4', E, 0.4, 'B');
+addNote(b + DH + E, 'alto', 'B4', E, 0.4, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.5, 'B');
+addNote(b, 'soprano', 'A5', H, 0.55, 'B');
+addNote(b, 'alto', 'C5', H, 0.45, 'B');
+addNote(b + H, 'bass', 'C3', Q, 0.5, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.55, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.45, 'B');
+addNote(b + DH, 'bass', 'F2', Q, 0.5, 'B');
+addNote(b + DH, 'soprano', 'F5', Q, 0.55, 'B');
+addNote(b + DH, 'alto', 'A4', Q, 0.45, 'B');
+b += W;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VII. CODA — Transfiguration (Bars 129-144)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("VII. Coda", b);
+
+// Motifs unified - peaceful
+addNote(b, 'bass', 'F2', H, 0.45, 'B');
+addNote(b, 'soprano', 'F5', DE, 0.5, 'B');
+addNote(b + DE, 'soprano', 'G5', S, 0.45, 'B');
+addNote(b + Q, 'soprano', 'A5', E, 0.45, 'B');
+addNote(b + Q + E, 'soprano', 'B5', E, 0.45, 'B');
+addNote(b, 'alto', 'C4', Q, 0.4, 'B');
+addNote(b + Q, 'alto', 'B4', E, 0.35, 'B');
+addNote(b + Q + E, 'alto', 'A4', E, 0.35, 'B');
+addNote(b + H, 'bass', 'A2', H, 0.45, 'B');
+addNote(b + H, 'soprano', 'B5', E, 0.45, 'B');
+addNote(b + H + E, 'soprano', 'A5', E, 0.45, 'B');
+addNote(b + DH, 'soprano', 'G5', Q, 0.45, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.35, 'B');
+addNote(b + DH, 'alto', 'F4', Q, 0.35, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.45, 'B');
+addNote(b, 'soprano', 'E5', Q, 0.5, 'B');
+addNote(b + Q, 'soprano', 'F5', E, 0.45, 'B');
+addNote(b + Q + E, 'soprano', 'G5', E, 0.45, 'B');
+addNote(b, 'alto', 'E4', Q, 0.4, 'B');
+addNote(b + Q, 'alto', 'D4', E, 0.35, 'B');
+addNote(b + Q + E, 'alto', 'C4', E, 0.35, 'B');
+addNote(b + H, 'bass', 'G2', H, 0.45, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.5, 'B');
+addNote(b + H, 'alto', 'C4', H, 0.4, 'B');
+b += W;
+
+addNote(b, 'bass', 'C3', H, 0.45, 'B');
+addNote(b, 'soprano', 'G5', DE, 0.5, 'B');
+addNote(b + DE, 'soprano', 'A5', S, 0.45, 'B');
+addNote(b + Q, 'soprano', 'B5', E, 0.45, 'B');
+addNote(b + Q + E, 'soprano', 'C6', E, 0.45, 'B');
+addNote(b, 'alto', 'E4', Q, 0.4, 'B');
+addNote(b + Q, 'alto', 'D4', E, 0.35, 'B');
+addNote(b + Q + E, 'alto', 'C4', E, 0.35, 'B');
+addNote(b + H, 'bass', 'G2', H, 0.45, 'B');
+addNote(b + H, 'soprano', 'C6', E, 0.45, 'B');
+addNote(b + H + E, 'soprano', 'B5', E, 0.45, 'B');
+addNote(b + DH, 'soprano', 'A5', Q, 0.45, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.35, 'B');
+addNote(b + DH, 'alto', 'D4', Q, 0.35, 'B');
+b += W;
+
+addNote(b, 'bass', 'B2', H, 0.45, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.5, 'B');
+addNote(b + Q, 'soprano', 'G5', E, 0.45, 'B');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.45, 'B');
+addNote(b, 'alto', 'E4', Q, 0.4, 'B');
+addNote(b + Q, 'alto', 'D4', E, 0.35, 'B');
+addNote(b + Q + E, 'alto', 'C4', E, 0.35, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.5, 'B');
+addNote(b + H, 'soprano', 'B5', H, 0.5, 'B');
+addNote(b + H, 'alto', 'D4', H, 0.4, 'B');
+b += W;
+
+// Final Motif B - fading
+addNote(b, 'bass', 'F2', H, 0.4, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.45, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.4, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.4, 'B');
+addNote(b, 'alto', 'A4', Q, 0.35, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.3, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.3, 'B');
+addNote(b + H, 'bass', 'A2', Q, 0.4, 'B');
+addNote(b + H, 'soprano', 'C5', Q, 0.45, 'B');
+addNote(b + H, 'alto', 'E4', Q, 0.35, 'B');
+addNote(b + DH, 'bass', 'C3', Q, 0.4, 'B');
+addNote(b + DH, 'soprano', 'D5', E, 0.4, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.4, 'B');
+addNote(b + DH, 'alto', 'F4', E, 0.3, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.3, 'B');
+b += W;
+
+addNote(b, 'bass', 'D3', H, 0.4, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.45, 'B');
+addNote(b + Q, 'soprano', 'G5', Q, 0.45, 'B');
+addNote(b, 'alto', 'A4', Q, 0.35, 'B');
+addNote(b + Q, 'alto', 'B4', Q, 0.35, 'B');
+addNote(b + H, 'bass', 'F2', H, 0.45, 'B');
+addNote(b + H, 'soprano', 'A5', H, 0.5, 'B');
+addNote(b + H, 'alto', 'C5', H, 0.4, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.4, 'B');
+addNote(b, 'soprano', 'A5', Q, 0.45, 'B');
+addNote(b + Q, 'soprano', 'G5', E, 0.4, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.4, 'B');
+addNote(b, 'alto', 'C5', Q, 0.35, 'B');
+addNote(b + Q, 'alto', 'B4', E, 0.3, 'B');
+addNote(b + Q + E, 'alto', 'A4', E, 0.3, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.4, 'B');
+addNote(b + H, 'soprano', 'E5', Q, 0.45, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.4, 'B');
+addNote(b + DH + E, 'soprano', 'G5', E, 0.4, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.35, 'B');
+addNote(b + DH, 'alto', 'A4', E, 0.3, 'B');
+addNote(b + DH + E, 'alto', 'B4', E, 0.3, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.4, 'B');
+addNote(b, 'soprano', 'A5', H, 0.45, 'B');
+addNote(b, 'alto', 'C5', H, 0.35, 'B');
+addNote(b + H, 'bass', 'C3', Q, 0.35, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.4, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.3, 'B');
+addNote(b + DH, 'bass', 'F2', Q, 0.35, 'B');
+addNote(b + DH, 'soprano', 'F5', Q, 0.4, 'B');
+addNote(b + DH, 'alto', 'A4', Q, 0.3, 'B');
+b += W;
+
+// Very final descent
+addNote(b, 'bass', 'F2', H, 0.35, 'B');
+addNote(b, 'soprano', 'F5', Q, 0.4, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.35, 'B');
+addNote(b + Q + E, 'soprano', 'D5', E, 0.35, 'B');
+addNote(b, 'alto', 'A4', Q, 0.3, 'B');
+addNote(b + Q, 'alto', 'G4', E, 0.25, 'B');
+addNote(b + Q + E, 'alto', 'F4', E, 0.25, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.35, 'B');
+addNote(b + H, 'soprano', 'C5', H, 0.4, 'B');
+addNote(b + H, 'alto', 'E4', H, 0.3, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.35, 'B');
+addNote(b, 'soprano', 'C5', E, 0.4, 'B');
+addNote(b + E, 'soprano', 'D5', E, 0.35, 'B');
+addNote(b + Q, 'soprano', 'E5', E, 0.35, 'B');
+addNote(b + Q + E, 'soprano', 'F5', E, 0.35, 'B');
+addNote(b, 'alto', 'E4', H, 0.3, 'B');
+addNote(b + H, 'bass', 'C3', Q, 0.35, 'B');
+addNote(b + H, 'soprano', 'G5', E, 0.35, 'B');
+addNote(b + H + E, 'soprano', 'A5', E, 0.35, 'B');
+addNote(b + DH, 'soprano', 'B5', E, 0.35, 'B');
+addNote(b + DH + E, 'soprano', 'C6', E, 0.35, 'B');
+addNote(b + H, 'alto', 'G4', Q, 0.3, 'B');
+addNote(b + DH, 'alto', 'B4', Q, 0.3, 'B');
+addNote(b + DH, 'bass', 'E3', Q, 0.35, 'B');
+b += W;
+
+addNote(b, 'bass', 'F2', H, 0.35, 'B');
+addNote(b, 'soprano', 'C6', Q, 0.4, 'B');
+addNote(b + Q, 'soprano', 'B5', E, 0.35, 'B');
+addNote(b + Q + E, 'soprano', 'A5', E, 0.35, 'B');
+addNote(b, 'alto', 'E5', Q, 0.3, 'B');
+addNote(b + Q, 'alto', 'D5', E, 0.25, 'B');
+addNote(b + Q + E, 'alto', 'C5', E, 0.25, 'B');
+addNote(b + H, 'bass', 'C3', H, 0.35, 'B');
+addNote(b + H, 'soprano', 'G5', Q, 0.4, 'B');
+addNote(b + DH, 'soprano', 'F5', E, 0.35, 'B');
+addNote(b + DH + E, 'soprano', 'E5', E, 0.35, 'B');
+addNote(b + H, 'alto', 'B4', Q, 0.3, 'B');
+addNote(b + DH, 'alto', 'A4', E, 0.25, 'B');
+addNote(b + DH + E, 'alto', 'G4', E, 0.25, 'B');
+b += W;
+
+// Final chord - F major
+addNote(b, 'bass', 'F2', W * 2, 0.4, 'B');
+addNote(b, 'soprano', 'F5', W * 2, 0.45, 'B');
+addNote(b, 'alto', 'A4', W * 2, 0.35, 'B');
+b += W * 2;
+
+// Silence
+b += W;
+
+const TOTAL_DURATION = b;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEQUENCER
+// ═══════════════════════════════════════════════════════════════════════════════
+let currentBeat = 0;
+let startTime = 0;
+let nextNoteIdx = 0;
+let currentSection = "DUALITY";
+let activeMotif = '';
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Update section display
+    for (let i = SECTIONS.length - 1; i >= 0; i--) {
+        if (currentBeat >= SECTIONS[i].beat) {
+            if (currentSection !== SECTIONS[i].name) {
+                currentSection = SECTIONS[i].name;
+                document.getElementById('current-section').textContent = currentSection;
+            }
+            break;
+        }
+    }
+    
+    // Update time display
+    const elapsed = currentBeat * (60 / CONFIG.BPM);
+    const total = TOTAL_DURATION * (60 / CONFIG.BPM);
+    const elapsedMin = Math.floor(elapsed / 60);
+    const elapsedSec = Math.floor(elapsed % 60);
+    const totalMin = Math.floor(total / 60);
+    const totalSec = Math.floor(total % 60);
+    document.getElementById('time-display').textContent = 
+        `${elapsedMin}:${elapsedSec.toString().padStart(2, '0')} / ${totalMin}:${totalSec.toString().padStart(2, '0')}`;
+    
+    // Update progress bar
+    document.getElementById('progress').style.width = `${(currentBeat / TOTAL_DURATION) * 100}%`;
+    
+    // Loop check
+    if (currentBeat >= TOTAL_DURATION) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextNoteIdx = 0;
+    }
+    
+    // Schedule notes
+    while (nextNoteIdx < SCORE.length && SCORE[nextNoteIdx].beat <= currentBeat + 0.2) {
+        const event = SCORE[nextNoteIdx];
+        const playTime = startTime + (event.beat * (60 / CONFIG.BPM));
+        const duration = event.duration * (60 / CONFIG.BPM);
+        
+        if (event.type === 'note') {
+            AudioEngine.playNote(event.voice, event.note, playTime, duration, event.velocity, event.motif);
+        } else if (event.type === 'chord') {
+            AudioEngine.playChord(event.voice, event.notes, playTime, duration, event.velocity, event.motif);
+        }
+        
+        // Track active motif for visual
+        activeMotif = event.motif;
+        triggerVisual(event);
+        
+        nextNoteIdx++;
+    }
+    
+    // Update motif indicator
+    const motifA = document.querySelector('.motif-a');
+    const motifB = document.querySelector('.motif-b');
+    if (activeMotif === 'A') {
+        motifA.style.opacity = '1';
+        motifB.style.opacity = '0.3';
+    } else {
+        motifA.style.opacity = '0.3';
+        motifB.style.opacity = '1';
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VISUAL ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const particles = [];
+const waveforms = { soprano: [], alto: [], bass: [] };
+
+function resize() {
+    w = cvs.width = innerWidth;
+    h = cvs.height = innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(event) {
+    const voiceY = {
+        soprano: h * 0.3,
+        alto: h * 0.5,
+        bass: h * 0.7
+    };
+    
+    const y = voiceY[event.voice] || h * 0.5;
+    const color = event.motif === 'A' ? '#ff6b6b' : '#6bffb8';
+    
+    // Add particles
+    for (let i = 0; i < 8; i++) {
+        particles.push({
+            x: w * 0.1,
+            y: y + (Math.random() - 0.5) * 50,
+            vx: 2 + Math.random() * 3,
+            vy: (Math.random() - 0.5) * 2,
+            life: 1.0,
+            color: color,
+            size: 2 + Math.random() * 3
+        });
+    }
+    
+    // Add waveform point
+    waveforms[event.voice].push({
+        x: w * 0.1,
+        y: y,
+        amplitude: event.velocity * 30,
+        color: color,
+        life: 1.0
+    });
+}
+
+function draw() {
+    // Clear with fade
+    ctx.fillStyle = 'rgba(10, 10, 18, 0.08)';
+    ctx.fillRect(0, 0, w, h);
+    
+    // Draw voice lanes
+    const voiceY = { soprano: h * 0.3, alto: h * 0.5, bass: h * 0.7 };
+    const voiceNames = ['Soprano', 'Alto', 'Bass'];
+    const voiceKeys = ['soprano', 'alto', 'bass'];
+    
+    ctx.font = '14px Georgia';
+    voiceKeys.forEach((key, i) => {
+        const y = voiceY[key];
+        
+        // Lane line
+        ctx.strokeStyle = 'rgba(100, 100, 120, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        
+        // Label
+        ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
+        ctx.fillText(voiceNames[i], 15, y - 10);
+    });
+    
+    // Draw waveforms
+    voiceKeys.forEach(key => {
+        const wave = waveforms[key];
+        
+        for (let i = wave.length - 1; i >= 0; i--) {
+            const p = wave[i];
+            p.x += 3;
+            p.life -= 0.008;
+            p.amplitude *= 0.98;
+            
+            if (p.life <= 0 || p.x > w) {
+                wave.splice(i, 1);
+                continue;
+            }
+            
+            // Draw wave segment
+            ctx.beginPath();
+            ctx.arc(p.x, p.y + Math.sin(p.x * 0.05) * p.amplitude, 3, 0, Math.PI * 2);
+            ctx.fillStyle = p.color.replace(')', `, ${p.life * 0.6})`).replace('rgb', 'rgba').replace('#', '');
+            
+            // Convert hex to rgba
+            const hex = p.color.slice(1);
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.life * 0.6})`;
+            ctx.fill();
+        }
+    });
+    
+    // Draw particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.02; // Slight gravity
+        p.life -= 0.015;
+        
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        
+        const hex = p.color.slice(1);
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b_ = parseInt(hex.substr(4, 2), 16);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b_}, ${p.life * 0.8})`;
+        ctx.fill();
+    }
+    
+    // Center glow based on intensity
+    const recentNotes = particles.length;
+    if (recentNotes > 0) {
+        const intensity = Math.min(recentNotes / 50, 1);
+        const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, 300);
+        gradient.addColorStop(0, `rgba(212, 175, 55, ${intensity * 0.1})`);
+        gradient.addColorStop(1, 'rgba(212, 175, 55, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, w, h);
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('overlay').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+    }
+    togglePlay();
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('score-container').classList.add('visible');
+});
+
+document.getElementById('playBtn').addEventListener('click', togglePlay);
+
+document.getElementById('scoreBtn').addEventListener('click', () => {
+    const container = document.getElementById('score-container');
+    container.classList.toggle('visible');
+});
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+function togglePlay() {
+    if (!AudioEngine.ctx) return;
+    
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('playBtn').textContent = '▶ Play';
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('playBtn').textContent = '⏸ Pause';
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+// Start visual loop
+draw();
+
+console.log(`
+════════════════════════════════════════════════════════════════
+  DUALITY - A Composition for Three Voices
+  
+  Total events: ${SCORE.length}
+  Duration: ~${Math.round(TOTAL_DURATION * (60/CONFIG.BPM) / 60)}:${Math.round((TOTAL_DURATION * (60/CONFIG.BPM)) % 60).toString().padStart(2, '0')}
+  Sections: ${SECTIONS.length}
+  
+  Motif A: Intense, Angry (D minor, dotted rhythms)
+  Motif B: Sweet, Gentle (F major, legato)
+════════════════════════════════════════════════════════════════
+`);
+</script>
+</body>
+</html>

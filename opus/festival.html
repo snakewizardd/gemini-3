@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ETHEREAL - A Future Bass Anthem</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+        background: #0a0a0f; 
+        overflow: hidden; 
+        font-family: 'Arial', sans-serif;
+        color: #fff;
+    }
+    
+    #canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+    
+    #overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.95);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        transition: opacity 1s;
+    }
+    .hidden { opacity: 0; pointer-events: none; }
+    
+    #overlay h1 {
+        font-size: 5em;
+        background: linear-gradient(135deg, #00d4ff, #ff00ff, #00ff88);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-shadow: 0 0 60px rgba(0, 212, 255, 0.5);
+        letter-spacing: 0.3em;
+        animation: glow 2s ease-in-out infinite alternate;
+    }
+    
+    @keyframes glow {
+        from { filter: drop-shadow(0 0 20px #00d4ff); }
+        to { filter: drop-shadow(0 0 40px #ff00ff); }
+    }
+    
+    #overlay h2 {
+        font-size: 1.5em;
+        color: #666;
+        margin-top: 20px;
+        font-weight: 300;
+        letter-spacing: 0.5em;
+    }
+    
+    .click-prompt {
+        margin-top: 60px;
+        font-size: 1.2em;
+        color: #444;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 1; }
+    }
+    
+    #controls {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    #controls button {
+        background: linear-gradient(135deg, #00d4ff, #ff00ff);
+        border: none;
+        color: #fff;
+        padding: 15px 40px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 50px;
+        transition: all 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+    
+    #controls button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    }
+    
+    #time-display {
+        color: #666;
+        font-size: 14px;
+        font-family: monospace;
+    }
+    
+    #section-display {
+        position: fixed;
+        top: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 24px;
+        font-weight: bold;
+        background: linear-gradient(135deg, #00d4ff, #ff00ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        z-index: 50;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+    }
+    
+    #bpm-display {
+        position: fixed;
+        top: 30px;
+        right: 30px;
+        font-size: 18px;
+        color: #00d4ff;
+        z-index: 50;
+        font-family: monospace;
+    }
+    
+    #progress {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #00d4ff, #ff00ff, #00ff88);
+        z-index: 50;
+        transition: width 0.1s linear;
+    }
+    
+    #waveform {
+        position: fixed;
+        bottom: 80px;
+        left: 0;
+        width: 100%;
+        height: 60px;
+        z-index: 40;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>ETHEREAL</h1>
+    <h2>FUTURE BASS ANTHEM</h2>
+    <p class="click-prompt">[ CLICK TO DROP ]</p>
+</div>
+
+<canvas id="canvas"></canvas>
+<canvas id="waveform"></canvas>
+
+<div id="section-display">ETHEREAL</div>
+<div id="bpm-display">150 BPM</div>
+
+<div id="controls">
+    <button id="playBtn">▶ DROP IT</button>
+    <div id="time-display">0:00 / 2:30</div>
+</div>
+
+<div id="progress"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 150,
+    KEY: 'F#m'  // That emotional future bass key
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NOTE FREQUENCIES
+// ═══════════════════════════════════════════════════════════════════════════════
+const NOTES = {
+    'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81,
+    'F3': 174.61, 'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00,
+    'A#3': 233.08, 'B3': 246.94,
+    'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63,
+    'F4': 349.23, 'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00,
+    'A#4': 466.16, 'B4': 493.88,
+    'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.26,
+    'F5': 698.46, 'F#5': 739.99, 'G5': 783.99, 'G#5': 830.61, 'A5': 880.00,
+    'A#5': 932.33, 'B5': 987.77,
+    'C6': 1046.50, 'D6': 1174.66, 'E6': 1318.51, 'F#6': 1479.98
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE - Future Bass / Marshmello Style
+// ═══════════════════════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    compressor: null,
+    sidechain: null,
+    sidechainGain: null,
+    reverbNode: null,
+    reverbGain: null,
+    analyser: null,
+    isPlaying: false,
+    kickTime: 0,
+    
+    init: async () => {
+        AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = AudioEngine.ctx;
+        
+        // Analyser for visualizations
+        AudioEngine.analyser = ctx.createAnalyser();
+        AudioEngine.analyser.fftSize = 256;
+        
+        // Master limiter/compressor
+        AudioEngine.compressor = ctx.createDynamicsCompressor();
+        AudioEngine.compressor.threshold.value = -6;
+        AudioEngine.compressor.knee.value = 3;
+        AudioEngine.compressor.ratio.value = 8;
+        AudioEngine.compressor.attack.value = 0.001;
+        AudioEngine.compressor.release.value = 0.1;
+        
+        // Master output
+        AudioEngine.master = ctx.createGain();
+        AudioEngine.master.gain.value = 0.8;
+        
+        // Sidechain compression simulation
+        AudioEngine.sidechainGain = ctx.createGain();
+        AudioEngine.sidechainGain.gain.value = 1.0;
+        
+        // Reverb
+        AudioEngine.reverbNode = ctx.createConvolver();
+        AudioEngine.reverbNode.buffer = await AudioEngine.createReverb(2.5, 2.0);
+        AudioEngine.reverbGain = ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.25;
+        
+        // EQ - Bass boost
+        AudioEngine.bassBoost = ctx.createBiquadFilter();
+        AudioEngine.bassBoost.type = 'lowshelf';
+        AudioEngine.bassBoost.frequency.value = 150;
+        AudioEngine.bassBoost.gain.value = 6;
+        
+        // EQ - High presence
+        AudioEngine.highBoost = ctx.createBiquadFilter();
+        AudioEngine.highBoost.type = 'highshelf';
+        AudioEngine.highBoost.frequency.value = 8000;
+        AudioEngine.highBoost.gain.value = 4;
+        
+        // Signal chain
+        AudioEngine.sidechainGain.connect(AudioEngine.bassBoost);
+        AudioEngine.bassBoost.connect(AudioEngine.highBoost);
+        AudioEngine.highBoost.connect(AudioEngine.compressor);
+        AudioEngine.compressor.connect(AudioEngine.master);
+        AudioEngine.master.connect(AudioEngine.analyser);
+        AudioEngine.analyser.connect(ctx.destination);
+        
+        // Reverb send
+        AudioEngine.sidechainGain.connect(AudioEngine.reverbNode);
+        AudioEngine.reverbNode.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.master);
+    },
+    
+    createReverb: async (duration, decay) => {
+        const ctx = AudioEngine.ctx;
+        const rate = ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        
+        for (let i = 0; i < length; i++) {
+            const env = Math.pow(1 - i / length, decay);
+            L[i] = (Math.random() * 2 - 1) * env;
+            R[i] = (Math.random() * 2 - 1) * env;
+        }
+        return impulse;
+    },
+    
+    // Trigger sidechain duck
+    triggerSidechain: (time) => {
+        const gain = AudioEngine.sidechainGain.gain;
+        gain.cancelScheduledValues(time);
+        gain.setValueAtTime(0.3, time);
+        gain.linearRampToValueAtTime(1.0, time + 0.15);
+        AudioEngine.kickTime = time;
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DRUMS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Punchy 808 Kick
+    playKick: (time, velocity = 1.0) => {
+        const ctx = AudioEngine.ctx;
+        
+        // Main body
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, time);
+        osc.frequency.exponentialRampToValueAtTime(40, time + 0.08);
+        
+        // Distortion layer
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(120, time);
+        osc2.frequency.exponentialRampToValueAtTime(35, time + 0.06);
+        
+        // Click transient
+        const click = ctx.createOscillator();
+        click.type = 'square';
+        click.frequency.value = 1500;
+        
+        const clickEnv = ctx.createGain();
+        clickEnv.gain.setValueAtTime(0.3 * velocity, time);
+        clickEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.015);
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(1.0 * velocity, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+        
+        const env2 = ctx.createGain();
+        env2.gain.setValueAtTime(0.4 * velocity, time);
+        env2.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+        
+        // Filter
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 200;
+        filter.Q.value = 1;
+        
+        osc.connect(env);
+        osc2.connect(env2);
+        click.connect(clickEnv);
+        env.connect(filter);
+        env2.connect(filter);
+        clickEnv.connect(AudioEngine.master);
+        filter.connect(AudioEngine.master);
+        
+        osc.start(time);
+        osc.stop(time + 0.5);
+        osc2.start(time);
+        osc2.stop(time + 0.4);
+        click.start(time);
+        click.stop(time + 0.02);
+        
+        // Trigger sidechain
+        AudioEngine.triggerSidechain(time);
+        
+        // Visual trigger
+        triggerDrumVisual('kick', time);
+    },
+    
+    // Snappy Snare
+    playSnare: (time, velocity = 1.0) => {
+        const ctx = AudioEngine.ctx;
+        
+        // Noise component
+        const bufferSize = ctx.sampleRate * 0.15;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        // Highpass for snap
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 2000;
+        
+        // Body tone
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(250, time);
+        osc.frequency.exponentialRampToValueAtTime(150, time + 0.05);
+        
+        const noiseEnv = ctx.createGain();
+        noiseEnv.gain.setValueAtTime(0.8 * velocity, time);
+        noiseEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+        
+        const oscEnv = ctx.createGain();
+        oscEnv.gain.setValueAtTime(0.6 * velocity, time);
+        oscEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+        
+        noise.connect(hpf);
+        hpf.connect(noiseEnv);
+        noiseEnv.connect(AudioEngine.sidechainGain);
+        
+        osc.connect(oscEnv);
+        oscEnv.connect(AudioEngine.sidechainGain);
+        
+        noise.start(time);
+        osc.start(time);
+        osc.stop(time + 0.1);
+        
+        triggerDrumVisual('snare', time);
+    },
+    
+    // Crispy Hi-Hat
+    playHat: (time, open = false, velocity = 0.5) => {
+        const ctx = AudioEngine.ctx;
+        
+        const bufferSize = ctx.sampleRate * (open ? 0.3 : 0.05);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        // Bandpass for that metallic sound
+        const bpf = ctx.createBiquadFilter();
+        bpf.type = 'bandpass';
+        bpf.frequency.value = 10000;
+        bpf.Q.value = 1;
+        
+        // Highpass
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 7000;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(velocity, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + (open ? 0.25 : 0.04));
+        
+        noise.connect(bpf);
+        bpf.connect(hpf);
+        hpf.connect(env);
+        env.connect(AudioEngine.sidechainGain);
+        
+        noise.start(time);
+    },
+    
+    // Clap
+    playClap: (time, velocity = 0.8) => {
+        const ctx = AudioEngine.ctx;
+        
+        // Multiple noise bursts for clap texture
+        for (let i = 0; i < 3; i++) {
+            const bufferSize = ctx.sampleRate * 0.02;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let j = 0; j < bufferSize; j++) {
+                data[j] = Math.random() * 2 - 1;
+            }
+            
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            
+            const bpf = ctx.createBiquadFilter();
+            bpf.type = 'bandpass';
+            bpf.frequency.value = 2500;
+            bpf.Q.value = 0.5;
+            
+            const env = ctx.createGain();
+            const startTime = time + i * 0.01;
+            env.gain.setValueAtTime(velocity * 0.7, startTime);
+            env.gain.exponentialRampToValueAtTime(0.001, startTime + 0.1);
+            
+            noise.connect(bpf);
+            bpf.connect(env);
+            env.connect(AudioEngine.sidechainGain);
+            noise.start(startTime);
+        }
+        
+        triggerDrumVisual('clap', time);
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SYNTHS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Supersaw Lead (that iconic EDM lead)
+    playSupersaw: (note, time, duration, velocity = 0.7) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        const oscCount = 7;
+        const oscs = [];
+        const detunes = [-40, -25, -10, 0, 10, 25, 40];
+        
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(0, time);
+        gainNode.gain.linearRampToValueAtTime(velocity * 0.15, time + 0.02);
+        gainNode.gain.setValueAtTime(velocity * 0.15, time + duration - 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, time + duration);
+        
+        // Filter with envelope
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2000, time);
+        filter.frequency.linearRampToValueAtTime(8000, time + 0.1);
+        filter.frequency.setValueAtTime(8000, time + duration - 0.1);
+        filter.frequency.linearRampToValueAtTime(2000, time + duration);
+        filter.Q.value = 2;
+        
+        for (let i = 0; i < oscCount; i++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = detunes[i];
+            osc.connect(filter);
+            osc.start(time);
+            osc.stop(time + duration + 0.1);
+            oscs.push(osc);
+        }
+        
+        filter.connect(gainNode);
+        gainNode.connect(AudioEngine.sidechainGain);
+        
+        triggerSynthVisual(note, time, 'lead');
+    },
+    
+    // Plucky Synth (that squeaky Marshmello sound)
+    playPluck: (note, time, velocity = 0.6) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        // Main oscillators
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const osc3 = ctx.createOscillator();
+        
+        osc1.type = 'square';
+        osc2.type = 'sawtooth';
+        osc3.type = 'triangle';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2;
+        osc3.frequency.value = freq;
+        
+        osc2.detune.value = 7;
+        osc3.detune.value = -5;
+        
+        const g1 = ctx.createGain(); g1.gain.value = 0.4;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        const g3 = ctx.createGain(); g3.gain.value = 0.3;
+        
+        // Pluck filter
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(12000, time);
+        filter.frequency.exponentialRampToValueAtTime(800, time + 0.2);
+        filter.Q.value = 5;
+        
+        // Pluck envelope
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.5, time + 0.005);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+        
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        osc3.connect(g3); g3.connect(filter);
+        filter.connect(env);
+        env.connect(AudioEngine.sidechainGain);
+        
+        osc1.start(time); osc1.stop(time + 0.4);
+        osc2.start(time); osc2.stop(time + 0.4);
+        osc3.start(time); osc3.stop(time + 0.4);
+        
+        triggerSynthVisual(note, time, 'pluck');
+    },
+    
+    // Future Bass Chord (wobbly, lush)
+    playFutureBassChord: (notes, time, duration, velocity = 0.6) => {
+        const ctx = AudioEngine.ctx;
+        
+        const masterGain = ctx.createGain();
+        masterGain.gain.setValueAtTime(0, time);
+        masterGain.gain.linearRampToValueAtTime(velocity * 0.3, time + 0.05);
+        masterGain.gain.setValueAtTime(velocity * 0.3, time + duration - 0.1);
+        masterGain.gain.linearRampToValueAtTime(0, time + duration);
+        
+        // LFO for wobble
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 4;
+        
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 500;
+        
+        // Main filter
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3000;
+        filter.Q.value = 4;
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(filter.frequency);
+        lfo.start(time);
+        lfo.stop(time + duration + 0.1);
+        
+        notes.forEach(note => {
+            const freq = NOTES[note];
+            if (!freq) return;
+            
+            // 5 detuned saws per note
+            for (let i = 0; i < 5; i++) {
+                const osc = ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq;
+                osc.detune.value = (i - 2) * 15;
+                
+                const noteGain = ctx.createGain();
+                noteGain.gain.value = 0.12;
+                
+                osc.connect(noteGain);
+                noteGain.connect(filter);
+                osc.start(time);
+                osc.stop(time + duration + 0.1);
+            }
+        });
+        
+        filter.connect(masterGain);
+        masterGain.connect(AudioEngine.sidechainGain);
+        
+        notes.forEach(note => triggerSynthVisual(note, time, 'chord'));
+    },
+    
+    // 808 Sub Bass
+    playSubBass: (note, time, duration, velocity = 0.9) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq / 2; // One octave down
+        
+        // Sub harmonics
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.value = freq / 2;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.7, time + 0.02);
+        env.gain.setValueAtTime(velocity * 0.7, time + duration - 0.05);
+        env.gain.linearRampToValueAtTime(0, time + duration);
+        
+        const env2 = ctx.createGain();
+        env2.gain.value = 0.2;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 200;
+        
+        osc.connect(env);
+        osc2.connect(env2);
+        env2.connect(env);
+        env.connect(filter);
+        filter.connect(AudioEngine.master);
+        
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+        osc2.start(time);
+        osc2.stop(time + duration + 0.1);
+        
+        triggerSynthVisual(note, time, 'bass');
+    },
+    
+    // Arp Synth
+    playArp: (note, time, velocity = 0.5) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'sawtooth';
+        osc2.frequency.value = freq;
+        osc2.detune.value = 5;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(8000, time);
+        filter.frequency.exponentialRampToValueAtTime(1000, time + 0.1);
+        filter.Q.value = 3;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.25, time + 0.01);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+        
+        const g1 = ctx.createGain(); g1.gain.value = 0.5;
+        const g2 = ctx.createGain(); g2.gain.value = 0.5;
+        
+        osc.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        filter.connect(env);
+        env.connect(AudioEngine.sidechainGain);
+        
+        osc.start(time); osc.stop(time + 0.2);
+        osc2.start(time); osc2.stop(time + 0.2);
+        
+        triggerSynthVisual(note, time, 'arp');
+    },
+    
+    // White Noise Riser
+    playRiser: (time, duration) => {
+        const ctx = AudioEngine.ctx;
+        
+        const bufferSize = ctx.sampleRate * duration;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(100, time);
+        filter.frequency.exponentialRampToValueAtTime(15000, time + duration);
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(0.4, time + duration * 0.9);
+        env.gain.linearRampToValueAtTime(0, time + duration);
+        
+        noise.connect(filter);
+        filter.connect(env);
+        env.connect(AudioEngine.sidechainGain);
+        
+        noise.start(time);
+    },
+    
+    // Impact/Drop sound
+    playImpact: (time) => {
+        const ctx = AudioEngine.ctx;
+        
+        // Low boom
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(80, time);
+        osc.frequency.exponentialRampToValueAtTime(20, time + 0.5);
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(1.0, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.8);
+        
+        // Crash
+        const bufferSize = ctx.sampleRate * 0.5;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const crash = ctx.createBufferSource();
+        crash.buffer = buffer;
+        
+        const crashEnv = ctx.createGain();
+        crashEnv.gain.setValueAtTime(0.5, time);
+        crashEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+        
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 5000;
+        
+        osc.connect(env);
+        env.connect(AudioEngine.master);
+        crash.connect(hpf);
+        hpf.connect(crashEnv);
+        crashEnv.connect(AudioEngine.sidechainGain);
+        
+        osc.start(time);
+        osc.stop(time + 1);
+        crash.start(time);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSITION
+// ═══════════════════════════════════════════════════════════════════════════════
+const EVENTS = [];
+const SECTIONS = [];
+
+function addSection(name, beat) {
+    SECTIONS.push({ name, beat });
+}
+
+function addEvent(beat, type, data) {
+    EVENTS.push({ beat, type, ...data });
+}
+
+// Timing
+const BAR = 4;    // 4 beats per bar
+const B = 0.5;    // Eighth note
+const S = 0.25;   // Sixteenth note
+
+let b = 0;
+
+// Chord progression: F#m - D - A - E (classic EDM progression)
+const CHORDS = {
+    'F#m': ['F#4', 'A4', 'C#5'],
+    'D': ['D4', 'F#4', 'A4'],
+    'A': ['A4', 'C#5', 'E5'],
+    'E': ['E4', 'G#4', 'B4']
+};
+
+const BASS_NOTES = {
+    'F#m': 'F#3',
+    'D': 'D3',
+    'A': 'A3',
+    'E': 'E3'
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  INTRO (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("INTRO", b);
+
+// Soft arp intro
+for (let bar = 0; bar < 4; bar++) {
+    const chord = ['F#m', 'D', 'A', 'E'][bar % 4];
+    const notes = CHORDS[chord];
+    
+    // Arpeggiated plucks
+    for (let i = 0; i < 4; i++) {
+        addEvent(b + i * B, 'pluck', { note: notes[i % 3], velocity: 0.3 + (bar * 0.05) });
+    }
+    
+    // Add hats
+    for (let i = 0; i < 8; i++) {
+        if (i % 2 === 0) addEvent(b + i * S, 'hat', { velocity: 0.2 });
+    }
+    
+    b += BAR;
+}
+
+// Build with more elements
+for (let bar = 0; bar < 4; bar++) {
+    const chordName = ['F#m', 'D', 'A', 'E'][bar % 4];
+    const chord = CHORDS[chordName];
+    const bass = BASS_NOTES[chordName];
+    
+    // Kick pattern starts
+    addEvent(b, 'kick', { velocity: 0.6 + (bar * 0.1) });
+    addEvent(b + 2, 'kick', { velocity: 0.6 + (bar * 0.1) });
+    
+    // Plucks
+    for (let i = 0; i < 4; i++) {
+        addEvent(b + i * B, 'pluck', { note: chord[i % 3], velocity: 0.4 });
+    }
+    
+    // Clap on 2 and 4
+    addEvent(b + 1, 'clap', { velocity: 0.4 });
+    addEvent(b + 3, 'clap', { velocity: 0.4 });
+    
+    // Hats
+    for (let i = 0; i < 16; i++) {
+        addEvent(b + i * S, 'hat', { velocity: 0.25 + (i % 4 === 0 ? 0.1 : 0) });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BUILDUP 1 (4 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BUILD", b);
+
+// Riser
+addEvent(b, 'riser', { duration: BAR * 4 * (60 / CONFIG.BPM) });
+
+for (let bar = 0; bar < 4; bar++) {
+    const chordName = ['F#m', 'D', 'A', 'E'][bar % 4];
+    const chord = CHORDS[chordName];
+    
+    // Accelerating snare roll
+    const density = Math.pow(2, bar);
+    for (let i = 0; i < 4 * density; i++) {
+        addEvent(b + i * (BAR / (4 * density)), 'snare', { velocity: 0.3 + (bar * 0.15) });
+    }
+    
+    // Rising arp
+    const arpNotes = ['F#5', 'A5', 'C#6', 'E6', 'F#6'];
+    for (let i = 0; i < 8; i++) {
+        addEvent(b + i * B, 'arp', { note: arpNotes[(i + bar * 2) % 5], velocity: 0.4 + (bar * 0.1) });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DROP 1 (16 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("DROP", b);
+
+// Impact!
+addEvent(b, 'impact', {});
+
+for (let bar = 0; bar < 16; bar++) {
+    const chordIdx = bar % 4;
+    const chordName = ['F#m', 'D', 'A', 'E'][chordIdx];
+    const chord = CHORDS[chordName];
+    const bass = BASS_NOTES[chordName];
+    
+    // FOUR ON THE FLOOR KICKS
+    for (let i = 0; i < 4; i++) {
+        addEvent(b + i, 'kick', { velocity: 1.0 });
+    }
+    
+    // Snare on 2 and 4
+    addEvent(b + 1, 'snare', { velocity: 0.9 });
+    addEvent(b + 3, 'snare', { velocity: 0.9 });
+    addEvent(b + 1, 'clap', { velocity: 0.7 });
+    addEvent(b + 3, 'clap', { velocity: 0.7 });
+    
+    // Hi-hats
+    for (let i = 0; i < 16; i++) {
+        addEvent(b + i * S, 'hat', { 
+            open: i % 4 === 2, 
+            velocity: i % 4 === 0 ? 0.5 : 0.3 
+        });
+    }
+    
+    // BIG FUTURE BASS CHORDS
+    addEvent(b, 'chord', { notes: chord, duration: BAR * (60 / CONFIG.BPM), velocity: 0.8 });
+    
+    // Sub bass
+    addEvent(b, 'subbass', { note: bass, duration: BAR * (60 / CONFIG.BPM), velocity: 0.9 });
+    
+    // Supersaw lead melody every other bar
+    if (bar % 2 === 0) {
+        const melodyNotes = [
+            ['C#5', 'E5', 'F#5', 'E5'],
+            ['A4', 'B4', 'C#5', 'B4'],
+            ['E5', 'F#5', 'G#5', 'F#5'],
+            ['B4', 'C#5', 'D5', 'C#5']
+        ][chordIdx];
+        
+        melodyNotes.forEach((note, i) => {
+            addEvent(b + i, 'supersaw', { 
+                note, 
+                duration: 0.9 * (60 / CONFIG.BPM), 
+                velocity: 0.7 
+            });
+        });
+    }
+    
+    // Plucky accents
+    if (bar % 4 === 0) {
+        addEvent(b + 0.5, 'pluck', { note: chord[2], velocity: 0.6 });
+        addEvent(b + 1.5, 'pluck', { note: chord[1], velocity: 0.6 });
+        addEvent(b + 2.5, 'pluck', { note: chord[0], velocity: 0.6 });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BREAKDOWN (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BREAKDOWN", b);
+
+for (let bar = 0; bar < 8; bar++) {
+    const chordIdx = bar % 4;
+    const chordName = ['F#m', 'D', 'A', 'E'][chordIdx];
+    const chord = CHORDS[chordName];
+    
+    // Soft plucks only
+    for (let i = 0; i < 8; i++) {
+        addEvent(b + i * B, 'pluck', { 
+            note: chord[i % 3], 
+            velocity: 0.35 
+        });
+    }
+    
+    // Light hats
+    if (bar >= 4) {
+        for (let i = 0; i < 8; i++) {
+            addEvent(b + i * B, 'hat', { velocity: 0.2 });
+        }
+        
+        // Clap
+        addEvent(b + 2, 'clap', { velocity: 0.3 });
+    }
+    
+    // Arp ascending
+    if (bar >= 4) {
+        const arpNotes = ['F#4', 'A4', 'C#5', 'E5'];
+        arpNotes.forEach((note, i) => {
+            addEvent(b + i, 'arp', { note, velocity: 0.3 + (bar - 4) * 0.05 });
+        });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BUILDUP 2 (4 bars - BIGGER)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BUILD 2", b);
+
+addEvent(b, 'riser', { duration: BAR * 4 * (60 / CONFIG.BPM) });
+
+for (let bar = 0; bar < 4; bar++) {
+    const chordName = ['F#m', 'D', 'A', 'E'][bar % 4];
+    const chord = CHORDS[chordName];
+    
+    // CRAZY snare roll acceleration
+    const notesInBar = Math.pow(2, bar + 2);
+    for (let i = 0; i < notesInBar; i++) {
+        addEvent(b + i * (BAR / notesInBar), 'snare', { velocity: 0.4 + (bar * 0.15) });
+    }
+    
+    // Arp going wild
+    const arpNotes = ['F#5', 'A5', 'C#6', 'E6', 'F#6', 'A6'];
+    for (let i = 0; i < 16; i++) {
+        addEvent(b + i * S, 'arp', { 
+            note: arpNotes[(i + bar * 4) % 6], 
+            velocity: 0.5 + (bar * 0.1) 
+        });
+    }
+    
+    // Chord swells
+    addEvent(b, 'chord', { 
+        notes: chord, 
+        duration: BAR * (60 / CONFIG.BPM), 
+        velocity: 0.5 + (bar * 0.1) 
+    });
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DROP 2 - FINAL DROP (16 bars - MAXIMUM ENERGY)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("FINAL DROP", b);
+
+addEvent(b, 'impact', {});
+
+for (let bar = 0; bar < 16; bar++) {
+    const chordIdx = bar % 4;
+    const chordName = ['F#m', 'D', 'A', 'E'][chordIdx];
+    const chord = CHORDS[chordName];
+    const bass = BASS_NOTES[chordName];
+    
+    // MAXIMUM KICKS
+    for (let i = 0; i < 4; i++) {
+        addEvent(b + i, 'kick', { velocity: 1.0 });
+    }
+    // Extra offbeat kicks for energy
+    if (bar >= 8) {
+        addEvent(b + 0.5, 'kick', { velocity: 0.6 });
+        addEvent(b + 2.5, 'kick', { velocity: 0.6 });
+    }
+    
+    // Snare/Clap layers
+    addEvent(b + 1, 'snare', { velocity: 1.0 });
+    addEvent(b + 3, 'snare', { velocity: 1.0 });
+    addEvent(b + 1, 'clap', { velocity: 0.8 });
+    addEvent(b + 3, 'clap', { velocity: 0.8 });
+    
+    // Crazy hats
+    for (let i = 0; i < 16; i++) {
+        addEvent(b + i * S, 'hat', { 
+            open: i % 4 === 2, 
+            velocity: i % 2 === 0 ? 0.5 : 0.35 
+        });
+    }
+    
+    // MASSIVE CHORDS
+    addEvent(b, 'chord', { notes: chord, duration: BAR * (60 / CONFIG.BPM), velocity: 1.0 });
+    
+    // FAT BASS
+    addEvent(b, 'subbass', { note: bass, duration: BAR * (60 / CONFIG.BPM), velocity: 1.0 });
+    
+    // Lead melody - more active
+    const melodyPattern = bar % 2 === 0 ? 
+        ['C#5', 'E5', 'F#5', 'E5', 'C#5', 'B4', 'A4', 'B4'] :
+        ['F#5', 'E5', 'C#5', 'B4', 'A4', 'B4', 'C#5', 'E5'];
+    
+    melodyPattern.forEach((note, i) => {
+        addEvent(b + i * B, 'supersaw', { 
+            note, 
+            duration: 0.4 * (60 / CONFIG.BPM), 
+            velocity: 0.8 
+        });
+    });
+    
+    // Plucky fills
+    if (bar % 2 === 1) {
+        chord.forEach((note, i) => {
+            addEvent(b + 3.5 + i * S, 'pluck', { note, velocity: 0.7 });
+        });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  OUTRO (4 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("OUTRO", b);
+
+for (let bar = 0; bar < 4; bar++) {
+    const chordName = ['F#m', 'D', 'A', 'E'][bar % 4];
+    const chord = CHORDS[chordName];
+    
+    // Fading drums
+    if (bar < 2) {
+        addEvent(b, 'kick', { velocity: 0.7 - (bar * 0.2) });
+        addEvent(b + 2, 'kick', { velocity: 0.6 - (bar * 0.2) });
+        addEvent(b + 1, 'clap', { velocity: 0.4 - (bar * 0.1) });
+        addEvent(b + 3, 'clap', { velocity: 0.4 - (bar * 0.1) });
+    }
+    
+    // Gentle plucks
+    for (let i = 0; i < 4; i++) {
+        addEvent(b + i, 'pluck', { 
+            note: chord[i % 3], 
+            velocity: 0.4 - (bar * 0.08) 
+        });
+    }
+    
+    // Final chord
+    if (bar === 3) {
+        addEvent(b, 'chord', { 
+            notes: CHORDS['F#m'], 
+            duration: BAR * 2 * (60 / CONFIG.BPM), 
+            velocity: 0.5 
+        });
+    }
+    
+    b += BAR;
+}
+
+const TOTAL_BEATS = b;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEQUENCER
+// ═══════════════════════════════════════════════════════════════════════════════
+let currentBeat = 0;
+let startTime = 0;
+let nextEventIdx = 0;
+let currentSection = "ETHEREAL";
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Update section
+    for (let i = SECTIONS.length - 1; i >= 0; i--) {
+        if (currentBeat >= SECTIONS[i].beat) {
+            if (currentSection !== SECTIONS[i].name) {
+                currentSection = SECTIONS[i].name;
+                document.getElementById('section-display').textContent = currentSection;
+            }
+            break;
+        }
+    }
+    
+    // Update time display
+    const elapsed = currentBeat * (60 / CONFIG.BPM);
+    const total = TOTAL_BEATS * (60 / CONFIG.BPM);
+    const elapsedMin = Math.floor(elapsed / 60);
+    const elapsedSec = Math.floor(elapsed % 60);
+    const totalMin = Math.floor(total / 60);
+    const totalSec = Math.floor(total % 60);
+    document.getElementById('time-display').textContent = 
+        `${elapsedMin}:${elapsedSec.toString().padStart(2, '0')} / ${totalMin}:${totalSec.toString().padStart(2, '0')}`;
+    
+    // Progress bar
+    document.getElementById('progress').style.width = `${(currentBeat / TOTAL_BEATS) * 100}%`;
+    
+    // Loop
+    if (currentBeat >= TOTAL_BEATS) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextEventIdx = 0;
+    }
+    
+    // Schedule events
+    while (nextEventIdx < EVENTS.length && EVENTS[nextEventIdx].beat <= currentBeat + 0.2) {
+        const event = EVENTS[nextEventIdx];
+        const eventTime = startTime + (event.beat * (60 / CONFIG.BPM));
+        
+        switch (event.type) {
+            case 'kick':
+                AudioEngine.playKick(eventTime, event.velocity);
+                break;
+            case 'snare':
+                AudioEngine.playSnare(eventTime, event.velocity);
+                break;
+            case 'hat':
+                AudioEngine.playHat(eventTime, event.open, event.velocity);
+                break;
+            case 'clap':
+                AudioEngine.playClap(eventTime, event.velocity);
+                break;
+            case 'pluck':
+                AudioEngine.playPluck(event.note, eventTime, event.velocity);
+                break;
+            case 'supersaw':
+                AudioEngine.playSupersaw(event.note, eventTime, event.duration, event.velocity);
+                break;
+            case 'chord':
+                AudioEngine.playFutureBassChord(event.notes, eventTime, event.duration, event.velocity);
+                break;
+            case 'subbass':
+                AudioEngine.playSubBass(event.note, eventTime, event.duration, event.velocity);
+                break;
+            case 'arp':
+                AudioEngine.playArp(event.note, eventTime, event.velocity);
+                break;
+            case 'riser':
+                AudioEngine.playRiser(eventTime, event.duration);
+                break;
+            case 'impact':
+                AudioEngine.playImpact(eventTime);
+                break;
+        }
+        
+        nextEventIdx++;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VISUAL ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const waveCanvas = document.getElementById('waveform');
+const waveCtx = waveCanvas.getContext('2d');
+
+let w, h;
+const particles = [];
+const bars = [];
+const rings = [];
+
+function resize() {
+    w = canvas.width = innerWidth;
+    h = canvas.height = innerHeight;
+    waveCanvas.width = innerWidth;
+    waveCanvas.height = 60;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Visual triggers
+function triggerDrumVisual(type, time) {
+    if (type === 'kick') {
+        // Central burst
+        for (let i = 0; i < 20; i++) {
+            const angle = (Math.PI * 2 * i) / 20;
+            particles.push({
+                x: w / 2,
+                y: h / 2,
+                vx: Math.cos(angle) * (5 + Math.random() * 10),
+                vy: Math.sin(angle) * (5 + Math.random() * 10),
+                life: 1.0,
+                color: '#00d4ff',
+                size: 4 + Math.random() * 4
+            });
+        }
+        // Ring
+        rings.push({
+            x: w / 2,
+            y: h / 2,
+            radius: 10,
+            maxRadius: 300,
+            life: 1.0,
+            color: '#00d4ff'
+        });
+    } else if (type === 'snare' || type === 'clap') {
+        // Side bursts
+        for (let i = 0; i < 15; i++) {
+            particles.push({
+                x: Math.random() * w,
+                y: h / 2,
+                vx: (Math.random() - 0.5) * 8,
+                vy: -5 - Math.random() * 10,
+                life: 1.0,
+                color: '#ff00ff',
+                size: 3 + Math.random() * 3
+            });
+        }
+    }
+}
+
+function triggerSynthVisual(note, time, type) {
+    const hue = type === 'lead' ? 180 : type === 'pluck' ? 300 : type === 'chord' ? 120 : 60;
+    const color = `hsl(${hue}, 100%, 60%)`;
+    
+    // Floating note particles
+    for (let i = 0; i < 5; i++) {
+        particles.push({
+            x: Math.random() * w,
+            y: h + 20,
+            vx: (Math.random() - 0.5) * 2,
+            vy: -3 - Math.random() * 3,
+            life: 1.0,
+            color: color,
+            size: 2 + Math.random() * 3
+        });
+    }
+}
+
+function draw() {
+    // Clear with trail
+    ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+    ctx.fillRect(0, 0, w, h);
+    
+    // Draw rings
+    for (let i = rings.length - 1; i >= 0; i--) {
+        const ring = rings[i];
+        ring.radius += (ring.maxRadius - ring.radius) * 0.1;
+        ring.life -= 0.02;
+        
+        if (ring.life <= 0) {
+            rings.splice(i, 1);
+            continue;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = ring.color.replace(')', `, ${ring.life})`).replace('rgb', 'rgba');
+        if (ring.color.startsWith('#')) {
+            const hex = ring.color.slice(1);
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b_ = parseInt(hex.substr(4, 2), 16);
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b_}, ${ring.life})`;
+        }
+        ctx.lineWidth = 3 * ring.life;
+        ctx.stroke();
+    }
+    
+    // Draw particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.1; // Gravity
+        p.life -= 0.015;
+        
+        if (p.life <= 0 || p.y > h + 50) {
+            particles.splice(i, 1);
+            continue;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        
+        if (p.color.startsWith('#')) {
+            const hex = p.color.slice(1);
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b_ = parseInt(hex.substr(4, 2), 16);
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b_}, ${p.life})`;
+        } else {
+            ctx.fillStyle = p.color;
+        }
+        ctx.fill();
+    }
+    
+    // Draw frequency bars
+    if (AudioEngine.analyser) {
+        const bufferLength = AudioEngine.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        AudioEngine.analyser.getByteFrequencyData(dataArray);
+        
+        const barCount = 64;
+        const barWidth = w / barCount;
+        
+        for (let i = 0; i < barCount; i++) {
+            const idx = Math.floor(i * bufferLength / barCount);
+            const value = dataArray[idx] / 255;
+            const barHeight = value * h * 0.4;
+            
+            const hue = 180 + (i / barCount) * 120;
+            ctx.fillStyle = `hsla(${hue}, 100%, 60%, ${0.3 + value * 0.5})`;
+            
+            // Bottom bars
+            ctx.fillRect(
+                i * barWidth,
+                h - barHeight,
+                barWidth - 2,
+                barHeight
+            );
+            
+            // Top bars (mirror)
+            ctx.fillRect(
+                i * barWidth,
+                0,
+                barWidth - 2,
+                barHeight * 0.3
+            );
+        }
+        
+        // Waveform
+        waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+        const timeData = new Uint8Array(bufferLength);
+        AudioEngine.analyser.getByteTimeDomainData(timeData);
+        
+        waveCtx.beginPath();
+        waveCtx.strokeStyle = 'rgba(0, 212, 255, 0.8)';
+        waveCtx.lineWidth = 2;
+        
+        for (let i = 0; i < bufferLength; i++) {
+            const x = (i / bufferLength) * waveCanvas.width;
+            const y = (timeData[i] / 255) * waveCanvas.height;
+            
+            if (i === 0) waveCtx.moveTo(x, y);
+            else waveCtx.lineTo(x, y);
+        }
+        waveCtx.stroke();
+    }
+    
+    // Central glow
+    const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, 400);
+    const glowIntensity = particles.length / 100;
+    gradient.addColorStop(0, `rgba(0, 212, 255, ${glowIntensity * 0.2})`);
+    gradient.addColorStop(0.5, `rgba(255, 0, 255, ${glowIntensity * 0.1})`);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('overlay').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) {
+        await AudioEngine.init();
+    }
+    togglePlay();
+    document.getElementById('overlay').classList.add('hidden');
+});
+
+document.getElementById('playBtn').addEventListener('click', togglePlay);
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+function togglePlay() {
+    if (!AudioEngine.ctx) return;
+    
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('playBtn').textContent = '▶ DROP IT';
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('playBtn').textContent = '⏸ PAUSE';
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+// Start visual loop
+draw();
+
+console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║                        ETHEREAL                               ║
+║                  Future Bass Anthem                           ║
+╠══════════════════════════════════════════════════════════════╣
+║  BPM: ${CONFIG.BPM}                                                  ║
+║  Key: ${CONFIG.KEY}                                                  ║
+║  Duration: ~${Math.floor(TOTAL_BEATS * (60/CONFIG.BPM) / 60)}:${Math.round((TOTAL_BEATS * (60/CONFIG.BPM)) % 60).toString().padStart(2, '0')}                                           ║
+║  Events: ${EVENTS.length}                                              ║
+╚══════════════════════════════════════════════════════════════╝
+`);
+</script>
+</body>
+</html>
