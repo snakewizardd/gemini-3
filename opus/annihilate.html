@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ANNIHILATE - Aggressive Dubstep Destroyer</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+        background: #000; 
+        overflow: hidden; 
+        font-family: 'Impact', 'Arial Black', sans-serif;
+        color: #fff;
+    }
+    
+    #canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+    
+    #overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.97);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        transition: opacity 1s;
+    }
+    .hidden { opacity: 0; pointer-events: none; }
+    
+    #overlay h1 {
+        font-size: 6em;
+        color: #ff0040;
+        text-shadow: 
+            0 0 20px #ff0040,
+            0 0 40px #ff0040,
+            0 0 80px #ff0040,
+            4px 4px 0 #000;
+        letter-spacing: 0.2em;
+        animation: glitch 0.3s infinite;
+        text-transform: uppercase;
+    }
+    
+    @keyframes glitch {
+        0%, 90%, 100% { transform: translate(0); }
+        92% { transform: translate(-5px, 2px); }
+        94% { transform: translate(5px, -2px); }
+        96% { transform: translate(-3px, -1px); }
+        98% { transform: translate(3px, 1px); }
+    }
+    
+    #overlay h2 {
+        font-size: 1.8em;
+        color: #0ff;
+        margin-top: 20px;
+        font-weight: 400;
+        letter-spacing: 0.8em;
+        text-shadow: 0 0 20px #0ff;
+    }
+    
+    .warning {
+        margin-top: 40px;
+        padding: 20px 40px;
+        background: rgba(255, 0, 64, 0.2);
+        border: 2px solid #ff0040;
+        color: #ff0040;
+        font-size: 1.2em;
+        letter-spacing: 0.3em;
+        animation: blink 1s infinite;
+    }
+    
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    .click-prompt {
+        margin-top: 50px;
+        font-size: 1.5em;
+        color: #666;
+        letter-spacing: 0.2em;
+    }
+    
+    #controls {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    #controls button {
+        background: linear-gradient(135deg, #ff0040, #ff6600);
+        border: none;
+        color: #fff;
+        padding: 18px 50px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 0;
+        transition: all 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+    }
+    
+    #controls button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 40px rgba(255, 0, 64, 0.8);
+    }
+    
+    #time-display {
+        color: #ff0040;
+        font-size: 16px;
+        font-family: monospace;
+        text-shadow: 0 0 10px #ff0040;
+    }
+    
+    #section-display {
+        position: fixed;
+        top: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 32px;
+        font-weight: bold;
+        color: #ff0040;
+        z-index: 50;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        text-shadow: 0 0 20px #ff0040;
+    }
+    
+    #bpm-display {
+        position: fixed;
+        top: 30px;
+        right: 30px;
+        font-size: 24px;
+        color: #0ff;
+        z-index: 50;
+        font-family: monospace;
+        text-shadow: 0 0 15px #0ff;
+    }
+    
+    #progress {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        height: 5px;
+        background: linear-gradient(90deg, #ff0040, #ff6600, #ffff00, #0ff);
+        z-index: 50;
+        box-shadow: 0 0 20px #ff0040;
+    }
+    
+    #intensity-meter {
+        position: fixed;
+        left: 30px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 20px;
+        height: 300px;
+        background: rgba(255,255,255,0.1);
+        z-index: 50;
+        border: 2px solid #ff0040;
+    }
+    
+    #intensity-fill {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        background: linear-gradient(to top, #ff0040, #ff6600, #ffff00);
+        transition: height 0.1s;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>ANNIHILATE</h1>
+    <h2>DUBSTEP DESTROYER</h2>
+    <div class="warning">⚠ EXTREME BASS WARNING ⚠</div>
+    <p class="click-prompt">[ CLICK TO UNLEASH CHAOS ]</p>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="section-display">ANNIHILATE</div>
+<div id="bpm-display">140 BPM</div>
+
+<div id="intensity-meter">
+    <div id="intensity-fill"></div>
+</div>
+
+<div id="controls">
+    <button id="playBtn">▶ DESTROY</button>
+    <div id="time-display">0:00 / 3:45</div>
+</div>
+
+<div id="progress"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONFIG - AGGRESSIVE DUBSTEP
+// ═══════════════════════════════════════════════════════════════════════════════
+const CONFIG = {
+    BPM: 140,
+    KEY: 'Fm'
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NOTE FREQUENCIES
+// ═══════════════════════════════════════════════════════════════════════════════
+const NOTES = {
+    'C1': 32.70, 'D1': 36.71, 'E1': 41.20, 'F1': 43.65, 'G1': 49.00, 'A1': 55.00, 'B1': 61.74,
+    'C2': 65.41, 'C#2': 69.30, 'D2': 73.42, 'D#2': 77.78, 'E2': 82.41, 'F2': 87.31,
+    'F#2': 92.50, 'G2': 98.00, 'G#2': 103.83, 'A2': 110.00, 'A#2': 116.54, 'B2': 123.47,
+    'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81, 'F3': 174.61,
+    'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
+    'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63, 'F4': 349.23,
+    'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
+    'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.26, 'F5': 698.46,
+    'F#5': 739.99, 'G5': 783.99, 'G#5': 830.61, 'A5': 880.00, 'A#5': 932.33, 'B5': 987.77,
+    'C6': 1046.50
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE - HEAVY DUBSTEP/BROSTEP
+// ═══════════════════════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    compressor: null,
+    distortion: null,
+    analyser: null,
+    isPlaying: false,
+    intensity: 0,
+    
+    init: async () => {
+        AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = AudioEngine.ctx;
+        
+        // Analyser
+        AudioEngine.analyser = ctx.createAnalyser();
+        AudioEngine.analyser.fftSize = 512;
+        
+        // HEAVY compression/limiting
+        AudioEngine.compressor = ctx.createDynamicsCompressor();
+        AudioEngine.compressor.threshold.value = -3;
+        AudioEngine.compressor.knee.value = 0;
+        AudioEngine.compressor.ratio.value = 20;
+        AudioEngine.compressor.attack.value = 0.001;
+        AudioEngine.compressor.release.value = 0.05;
+        
+        // Distortion for aggression
+        AudioEngine.distortion = ctx.createWaveShaper();
+        AudioEngine.distortion.curve = AudioEngine.makeDistortionCurve(100);
+        AudioEngine.distortion.oversample = '4x';
+        
+        // Master
+        AudioEngine.master = ctx.createGain();
+        AudioEngine.master.gain.value = 0.85;
+        
+        // Bass boost EQ
+        AudioEngine.bassBoost = ctx.createBiquadFilter();
+        AudioEngine.bassBoost.type = 'lowshelf';
+        AudioEngine.bassBoost.frequency.value = 100;
+        AudioEngine.bassBoost.gain.value = 10;
+        
+        // Sub boost
+        AudioEngine.subBoost = ctx.createBiquadFilter();
+        AudioEngine.subBoost.type = 'peaking';
+        AudioEngine.subBoost.frequency.value = 50;
+        AudioEngine.subBoost.gain.value = 8;
+        AudioEngine.subBoost.Q.value = 2;
+        
+        // High presence
+        AudioEngine.highBoost = ctx.createBiquadFilter();
+        AudioEngine.highBoost.type = 'highshelf';
+        AudioEngine.highBoost.frequency.value = 6000;
+        AudioEngine.highBoost.gain.value = 6;
+        
+        // Signal chain
+        AudioEngine.subBoost.connect(AudioEngine.bassBoost);
+        AudioEngine.bassBoost.connect(AudioEngine.highBoost);
+        AudioEngine.highBoost.connect(AudioEngine.compressor);
+        AudioEngine.compressor.connect(AudioEngine.master);
+        AudioEngine.master.connect(AudioEngine.analyser);
+        AudioEngine.analyser.connect(ctx.destination);
+    },
+    
+    makeDistortionCurve: (amount) => {
+        const k = amount;
+        const n = 44100;
+        const curve = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            const x = (i * 2) / n - 1;
+            curve[i] = (Math.PI + k) * x / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DRUMS - HEAVY AF
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // CRUSHING Kick
+    playKick: (time, velocity = 1.0, type = 'normal') => {
+        const ctx = AudioEngine.ctx;
+        
+        // Sub layer
+        const sub = ctx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(type === 'sub' ? 60 : 150, time);
+        sub.frequency.exponentialRampToValueAtTime(type === 'sub' ? 30 : 35, time + 0.15);
+        
+        // Punch layer
+        const punch = ctx.createOscillator();
+        punch.type = 'triangle';
+        punch.frequency.setValueAtTime(200, time);
+        punch.frequency.exponentialRampToValueAtTime(40, time + 0.08);
+        
+        // Click
+        const click = ctx.createOscillator();
+        click.type = 'square';
+        click.frequency.value = 2500;
+        
+        // Noise click
+        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.02, ctx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) noiseData[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'highpass';
+        noiseFilter.frequency.value = 3000;
+        
+        const noiseEnv = ctx.createGain();
+        noiseEnv.gain.setValueAtTime(0.4 * velocity, time);
+        noiseEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
+        
+        const clickEnv = ctx.createGain();
+        clickEnv.gain.setValueAtTime(0.3 * velocity, time);
+        clickEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.01);
+        
+        const subEnv = ctx.createGain();
+        subEnv.gain.setValueAtTime(1.2 * velocity, time);
+        subEnv.gain.exponentialRampToValueAtTime(0.001, time + (type === 'sub' ? 0.6 : 0.35));
+        
+        const punchEnv = ctx.createGain();
+        punchEnv.gain.setValueAtTime(0.8 * velocity, time);
+        punchEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+        
+        // Distortion on kick
+        const kickDist = ctx.createWaveShaper();
+        kickDist.curve = AudioEngine.makeDistortionCurve(50);
+        
+        sub.connect(subEnv);
+        punch.connect(punchEnv);
+        click.connect(clickEnv);
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseEnv);
+        
+        subEnv.connect(kickDist);
+        punchEnv.connect(kickDist);
+        clickEnv.connect(AudioEngine.subBoost);
+        noiseEnv.connect(AudioEngine.subBoost);
+        kickDist.connect(AudioEngine.subBoost);
+        
+        sub.start(time); sub.stop(time + 0.7);
+        punch.start(time); punch.stop(time + 0.3);
+        click.start(time); click.stop(time + 0.02);
+        noise.start(time);
+        
+        AudioEngine.intensity = Math.min(1, AudioEngine.intensity + 0.3);
+        triggerVisual('kick', velocity);
+    },
+    
+    // Snare with BITE
+    playSnare: (time, velocity = 1.0, type = 'normal') => {
+        const ctx = AudioEngine.ctx;
+        
+        // Noise
+        const bufferSize = ctx.sampleRate * (type === 'long' ? 0.3 : 0.15);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        // Body
+        const body = ctx.createOscillator();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(280, time);
+        body.frequency.exponentialRampToValueAtTime(140, time + 0.05);
+        
+        // Filters
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 1500;
+        
+        const peak = ctx.createBiquadFilter();
+        peak.type = 'peaking';
+        peak.frequency.value = 4000;
+        peak.gain.value = 8;
+        peak.Q.value = 2;
+        
+        const noiseEnv = ctx.createGain();
+        noiseEnv.gain.setValueAtTime(0.9 * velocity, time);
+        noiseEnv.gain.exponentialRampToValueAtTime(0.001, time + (type === 'long' ? 0.25 : 0.12));
+        
+        const bodyEnv = ctx.createGain();
+        bodyEnv.gain.setValueAtTime(0.7 * velocity, time);
+        bodyEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+        
+        noise.connect(hpf);
+        hpf.connect(peak);
+        peak.connect(noiseEnv);
+        body.connect(bodyEnv);
+        noiseEnv.connect(AudioEngine.subBoost);
+        bodyEnv.connect(AudioEngine.subBoost);
+        
+        noise.start(time);
+        body.start(time); body.stop(time + 0.1);
+        
+        triggerVisual('snare', velocity);
+    },
+    
+    // Hi-hats
+    playHat: (time, open = false, velocity = 0.5) => {
+        const ctx = AudioEngine.ctx;
+        
+        const duration = open ? 0.25 : 0.04;
+        const bufferSize = ctx.sampleRate * duration;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const bpf = ctx.createBiquadFilter();
+        bpf.type = 'bandpass';
+        bpf.frequency.value = 10000;
+        bpf.Q.value = 0.5;
+        
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 8000;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(velocity, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        noise.connect(bpf);
+        bpf.connect(hpf);
+        hpf.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        noise.start(time);
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BASS - THE WOBBLE MONSTERS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // GROWL BASS - the signature dubstep sound
+    playGrowlBass: (note, time, duration, wobbleSpeed = 8, velocity = 1.0) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note] || 55;
+        
+        // Multiple oscillators for thickness
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const osc3 = ctx.createOscillator();
+        const osc4 = ctx.createOscillator();
+        
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc3.type = 'sawtooth';
+        osc4.type = 'square';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        osc3.frequency.value = freq * 2;
+        osc4.frequency.value = freq * 0.5;
+        
+        osc2.detune.value = 10;
+        osc3.detune.value = -7;
+        
+        // LFO for wobble
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = wobbleSpeed;
+        
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 2000;
+        
+        // Main filter - THIS IS THE GROWL
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 400;
+        filter.Q.value = 15;
+        
+        // Second filter for more character
+        const filter2 = ctx.createBiquadFilter();
+        filter2.type = 'bandpass';
+        filter2.frequency.value = 800;
+        filter2.Q.value = 5;
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(filter.frequency);
+        lfoGain.connect(filter2.frequency);
+        
+        // Distortion
+        const dist = ctx.createWaveShaper();
+        dist.curve = AudioEngine.makeDistortionCurve(200);
+        dist.oversample = '4x';
+        
+        // Mix gains
+        const g1 = ctx.createGain(); g1.gain.value = 0.4;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        const g3 = ctx.createGain(); g3.gain.value = 0.2;
+        const g4 = ctx.createGain(); g4.gain.value = 0.4;
+        
+        // Master envelope
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.8, time + 0.02);
+        env.gain.setValueAtTime(velocity * 0.8, time + duration - 0.05);
+        env.gain.linearRampToValueAtTime(0, time + duration);
+        
+        osc1.connect(g1);
+        osc2.connect(g2);
+        osc3.connect(g3);
+        osc4.connect(g4);
+        g1.connect(filter);
+        g2.connect(filter);
+        g3.connect(filter);
+        g4.connect(filter);
+        filter.connect(filter2);
+        filter2.connect(dist);
+        dist.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        osc1.start(time); osc1.stop(time + duration + 0.1);
+        osc2.start(time); osc2.stop(time + duration + 0.1);
+        osc3.start(time); osc3.stop(time + duration + 0.1);
+        osc4.start(time); osc4.stop(time + duration + 0.1);
+        lfo.start(time); lfo.stop(time + duration + 0.1);
+        
+        AudioEngine.intensity = Math.min(1, AudioEngine.intensity + 0.15);
+        triggerVisual('bass', velocity);
+    },
+    
+    // SCREAM BASS - Higher pitched aggressive bass
+    playScreamBass: (note, time, duration, velocity = 1.0) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note] || 110;
+        
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 1.01;
+        
+        // FM modulation for screaming
+        const modulator = ctx.createOscillator();
+        const modGain = ctx.createGain();
+        modulator.type = 'sawtooth';
+        modulator.frequency.value = freq * 2;
+        modGain.gain.value = freq;
+        
+        modulator.connect(modGain);
+        modGain.connect(osc1.frequency);
+        
+        // Filter sweep
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(500, time);
+        filter.frequency.exponentialRampToValueAtTime(4000, time + duration * 0.3);
+        filter.frequency.exponentialRampToValueAtTime(800, time + duration);
+        filter.Q.value = 8;
+        
+        const dist = ctx.createWaveShaper();
+        dist.curve = AudioEngine.makeDistortionCurve(300);
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.6, time + 0.01);
+        env.gain.setValueAtTime(velocity * 0.6, time + duration - 0.02);
+        env.gain.linearRampToValueAtTime(0, time + duration);
+        
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(dist);
+        dist.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        osc1.start(time); osc1.stop(time + duration + 0.1);
+        osc2.start(time); osc2.stop(time + duration + 0.1);
+        modulator.start(time); modulator.stop(time + duration + 0.1);
+        
+        triggerVisual('scream', velocity);
+    },
+    
+    // YOINK bass - that pitch-bending craziness
+    playYoinkBass: (note, time, duration, direction = 'down', velocity = 1.0) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note] || 110;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        
+        if (direction === 'down') {
+            osc.frequency.setValueAtTime(freq * 4, time);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.25, time + duration);
+        } else {
+            osc.frequency.setValueAtTime(freq * 0.25, time);
+            osc.frequency.exponentialRampToValueAtTime(freq * 4, time + duration);
+        }
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3000;
+        filter.Q.value = 10;
+        
+        const dist = ctx.createWaveShaper();
+        dist.curve = AudioEngine.makeDistortionCurve(150);
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(velocity * 0.7, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(filter);
+        filter.connect(dist);
+        dist.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+        
+        triggerVisual('yoink', velocity);
+    },
+    
+    // SUB bass - clean low end
+    playSubBass: (note, time, duration, velocity = 1.0) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note] || 55;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq / 2;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.9, time + 0.02);
+        env.gain.setValueAtTime(velocity * 0.9, time + duration - 0.05);
+        env.gain.linearRampToValueAtTime(0, time + duration);
+        
+        osc.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LEADS & FX
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Aggressive lead
+    playLead: (note, time, duration, velocity = 0.7) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        const oscCount = 5;
+        const detunes = [-25, -12, 0, 12, 25];
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(8000, time);
+        filter.frequency.exponentialRampToValueAtTime(2000, time + duration);
+        filter.Q.value = 2;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.4, time + 0.02);
+        env.gain.setValueAtTime(velocity * 0.4, time + duration - 0.03);
+        env.gain.linearRampToValueAtTime(0, time + duration);
+        
+        for (let i = 0; i < oscCount; i++) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.detune.value = detunes[i];
+            
+            const g = ctx.createGain();
+            g.gain.value = 0.2;
+            
+            osc.connect(g);
+            g.connect(filter);
+            osc.start(time);
+            osc.stop(time + duration + 0.1);
+        }
+        
+        filter.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        triggerVisual('lead', velocity);
+    },
+    
+    // Stab chord
+    playStab: (notes, time, velocity = 0.8) => {
+        const ctx = AudioEngine.ctx;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(10000, time);
+        filter.frequency.exponentialRampToValueAtTime(500, time + 0.2);
+        filter.Q.value = 5;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(velocity * 0.5, time + 0.005);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+        
+        notes.forEach(note => {
+            const freq = NOTES[note];
+            if (!freq) return;
+            
+            for (let i = 0; i < 3; i++) {
+                const osc = ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq;
+                osc.detune.value = (i - 1) * 15;
+                
+                osc.connect(filter);
+                osc.start(time);
+                osc.stop(time + 0.3);
+            }
+        });
+        
+        filter.connect(env);
+        env.connect(AudioEngine.subBoost);
+        
+        triggerVisual('stab', velocity);
+    },
+    
+    // Riser
+    playRiser: (time, duration, type = 'noise') => {
+        const ctx = AudioEngine.ctx;
+        
+        if (type === 'noise') {
+            const bufferSize = ctx.sampleRate * duration;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(100, time);
+            filter.frequency.exponentialRampToValueAtTime(12000, time + duration);
+            
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, time);
+            env.gain.linearRampToValueAtTime(0.5, time + duration * 0.9);
+            env.gain.linearRampToValueAtTime(0, time + duration);
+            
+            noise.connect(filter);
+            filter.connect(env);
+            env.connect(AudioEngine.subBoost);
+            noise.start(time);
+        } else {
+            // Pitch riser
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100, time);
+            osc.frequency.exponentialRampToValueAtTime(2000, time + duration);
+            
+            const env = ctx.createGain();
+            env.gain.setValueAtTime(0, time);
+            env.gain.linearRampToValueAtTime(0.4, time + duration * 0.9);
+            env.gain.linearRampToValueAtTime(0, time + duration);
+            
+            osc.connect(env);
+            env.connect(AudioEngine.subBoost);
+            osc.start(time);
+            osc.stop(time + duration + 0.1);
+        }
+    },
+    
+    // Impact/Drop
+    playImpact: (time, size = 'big') => {
+        const ctx = AudioEngine.ctx;
+        
+        // Low boom
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(size === 'huge' ? 100 : 80, time);
+        osc.frequency.exponentialRampToValueAtTime(15, time + 0.8);
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(size === 'huge' ? 1.5 : 1.0, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 1.0);
+        
+        // Crash
+        const bufferSize = ctx.sampleRate * 0.8;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        
+        const crash = ctx.createBufferSource();
+        crash.buffer = buffer;
+        
+        const crashEnv = ctx.createGain();
+        crashEnv.gain.setValueAtTime(size === 'huge' ? 0.8 : 0.5, time);
+        crashEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.6);
+        
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 3000;
+        
+        osc.connect(env);
+        env.connect(AudioEngine.subBoost);
+        crash.connect(hpf);
+        hpf.connect(crashEnv);
+        crashEnv.connect(AudioEngine.subBoost);
+        
+        osc.start(time); osc.stop(time + 1.2);
+        crash.start(time);
+        
+        AudioEngine.intensity = 1.0;
+        triggerVisual('impact', 1.0);
+    },
+    
+    // Laser/zap
+    playLaser: (time, direction = 'down') => {
+        const ctx = AudioEngine.ctx;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        
+        if (direction === 'down') {
+            osc.frequency.setValueAtTime(3000, time);
+            osc.frequency.exponentialRampToValueAtTime(100, time + 0.15);
+        } else {
+            osc.frequency.setValueAtTime(100, time);
+            osc.frequency.exponentialRampToValueAtTime(3000, time + 0.15);
+        }
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0.4, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+        
+        osc.connect(env);
+        env.connect(AudioEngine.subBoost);
+        osc.start(time);
+        osc.stop(time + 0.2);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSITION
+// ═══════════════════════════════════════════════════════════════════════════════
+const EVENTS = [];
+const SECTIONS = [];
+
+function addSection(name, beat) {
+    SECTIONS.push({ name, beat });
+}
+
+function addEvent(beat, type, data = {}) {
+    EVENTS.push({ beat, type, ...data });
+}
+
+const BAR = 4;
+const B = 0.5;
+const S = 0.25;
+const T = 1/3;
+
+let b = 0;
+
+// F minor chord voicings
+const CHORDS = {
+    'Fm': ['F3', 'G#3', 'C4'],
+    'Db': ['Db3', 'F3', 'Ab3'],
+    'Ab': ['Ab3', 'C4', 'Eb4'],
+    'Eb': ['Eb3', 'G3', 'Bb3'],
+    'Bbm': ['Bb3', 'Db4', 'F4']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  INTRO - OMINOUS BUILD (16 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("INTRO", b);
+
+// Dark atmospheric intro
+for (let bar = 0; bar < 8; bar++) {
+    // Sparse kicks
+    if (bar >= 4) {
+        addEvent(b, 'kick', { velocity: 0.5 + bar * 0.05, type: 'sub' });
+    }
+    
+    // Growing hats
+    if (bar >= 2) {
+        for (let i = 0; i < 8; i++) {
+            addEvent(b + i * B, 'hat', { velocity: 0.15 + bar * 0.02 });
+        }
+    }
+    
+    // Stabs
+    if (bar % 2 === 0) {
+        addEvent(b, 'stab', { notes: ['F4', 'Ab4', 'C5'], velocity: 0.3 + bar * 0.05 });
+    }
+    
+    // Sub bass drone
+    addEvent(b, 'subbass', { note: 'F1', duration: BAR * (60/CONFIG.BPM), velocity: 0.4 + bar * 0.05 });
+    
+    b += BAR;
+}
+
+// Buildup intensifies
+for (let bar = 0; bar < 8; bar++) {
+    addEvent(b, 'kick', { velocity: 0.7 + bar * 0.03 });
+    if (bar >= 4) addEvent(b + 2, 'kick', { velocity: 0.6 });
+    
+    addEvent(b + 1, 'snare', { velocity: 0.5 + bar * 0.05 });
+    addEvent(b + 3, 'snare', { velocity: 0.5 + bar * 0.05 });
+    
+    for (let i = 0; i < 16; i++) {
+        addEvent(b + i * S, 'hat', { velocity: 0.25 + bar * 0.02, open: i % 8 === 4 });
+    }
+    
+    // Building lead
+    const leadNotes = ['F4', 'Ab4', 'C5', 'Eb5'];
+    if (bar >= 4) {
+        leadNotes.forEach((note, i) => {
+            addEvent(b + i, 'lead', { note, duration: 0.9 * (60/CONFIG.BPM), velocity: 0.4 + bar * 0.05 });
+        });
+    }
+    
+    addEvent(b, 'subbass', { note: 'F1', duration: BAR * (60/CONFIG.BPM), velocity: 0.6 });
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BUILD 1 - TENSION (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BUILD", b);
+
+// Riser
+addEvent(b, 'riser', { duration: BAR * 8 * (60/CONFIG.BPM), type: 'noise' });
+addEvent(b, 'riser', { duration: BAR * 8 * (60/CONFIG.BPM), type: 'pitch' });
+
+for (let bar = 0; bar < 8; bar++) {
+    // Accelerating snare roll
+    const rollDensity = Math.pow(2, Math.floor(bar / 2) + 1);
+    for (let i = 0; i < rollDensity; i++) {
+        addEvent(b + (i / rollDensity) * BAR, 'snare', { 
+            velocity: 0.4 + (bar / 8) * 0.5,
+            type: bar >= 6 ? 'long' : 'normal'
+        });
+    }
+    
+    // Stabs getting more frequent
+    if (bar < 6) {
+        addEvent(b, 'stab', { notes: ['F4', 'Ab4', 'C5'], velocity: 0.6 + bar * 0.05 });
+        if (bar >= 4) {
+            addEvent(b + 2, 'stab', { notes: ['Db4', 'F4', 'Ab4'], velocity: 0.5 });
+        }
+    }
+    
+    // Laser zaps
+    if (bar >= 4) {
+        addEvent(b + 1, 'laser', { direction: 'up' });
+        addEvent(b + 3, 'laser', { direction: 'down' });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DROP 1 - UNLEASH THE BEAST (16 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("DROP 1", b);
+
+// MASSIVE IMPACT
+addEvent(b, 'impact', { size: 'huge' });
+
+// Main drop pattern
+for (let bar = 0; bar < 16; bar++) {
+    const pattern = bar % 4;
+    
+    // Kick pattern - syncopated dubstep style
+    addEvent(b, 'kick', { velocity: 1.0 });
+    if (pattern !== 2) addEvent(b + 1.5, 'kick', { velocity: 0.8 });
+    addEvent(b + 2.5, 'kick', { velocity: 0.9 });
+    if (pattern === 1 || pattern === 3) addEvent(b + 3.5, 'kick', { velocity: 0.7 });
+    
+    // Snare on 2 and 4
+    addEvent(b + 1, 'snare', { velocity: 1.0 });
+    addEvent(b + 3, 'snare', { velocity: 1.0 });
+    // Ghost snares
+    addEvent(b + 2.75, 'snare', { velocity: 0.4 });
+    
+    // Hats - intricate pattern
+    for (let i = 0; i < 16; i++) {
+        if (i !== 4 && i !== 12) {
+            addEvent(b + i * S, 'hat', { 
+                velocity: i % 4 === 0 ? 0.5 : 0.3,
+                open: i === 6 || i === 14
+            });
+        }
+    }
+    
+    // GROWL BASS - the main attraction
+    const wobbleSpeeds = [8, 12, 6, 16];
+    const bassNotes = ['F2', 'F2', 'Db2', 'Eb2'];
+    
+    addEvent(b, 'growlbass', { 
+        note: bassNotes[pattern],
+        duration: 1.4 * (60/CONFIG.BPM),
+        wobbleSpeed: wobbleSpeeds[pattern],
+        velocity: 1.0
+    });
+    
+    addEvent(b + 1.5, 'growlbass', { 
+        note: bassNotes[pattern],
+        duration: 1.0 * (60/CONFIG.BPM),
+        wobbleSpeed: wobbleSpeeds[(pattern + 1) % 4],
+        velocity: 0.9
+    });
+    
+    // Yoinks and screams for variation
+    if (bar % 4 === 3) {
+        addEvent(b + 3, 'yoinkbass', { 
+            note: 'F2', 
+            duration: 0.5 * (60/CONFIG.BPM),
+            direction: 'down',
+            velocity: 1.0
+        });
+    }
+    
+    if (bar % 8 === 7) {
+        addEvent(b + 2.5, 'screambass', {
+            note: 'F3',
+            duration: 1.5 * (60/CONFIG.BPM),
+            velocity: 0.9
+        });
+    }
+    
+    // Sub for weight
+    addEvent(b, 'subbass', { note: bassNotes[pattern], duration: BAR * (60/CONFIG.BPM), velocity: 0.8 });
+    
+    // Lead stabs
+    if (bar % 2 === 0) {
+        addEvent(b + 0.5, 'stab', { notes: CHORDS['Fm'], velocity: 0.6 });
+        addEvent(b + 2.5, 'stab', { notes: CHORDS['Ab'], velocity: 0.5 });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BREAKDOWN 1 (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BREAKDOWN", b);
+
+for (let bar = 0; bar < 8; bar++) {
+    // Minimal drums
+    if (bar >= 4) {
+        addEvent(b + 1, 'snare', { velocity: 0.4 });
+        addEvent(b + 3, 'snare', { velocity: 0.4 });
+    }
+    
+    // Atmospheric pads (using stabs held)
+    addEvent(b, 'stab', { notes: ['F4', 'Ab4', 'C5'], velocity: 0.3 });
+    
+    // Melodic lead
+    const melodyNotes = [
+        ['F5', 'Eb5', 'C5', 'Ab4'],
+        ['Db5', 'C5', 'Ab4', 'F4'],
+        ['Ab5', 'G5', 'F5', 'Eb5'],
+        ['C5', 'Bb4', 'Ab4', 'G4']
+    ];
+    
+    melodyNotes[bar % 4].forEach((note, i) => {
+        addEvent(b + i, 'lead', { 
+            note, 
+            duration: 0.9 * (60/CONFIG.BPM), 
+            velocity: 0.4 - bar * 0.02 + i * 0.05
+        });
+    });
+    
+    // Sub pad
+    addEvent(b, 'subbass', { note: 'F1', duration: BAR * (60/CONFIG.BPM), velocity: 0.3 });
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BUILD 2 - MAXIMUM TENSION (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BUILD 2", b);
+
+addEvent(b, 'riser', { duration: BAR * 8 * (60/CONFIG.BPM), type: 'noise' });
+addEvent(b, 'riser', { duration: BAR * 8 * (60/CONFIG.BPM), type: 'pitch' });
+
+for (let bar = 0; bar < 8; bar++) {
+    // INSANE snare roll
+    const density = Math.pow(2, Math.min(bar + 2, 6));
+    for (let i = 0; i < density; i++) {
+        addEvent(b + (i / density) * BAR, 'snare', { 
+            velocity: 0.5 + (bar / 8) * 0.5 + (i / density) * 0.2
+        });
+    }
+    
+    // Kick accents
+    if (bar < 6) {
+        addEvent(b, 'kick', { velocity: 0.7 + bar * 0.05 });
+        addEvent(b + 2, 'kick', { velocity: 0.6 + bar * 0.05 });
+    }
+    
+    // Stab crescendo
+    addEvent(b, 'stab', { notes: ['F4', 'Ab4', 'C5', 'F5'], velocity: 0.5 + bar * 0.06 });
+    
+    // Lasers going crazy
+    for (let i = 0; i < 4; i++) {
+        if (bar >= 4) {
+            addEvent(b + i, 'laser', { direction: i % 2 === 0 ? 'up' : 'down' });
+        }
+    }
+    
+    // Teaser growl
+    if (bar >= 6) {
+        addEvent(b + 2, 'growlbass', {
+            note: 'F2',
+            duration: 0.5 * (60/CONFIG.BPM),
+            wobbleSpeed: 16,
+            velocity: 0.6 + (bar - 6) * 0.2
+        });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DROP 2 - ABSOLUTE CARNAGE (20 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("DROP 2", b);
+
+addEvent(b, 'impact', { size: 'huge' });
+
+// HEAVIEST DROP
+for (let bar = 0; bar < 20; bar++) {
+    const pattern = bar % 4;
+    const section = Math.floor(bar / 4);
+    
+    // Kick pattern - even more aggressive
+    addEvent(b, 'kick', { velocity: 1.0 });
+    addEvent(b + 0.75, 'kick', { velocity: 0.6 });
+    addEvent(b + 1.5, 'kick', { velocity: 0.9 });
+    addEvent(b + 2.5, 'kick', { velocity: 0.95 });
+    if (pattern === 1 || pattern === 3) {
+        addEvent(b + 3.25, 'kick', { velocity: 0.7 });
+        addEvent(b + 3.75, 'kick', { velocity: 0.65 });
+    }
+    
+    // Snare layers
+    addEvent(b + 1, 'snare', { velocity: 1.0 });
+    addEvent(b + 3, 'snare', { velocity: 1.0 });
+    addEvent(b + 1.5, 'snare', { velocity: 0.3 });
+    addEvent(b + 2.75, 'snare', { velocity: 0.4 });
+    addEvent(b + 3.5, 'snare', { velocity: 0.35 });
+    
+    // Crazy hats
+    for (let i = 0; i < 16; i++) {
+        addEvent(b + i * S, 'hat', { 
+            velocity: (i % 2 === 0 ? 0.5 : 0.35) + (Math.random() * 0.1),
+            open: i === 6 || i === 14
+        });
+    }
+    
+    // ROTATING BASS SOUNDS
+    const bassTypes = ['growl', 'scream', 'growl', 'yoink'];
+    const currentBassType = bassTypes[pattern];
+    const bassNote = ['F2', 'Db2', 'Ab2', 'Eb2'][pattern];
+    
+    // First half of bar
+    if (currentBassType === 'growl') {
+        addEvent(b, 'growlbass', {
+            note: bassNote,
+            duration: 1.4 * (60/CONFIG.BPM),
+            wobbleSpeed: [8, 12, 6, 16][section % 4],
+            velocity: 1.0
+        });
+    } else if (currentBassType === 'scream') {
+        addEvent(b, 'screambass', {
+            note: 'F3',
+            duration: 1.4 * (60/CONFIG.BPM),
+            velocity: 1.0
+        });
+    } else {
+        addEvent(b, 'growlbass', {
+            note: bassNote,
+            duration: 1.0 * (60/CONFIG.BPM),
+            wobbleSpeed: 10,
+            velocity: 0.9
+        });
+    }
+    
+    // Second half - variations
+    if (pattern === 0 || pattern === 2) {
+        addEvent(b + 1.5, 'growlbass', {
+            note: bassNote,
+            duration: 1.0 * (60/CONFIG.BPM),
+            wobbleSpeed: 16,
+            velocity: 0.85
+        });
+        addEvent(b + 3, 'yoinkbass', {
+            note: 'F2',
+            duration: 0.4 * (60/CONFIG.BPM),
+            direction: 'down',
+            velocity: 0.9
+        });
+    } else if (pattern === 1) {
+        addEvent(b + 2, 'screambass', {
+            note: 'Ab3',
+            duration: 1.5 * (60/CONFIG.BPM),
+            velocity: 0.85
+        });
+    } else {
+        addEvent(b + 1.5, 'yoinkbass', {
+            note: 'F2',
+            duration: 0.6 * (60/CONFIG.BPM),
+            direction: 'up',
+            velocity: 0.9
+        });
+        addEvent(b + 2.5, 'yoinkbass', {
+            note: 'F2',
+            duration: 0.6 * (60/CONFIG.BPM),
+            direction: 'down',
+            velocity: 0.95
+        });
+    }
+    
+    // Constant sub
+    addEvent(b, 'subbass', { note: bassNote, duration: BAR * (60/CONFIG.BPM), velocity: 0.9 });
+    
+    // Stab accents
+    if (bar % 2 === 1) {
+        addEvent(b + 0.5, 'stab', { notes: CHORDS['Fm'], velocity: 0.7 });
+    }
+    
+    // Lead fills every 4 bars
+    if (bar % 4 === 3) {
+        const fillNotes = ['C5', 'Db5', 'Eb5', 'F5', 'G5', 'Ab5', 'G5', 'F5'];
+        fillNotes.forEach((note, i) => {
+            addEvent(b + 2 + i * S, 'lead', {
+                note,
+                duration: S * (60/CONFIG.BPM),
+                velocity: 0.6
+            });
+        });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BREAKDOWN 2 - BREATHING ROOM (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("BREAK 2", b);
+
+for (let bar = 0; bar < 8; bar++) {
+    // Very minimal
+    if (bar >= 4) {
+        addEvent(b, 'kick', { velocity: 0.5, type: 'sub' });
+        addEvent(b + 2, 'kick', { velocity: 0.4, type: 'sub' });
+    }
+    
+    // Emotional melody
+    const melodies = [
+        ['F5', 'Eb5', 'Db5', 'C5'],
+        ['Ab4', 'Bb4', 'C5', 'Db5'],
+        ['Eb5', 'Db5', 'C5', 'Bb4'],
+        ['Ab4', 'G4', 'F4', 'Eb4']
+    ];
+    
+    melodies[bar % 4].forEach((note, i) => {
+        addEvent(b + i, 'lead', {
+            note,
+            duration: 0.95 * (60/CONFIG.BPM),
+            velocity: 0.35
+        });
+    });
+    
+    // Pad
+    addEvent(b, 'stab', { notes: ['F4', 'Ab4', 'C5'], velocity: 0.25 });
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FINAL BUILD - MAXIMUM HYPE (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("FINAL BUILD", b);
+
+addEvent(b, 'riser', { duration: BAR * 8 * (60/CONFIG.BPM), type: 'noise' });
+addEvent(b, 'riser', { duration: BAR * 8 * (60/CONFIG.BPM), type: 'pitch' });
+
+for (let bar = 0; bar < 8; bar++) {
+    // MAXIMUM SNARE ROLL
+    const density = Math.pow(2, Math.min(bar + 3, 7));
+    for (let i = 0; i < density; i++) {
+        addEvent(b + (i / density) * BAR, 'snare', {
+            velocity: 0.6 + (i / density) * 0.4
+        });
+    }
+    
+    // Stabs
+    addEvent(b, 'stab', { notes: ['F4', 'Ab4', 'C5', 'Eb5', 'F5'], velocity: 0.6 + bar * 0.05 });
+    
+    // Teaser bass hits
+    if (bar >= 6) {
+        addEvent(b, 'growlbass', {
+            note: 'F2',
+            duration: 0.3 * (60/CONFIG.BPM),
+            wobbleSpeed: 20,
+            velocity: 0.7 + (bar - 6) * 0.15
+        });
+        addEvent(b + 2, 'yoinkbass', {
+            note: 'F2',
+            duration: 0.3 * (60/CONFIG.BPM),
+            direction: 'down',
+            velocity: 0.8
+        });
+    }
+    
+    // All the lasers
+    for (let i = 0; i < 8; i++) {
+        addEvent(b + i * B, 'laser', { direction: i % 2 === 0 ? 'up' : 'down' });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FINAL DROP - APOCALYPSE (16 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("FINAL DROP", b);
+
+addEvent(b, 'impact', { size: 'huge' });
+
+for (let bar = 0; bar < 16; bar++) {
+    const pattern = bar % 4;
+    
+    // ULTIMATE KICK PATTERN
+    addEvent(b, 'kick', { velocity: 1.0 });
+    addEvent(b + 0.5, 'kick', { velocity: 0.7 });
+    addEvent(b + 1.25, 'kick', { velocity: 0.85 });
+    addEvent(b + 2, 'kick', { velocity: 0.9 });
+    addEvent(b + 2.75, 'kick', { velocity: 0.95 });
+    addEvent(b + 3.5, 'kick', { velocity: 0.75 });
+    
+    // Triple snare hits
+    addEvent(b + 1, 'snare', { velocity: 1.0, type: 'long' });
+    addEvent(b + 3, 'snare', { velocity: 1.0, type: 'long' });
+    addEvent(b + 1.75, 'snare', { velocity: 0.5 });
+    addEvent(b + 2.5, 'snare', { velocity: 0.45 });
+    addEvent(b + 3.75, 'snare', { velocity: 0.55 });
+    
+    // Absolute hat madness
+    for (let i = 0; i < 32; i++) {
+        addEvent(b + i * (S/2), 'hat', {
+            velocity: 0.3 + Math.random() * 0.3,
+            open: i % 8 === 6
+        });
+    }
+    
+    // ALL THE BASS SOUNDS COMBINED
+    // Main growl
+    addEvent(b, 'growlbass', {
+        note: ['F2', 'Db2', 'Ab2', 'Eb2'][pattern],
+        duration: 1.0 * (60/CONFIG.BPM),
+        wobbleSpeed: [8, 16, 6, 12][pattern],
+        velocity: 1.0
+    });
+    
+    // Scream layer
+    addEvent(b + 1, 'screambass', {
+        note: 'F3',
+        duration: 0.8 * (60/CONFIG.BPM),
+        velocity: 0.7
+    });
+    
+    // Yoink fills
+    addEvent(b + 2, 'yoinkbass', {
+        note: 'F2',
+        duration: 0.4 * (60/CONFIG.BPM),
+        direction: pattern % 2 === 0 ? 'down' : 'up',
+        velocity: 0.9
+    });
+    
+    // More growl
+    addEvent(b + 2.5, 'growlbass', {
+        note: ['F2', 'Ab2', 'Eb2', 'Db2'][pattern],
+        duration: 1.0 * (60/CONFIG.BPM),
+        wobbleSpeed: 20,
+        velocity: 0.85
+    });
+    
+    // Constant sub
+    addEvent(b, 'subbass', { 
+        note: ['F1', 'Db1', 'Ab1', 'Eb1'][pattern],
+        duration: BAR * (60/CONFIG.BPM),
+        velocity: 1.0
+    });
+    
+    // Stab layers
+    addEvent(b + 0.5, 'stab', { notes: CHORDS['Fm'], velocity: 0.8 });
+    addEvent(b + 2.5, 'stab', { notes: CHORDS['Db'], velocity: 0.7 });
+    
+    // Lead fills
+    if (bar % 2 === 1) {
+        const fills = ['F5', 'G5', 'Ab5', 'Bb5', 'C6', 'Bb5', 'Ab5', 'G5'];
+        fills.forEach((note, i) => {
+            addEvent(b + 2 + i * S, 'lead', {
+                note,
+                duration: S * 0.9 * (60/CONFIG.BPM),
+                velocity: 0.7
+            });
+        });
+    }
+    
+    b += BAR;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  OUTRO (8 bars)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+addSection("OUTRO", b);
+
+for (let bar = 0; bar < 8; bar++) {
+    const fadeVel = 1.0 - (bar / 8) * 0.7;
+    
+    if (bar < 6) {
+        addEvent(b, 'kick', { velocity: fadeVel });
+        addEvent(b + 2, 'kick', { velocity: fadeVel * 0.8 });
+        
+        if (bar < 4) {
+            addEvent(b + 1, 'snare', { velocity: fadeVel * 0.8 });
+            addEvent(b + 3, 'snare', { velocity: fadeVel * 0.8 });
+        }
+    }
+    
+    // Fading bass
+    if (bar < 4) {
+        addEvent(b, 'growlbass', {
+            note: 'F2',
+            duration: BAR * (60/CONFIG.BPM),
+            wobbleSpeed: 4,
+            velocity: fadeVel * 0.7
+        });
+    }
+    
+    // Final stab
+    if (bar === 6) {
+        addEvent(b, 'stab', { notes: ['F3', 'Ab3', 'C4', 'F4', 'Ab4', 'C5'], velocity: 0.8 });
+    }
+    
+    // Final impact
+    if (bar === 7) {
+        addEvent(b, 'impact', { size: 'big' });
+    }
+    
+    addEvent(b, 'subbass', { note: 'F1', duration: BAR * (60/CONFIG.BPM), velocity: fadeVel * 0.5 });
+    
+    b += BAR;
+}
+
+const TOTAL_BEATS = b;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEQUENCER
+// ═══════════════════════════════════════════════════════════════════════════════
+let currentBeat = 0;
+let startTime = 0;
+let nextEventIdx = 0;
+let currentSection = "ANNIHILATE";
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    // Update section
+    for (let i = SECTIONS.length - 1; i >= 0; i--) {
+        if (currentBeat >= SECTIONS[i].beat) {
+            if (currentSection !== SECTIONS[i].name) {
+                currentSection = SECTIONS[i].name;
+                document.getElementById('section-display').textContent = currentSection;
+            }
+            break;
+        }
+    }
+    
+    // Time display
+    const elapsed = currentBeat * (60 / CONFIG.BPM);
+    const total = TOTAL_BEATS * (60 / CONFIG.BPM);
+    document.getElementById('time-display').textContent = 
+        `${Math.floor(elapsed / 60)}:${Math.floor(elapsed % 60).toString().padStart(2, '0')} / ${Math.floor(total / 60)}:${Math.floor(total % 60).toString().padStart(2, '0')}`;
+    
+    // Progress
+    document.getElementById('progress').style.width = `${(currentBeat / TOTAL_BEATS) * 100}%`;
+    
+    // Intensity meter decay
+    AudioEngine.intensity *= 0.98;
+    document.getElementById('intensity-fill').style.height = `${AudioEngine.intensity * 100}%`;
+    
+    // Loop
+    if (currentBeat >= TOTAL_BEATS) {
+        startTime = currentTime;
+        currentBeat = 0;
+        nextEventIdx = 0;
+    }
+    
+    // Schedule events
+    while (nextEventIdx < EVENTS.length && EVENTS[nextEventIdx].beat <= currentBeat + 0.15) {
+        const event = EVENTS[nextEventIdx];
+        const eventTime = startTime + (event.beat * (60 / CONFIG.BPM));
+        
+        switch (event.type) {
+            case 'kick': AudioEngine.playKick(eventTime, event.velocity, event.kickType); break;
+            case 'snare': AudioEngine.playSnare(eventTime, event.velocity, event.snareType); break;
+            case 'hat': AudioEngine.playHat(eventTime, event.open, event.velocity); break;
+            case 'growlbass': AudioEngine.playGrowlBass(event.note, eventTime, event.duration, event.wobbleSpeed, event.velocity); break;
+            case 'screambass': AudioEngine.playScreamBass(event.note, eventTime, event.duration, event.velocity); break;
+            case 'yoinkbass': AudioEngine.playYoinkBass(event.note, eventTime, event.duration, event.direction, event.velocity); break;
+            case 'subbass': AudioEngine.playSubBass(event.note, eventTime, event.duration, event.velocity); break;
+            case 'lead': AudioEngine.playLead(event.note, eventTime, event.duration, event.velocity); break;
+            case 'stab': AudioEngine.playStab(event.notes, eventTime, event.velocity); break;
+            case 'riser': AudioEngine.playRiser(eventTime, event.duration, event.riserType); break;
+            case 'impact': AudioEngine.playImpact(eventTime, event.size); break;
+            case 'laser': AudioEngine.playLaser(eventTime, event.direction); break;
+        }
+        
+        nextEventIdx++;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VISUAL ENGINE - AGGRESSIVE CHAOS
+// ═══════════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let w, h;
+const particles = [];
+const shockwaves = [];
+const bars = new Array(64).fill(0);
+
+function resize() {
+    w = canvas.width = innerWidth;
+    h = canvas.height = innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(type, velocity) {
+    const colors = {
+        kick: '#ff0040',
+        snare: '#ff6600',
+        bass: '#ff00ff',
+        scream: '#00ffff',
+        yoink: '#ffff00',
+        lead: '#00ff88',
+        stab: '#8800ff',
+        impact: '#ffffff'
+    };
+    
+    const color = colors[type] || '#ff0040';
+    
+    if (type === 'kick' || type === 'impact') {
+        // Massive shockwave
+        shockwaves.push({
+            x: w / 2,
+            y: h / 2,
+            radius: 0,
+            maxRadius: type === 'impact' ? 800 : 400,
+            life: 1.0,
+            color: color
+        });
+        
+        // Explosion particles
+        for (let i = 0; i < (type === 'impact' ? 50 : 25); i++) {
+            const angle = (Math.PI * 2 * i) / 25;
+            const speed = 10 + Math.random() * 20;
+            particles.push({
+                x: w / 2,
+                y: h / 2,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1.0,
+                color: color,
+                size: 3 + Math.random() * 5
+            });
+        }
+    } else if (type === 'snare') {
+        // Horizontal burst
+        for (let i = 0; i < 20; i++) {
+            particles.push({
+                x: Math.random() * w,
+                y: h / 2,
+                vx: (Math.random() - 0.5) * 15,
+                vy: (Math.random() - 0.5) * 30,
+                life: 1.0,
+                color: color,
+                size: 2 + Math.random() * 4
+            });
+        }
+    } else if (type === 'bass' || type === 'scream' || type === 'yoink') {
+        // Warping effect
+        for (let i = 0; i < 15; i++) {
+            particles.push({
+                x: Math.random() * w,
+                y: h * 0.7 + Math.random() * h * 0.3,
+                vx: (Math.random() - 0.5) * 8,
+                vy: -10 - Math.random() * 15,
+                life: 1.0,
+                color: color,
+                size: 4 + Math.random() * 6
+            });
+        }
+    } else {
+        // Default particles
+        for (let i = 0; i < 10; i++) {
+            particles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
+                life: 1.0,
+                color: color,
+                size: 2 + Math.random() * 3
+            });
+        }
+    }
+}
+
+function draw() {
+    // Aggressive clear with motion blur
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(0, 0, w, h);
+    
+    // Frequency bars
+    if (AudioEngine.analyser) {
+        const bufferLength = AudioEngine.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        AudioEngine.analyser.getByteFrequencyData(dataArray);
+        
+        const barCount = 64;
+        const barWidth = w / barCount;
+        
+        for (let i = 0; i < barCount; i++) {
+            const idx = Math.floor(i * bufferLength / barCount);
+            const value = dataArray[idx] / 255;
+            
+            // Smooth bars
+            bars[i] += (value - bars[i]) * 0.3;
+            const barHeight = bars[i] * h * 0.6;
+            
+            // Gradient based on frequency
+            const hue = (i / barCount) * 60 + 330; // Red to magenta
+            ctx.fillStyle = `hsla(${hue % 360}, 100%, 50%, ${0.5 + bars[i] * 0.5})`;
+            
+            // Bottom bars
+            ctx.fillRect(i * barWidth, h - barHeight, barWidth - 1, barHeight);
+            
+            // Mirror top
+            ctx.fillStyle = `hsla(${hue % 360}, 100%, 50%, ${0.2 + bars[i] * 0.3})`;
+            ctx.fillRect(i * barWidth, 0, barWidth - 1, barHeight * 0.4);
+        }
+    }
+    
+    // Draw shockwaves
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+        const sw = shockwaves[i];
+        sw.radius += (sw.maxRadius - sw.radius) * 0.15;
+        sw.life -= 0.025;
+        
+        if (sw.life <= 0) {
+            shockwaves.splice(i, 1);
+            continue;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = sw.color.replace(')', `, ${sw.life})`).replace('#', 'rgba(');
+        
+        // Parse hex color
+        const hex = sw.color.slice(1);
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b_ = parseInt(hex.substr(4, 2), 16);
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b_}, ${sw.life})`;
+        ctx.lineWidth = 4 * sw.life;
+        ctx.stroke();
+        
+        // Inner glow
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius * 0.8, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b_}, ${sw.life * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    
+    // Draw particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.3; // Gravity
+        p.vx *= 0.98; // Friction
+        p.life -= 0.02;
+        
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        
+        const hex = p.color.slice(1);
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b_ = parseInt(hex.substr(4, 2), 16);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b_}, ${p.life})`;
+        ctx.fill();
+        
+        // Trail
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * 2, p.y - p.vy * 2);
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b_}, ${p.life * 0.5})`;
+        ctx.lineWidth = p.size * p.life * 0.5;
+        ctx.stroke();
+    }
+    
+    // Center glow based on intensity
+    const intensity = AudioEngine.intensity || 0;
+    if (intensity > 0.1) {
+        const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, 500);
+        gradient.addColorStop(0, `rgba(255, 0, 64, ${intensity * 0.4})`);
+        gradient.addColorStop(0.5, `rgba(255, 102, 0, ${intensity * 0.2})`);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, w, h);
+    }
+    
+    // Scan lines
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+    for (let y = 0; y < h; y += 4) {
+        ctx.fillRect(0, y, w, 2);
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('overlay').addEventListener('click', async () => {
+    if (!AudioEngine.ctx) await AudioEngine.init();
+    togglePlay();
+    document.getElementById('overlay').classList.add('hidden');
+});
+
+document.getElementById('playBtn').addEventListener('click', togglePlay);
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+function togglePlay() {
+    if (!AudioEngine.ctx) return;
+    
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('playBtn').textContent = '▶ DESTROY';
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('playBtn').textContent = '⏸ PAUSE';
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+
+console.log(`
+╔══════════════════════════════════════════════════════════════════╗
+║                       A N N I H I L A T E                        ║
+║                    DUBSTEP DESTROYER                             ║
+╠══════════════════════════════════════════════════════════════════╣
+║  BPM: ${CONFIG.BPM}                                                     ║
+║  Key: ${CONFIG.KEY}                                                     ║
+║  Duration: ${Math.floor(TOTAL_BEATS * (60/CONFIG.BPM) / 60)}:${Math.floor((TOTAL_BEATS * (60/CONFIG.BPM)) % 60).toString().padStart(2, '0')}                                                ║
+║  Total Events: ${EVENTS.length}                                            ║
+║  Sections: ${SECTIONS.length}                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║  BASS TYPES:                                                     ║
+║  • Growl Bass - LFO-modulated filter wobble                      ║
+║  • Scream Bass - FM synthesis aggression                         ║
+║  • Yoink Bass - Pitch-bending chaos                              ║
+║  • Sub Bass - Clean low-end foundation                           ║
+╚══════════════════════════════════════════════════════════════════╝
+`);
+</script>
+</body>
+</html>
