@@ -1,0 +1,562 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>DDA Playground — Identity, Trauma (k), Pressure (m)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --ink:#e9f1ff; --muted:#9fb3cc; --accent:#67d3ff; --warn:#ff6565; --ok:#58f29a; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial; }
+  header { padding:14px 16px; background:linear-gradient(180deg,#101722,#0e141d); border-bottom:1px solid #1b2533;}
+  header h1 { margin:0; font-size:16px; font-weight:600; letter-spacing:.2px;}
+  header .sub { color:var(--muted); font-size:12px; margin-top:4px;}
+  .wrap { display:flex; gap:12px; padding:12px; }
+  .panel { background:var(--panel); border:1px solid #1b2431; border-radius:10px; padding:12px; }
+  .left { width:360px; flex:0 0 auto; }
+  .mid, .right { flex:1 1 0; min-width:300px; display:flex; flex-direction:column; gap:12px; }
+  fieldset { border:1px solid #223046; border-radius:8px; padding:10px; margin:0 0 10px 0; }
+  legend { padding:0 6px; color:var(--muted); font-size:12px; }
+  .row { display:grid; grid-template-columns: 140px 1fr 60px; align-items:center; gap:8px; margin:6px 0; }
+  input[type="range"] { width:100%; }
+  .val { text-align:right; color:var(--accent); font-variant-numeric: tabular-nums; }
+  .stack { display:flex; gap:10px; flex-wrap:wrap; }
+  button, select, input[type="number"], input[type="checkbox"], label { font:inherit; }
+  button { background:#1a2331; color:var(--ink); border:1px solid #2a3750; border-radius:8px; padding:8px 10px; cursor:pointer; }
+  button:hover { border-color:#3b4f6e; }
+  .badge { display:inline-block; padding:2px 6px; border-radius:6px; font-size:12px; border:1px solid #2a3750; color:var(--muted); }
+  .badge.ok { color:var(--ok); border-color:#2f5c46; }
+  .badge.warn { color:var(--warn); border-color:#5c2f2f; }
+  canvas { width:100%; height:260px; background:#0c1118; border:1px solid #1b2431; border-radius:10px; }
+  .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+  .kpi .card { background:#0f151e; border:1px solid #1b2431; border-radius:8px; padding:10px; }
+  .kpi .lab { color:var(--muted); font-size:11px; }
+  .kpi .num { font-size:18px; letter-spacing:.2px; margin-top:4px; color:var(--ink); }
+  footer { color:var(--muted); padding:10px 12px; border-top:1px solid #1b2533; }
+  a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DDA Playground — Fₙ = P₀·k·Fₙ₋₁ + m·[T(Iₙ,ΔI) + R(Dₙ,Φ)]</h1>
+  <div class="sub">Dial identity (P₀), trauma/hysteresis (k), pressure (m). Watch time series + hysteresis. Auto‑update k via ε = |u − F|.</div>
+</header>
+
+<div class="wrap">
+  <div class="panel left">
+    <fieldset>
+      <legend>Core Parameters</legend>
+      <div class="row">
+        <label>P₀ (identity)</label>
+        <input id="p0" type="range" min="0" max="1" step="0.01" value="0.60">
+        <div class="val" id="p0v">0.60</div>
+      </div>
+      <div class="row">
+        <label>k (trauma)</label>
+        <input id="k" type="range" min="0.05" max="0.99" step="0.01" value="0.15">
+        <div class="val" id="kv">0.15</div>
+      </div>
+      <div class="row">
+        <label>m (pressure)</label>
+        <input id="m" type="range" min="0" max="3" step="0.01" value="0.50">
+        <div class="val" id="mv">0.50</div>
+      </div>
+      <div class="row">
+        <label>R (reflection bias)</label>
+        <input id="r" type="range" min="-1" max="1" step="0.01" value="0.00">
+        <div class="val" id="rv">0.00</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Trauma Dynamics (k update)</legend>
+      <div class="row">
+        <label>α (accumulation)</label>
+        <input id="alpha" type="range" min="0" max="1" step="0.01" value="0.20">
+        <div class="val" id="alphav">0.20</div>
+      </div>
+      <div class="row">
+        <label>β (sensitivity)</label>
+        <input id="beta" type="range" min="0.2" max="2" step="0.01" value="1.00">
+        <div class="val" id="betav">1.00</div>
+      </div>
+      <div class="row">
+        <label>γ (healing per step)</label>
+        <input id="gamma" type="range" min="0" max="0.1" step="0.001" value="0.01">
+        <div class="val" id="gammav">0.010</div>
+      </div>
+      <div class="stack">
+        <label><input id="autoK" type="checkbox" checked> auto‑update k with ε = |u − F|</label>
+        <label><input id="healWhenSafe" type="checkbox" checked> only heal when m < 0.3 and ε < 0.05</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>External Signal T(I,ΔI)</legend>
+      <div class="row">
+        <label>Signal</label>
+        <select id="sig">
+          <option value="const">Constant</option>
+          <option value="sine" selected>Sine</option>
+          <option value="step">Step</option>
+          <option value="noise">Noise</option>
+        </select>
+        <span class="badge">T ∈ [−1,1]</span>
+      </div>
+      <div class="row">
+        <label>Amplitude</label>
+        <input id="amp" type="range" min="0" max="1" step="0.01" value="1.00">
+        <div class="val" id="ampv">1.00</div>
+      </div>
+      <div class="row">
+        <label>Frequency (Hz)</label>
+        <input id="freq" type="range" min="0.01" max="2" step="0.01" value="0.20">
+        <div class="val" id="freqv">0.20</div>
+      </div>
+      <div class="row">
+        <label>Constant value</label>
+        <input id="constVal" type="range" min="-1" max="1" step="0.01" value="0.00">
+        <div class="val" id="constv">0.00</div>
+      </div>
+      <div class="stack">
+        <label><input id="useDelta" type="checkbox"> include ΔI term</label>
+        <span class="badge">u = T(I,ΔI) + R</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Run</legend>
+      <div class="row">
+        <label>Steps / sec</label>
+        <input id="speed" type="range" min="1" max="120" step="1" value="30">
+        <div class="val" id="speedv">30</div>
+      </div>
+      <div class="stack">
+        <button id="start">Start</button>
+        <button id="pause">Pause</button>
+        <button id="step">Step</button>
+        <button id="reset">Reset</button>
+        <label><input id="clearPlots" type="checkbox"> clear plots on reset</label>
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="mid">
+    <div class="panel">
+      <div class="kpi">
+        <div class="card">
+          <div class="lab">F (state)</div>
+          <div class="num" id="Fv">0.500</div>
+        </div>
+        <div class="card">
+          <div class="lab">k (trauma)</div>
+          <div class="num" id="Kpv">0.150</div>
+        </div>
+        <div class="card">
+          <div class="lab">ε = |u − F|</div>
+          <div class="num" id="Ev">0.000</div>
+        </div>
+        <div class="card">
+          <div class="lab">m_crit</div>
+          <div class="num" id="Mcritv">—</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <span class="badge" id="ptsdFlag">PTSD-lock: no</span>
+        <span class="badge" id="panicFlag">Panic: no</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="margin-bottom:6px; color:var(--muted)">Time series (F, u, k)</div>
+      <canvas id="timePlot" width="800" height="260"></canvas>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="panel">
+      <div style="margin-bottom:6px; color:var(--muted)">Hysteresis loop: input u vs output F (trace shows memory)</div>
+      <canvas id="loopPlot" width="800" height="260"></canvas>
+    </div>
+    <div class="panel">
+      <details>
+        <summary style="cursor:pointer">Model (for this demo)</summary>
+        <pre style="white-space:pre-wrap; color:var(--muted); margin-top:8px;">
+Fₙ = clamp( P₀ · k · Fₙ₋₁ + m · u , 0, 1 ),  where  u = T(I,ΔI) + R
+kₙ = clip( kₙ₋₁ + α · |ε|^β − γ, [0.05, 0.99] ),  ε = |u − Fₙ|
+m_crit ≈ (P₀·k) / max|u|, signaling potential “panic” when m > m_crit
+        </pre>
+      </details>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Protip: crank α and run a sine T — watch the loop widen (rigidity). Slam m past m_crit to trigger “panic” regime flips. Reset to cool the system down (healing γ).
+</footer>
+
+<script>
+(() => {
+  // State
+  const state = {
+    F: 0.5,
+    Fprev: 0.5,
+    p0: 0.6,
+    k: 0.15,
+    m: 0.5,
+    r: 0.0,
+    alpha: 0.2,
+    beta: 1.0,
+    gamma: 0.01,
+    autoK: true,
+    healWhenSafe: true,
+    // external signal
+    sig: 'sine',
+    amp: 1.0,
+    freq: 0.2,
+    constVal: 0.0,
+    useDelta: false,
+    // sim
+    running: false,
+    t: 0,
+    dt: 1/30,
+    speed: 30,
+    // plots
+    timeSeries: [], // {t,F,u,k}
+    loopSeries: []  // {u,F}
+  };
+
+  // DOM helpers
+  const qs = s => document.querySelector(s);
+  const setVal = (id, v, digits = 2) => { qs('#'+id).textContent = Number(v).toFixed(digits); };
+
+  // Elements
+  const els = {
+    p0: qs('#p0'), p0v: qs('#p0v'),
+    k: qs('#k'), kv: qs('#kv'),
+    m: qs('#m'), mv: qs('#mv'),
+    r: qs('#r'), rv: qs('#rv'),
+    alpha: qs('#alpha'), alphav: qs('#alphav'),
+    beta: qs('#beta'), betav: qs('#betav'),
+    gamma: qs('#gamma'), gammav: qs('#gammav'),
+    autoK: qs('#autoK'), healWhenSafe: qs('#healWhenSafe'),
+    sig: qs('#sig'),
+    amp: qs('#amp'), ampv: qs('#ampv'),
+    freq: qs('#freq'), freqv: qs('#freqv'),
+    constVal: qs('#constVal'), constv: qs('#constv'),
+    useDelta: qs('#useDelta'),
+    speed: qs('#speed'), speedv: qs('#speedv'),
+    start: qs('#start'), pause: qs('#pause'), step: qs('#step'), reset: qs('#reset'), clearPlots: qs('#clearPlots'),
+    Fv: qs('#Fv'), Kpv: qs('#Kpv'), Ev: qs('#Ev'), Mcritv: qs('#Mcritv'),
+    ptsd: qs('#ptsdFlag'), panic: qs('#panicFlag'),
+    timePlot: qs('#timePlot'), loopPlot: qs('#loopPlot')
+  };
+
+  // init UI vals
+  function syncUI() {
+    setVal('p0v', state.p0);
+    setVal('kv', state.k);
+    setVal('mv', state.m);
+    setVal('rv', state.r);
+    setVal('alphav', state.alpha);
+    setVal('betav', state.beta);
+    setVal('gammav', state.gamma, 3);
+    setVal('ampv', state.amp);
+    setVal('freqv', state.freq);
+    setVal('constv', state.constVal);
+    setVal('speedv', state.speed, 0);
+    els.autoK.checked = state.autoK;
+    els.healWhenSafe.checked = state.healWhenSafe;
+    els.sig.value = state.sig;
+    els.useDelta.checked = state.useDelta;
+    els.clearPlots.checked = false;
+    els.Fv.textContent = state.F.toFixed(3);
+    els.Kpv.textContent = state.k.toFixed(3);
+    els.Ev.textContent = '0.000';
+    els.Mcritv.textContent = '—';
+  }
+  syncUI();
+
+  // Clamp helpers
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const lerp = (a,b,t) => a + (b-a)*t;
+
+  // External signal generator T(I,ΔI)
+  let lastI = 0;
+  function genSignal(dt) {
+    const A = state.amp;
+    let I = 0;
+    switch (state.sig) {
+      case 'sine':
+        I = A * Math.sin(2*Math.PI*state.freq*state.t);
+        break;
+      case 'step':
+        I = ( (Math.sin(2*Math.PI*state.freq*state.t) >= 0) ? A : -A );
+        break;
+      case 'noise':
+        I = A * (Math.random()*2 - 1);
+        break;
+      case 'const':
+      default:
+        I = clamp(state.constVal, -1, 1);
+        break;
+    }
+    const dI = (I - lastI) / Math.max(dt, 1e-6);
+    lastI = I;
+    const T = state.useDelta ? clamp(0.8*I + 0.2*Math.tanh(dI), -1, 1) : I;
+    const u = clamp(T + state.r, -1, 1);
+    return { I, T, u };
+  }
+
+  // m_crit estimate based on signal bounds
+  function maxUForSignal() {
+    const amp = Math.abs(state.sig === 'const' ? state.constVal : state.amp);
+    // Since u = T + R, bound by amp + |r|, but clamp to 1
+    return Math.min(1, amp + Math.abs(state.r));
+  }
+
+  // One simulation step
+  function step(dt) {
+    const { u } = genSignal(dt);
+    // Core update
+    const raw = state.p0 * state.k * state.F + state.m * u;
+    const Fnew = clamp(raw, 0, 1);
+    const eps = Math.abs(u - Fnew);
+
+    // Adaptive k
+    if (state.autoK) {
+      let dk = state.alpha * Math.pow(eps, state.beta);
+      let heal = state.gamma;
+      if (state.healWhenSafe) {
+        const safe = (state.m < 0.3) && (eps < 0.05);
+        heal = safe ? state.gamma : 0;
+      }
+      state.k = clamp(state.k + dk - heal, 0.05, 0.99);
+    }
+
+    state.F = Fnew;
+    state.Fprev = Fnew;
+
+    // diagnostics
+    const umax = Math.max(1e-6, maxUForSignal());
+    const mcrit = (state.p0 * state.k) / umax;
+    const ptsdLock = state.k > 0.9;
+    const panic = state.m > mcrit;
+
+    // record for plots
+    state.timeSeries.push({t: state.t, F: state.F, u, k: state.k});
+    state.loopSeries.push({u, F: state.F});
+    trimSeries();
+
+    // UI updates
+    els.Fv.textContent = state.F.toFixed(3);
+    els.Kpv.textContent = state.k.toFixed(3);
+    els.Ev.textContent = eps.toFixed(3);
+    els.Mcritv.textContent = (isFinite(mcrit) ? mcrit.toFixed(3) : '∞');
+
+    els.ptsd.textContent = 'PTSD-lock: ' + (ptsdLock ? 'yes' : 'no');
+    els.panic.textContent = 'Panic: ' + (panic ? 'yes' : 'no');
+    els.ptsd.className = 'badge ' + (ptsdLock ? 'warn' : '');
+    els.panic.className = 'badge ' + (panic ? 'warn' : '');
+
+    // advance time
+    state.t += dt;
+  }
+
+  function trimSeries() {
+    // keep ~1500 samples max for perf
+    const MAX = 1500;
+    if (state.timeSeries.length > MAX) state.timeSeries.splice(0, state.timeSeries.length - MAX);
+    if (state.loopSeries.length > MAX) state.loopSeries.splice(0, state.loopSeries.length - MAX);
+  }
+
+  // Drawing
+  const ctxTime = els.timePlot.getContext('2d');
+  const ctxLoop = els.loopPlot.getContext('2d');
+
+  function drawPlots() {
+    drawTime();
+    drawLoop();
+  }
+
+  function clearCanvas(ctx, canvas) {
+    ctx.fillStyle = '#0c1118';
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+  }
+
+  function drawTime() {
+    const W = els.timePlot.width, H = els.timePlot.height;
+    clearCanvas(ctxTime, els.timePlot);
+    const data = state.timeSeries;
+    if (data.length < 2) return;
+
+    const t0 = data.t, t1 = data[data.length-1].t;
+    const xOf = t => ( (t - t0) / Math.max(1e-6, (t1 - t0)) ) * (W-20) + 10;
+    const yOfF = y => (1 - y) * (H-20) + 10; // F in [0,1]
+    const yOfU = y => (1 - (y+1)/2) * (H-20) + 10; // u in [-1,1]
+    const yOfK = y => (1 - y) * (H-20) + 10; // k in [0,1]
+
+    // grid
+    ctxTime.strokeStyle = '#15202e';
+    ctxTime.lineWidth = 1;
+    for (let i=0;i<=4;i++) {
+      const yy = 10 + i*(H-20)/4;
+      ctxTime.beginPath(); ctxTime.moveTo(10,yy); ctxTime.lineTo(W-10,yy); ctxTime.stroke();
+    }
+
+    // u(t)
+    ctxTime.strokeStyle = '#67d3ff';
+    ctxTime.lineWidth = 1.6;
+    ctxTime.beginPath();
+    ctxTime.moveTo(xOf(data.t), yOfU(data.u));
+    for (const d of data) ctxTime.lineTo(xOf(d.t), yOfU(d.u));
+    ctxTime.stroke();
+
+    // F(t)
+    ctxTime.strokeStyle = '#e9f1ff';
+    ctxTime.lineWidth = 2.0;
+    ctxTime.beginPath();
+    ctxTime.moveTo(xOf(data.t), yOfF(data.F));
+    for (const d of data) ctxTime.lineTo(xOf(d.t), yOfF(d.F));
+    ctxTime.stroke();
+
+    // k(t)
+    ctxTime.strokeStyle = '#58f29a';
+    ctxTime.lineWidth = 1.3;
+    ctxTime.beginPath();
+    ctxTime.moveTo(xOf(data.t), yOfK(data.k));
+    for (const d of data) ctxTime.lineTo(xOf(d.t), yOfK(d.k));
+    ctxTime.stroke();
+
+    // legend
+    ctxTime.fillStyle = '#9fb3cc';
+    ctxTime.font = '12px system-ui';
+    ctxTime.fillText('u(t)  [-1..1]  cyan', 14, 18);
+    ctxTime.fillText('F(t)  [0..1]   white', 160, 18);
+    ctxTime.fillText('k(t)  [0.05..0.99]  green', 300, 18);
+  }
+
+  function drawLoop() {
+    const W = els.loopPlot.width, H = els.loopPlot.height;
+    clearCanvas(ctxLoop, els.loopPlot);
+    const data = state.loopSeries;
+    if (data.length < 2) return;
+
+    const xOf = u => ((u + 1) / 2) * (W - 20) + 10; // u in [-1,1]
+    const yOf = F => (1 - F) * (H - 20) + 10;       // F in [0,1]
+
+    // grid + axes
+    ctxLoop.strokeStyle = '#15202e';
+    ctxLoop.lineWidth = 1;
+    for (let i=0;i<=4;i++) {
+      const yy = 10 + i*(H-20)/4;
+      ctxLoop.beginPath(); ctxLoop.moveTo(10,yy); ctxLoop.lineTo(W-10,yy); ctxLoop.stroke();
+    }
+    for (let i=0;i<=4;i++) {
+      const xx = 10 + i*(W-20)/4;
+      ctxLoop.beginPath(); ctxLoop.moveTo(xx,10); ctxLoop.lineTo(xx,H-10); ctxLoop.stroke();
+    }
+
+    // trace
+    ctxLoop.strokeStyle = '#e9f1ff';
+    ctxLoop.lineWidth = 1.7;
+    ctxLoop.beginPath();
+    ctxLoop.moveTo(xOf(data.u), yOf(data.F));
+    for (const d of data) ctxLoop.lineTo(xOf(d.u), yOf(d.F));
+    ctxLoop.stroke();
+
+    // labels
+    ctxLoop.fillStyle = '#9fb3cc';
+    ctxLoop.font = '12px system-ui';
+    ctxLoop.fillText('u (input)', W - 80, H - 14);
+    ctxLoop.fillText('F (output)', 14, 22);
+  }
+
+  // Simulation loop
+  let rafId = null, timerId = null;
+  function runLoop() {
+    if (state.running) return;
+    state.running = true;
+    schedule();
+  }
+  function schedule() {
+    clearInterval(timerId);
+    const interval = 1000 / Math.max(1, state.speed);
+    timerId = setInterval(() => {
+      step(1/Math.max(1, state.speed));
+      drawPlots();
+    }, interval);
+  }
+  function pauseLoop() {
+    state.running = false;
+    clearInterval(timerId);
+    timerId = null;
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+  function singleStep() {
+    step(1/Math.max(1, state.speed));
+    drawPlots();
+  }
+  function reset(simOnly=false) {
+    pauseLoop();
+    state.F = 0.5; state.Fprev = 0.5; state.t = 0;
+    if (!simOnly) {
+      state.p0 = parseFloat(els.p0.value);
+      state.k = parseFloat(els.k.value);
+      state.m = parseFloat(els.m.value);
+      state.r = parseFloat(els.r.value);
+    }
+    if (els.clearPlots.checked) {
+      state.timeSeries = [];
+      state.loopSeries = [];
+    }
+    els.Fv.textContent = state.F.toFixed(3);
+    els.Kpv.textContent = state.k.toFixed(3);
+    els.Ev.textContent = '0.000';
+    els.Mcritv.textContent = '—';
+    els.ptsd.textContent = 'PTSD-lock: no';
+    els.panic.textContent = 'Panic: no';
+    els.ptsd.className = 'badge';
+    els.panic.className = 'badge';
+    drawPlots();
+  }
+
+  // UI bindings
+  els.p0.addEventListener('input', e => { state.p0 = parseFloat(e.target.value); setVal('p0v', state.p0); });
+  els.k.addEventListener('input', e => { state.k = parseFloat(e.target.value); setVal('kv', state.k); });
+  els.m.addEventListener('input', e => { state.m = parseFloat(e.target.value); setVal('mv', state.m); });
+  els.r.addEventListener('input', e => { state.r = parseFloat(e.target.value); setVal('rv', state.r); });
+
+  els.alpha.addEventListener('input', e => { state.alpha = parseFloat(e.target.value); setVal('alphav', state.alpha); });
+  els.beta.addEventListener('input', e => { state.beta = parseFloat(e.target.value); setVal('betav', state.beta); });
+  els.gamma.addEventListener('input', e => { state.gamma = parseFloat(e.target.value); setVal('gammav', state.gamma, 3); });
+  els.autoK.addEventListener('change', e => { state.autoK = !!e.target.checked; });
+  els.healWhenSafe.addEventListener('change', e => { state.healWhenSafe = !!e.target.checked; });
+
+  els.sig.addEventListener('change', e => { state.sig = e.target.value; });
+  els.amp.addEventListener('input', e => { state.amp = parseFloat(e.target.value); setVal('ampv', state.amp); });
+  els.freq.addEventListener('input', e => { state.freq = parseFloat(e.target.value); setVal('freqv', state.freq); });
+  els.constVal.addEventListener('input', e => { state.constVal = parseFloat(e.target.value); setVal('constv', state.constVal); });
+  els.useDelta.addEventListener('change', e => { state.useDelta = !!e.target.checked; });
+
+  els.speed.addEventListener('input', e => {
+    state.speed = parseInt(e.target.value,10);
+    setVal('speedv', state.speed, 0);
+    if (state.running) schedule();
+  });
+
+  els.start.addEventListener('click', runLoop);
+  els.pause.addEventListener('click', pauseLoop);
+  els.step.addEventListener('click', singleStep);
+  els.reset.addEventListener('click', () => reset(true));
+
+  // First paint
+  drawPlots();
+})();
+</script>
+</body>
+</html>
+
+</script>
+</body>
+</html>

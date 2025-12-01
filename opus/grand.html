@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DDA Agent Simulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e4;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    
+    .panel {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 2em;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      grid-column: 1 / -1;
+    }
+    
+    h2 {
+      font-size: 1.1em;
+      margin-bottom: 15px;
+      color: #00d4ff;
+      border-bottom: 1px solid rgba(0,212,255,0.3);
+      padding-bottom: 8px;
+    }
+    
+    /* State Display */
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .state-card {
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      padding: 15px;
+      text-align: center;
+    }
+    
+    .state-card label {
+      display: block;
+      font-size: 0.8em;
+      color: #888;
+      margin-bottom: 5px;
+    }
+    
+    .state-card .value {
+      font-size: 2em;
+      font-weight: bold;
+    }
+    
+    .state-card .desc {
+      font-size: 0.75em;
+      color: #aaa;
+      margin-top: 5px;
+    }
+    
+    .identity { color: #7b2cbf; }
+    .trauma { color: #ff6b6b; }
+    .state { color: #4ecdc4; }
+    .pressure { color: #ffd93d; }
+    
+    /* Visualization Canvas */
+    #visualCanvas {
+      width: 100%;
+      height: 300px;
+      background: rgba(0,0,0,0.4);
+      border-radius: 12px;
+      margin-bottom: 15px;
+    }
+    
+    /* Controls */
+    .control-group {
+      margin-bottom: 15px;
+    }
+    
+    .control-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 0.9em;
+    }
+    
+    .control-group input[type="range"] {
+      width: 100%;
+      margin-bottom: 5px;
+    }
+    
+    .control-group .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7em;
+      color: #666;
+    }
+    
+    /* Buttons */
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+    
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: all 0.2s;
+    }
+    
+    .btn-event {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-event:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-danger {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
+    
+    .btn-success {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    
+    .btn-reset {
+      background: #444;
+      color: white;
+    }
+    
+    /* Memory Ledger */
+    .ledger {
+      max-height: 250px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    
+    .ledger-entry {
+      padding: 10px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      border-left: 3px solid #666;
+      font-size: 0.85em;
+    }
+    
+    .ledger-entry.high-error {
+      border-left-color: #ff6b6b;
+      background: rgba(255,107,107,0.1);
+    }
+    
+    .ledger-entry.low-error {
+      border-left-color: #4ecdc4;
+    }
+    
+    .ledger-entry .event-name {
+      font-weight: bold;
+      color: #fff;
+    }
+    
+    .ledger-entry .metrics {
+      display: flex;
+      gap: 15px;
+      margin-top: 5px;
+      font-size: 0.8em;
+      color: #888;
+    }
+    
+    /* K Trajectory Chart */
+    #kChart {
+      width: 100%;
+      height: 150px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+    }
+    
+    /* Persona Selector */
+    .persona-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .persona-btn {
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #e4e4e4;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    
+    .persona-btn:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: #00d4ff;
+    }
+    
+    .persona-btn.active {
+      border-color: #00d4ff;
+      background: rgba(0,212,255,0.1);
+    }
+    
+    .persona-btn .name {
+      font-weight: bold;
+      margin-bottom: 3px;
+    }
+    
+    .persona-btn .desc {
+      font-size: 0.75em;
+      color: #888;
+    }
+    
+    /* Status Text */
+    .status-text {
+      background: rgba(0,0,0,0.3);
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 0.9em;
+      line-height: 1.6;
+      margin-top: 15px;
+    }
+    
+    .status-text em {
+      color: #ffd93d;
+      font-style: normal;
+    }
+    
+    /* Responsive */
+    @media (max-width: 900px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧠 Dynamic Decision Algorithm Simulator</h1>
+    
+    <!-- Left Panel: Agent State & Visualization -->
+    <div class="panel">
+      <h2>Agent State</h2>
+      
+      <div class="state-grid">
+        <div class="state-card">
+          <label>P₀ (Identity)</label>
+          <div class="value identity" id="p0Value">0.50</div>
+          <div class="desc" id="p0Desc">Balanced</div>
+        </div>
+        <div class="state-card">
+          <label>k (Trauma)</label>
+          <div class="value trauma" id="kValue">0.20</div>
+          <div class="desc" id="kDesc">Open/Fluid</div>
+        </div>
+        <div class="state-card">
+          <label>F (Current State)</label>
+          <div class="value state" id="fValue">0.50</div>
+          <div class="desc" id="fDesc">Balanced</div>
+        </div>
+        <div class="state-card">
+          <label>m_crit (Breakdown Threshold)</label>
+          <div class="value pressure" id="mcritValue">0.15</div>
+          <div class="desc" id="mcritDesc">Resilient</div>
+        </div>
+      </div>
+      
+      <h2>Phase Space Visualization</h2>
+      <canvas id="visualCanvas"></canvas>
+      
+      <h2>Trauma Trajectory (k over time)</h2>
+      <canvas id="kChart"></canvas>
+      
+      <div class="status-text" id="statusText">
+        Agent initialized. Waiting for events...
+      </div>
+    </div>
+    
+    <!-- Right Panel: Controls & Memory -->
+    <div class="panel">
+      <h2>Select Persona</h2>
+      <div class="persona-grid">
+        <button class="persona-btn active" onclick="setPersona('warmHeart')">
+          <div class="name">💛 Warm Heart</div>
+          <div class="desc">Trusting, slow to harden, forgiving</div>
+        </button>
+        <button class="persona-btn" onclick="setPersona('coldLogic')">
+          <div class="name">🧊 Cold Logic</div>
+          <div class="desc">Adaptive, external-focused, efficient</div>
+        </button>
+        <button class="persona-btn" onclick="setPersona('guardian')">
+          <div class="name">🛡️ Guardian</div>
+          <div class="desc">Protective, steady, reliable</div>
+        </button>
+        <button class="persona-btn" onclick="setPersona('wounded')">
+          <div class="name">💔 Wounded</div>
+          <div class="desc">Traumatized, defensive, hypervigilant</div>
+        </button>
+        <button class="persona-btn" onclick="setPersona('fanatic')">
+          <div class="name">🔥 Fanatic</div>
+          <div class="desc">Rigid beliefs, ignores contradictions</div>
+        </button>
+        <button class="persona-btn" onclick="setPersona('explorer')">
+          <div class="name">🌊 Explorer</div>
+          <div class="desc">Curious, low inertia, seeks novelty</div>
+        </button>
+      </div>
+      
+      <h2>Trigger Events</h2>
+      <div class="btn-group">
+        <button class="btn btn-success" onclick="triggerEvent('kindness')">🤝 Kindness</button>
+        <button class="btn btn-success" onclick="triggerEvent('success')">🏆 Success</button>
+        <button class="btn btn-event" onclick="triggerEvent('challenge')">⚡ Challenge</button>
+        <button class="btn btn-event" onclick="triggerEvent('surprise')">❓ Surprise</button>
+        <button class="btn btn-danger" onclick="triggerEvent('betrayal')">🗡️ Betrayal</button>
+        <button class="btn btn-danger" onclick="triggerEvent('crisis')">🌪️ Crisis</button>
+        <button class="btn btn-danger" onclick="triggerEvent('trauma')">💥 Major Trauma</button>
+      </div>
+      
+      <h2>Manual Controls</h2>
+      <div class="control-group">
+        <label>Environmental Truth (T): <span id="tDisplay">0.50</span></label>
+        <input type="range" id="tSlider" min="0" max="100" value="50" oninput="updateT()">
+        <div class="range-labels"><span>Hostile</span><span>Neutral</span><span>Supportive</span></div>
+      </div>
+      
+      <div class="control-group">
+        <label>Pressure (m): <span id="mDisplay">0.50</span></label>
+        <input type="range" id="mSlider" min="0" max="100" value="50" oninput="updateM()">
+        <div class="range-labels"><span>Low Stakes</span><span>Moderate</span><span>Survival</span></div>
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-event" onclick="manualStep()">▶️ Step</button>
+        <button class="btn btn-success" onclick="runRecovery()">💚 Recovery Period</button>
+        <button class="btn btn-reset" onclick="resetAgent()">🔄 Reset</button>
+      </div>
+      
+      <h2>Memory Ledger (RAG)</h2>
+      <div class="ledger" id="ledger">
+        <div class="ledger-entry low-error">
+          <div class="event-name">🌱 Genesis</div>
+          <div class="metrics">
+            <span>ε: 0.00</span>
+            <span>k: 0.20</span>
+            <span>F: 0.50</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ============================================
+// DDA AGENT CORE
+// ============================================
+
+class DDAgent {
+  constructor(config = {}) {
+    this.P0 = config.P0 ?? 0.5;
+    this.k = config.k ?? 0.2;
+    this.F = config.F ?? this.P0;
+    this.alpha = config.alpha ?? 0.15;
+    this.delta = config.delta ?? 0.02;
+    this.beta = config.beta ?? 1.0;
+    
+    this.history = [];
+    this.kHistory = [this.k];
+    this.fHistory = [this.F];
+    this.lastPrediction = null;
+    this.stepCount = 0;
+  }
+
+  feel(T, m) {
+    const inertia = this.P0 * this.k * this.F;
+    const reality = (1 - this.k) * m * T;
+    this.F = Math.max(0, Math.min(1, inertia + reality));
+    return this.F;
+  }
+
+  predict() {
+    this.lastPrediction = this.F * 0.7 + this.P0 * 0.3;
+    return this.lastPrediction;
+  }
+
+  learn(actual, eventName = "event") {
+    if (this.lastPrediction === null) this.predict();
+    
+    const epsilon = Math.abs(this.lastPrediction - actual);
+    const traumaGain = this.alpha * Math.pow(epsilon, this.beta);
+    const healing = this.delta;
+    
+    const oldK = this.k;
+    this.k = Math.max(0.05, Math.min(0.95, this.k + traumaGain - healing));
+    
+    this.stepCount++;
+    this.kHistory.push(this.k);
+    this.fHistory.push(this.F);
+    
+    const entry = {
+      step: this.stepCount,
+      event: eventName,
+      predicted: this.lastPrediction,
+      actual,
+      epsilon,
+      kBefore: oldK,
+      kAfter: this.k,
+      F: this.F
+    };
+    this.history.push(entry);
+    
+    this.lastPrediction = null;
+    return entry;
+  }
+
+  getMcrit() {
+    return (this.P0 * this.k) / (1 - this.k + 0.01);
+  }
+
+  checkPanic(m) {
+    const mcrit = this.getMcrit();
+    return { panic: m > mcrit, mcrit, margin: m - mcrit };
+  }
+
+  getKDescription() {
+    if (this.k < 0.25) return "Open/Fluid";
+    if (this.k < 0.45) return "Balanced";
+    if (this.k < 0.65) return "Guarded";
+    if (this.k < 0.80) return "Defensive";
+    return "Rigid/Locked";
+  }
+
+  getFDescription() {
+    if (this.F < 0.3) return "External-focused";
+    if (this.F < 0.7) return "Balanced";
+    return "Internal-focused";
+  }
+
+  getMcritDescription() {
+    const mcrit = this.getMcrit();
+    if (mcrit < 0.2) return "Fragile";
+    if (mcrit < 0.4) return "Sensitive";
+    if (mcrit < 0.6) return "Moderate";
+    if (mcrit < 0.8) return "Resilient";
+    return "Fortified";
+  }
+}
+
+// ============================================
+// PERSONAS
+// ============================================
+
+const PERSONAS = {
+  warmHeart: { P0: 0.55, k: 0.15, alpha: 0.08, delta: 0.025, beta: 1.4 },
+  coldLogic: { P0: 0.25, k: 0.10, alpha: 0.05, delta: 0.04, beta: 0.7 },
+  guardian: { P0: 0.70, k: 0.35, alpha: 0.10, delta: 0.015, beta: 1.0 },
+  wounded: { P0: 0.50, k: 0.72, alpha: 0.18, delta: 0.008, beta: 0.6 },
+  fanatic: { P0: 0.92, k: 0.80, alpha: 0.20, delta: 0.005, beta: 0.4 },
+  explorer: { P0: 0.35, k: 0.12, alpha: 0.06, delta: 0.035, beta: 1.2 }
+};
+
+// ============================================
+// EVENT TEMPLATES
+// ============================================
+
+const EVENTS = {
+  kindness: { T: 0.75, m: 0.3, outcome: 0.8, name: "🤝 Act of Kindness" },
+  success: { T: 0.85, m: 0.5, outcome: 0.9, name: "🏆 Success" },
+  challenge: { T: 0.5, m: 0.6, outcome: 0.5, name: "⚡ Challenge" },
+  surprise: { T: 0.3, m: 0.5, outcome: 0.7, name: "❓ Unexpected Surprise" },
+  betrayal: { T: 0.15, m: 0.75, outcome: 0.1, name: "🗡️ Betrayal" },
+  crisis: { T: 0.2, m: 0.85, outcome: 0.25, name: "🌪️ Crisis" },
+  trauma: { T: 0.05, m: 0.95, outcome: 0.05, name: "💥 Major Trauma" }
+};
+
+// ============================================
+// SIMULATION STATE
+// ============================================
+
+let agent = new DDAgent(PERSONAS.warmHeart);
+let currentT = 0.5;
+let currentM = 0.5;
+let currentPersona = 'warmHeart';
+
+// ============================================
+// UI FUNCTIONS
+// ============================================
+
+function updateDisplay() {
+  document.getElementById('p0Value').textContent = agent.P0.toFixed(2);
+  document.getElementById('kValue').textContent = agent.k.toFixed(2);
+  document.getElementById('fValue').textContent = agent.F.toFixed(2);
+  document.getElementById('mcritValue').textContent = agent.getMcrit().toFixed(2);
+  
+  document.getElementById('kDesc').textContent = agent.getKDescription();
+  document.getElementById('fDesc').textContent = agent.getFDescription();
+  document.getElementById('mcritDesc').textContent = agent.getMcritDescription();
+  
+  // Color intensity based on values
+  document.getElementById('kValue').style.opacity = 0.5 + agent.k * 0.5;
+  
+  drawVisualization();
+  drawKChart();
+}
+
+function updateStatusText(entry) {
+  const panicCheck = agent.checkPanic(currentM);
+  let status = `<strong>Step ${agent.stepCount}:</strong> ${entry.event}<br>`;
+  status += `Prediction error (ε): <em>${entry.epsilon.toFixed(3)}</em><br>`;
+  status += `Trauma ${entry.kAfter > entry.kBefore ? 'increased' : 'decreased'} from ${entry.kBefore.toFixed(3)} → ${entry.kAfter.toFixed(3)}<br>`;
+  
+  if (panicCheck.panic) {
+    status += `<br>⚠️ <em>PANIC THRESHOLD EXCEEDED!</em> (m=${currentM.toFixed(2)} > m_crit=${panicCheck.mcrit.toFixed(2)})`;
+  }
+  
+  if (agent.k > 0.7) {
+    status += `<br>🔒 Agent is in <em>defensive lockdown</em> - resisting external input`;
+  } else if (agent.k < 0.25) {
+    status += `<br>🌊 Agent is <em>fluid</em> - highly responsive to environment`;
+  }
+  
+  document.getElementById('statusText').innerHTML = status;
+}
+
+function addLedgerEntry(entry) {
+  const ledger = document.getElementById('ledger');
+  const div = document.createElement('div');
+  div.className = `ledger-entry ${entry.epsilon > 0.3 ? 'high-error' : 'low-error'}`;
+  div.innerHTML = `
+    <div class="event-name">${entry.event}</div>
+    <div class="metrics">
+      <span>ε: ${entry.epsilon.toFixed(3)}</span>
+      <span>k: ${entry.kAfter.toFixed(2)}</span>
+      <span>F: ${entry.F.toFixed(2)}</span>
+    </div>
+  `;
+  ledger.insertBefore(div, ledger.firstChild);
+  
+  // Keep only last 20 entries visible
+  while (ledger.children.length > 20) {
+    ledger.removeChild(ledger.lastChild);
+  }
+}
+
+function setPersona(name) {
+  currentPersona = name;
+  agent = new DDAgent(PERSONAS[name]);
+  
+  // Update button states
+  document.querySelectorAll('.persona-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.closest('.persona-btn').classList.add('active');
+  
+  // Clear ledger
+  document.getElementById('ledger').innerHTML = `
+    <div class="ledger-entry low-error">
+      <div class="event-name">🌱 Persona: ${name}</div>
+      <div class="metrics">
+        <span>P₀: ${agent.P0.toFixed(2)}</span>
+        <span>k: ${agent.k.toFixed(2)}</span>
+        <span>F: ${agent.F.toFixed(2)}</span>
+      </div>
+    </div>
+  `;
+  
+  updateDisplay();
+  document.getElementById('statusText').innerHTML = `Loaded <em>${name}</em> persona. Ready for events.`;
+}
+
+function triggerEvent(eventType) {
+  const evt = EVENTS[eventType];
+  currentT = evt.T;
+  currentM = evt.m;
+  
+  document.getElementById('tSlider').value = evt.T * 100;
+  document.getElementById('mSlider').value = evt.m * 100;
+  document.getElementById('tDisplay').textContent = evt.T.toFixed(2);
+  document.getElementById('mDisplay').textContent = evt.m.toFixed(2);
+  
+  agent.predict();
+  agent.feel(evt.T, evt.m);
+  const entry = agent.learn(evt.outcome, evt.name);
+  
+  updateDisplay();
+  updateStatusText(entry);
+  addLedgerEntry(entry);
+}
+
+function manualStep() {
+  agent.predict();
+  agent.feel(currentT, currentM);
+  
+  // Outcome based on T with some noise
+  const outcome = currentT + (Math.random() - 0.5) * 0.2;
+  const entry = agent.learn(Math.max(0, Math.min(1, outcome)), "📊 Manual Step");
+  
+  updateDisplay();
+  updateStatusText(entry);
+  addLedgerEntry(entry);
+}
+
+function runRecovery() {
+  for (let i = 0; i < 10; i++) {
+    setTimeout(() => {
+      const T = 0.5 + (Math.random() - 0.5) * 0.1;
+      const m = 0.2 + Math.random() * 0.1;
+      
+      agent.predict();
+      agent.feel(T, m);
+      const outcome = T + (Math.random() - 0.5) * 0.1;
+      const entry = agent.learn(Math.max(0, Math.min(1, outcome)), "💚 Recovery");
+      
+      updateDisplay();
+      updateStatusText(entry);
+      addLedgerEntry(entry);
+    }, i * 200);
+  }
+}
+
+function resetAgent() {
+  agent = new DDAgent(PERSONAS[currentPersona]);
+  document.getElementById('ledger').innerHTML = `
+    <div class="ledger-entry low-error">
+      <div class="event-name">🔄 Reset</div>
+      <div class="metrics">
+        <span>ε: 0.00</span>
+        <span>k: ${agent.k.toFixed(2)}</span>
+        <span>F: ${agent.F.toFixed(2)}</span>
+      </div>
+    </div>
+  `;
+  updateDisplay();
+  document.getElementById('statusText').innerHTML = "Agent reset to initial state.";
+}
+
+function updateT() {
+  currentT = document.getElementById('tSlider').value / 100;
+  document.getElementById('tDisplay').textContent = currentT.toFixed(2);
+}
+
+function updateM() {
+  currentM = document.getElementById('mSlider').value / 100;
+  document.getElementById('mDisplay').textContent = currentM.toFixed(2);
+}
+
+// ============================================
+// VISUALIZATION
+// ============================================
+
+function drawVisualization() {
+  const canvas = document.getElementById('visualCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * 2;
+  const H = canvas.height = canvas.offsetHeight * 2;
+  ctx.scale(2, 2);
+  const w = W / 2, h = H / 2;
+  
+  // Clear
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(0, 0, w, h);
+  
+  const cx = w / 2;
+  const cy = h / 2;
+  const maxR = Math.min(w, h) * 0.4;
+  
+  // Draw identity attractor (P0)
+  const p0Angle = -Math.PI / 2;
+  const p0R = agent.P0 * maxR;
+  const p0x = cx + Math.cos(p0Angle) * p0R;
+  const p0y = cy + Math.sin(p0Angle) * p0R;
+  
+  ctx.beginPath();
+  ctx.arc(p0x, p0y, 15, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(123, 44, 191, 0.8)';
+  ctx.fill();
+  ctx.strokeStyle = '#7b2cbf';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('P₀', p0x, p0y + 4);
+  
+  // Draw current state (F) with k-based size
+  const fAngle = (agent.F - 0.5) * Math.PI;
+  const fR = maxR * 0.7;
+  const fx = cx + Math.cos(fAngle) * fR;
+  const fy = cy + Math.sin(fAngle) * fR * 0.5;
+  
+  const fSize = 10 + agent.k * 20;
+  ctx.beginPath();
+  ctx.arc(fx, fy, fSize, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(78, 205, 196, ${0.5 + agent.k * 0.5})`;
+  ctx.fill();
+  ctx.strokeStyle = '#4ecdc4';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.fillText('F', fx, fy + 4);
+  
+  // Draw connection line (tension)
+  ctx.beginPath();
+  ctx.moveTo(p0x, p0y);
+  ctx.lineTo(fx, fy);
+  ctx.strokeStyle = `rgba(255, 107, 107, ${agent.k})`;
+  ctx.lineWidth = 1 + agent.k * 3;
+  ctx.stroke();
+  
+  // Draw m_crit boundary
+  const mcrit = agent.getMcrit();
+  ctx.beginPath();
+  ctx.arc(cx, cy, mcrit * maxR * 1.5, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 217, 61, 0.5)`;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Labels
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`k (trauma): ${agent.k.toFixed(2)}`, 10, 20);
+  ctx.fillText(`m_crit: ${mcrit.toFixed(2)}`, 10, 35);
+  ctx.fillText(`Current m: ${currentM.toFixed(2)}`, 10, 50);
+  
+  // Panic indicator
+  if (currentM > mcrit) {
+    ctx.fillStyle = '#ff6b6b';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('⚠️ PANIC ZONE', 10, 70);
+  }
+  
+  // Draw history trail
+  if (agent.fHistory.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(78, 205, 196, 0.3)';
+    ctx.lineWidth = 1;
+    
+    for (let i = Math.max(0, agent.fHistory.length - 30); i < agent.fHistory.length; i++) {
+      const f = agent.fHistory[i];
+      const angle = (f - 0.5) * Math.PI;
+      const x = cx + Math.cos(angle) * fR;
+      const y = cy + Math.sin(angle) * fR * 0.5;
+      
+      if (i === Math.max(0, agent.fHistory.length - 30)) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
+  }
+}
+
+function drawKChart() {
+  const canvas = document.getElementById('kChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * 2;
+  const H = canvas.height = canvas.offsetHeight * 2;
+  ctx.scale(2, 2);
+  const w = W / 2, h = H / 2;
+  
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, 0, w, h);
+  
+  const padding = 30;
+  const chartW = w - padding * 2;
+  const chartH = h - padding * 2;
+  
+  // Draw axes
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, padding);
+  ctx.lineTo(padding, h - padding);
+  ctx.lineTo(w - padding, h - padding);
+  ctx.stroke();
+  
+  // Y-axis labels
+  ctx.fillStyle = '#888';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('1.0', padding - 5, padding + 5);
+  ctx.fillText('0.5', padding - 5, padding + chartH / 2);
+  ctx.fillText('0.0', padding - 5, h - padding);
+  
+  // Draw k line
+  if (agent.kHistory.length > 1) {
+    const points = agent.kHistory.slice(-50);
+    const stepW = chartW / Math.max(points.length - 1, 1);
+    
+    ctx.beginPath();
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 2;
+    
+    points.forEach((k, i) => {
+      const x = padding + i * stepW;
+      const y = h - padding - (k * chartH);
+      
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    
+    // Current k marker
+    const lastX = padding + (points.length - 1) * stepW;
+    const lastY = h - padding - (points[points.length - 1] * chartH);
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fill();
+  }
+  
+  // Label
+  ctx.fillStyle = '#888';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('k (trauma) over time', w / 2, h - 5);
+}
+
+// ============================================
+// INIT
+// ============================================
+
+window.onload = () => {
+  updateDisplay();
+};
+
+window.onresize = () => {
+  updateDisplay();
+};
+</script>
+</body>
+</html>
