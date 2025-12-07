@@ -1,0 +1,514 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Azure Waltz — Final (3/4, DDA beauty)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0b0f16; --panel:#111a28; --ink:#ecf4ff; --muted:#9cb0c9; --cyan:#71d9ff; --gold:#f6c978; --rose:#ff8cab; --lime:#7af0c7; }
+  html, body { margin:0; height:100%; background:radial-gradient(1200px 720px at 68% 16%, #121a2b 0%, #0b0f16 58%, #090c12 100%); color:var(--ink); font:14px/1.35 system-ui, -apple-system, Segoe UI, Inter, Roboto, Arial; }
+  header { position:fixed; top:10px; left:10px; right:10px; display:flex; gap:10px; align-items:flex-start; z-index:5; }
+  .card { background:rgba(17,26,40,.72); border:1px solid #213147; border-radius:12px; padding:12px 14px; backdrop-filter: blur(6px); }
+  .title { font-weight:600; letter-spacing:.3px; }
+  .sub { color:var(--muted); font-size:12px; margin-top:2px; }
+  .grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
+  .row { display:grid; grid-template-columns: 120px 200px 64px; gap:8px; align-items:center; }
+  input[type="range"] { width:100%; }
+  select { width:200px; }
+  .val { text-align:right; color:var(--cyan); font-variant-numeric: tabular-nums; }
+  .badge { border:1px solid #2a3b57; border-radius:8px; padding:3px 7px; color:var(--muted); font-size:12px; }
+  .warn { color:var(--rose); border-color:#5a2c3a; }
+  #stage { position:fixed; inset:0; }
+  .corner { position:fixed; bottom:10px; left:10px; color:var(--muted); font-size:12px; z-index:5; }
+  .cornerR { position:fixed; bottom:10px; right:10px; color:var(--muted); font-size:12px; z-index:5; text-align:right; }
+</style>
+</head>
+<body>
+<header>
+  <div class="card" style="min-width:300px">
+    <div class="title">Azure Waltz — Final (3/4, DDA beauty)</div>
+    <div class="sub">Click canvas or Space to play/pause • Mouse X=melody span, Y=reverb • Wheel=BPM • 1=A, 2=B, 3=A’</div>
+  </div>
+  <div class="card grid">
+    <div class="row"><label>P₀ identity</label><input id="p0" type="range" min="0" max="1" step="0.01" value="0.64"><div class="val" id="p0v">0.64</div></div>
+    <div class="row"><label>k hysteresis</label><input id="k" type="range" min="0.05" max="0.99" step="0.01" value="0.22"><div class="val" id="kv">0.22</div></div>
+    <div class="row"><label>m pressure</label><input id="m" type="range" min="0" max="3" step="0.01" value="0.50"><div class="val" id="mv">0.50</div></div>
+    <div class="row"><label>Beauty</label>
+      <select id="beauty">
+        <option value="tender" selected>Tender</option>
+        <option value="lyric">Lyric</option>
+        <option value="radiant">Radiant</option>
+      </select><span></span>
+    </div>
+    <div class="row"><label>Tempo (BPM)</label><input id="bpm" type="range" min="54" max="156" step="1" value="96"><div class="val" id="bpmv">96</div></div>
+    <div class="row"><label>Auto‑k</label><input id="autok" type="checkbox" checked><span class="badge">ε‑rigidify</span></div>
+  </div>
+  <div class="card">
+    <div class="badge" id="ptsd">PTSD‑lock: no</div>
+    <div class="badge" id="panic">Panic: no</div>
+  </div>
+</header>
+
+<canvas id="stage"></canvas>
+<div class="corner">3/4 oom‑pah‑pah • A (E minor) → B (G major) → A’ (E minor)</div>
+<div class="cornerR">DDA balances motif • smoothness • tension for max beauty</div>
+
+<script>
+(() => {
+  // ===== utils
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const choice=(arr,w=null)=>{
+    if(!arr.length) return null;
+    if(!w){ return arr[(Math.random()*arr.length)|0]; }
+    let s=0; for(const z of w) s+=z; let r=Math.random()*s, acc=0;
+    for(let i=0;i<arr.length;i++){ acc+=w[i]; if(r<=acc) return arr[i]; }
+    return arr[arr.length-1];
+  };
+  const setVal=(el,v,d=2)=>{ el.textContent = Number(v).toFixed(d); };
+
+  // ===== DDA brain
+  const DDA = {
+    P0:0.64, k:0.22, m:0.50,
+    alpha:0.22, beta:0.95, gamma:0.012,
+    F:0.5, u:0, eps:0, ptsd:false, panic:false,
+    update(u){
+      const z = this.P0*this.k*this.F + this.m*u;
+      const sig = 0.5*(1 + Math.tanh(1.25*z - 0.62));
+      this.F = clamp(sig, 0, 1);
+      this.u = u;
+      this.eps = Math.abs(u - (this.F*2-1));
+      if (UI.autok.checked){
+        const dk = this.alpha * Math.pow(this.eps, this.beta);
+        const heal = (this.m < 0.3 && this.eps < 0.05) ? this.gamma : 0;
+        this.k = clamp(this.k + dk - heal, 0.05, 0.99);
+      }
+      const mcrit = (this.P0 * this.k);
+      this.ptsd = this.k > 0.9;
+      this.panic = this.m > mcrit;
+    }
+  };
+
+  // ===== music theory
+  const A4=440, midiHz=m=>A4*Math.pow(2,(m-69)/12);
+  const SECTIONS = {
+    A:  { name:'A — E minor',  root:52, mode:'em', bars:32 },
+    B:  { name:'B — G major',  root:55, mode:'G',  bars:32 },
+    A2: { name:'A’ — E minor', root:52, mode:'em', bars:48 }
+  };
+  let currentSectionKey='A';
+  function nextSection(k){ return k==='A'?'B':(k==='B'?'A2':'A'); }
+
+  const MODES = {
+    em: { scale:[0,2,3,5,7,8,10],
+          chords:[
+            {name:'i',  deg:0,  tri:[0,3,7]},
+            {name:'iv', deg:5,  tri:[0,3,7]},
+            {name:'V',  deg:7,  tri:[0,4,7]},
+            {name:'VI', deg:8,  tri:[0,4,7]},
+            {name:'III',deg:3,  tri:[0,4,7]},
+            {name:'VII',deg:10, tri:[0,4,7]}
+          ]},
+    G:  { scale:[0,2,4,5,7,9,11],
+          chords:[
+            {name:'I',  deg:0,  tri:[0,4,7]},
+            {name:'IV', deg:5,  tri:[0,4,7]},
+            {name:'V',  deg:7,  tri:[0,4,7]},
+            {name:'vi', deg:9,  tri:[0,3,7]},
+            {name:'ii', deg:2,  tri:[0,3,7]},
+            {name:'iii',deg:4,  tri:[0,3,7]}
+          ]}
+  };
+  const DEG_CONS = {0:1.0,1:0.45,2:0.7,3:0.85,4:0.8,5:0.9,6:0.35,7:0.95,8:0.6,9:0.75,10:0.88,11:0.5};
+
+  function scaleSet(mode, rootMidi, low=45, high=81){
+    const deg = MODES[mode].scale, out=[];
+    for(let m=low; m<=high; m++){
+      let r=(m-rootMidi)%12; if(r<0) r+=12;
+      if (deg.includes(r)) out.push(m);
+    }
+    return out;
+  }
+  function beautyScore(prev, cur, motif){
+    const sec = SECTIONS[currentSectionKey];
+    const rel=((cur - sec.root)%12 + 12)%12;
+    const conson = DEG_CONS[rel]||0.5;
+    const interval = Math.abs(cur - prev);
+    const smooth = 1 - clamp(interval/12,0,1);
+    const motifBoost = motif.has(cur) ? 1 : 0;
+    const stable=[0,3,5,7,10];
+    const restLike = stable.includes(rel) ? 1 : 0;
+
+    let w = {con:0.42, smo:0.36, mot:0.22, rest:0.18};
+    if (UI.beauty.value==='lyric')   w = {con:0.36, smo:0.42, mot:0.25, rest:0.15};
+    if (UI.beauty.value==='radiant') w = {con:0.40, smo:0.28, mot:0.18, rest:0.12};
+
+    const k=DDA.k, m=DDA.m, P0=DDA.P0;
+    const wCon = w.con*(0.85+0.5*P0);
+    const wSmo = w.smo*(0.7+0.8*k)*(1-0.3*m);
+    const wMot = w.mot*(0.6+1.2*k);
+    const wRes = w.rest*(0.7+0.6*P0)*(1-0.4*m);
+    return wCon*conson + wSmo*smooth + wMot*motifBoost + wRes*restLike;
+  }
+
+  // ===== audio engine
+  const AE = {
+    ctx:null, comp:null, master:null, dry:null, rev:null, revG:null,
+    async init(){
+      if (this.ctx) return;
+      const ac = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // compressor (AudioParams must be set via .setValueAtTime)
+      this.comp = ac.createDynamicsCompressor();
+      this.comp.threshold.setValueAtTime(-22, ac.currentTime);
+      this.comp.knee.setValueAtTime(24, ac.currentTime);
+      this.comp.ratio.setValueAtTime(3, ac.currentTime);
+      this.comp.attack.setValueAtTime(0.004, ac.currentTime);
+      this.comp.release.setValueAtTime(0.25, ac.currentTime);
+
+      // master + sends
+      this.master = ac.createGain(); this.master.gain.setValueAtTime(0.82, ac.currentTime);
+      this.dry = ac.createGain(); this.dry.gain.setValueAtTime(0.9, ac.currentTime);
+      this.rev = ac.createConvolver(); this.rev.buffer = mkImpulse(ac, 2.8, 2.0);
+      this.revG = ac.createGain(); this.revG.gain.setValueAtTime(0.36, ac.currentTime);
+
+      // routing
+      this.master.connect(this.comp);
+      this.comp.connect(this.dry); this.dry.connect(ac.destination);
+      this.comp.connect(this.rev); this.rev.connect(this.revG); this.revG.connect(ac.destination);
+
+      if (ac.state === 'suspended') { await ac.resume(); }
+    },
+    setReverb(v){ if(this.revG) this.revG.gain.setTargetAtTime(clamp(v,0,1), this.ctx.currentTime, 0.1); },
+
+    // nylon-ish pluck (Karplus-Strong)
+    pluck(freq, t, dur=2.0, vel=0.9, color=0.25){
+      if(!this.ctx) return;
+      const ac=this.ctx;
+      const len = Math.max(2, Math.floor(ac.sampleRate/freq));
+      const buf=ac.createBuffer(1,len,ac.sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1 - color*(i/len));
+      const src=ac.createBufferSource(); src.buffer=buf; src.loop=true;
+      const delay=ac.createDelay(); delay.delayTime.setValueAtTime(len/ac.sampleRate, ac.currentTime);
+      const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(3200, ac.currentTime); lp.Q.setValueAtTime(0.25, ac.currentTime);
+      const fb=ac.createGain(); fb.gain.setValueAtTime(0.92 - 0.28*color, ac.currentTime);
+      const out=ac.createGain(); out.gain.setValueAtTime(0.0001, ac.currentTime);
+
+      out.gain.setValueAtTime(0.0001,t);
+      out.gain.linearRampToValueAtTime(0.7*vel, t+0.01);
+      out.gain.exponentialRampToValueAtTime(0.4*vel, t+0.06);
+      out.gain.exponentialRampToValueAtTime(0.001, t+dur);
+
+      src.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay); fb.connect(out); out.connect(this.master);
+      src.start(t); src.stop(t+dur+0.1);
+    },
+
+    // mallet/piano-ish pop for “pah” beats
+    mallet(freq, t, dur=0.6, vel=0.7, tone=0.5){
+      if(!this.ctx) return; const ac=this.ctx;
+      const o1=ac.createOscillator(), o2=ac.createOscillator(); o1.type='triangle'; o2.type='sine';
+      o1.frequency.setValueAtTime(freq, ac.currentTime); o2.frequency.setValueAtTime(freq*2, ac.currentTime); o2.detune.setValueAtTime(8, ac.currentTime);
+      const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(1200+1200*tone, ac.currentTime); bp.Q.setValueAtTime(1.2, ac.currentTime);
+      const g=ac.createGain(); g.gain.setValueAtTime(0.0001, ac.currentTime);
+      const n=ac.createBufferSource(); const nb=ac.createBuffer(1,128,ac.sampleRate); const nd=nb.getChannelData(0);
+      for(let i=0;i<128;i++) nd[i]=(Math.random()*2-1)*Math.pow(1-i/128,2);
+      n.buffer=nb;
+
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.55*vel, t+0.005);
+      g.gain.exponentialRampToValueAtTime(0.002, t+dur);
+
+      o1.connect(bp); o2.connect(bp); n.connect(bp); bp.connect(g); g.connect(this.master);
+      o1.start(t); o2.start(t); n.start(t);
+      o1.stop(t+dur+0.1); o2.stop(t+dur+0.1); n.stop(t+0.08);
+    },
+
+    // airy pad
+    pad(freq, t, dur=3.0, amp=0.20, color=0.4){
+      if(!this.ctx) return; const ac=this.ctx;
+      const o1=ac.createOscillator(), o2=ac.createOscillator();
+      o1.type='sine'; o2.type='sine';
+      o1.frequency.setValueAtTime(freq, ac.currentTime); o2.frequency.setValueAtTime(freq*2, ac.currentTime); o2.detune.setValueAtTime(7, ac.currentTime);
+      const lpf=ac.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.setValueAtTime(900+1300*(1-color), ac.currentTime); lpf.Q.setValueAtTime(0.7, ac.currentTime);
+      const g=ac.createGain(); g.gain.setValueAtTime(0.0001, ac.currentTime);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(amp, t+0.28+0.2*color);
+      g.gain.exponentialRampToValueAtTime(amp*0.65, t+dur*0.6);
+      g.gain.exponentialRampToValueAtTime(0.0008, t+dur);
+      o1.connect(lpf); o2.connect(lpf); lpf.connect(g); g.connect(this.master);
+      o1.start(t); o2.start(t); o1.stop(t+dur+0.1); o2.stop(t+dur+0.1);
+    },
+
+    // gentle bell
+    bell(freq, t, dur=1.2, amp=0.18){
+      if(!this.ctx) return; const ac=this.ctx;
+      const o=ac.createOscillator(), g=ac.createGain(); o.type='sine'; o.frequency.setValueAtTime(freq*2, ac.currentTime);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(amp, t+0.005);
+      g.gain.exponentialRampToValueAtTime(0.0008, t+dur);
+      o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.1);
+    },
+
+    // subtle sub pedal
+    sub(freq, t, dur=2.4, amp=0.12){
+      if(!this.ctx) return; const ac=this.ctx;
+      const o=ac.createOscillator(), g=ac.createGain(), lpf=ac.createBiquadFilter();
+      o.type='sine'; o.frequency.setValueAtTime(freq/2, ac.currentTime); lpf.type='lowpass'; lpf.frequency.setValueAtTime(180, ac.currentTime);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(amp, t+0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+      o.connect(lpf); lpf.connect(g); g.connect(this.master);
+      o.start(t); o.stop(t+dur+0.1);
+    }
+  };
+
+  function mkImpulse(ac, seconds, decay){
+    const len=Math.floor(ac.sampleRate*seconds); const buf=ac.createBuffer(2,len,ac.sampleRate);
+    for(let ch=0; ch<2; ch++){
+      const d=buf.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        const t=i/len, env=Math.pow(1-t,decay);
+        const early = i<ac.sampleRate*0.05 ? Math.sin(i*0.025)*0.35 : 0;
+        d[i]=((Math.random()*2-1)+early)*env;
+      }
+    }
+    return buf;
+  }
+
+  // ===== composer
+  const Composer = {
+    bpm:96, motif:new Map(),
+    barIndex:0, barsInSection:0, nextTime:0,
+    lastMel:null, prevChordName:null,
+    get sec(){ return SECTIONS[currentSectionKey]; },
+    beatTime(){ return 60/this.bpm; },
+    barTime(){ return 3*this.beatTime(); },
+    suggestU(t){
+      const tide = Math.sin(t*0.11)*0.6 + Math.sin(t*0.049+1.1)*0.4;
+      const breath = Math.sin(t*0.020+0.6)*0.3;
+      const jitter = (Math.random()*2-1)*0.06;
+      return clamp(0.5*tide + 0.3*breath + 0.2*jitter, -1, 1);
+    },
+    pickChord(prevName=null){
+      const mode = MODES[this.sec.mode]; const chords = mode.chords;
+      const explore=DDA.F;
+      const weights = chords.map(c=>{
+        let w=1;
+        if (prevName){
+          if (c.name===prevName) w*= 0.9 + 0.5*DDA.k;
+          if (prevName==='i' && (c.name==='VI'||c.name==='III')) w*=1.4;
+          if (prevName==='I' && (c.name==='vi'||c.name==='IV')) w*=1.4;
+          if ((prevName==='V') && (c.name==='i'||c.name==='I')) w*=1.8;
+        }
+        if (c.name==='V' || c.name==='VII' || c.name==='iii' || c.name==='vi') w*= (0.8 + 0.8*explore);
+        return w;
+      });
+      return choice(chords, weights);
+    },
+    chordToPitches(ch){ const r=this.sec.root+ch.deg; return ch.tri.map(s=>r+s); },
+    invertForBass(pitches, target=40){
+      const cands=[];
+      for(let i=-2;i<=2;i++){
+        for(let inv=0;inv<3;inv++){
+          const stack=pitches.map((p,j)=>p+12*i+(j<inv?12:0));
+          const bass=Math.min(...stack);
+          cands.push({stack, bass, d:Math.abs(bass-target)});
+        }
+      }
+      cands.sort((a,b)=>a.d-b.d); return cands[0].stack;
+    },
+    pickMelody(prevMidi){
+      const spanBase = 18 + Math.floor(mouse.x*20);
+      const low = this.sec.root + 5 - Math.floor(spanBase*(0.6 + 0.4*(1-DDA.P0)));
+      const high= this.sec.root + 12 + Math.floor(spanBase*(0.7 + 0.5*DDA.P0));
+
+      const pool = scaleSet(this.sec.mode, this.sec.root, low, high);
+      const explore=DDA.F, center=this.sec.root+(DDA.P0-0.5)*5;
+      const weights=[];
+      for(const m of pool){
+        const base=Math.exp(-(Math.abs(m-center)/(7+12*(1-explore))));
+        const bs=beautyScore(prevMidi, m, this.motif);
+        const leap=Math.abs(m-prevMidi);
+        const keep=Math.exp(-leap/(5+10*(1-DDA.k)));
+        const spice = 1 + 0.22*DDA.m*(Math.abs(m-center)/12);
+        weights.push(base*bs*keep*spice + 1e-6);
+      }
+      return choice(pool, weights) ?? prevMidi;
+    },
+    scheduleBar(t0){
+      this.barsInSection++;
+      if (this.barsInSection > this.sec.bars){
+        currentSectionKey = nextSection(currentSectionKey);
+        this.barsInSection = 1;
+      }
+
+      const beat=this.beatTime(), barDur=this.barTime();
+      this.prevChordName = this.prevChordName || (this.sec.mode==='em' ? 'i' : 'I');
+      const ch = this.pickChord(this.prevChordName); this.prevChordName=ch.name;
+      const tri=this.chordToPitches(ch);
+      const inv=this.invertForBass(tri, 40 + 6*Math.sin(this.barIndex*0.2));
+      const bass=Math.min(...inv), upper=inv.filter(n=>n!==bass).sort((a,b)=>a-b);
+
+      // oom‑pah‑pah
+      const velB = clamp(0.64 + 0.25*DDA.m, 0.4, 1.0);
+      const velP = clamp(0.50 + 0.18*DDA.m - 0.15*DDA.k, 0.35, 0.9);
+      const color= clamp(0.18 + 0.32*(1-DDA.P0) + 0.28*DDA.k, 0.10, 0.65);
+
+      AE.pluck(midiHz(bass-12), t0, beat*1.7, velB, color);           // beat 1: oom
+      AE.mallet(midiHz(upper[0]), t0+beat,    beat*0.9, velP, color);  // beat 2: pah
+      AE.mallet(midiHz(upper[1]), t0+2*beat,  beat*0.9, velP, color);  // beat 3: pah
+
+      if (Math.random() < 0.35 + 0.25*(1-DDA.m)){
+        AE.pad(midiHz(upper[1]), t0+0.02, beat*2.6, 0.14+0.08*DDA.P0, 0.35+0.25*DDA.k);
+      }
+      if (DDA.m > 0.95 && Math.random()<0.35){
+        AE.sub(midiHz(this.sec.root), t0+0.02, beat*2.4, 0.10+0.06*DDA.P0);
+      }
+
+      // melody
+      const notesInBar = (DDA.m>1.1)?3 : (DDA.m>0.7?2:1);
+      let last = this.lastMel || (this.sec.root+12);
+      for(let n=0;n<notesInBar;n++){
+        const m = this.pickMelody(last);
+        const when = t0 + (n===0? beat*0.0 : (n===1? beat*1.15 : beat*2.05));
+        const dur = (n===0? beat*1.4 : (n===1? beat*1.2 : beat*0.9)) * (1.1 + 0.2*DDA.k);
+        const velM = clamp(0.58 + 0.35*DDA.m - 0.18*DDA.k, 0.35, 1.0);
+        AE.pluck(midiHz(m), when, dur, velM, color*0.85);
+
+        if (DDA.eps>0.34 && Math.random()<0.55){
+          const step = (UI.beauty.value==='radiant') ? 3 : (Math.random()<0.5?2:3);
+          AE.bell(midiHz(m+step), when+0.10, dur*0.7, 0.14+0.06*DDA.P0);
+          spark(noteXY(m), '#71d9ff');
+        } else {
+          glow(noteXY(m), `hsla(${205+30*DDA.P0},85%,${56-18*DDA.k}%,1)`, dur);
+        }
+        const acc=(this.motif.get(m)||0)+1; this.motif.set(m,acc);
+        for(const [k,v] of this.motif){ const nv=v*0.93; if(nv<0.14) this.motif.delete(k); else this.motif.set(k,nv); }
+        last=m; this.lastMel=m;
+      }
+
+      this.barIndex++;
+      return barDur;
+    }
+  };
+
+  // ===== transport
+  let playing=false, raf=null, started=false;
+  function scheduler(){
+    if(!AE.ctx || !playing) return;
+    const now=AE.ctx.currentTime;
+    const u = Composer.suggestU(now); DDA.update(u);
+
+    const look=0.15;
+    while ((Composer.nextTime||0) < now + look){
+      const t0 = Composer.nextTime || (Composer.nextTime = now + 0.02);
+      const dur = Composer.scheduleBar(t0);
+      Composer.nextTime += dur;
+    }
+
+    UI.ptsd.textContent = 'PTSD‑lock: ' + (DDA.ptsd?'yes':'no');
+    UI.ptsd.className = 'badge ' + (DDA.ptsd?'warn':'');
+    UI.panic.textContent = 'Panic: ' + (DDA.panic?'yes':'no');
+    UI.panic.className = 'badge ' + (DDA.panic?'warn':'');
+
+    raf=requestAnimationFrame(scheduler);
+  }
+  async function toggle(){
+    if(!AE.ctx) await AE.init();
+    playing=!playing;
+    if(playing){
+      if(!started){ started=true; Composer.nextTime = AE.ctx.currentTime + 0.05; }
+      scheduler();
+    } else {
+      cancelAnimationFrame(raf); raf=null;
+    }
+  }
+
+  // ===== UI
+  const UI = {
+    p0: q('#p0'), p0v: q('#p0v'),
+    k: q('#k'), kv: q('#kv'),
+    m: q('#m'), mv: q('#mv'),
+    beauty: q('#beauty'),
+    bpm: q('#bpm'), bpmv: q('#bpmv'),
+    autok: q('#autok'),
+    ptsd: document.getElementById('ptsd'), panic: document.getElementById('panic')
+  };
+  function q(s){ return document.querySelector(s); }
+  UI.p0.addEventListener('input', e=>{ DDA.P0=parseFloat(e.target.value); setVal(UI.p0v,DDA.P0); });
+  UI.k.addEventListener('input', e=>{ DDA.k=parseFloat(e.target.value); setVal(UI.kv,DDA.k); });
+  UI.m.addEventListener('input', e=>{ DDA.m=parseFloat(e.target.value); setVal(UI.mv,DDA.m); });
+  UI.bpm.addEventListener('input', e=>{ Composer.bpm=parseInt(e.target.value,10); setVal(UI.bpmv,Composer.bpm,0); });
+  setVal(UI.p0v,DDA.P0); setVal(UI.kv,DDA.k); setVal(UI.mv,DDA.m); setVal(UI.bpmv,Composer.bpm,0);
+
+  // ===== gestures
+  const canvas=document.getElementById('stage'); const ctx=canvas.getContext('2d');
+  let W=0,H=0; function resize(){ W=canvas.width=innerWidth; H=canvas.height=innerHeight; } addEventListener('resize', resize); resize();
+  const mouse={x:0.5,y:0.5};
+  canvas.addEventListener('mousemove', e=>{
+    mouse.x=e.clientX/innerWidth; mouse.y=e.clientY/innerHeight;
+    AE.setReverb(0.18 + 0.75*(1 - mouse.y));
+  });
+  canvas.addEventListener('wheel', e=>{
+    Composer.bpm = clamp(Composer.bpm + (e.deltaY<0 ? 4 : -4), 54, 156);
+    UI.bpm.value=Composer.bpm; setVal(UI.bpmv, Composer.bpm, 0);
+  });
+  addEventListener('keydown', e=>{
+    if(e.code==='Space'){ e.preventDefault(); toggle(); }
+    if(e.key==='1'){ currentSectionKey='A';  Composer.barsInSection=0; }
+    if(e.key==='2'){ currentSectionKey='B';  Composer.barsInSection=0; }
+    if(e.key==='3'){ currentSectionKey='A2'; Composer.barsInSection=0; }
+  });
+  canvas.addEventListener('click', toggle);
+
+  // ===== visuals
+  const particles=[];
+  function glow(pt, color, dur){
+    particles.push({x:pt.x, y:pt.y, r:10+18*Math.random(), color, life:1, dl:1/Math.max(0.6,dur*1.5)});
+  }
+  function spark(pt, color){
+    for(let i=0;i<10;i++){
+      const a=Math.random()*Math.PI*2, sp=1+Math.random()*3;
+      particles.push({x:pt.x, y:pt.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, r:2+Math.random()*2, color, life:1, dl:0.06});
+    }
+  }
+  function noteXY(midi){
+    const sec=SECTIONS[currentSectionKey];
+    const rel=((midi-sec.root)%12+12)%12;
+    const ring=140 + rel*18;
+    const ang = (midi/12)*Math.PI*2 + performance.now()*0.00065*(0.9+0.6*DDA.P0);
+    const cx=W*0.55, cy=H*0.54;
+    return { x: cx + Math.cos(ang)*ring, y: cy + Math.sin(ang)*ring };
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    const cx=W*0.55, cy=H*0.54;
+    for(let r=70;r<=430;r+=36){
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      const a=0.035 + 0.02*Math.sin((performance.now()*0.0005 + r)*0.33);
+      ctx.strokeStyle = `rgba(113,217,255,${a})`; ctx.stroke();
+    }
+    ctx.font='13px system-ui'; ctx.fillStyle='#9cb0c9';
+    ctx.fillText(SECTIONS[currentSectionKey].name, 20, 26);
+    const barW=180, barH=8;
+    function bar(x,y,v,c){ ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(x,y,barW,barH); ctx.fillStyle=c; ctx.fillRect(x,y,barW*clamp(v,0,1),barH); }
+    ctx.fillText('P₀', 20, H-56); bar(44,H-66,DDA.P0,'#f6c978');
+    ctx.fillText('k',  20, H-38); bar(44,H-48,DDA.k,'#7af0c7');
+    ctx.fillText('m',  20, H-20); bar(44,H-30,DDA.m,'#ff8cab');
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      if(p.vx){ p.x+=p.vx; p.y+=p.vy; p.vx*=0.985; p.vy*=0.985; }
+      const grad=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);
+      const c0=p.color.replace('hsl','hsla').replace(')', ', '+(0.6*p.life)+')');
+      const c1=p.color.replace('hsl','hsla').replace(')', ', 0)');
+      grad.addColorStop(0,c0); grad.addColorStop(1,c1);
+      ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      p.life-=p.dl||0.02; if(p.life<=0) particles.splice(i,1);
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

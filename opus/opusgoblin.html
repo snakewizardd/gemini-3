@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goblin Room - Three.js Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Georgia', serif; }
+        canvas { display: block; }
+        #tooltip {
+            position: absolute;
+            background: linear-gradient(135deg, rgba(20,10,5,0.95), rgba(40,25,15,0.95));
+            color: #f4d03f;
+            padding: 12px 20px;
+            border-radius: 8px;
+            pointer-events: none;
+            display: none;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            border: 2px solid #8b4513;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 0 20px rgba(244,208,63,0.1);
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(20,10,5,0.85);
+            color: #c9a227;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            border: 2px solid #5d4e37;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #controls h3 { margin-bottom: 8px; color: #f4d03f; }
+        #title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(20,10,5,0.9), rgba(50,30,15,0.9));
+            color: #f4d03f;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            border: 3px solid #8b4513;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            letter-spacing: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">🏰 GOBLIN'S LAIR 🏰</div>
+    <div id="tooltip"></div>
+    <div id="controls">
+        <h3>⚔️ Controls</h3>
+        WASD / Arrows: Move<br>
+        Mouse: Rotate Camera<br>
+        Scroll: Zoom In/Out
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ============== SCENE SETUP ==============
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1010);
+        scene.fog = new THREE.Fog(0x1a1010, 8, 30);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // ============== PROCEDURAL TEXTURES ==============
+        function createStoneTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#4a4a4a';
+            ctx.fillRect(0, 0, 512, 512);
+            
+            const brickRows = 8;
+            const brickCols = 4;
+            const brickHeight = 512 / brickRows;
+            const brickWidth = 512 / brickCols;
+            
+            for (let row = 0; row < brickRows; row++) {
+                const offset = (row % 2) * (brickWidth / 2);
+                for (let col = 0; col < brickCols + 1; col++) {
+                    const x = col * brickWidth - offset;
+                    const y = row * brickHeight;
+                    
+                    const shade = 55 + Math.random() * 35;
+                    ctx.fillStyle = `rgb(${shade}, ${shade - 5}, ${shade - 10})`;
+                    ctx.fillRect(x + 3, y + 3, brickWidth - 6, brickHeight - 6);
+                    
+                    for (let i = 0; i < 50; i++) {
+                        const nx = x + 3 + Math.random() * (brickWidth - 6);
+                        const ny = y + 3 + Math.random() * (brickHeight - 6);
+                        const noiseShade = shade + (Math.random() - 0.5) * 40;
+                        ctx.fillStyle = `rgb(${noiseShade}, ${noiseShade - 5}, ${noiseShade - 10})`;
+                        ctx.fillRect(nx, ny, 3 + Math.random() * 5, 3 + Math.random() * 5);
+                    }
+                }
+            }
+            
+            ctx.strokeStyle = '#1a1a1a';
+            ctx.lineWidth = 4;
+            for (let row = 0; row <= brickRows; row++) {
+                ctx.beginPath();
+                ctx.moveTo(0, row * brickHeight);
+                ctx.lineTo(512, row * brickHeight);
+                ctx.stroke();
+            }
+            for (let row = 0; row < brickRows; row++) {
+                const offset = (row % 2) * (brickWidth / 2);
+                for (let col = 0; col <= brickCols + 1; col++) {
+                    ctx.beginPath();
+                    ctx.moveTo(col * brickWidth - offset, row * brickHeight);
+                    ctx.lineTo(col * brickWidth - offset, (row + 1) * brickHeight);
+                    ctx.stroke();
+                }
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        function createWoodTexture(dark = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            const baseR = dark ? 70 : 130;
+            const baseG = dark ? 45 : 85;
+            const baseB = dark ? 25 : 50;
+            
+            ctx.fillStyle = `rgb(${baseR}, ${baseG}, ${baseB})`;
+            ctx.fillRect(0, 0, 256, 256);
+            
+            for (let i = 0; i < 60; i++) {
+                const y = Math.random() * 256;
+                const variation = (Math.random() - 0.5) * 30;
+                ctx.strokeStyle = `rgb(${baseR + variation}, ${baseG + variation * 0.6}, ${baseB + variation * 0.3})`;
+                ctx.lineWidth = 1 + Math.random() * 3;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                for (let x = 0; x < 256; x += 10) {
+                    ctx.lineTo(x, y + Math.sin(x * 0.05) * 3 + (Math.random() - 0.5) * 2);
+                }
+                ctx.stroke();
+            }
+            
+            for (let i = 0; i < 3; i++) {
+                const kx = Math.random() * 256;
+                const ky = Math.random() * 256;
+                const gradient = ctx.createRadialGradient(kx, ky, 0, kx, ky, 15 + Math.random() * 10);
+                gradient.addColorStop(0, `rgb(${baseR - 30}, ${baseG - 20}, ${baseB - 10})`);
+                gradient.addColorStop(1, `rgba(${baseR}, ${baseG}, ${baseB}, 0)`);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.ellipse(kx, ky, 15 + Math.random() * 10, 10 + Math.random() * 8, Math.random() * Math.PI, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        function createFloorTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            const plankWidth = 512;
+            const plankHeight = 64;
+            
+            for (let row = 0; row < 8; row++) {
+                const baseShade = 80 + Math.random() * 35;
+                ctx.fillStyle = `rgb(${baseShade}, ${baseShade * 0.6}, ${baseShade * 0.35})`;
+                ctx.fillRect(0, row * plankHeight, plankWidth, plankHeight - 2);
+                
+                for (let i = 0; i < 30; i++) {
+                    const y = row * plankHeight + Math.random() * (plankHeight - 2);
+                    const variation = (Math.random() - 0.5) * 20;
+                    ctx.strokeStyle = `rgb(${baseShade + variation}, ${(baseShade + variation) * 0.6}, ${(baseShade + variation) * 0.35})`;
+                    ctx.lineWidth = 1 + Math.random() * 2;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(512, y + (Math.random() - 0.5) * 5);
+                    ctx.stroke();
+                }
+                
+                ctx.fillStyle = '#1a1008';
+                ctx.fillRect(0, (row + 1) * plankHeight - 2, plankWidth, 2);
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        function createFabricTexture(r, g, b) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fillRect(0, 0, 128, 128);
+            
+            for (let y = 0; y < 128; y += 2) {
+                for (let x = 0; x < 128; x += 2) {
+                    const variation = (Math.random() - 0.5) * 20;
+                    ctx.fillStyle = `rgb(${r + variation}, ${g + variation}, ${b + variation})`;
+                    ctx.fillRect(x, y, 2, 2);
+                }
+            }
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // ============== MATERIALS ==============
+        const stoneTexture = createStoneTexture();
+        stoneTexture.repeat.set(2, 2);
+        const stoneMaterial = new THREE.MeshStandardMaterial({
+            map: stoneTexture,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+
+        const floorTexture = createFloorTexture();
+        floorTexture.repeat.set(4, 4);
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            map: floorTexture,
+            roughness: 0.8,
+            metalness: 0.05
+        });
+
+        const woodTexture = createWoodTexture();
+        const woodMaterial = new THREE.MeshStandardMaterial({
+            map: woodTexture,
+            roughness: 0.7,
+            metalness: 0.05
+        });
+
+        const darkWoodTexture = createWoodTexture(true);
+        const darkWoodMaterial = new THREE.MeshStandardMaterial({
+            map: darkWoodTexture,
+            roughness: 0.7,
+            metalness: 0.05
+        });
+
+        // ============== ROOM CONSTRUCTION ==============
+        const roomSize = 15;
+        const wallHeight = 6;
+        const wallThickness = 0.5;
+        const interactiveObjects = [];
+
+        const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+        const floor = new THREE.Mesh(floorGeo, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+        const ceiling = new THREE.Mesh(ceilingGeo, stoneMaterial);
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = wallHeight;
+        ceiling.receiveShadow = true;
+        scene.add(ceiling);
+
+        function createWall(width, height, x, y, z, rotY = 0) {
+            const wallGeo = new THREE.BoxGeometry(width, height, wallThickness);
+            const wall = new THREE.Mesh(wallGeo, stoneMaterial);
+            wall.position.set(x, y, z);
+            wall.rotation.y = rotY;
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+            return wall;
+        }
+
+        createWall(roomSize, wallHeight, 0, wallHeight / 2, -roomSize / 2);
+        createWall(roomSize, wallHeight, 0, wallHeight / 2, roomSize / 2);
+        createWall(roomSize, wallHeight, -roomSize / 2, wallHeight / 2, 0, Math.PI / 2);
+        createWall(roomSize, wallHeight, roomSize / 2, wallHeight / 2, 0, Math.PI / 2);
+
+        // ============== LIGHTING (BRIGHTER!) ==============
+        // Stronger hemisphere light
+        const ambientLight = new THREE.HemisphereLight(0x6b4423, 0x1a0a05, 0.6);
+        scene.add(ambientLight);
+
+        // Add a subtle ambient light for overall brightness
+        const fillLight = new THREE.AmbientLight(0x2a1a10, 0.4);
+        scene.add(fillLight);
+
+        function createTorch(x, y, z) {
+            const torchGroup = new THREE.Group();
+            
+            const holderGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.4, 8);
+            const holderMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.8 });
+            const holder = new THREE.Mesh(holderGeo, holderMat);
+            holder.castShadow = true;
+            torchGroup.add(holder);
+            
+            const flameGeo = new THREE.SphereGeometry(0.15, 8, 8);
+            const flameMat = new THREE.MeshStandardMaterial({
+                color: 0xff6600,
+                emissive: 0xff4400,
+                emissiveIntensity: 3
+            });
+            const flame = new THREE.Mesh(flameGeo, flameMat);
+            flame.position.y = 0.3;
+            flame.scale.y = 1.5;
+            torchGroup.add(flame);
+            
+            // BRIGHTER torch lights!
+            const torchLight = new THREE.PointLight(0xff7733, 4, 12, 1.2);
+            torchLight.position.y = 0.4;
+            torchLight.castShadow = true;
+            torchLight.shadow.mapSize.width = 512;
+            torchLight.shadow.mapSize.height = 512;
+            torchLight.shadow.bias = -0.001;
+            torchGroup.add(torchLight);
+            
+            torchGroup.position.set(x, y, z);
+            torchGroup.userData = { flame, light: torchLight, baseIntensity: 4 };
+            scene.add(torchGroup);
+            return torchGroup;
+        }
+
+        const torches = [
+            createTorch(-6.5, 3, -7),
+            createTorch(6.5, 3, -7),
+            createTorch(-6.5, 3, 7),
+            createTorch(6.5, 3, 7),
+            // Extra torches for more light
+            createTorch(-7, 3, 0),
+            createTorch(7, 3, 0)
+        ];
+
+        // ============== GOBLIN CHARACTER ==============
+        const goblin = new THREE.Group();
+        goblin.userData.name = "Grimble the Goblin";
+        
+        const bodyGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.8, 8);
+        const goblinMat = new THREE.MeshStandardMaterial({ color: 0x4a7c4e, roughness: 0.7 });
+        const body = new THREE.Mesh(bodyGeo, goblinMat);
+        body.position.y = 0.7;
+        body.castShadow = true;
+        goblin.add(body);
+        
+        const headGeo = new THREE.SphereGeometry(0.3, 12, 12);
+        const head = new THREE.Mesh(headGeo, goblinMat);
+        head.position.y = 1.35;
+        head.scale.set(1, 0.9, 0.95);
+        head.castShadow = true;
+        goblin.add(head);
+        
+        const earGeo = new THREE.ConeGeometry(0.1, 0.25, 6);
+        const leftEar = new THREE.Mesh(earGeo, goblinMat);
+        leftEar.position.set(-0.3, 1.4, 0);
+        leftEar.rotation.z = Math.PI / 3;
+        goblin.add(leftEar);
+        
+        const rightEar = new THREE.Mesh(earGeo, goblinMat);
+        rightEar.position.set(0.3, 1.4, 0);
+        rightEar.rotation.z = -Math.PI / 3;
+        goblin.add(rightEar);
+        
+        const eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x888800 });
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.1, 1.4, 0.25);
+        goblin.add(leftEye);
+        
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(0.1, 1.4, 0.25);
+        goblin.add(rightEye);
+        
+        const noseGeo = new THREE.SphereGeometry(0.08, 6, 6);
+        const nose = new THREE.Mesh(noseGeo, goblinMat);
+        nose.position.set(0, 1.3, 0.28);
+        goblin.add(nose);
+        
+        const armGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.5, 6);
+        const leftArmPivot = new THREE.Group();
+        leftArmPivot.position.set(-0.35, 1, 0);
+        const leftArm = new THREE.Mesh(armGeo, goblinMat);
+        leftArm.position.y = -0.25;
+        leftArm.castShadow = true;
+        leftArmPivot.add(leftArm);
+        goblin.add(leftArmPivot);
+        
+        const rightArmPivot = new THREE.Group();
+        rightArmPivot.position.set(0.35, 1, 0);
+        const rightArm = new THREE.Mesh(armGeo, goblinMat);
+        rightArm.position.y = -0.25;
+        rightArm.castShadow = true;
+        rightArmPivot.add(rightArm);
+        goblin.add(rightArmPivot);
+        
+        const legGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.4, 6);
+        const leftLegPivot = new THREE.Group();
+        leftLegPivot.position.set(-0.15, 0.3, 0);
+        const leftLeg = new THREE.Mesh(legGeo, goblinMat);
+        leftLeg.position.y = -0.2;
+        leftLeg.castShadow = true;
+        leftLegPivot.add(leftLeg);
+        goblin.add(leftLegPivot);
+        
+        const rightLegPivot = new THREE.Group();
+        rightLegPivot.position.set(0.15, 0.3, 0);
+        const rightLeg = new THREE.Mesh(legGeo, goblinMat);
+        rightLeg.position.y = -0.2;
+        rightLeg.castShadow = true;
+        rightLegPivot.add(rightLeg);
+        goblin.add(rightLegPivot);
+        
+        const footGeo = new THREE.BoxGeometry(0.12, 0.08, 0.2);
+        const leftFoot = new THREE.Mesh(footGeo, goblinMat);
+        leftFoot.position.set(0, -0.4, 0.05);
+        leftLegPivot.add(leftFoot);
+        
+        const rightFoot = new THREE.Mesh(footGeo, goblinMat);
+        rightFoot.position.set(0, -0.4, 0.05);
+        rightLegPivot.add(rightFoot);
+        
+        goblin.position.set(0, 0, 0);
+        goblin.userData.limbs = { leftArmPivot, rightArmPivot, leftLegPivot, rightLegPivot };
+        scene.add(goblin);
+        interactiveObjects.push(goblin);
+
+        // ============== FURNITURE ==============
+        
+        function createBed() {
+            const bed = new THREE.Group();
+            bed.userData.name = "Cozy Bed";
+            
+            const frameGeo = new THREE.BoxGeometry(1.8, 0.3, 2.5);
+            const frame = new THREE.Mesh(frameGeo, darkWoodMaterial);
+            frame.position.y = 0.25;
+            frame.castShadow = true;
+            frame.receiveShadow = true;
+            bed.add(frame);
+            
+            const postGeo = new THREE.CylinderGeometry(0.08, 0.1, 1.2, 8);
+            const positions = [[-0.8, 0.6, -1.15], [0.8, 0.6, -1.15], [-0.8, 0.6, 1.15], [0.8, 0.6, 1.15]];
+            positions.forEach(pos => {
+                const post = new THREE.Mesh(postGeo, darkWoodMaterial);
+                post.position.set(...pos);
+                post.castShadow = true;
+                bed.add(post);
+            });
+            
+            const mattressGeo = new THREE.BoxGeometry(1.6, 0.25, 2.2);
+            const mattressMat = new THREE.MeshStandardMaterial({ map: createFabricTexture(120, 90, 70), roughness: 0.9 });
+            const mattress = new THREE.Mesh(mattressGeo, mattressMat);
+            mattress.position.y = 0.52;
+            mattress.castShadow = true;
+            bed.add(mattress);
+            
+            const pillowGeo = new THREE.BoxGeometry(1.2, 0.2, 0.4);
+            const pillowMat = new THREE.MeshStandardMaterial({ map: createFabricTexture(180, 170, 150), roughness: 0.9 });
+            const pillow = new THREE.Mesh(pillowGeo, pillowMat);
+            pillow.position.set(0, 0.72, -0.85);
+            pillow.castShadow = true;
+            bed.add(pillow);
+            
+            const blanketGeo = new THREE.BoxGeometry(1.5, 0.1, 1.5);
+            const blanketMat = new THREE.MeshStandardMaterial({ map: createFabricTexture(80, 50, 50), roughness: 0.95 });
+            const blanket = new THREE.Mesh(blanketGeo, blanketMat);
+            blanket.position.set(0, 0.68, 0.3);
+            blanket.castShadow = true;
+            bed.add(blanket);
+            
+            bed.position.set(-5.5, 0, -5);
+            scene.add(bed);
+            interactiveObjects.push(bed);
+        }
+        createBed();
+
+        function createTable() {
+            const table = new THREE.Group();
+            table.userData.name = "Wooden Table";
+            
+            const topGeo = new THREE.BoxGeometry(2.5, 0.12, 1.5);
+            const top = new THREE.Mesh(topGeo, woodMaterial);
+            top.position.y = 1;
+            top.castShadow = true;
+            top.receiveShadow = true;
+            table.add(top);
+            
+            const legGeo = new THREE.BoxGeometry(0.12, 1, 0.12);
+            [[-1.1, 0.5, -0.6], [1.1, 0.5, -0.6], [-1.1, 0.5, 0.6], [1.1, 0.5, 0.6]].forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, woodMaterial);
+                leg.position.set(...pos);
+                leg.castShadow = true;
+                table.add(leg);
+            });
+            
+            table.position.set(4, 0, -4);
+            scene.add(table);
+            interactiveObjects.push(table);
+        }
+        createTable();
+
+        function createChair(x, z, rotY) {
+            const chair = new THREE.Group();
+            chair.userData.name = "Wooden Chair";
+            
+            const seatGeo = new THREE.BoxGeometry(0.6, 0.08, 0.6);
+            const seat = new THREE.Mesh(seatGeo, woodMaterial);
+            seat.position.y = 0.5;
+            seat.castShadow = true;
+            chair.add(seat);
+            
+            const backGeo = new THREE.BoxGeometry(0.6, 0.7, 0.08);
+            const back = new THREE.Mesh(backGeo, woodMaterial);
+            back.position.set(0, 0.85, -0.26);
+            back.castShadow = true;
+            chair.add(back);
+            
+            const legGeo = new THREE.BoxGeometry(0.06, 0.5, 0.06);
+            [[-0.24, 0.25, -0.24], [0.24, 0.25, -0.24], [-0.24, 0.25, 0.24], [0.24, 0.25, 0.24]].forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, woodMaterial);
+                leg.position.set(...pos);
+                leg.castShadow = true;
+                chair.add(leg);
+            });
+            
+            chair.position.set(x, 0, z);
+            chair.rotation.y = rotY;
+            scene.add(chair);
+            interactiveObjects.push(chair);
+        }
+        createChair(4, -2.8, 0);
+        createChair(4, -5.2, Math.PI);
+        createChair(2.5, -4, Math.PI / 2);
+        createChair(5.5, -4, -Math.PI / 2);
+
+        function createBookshelf() {
+            const bookshelf = new THREE.Group();
+            bookshelf.userData.name = "Ancient Bookshelf";
+            
+            const backGeo = new THREE.BoxGeometry(2, 3, 0.1);
+            const back = new THREE.Mesh(backGeo, darkWoodMaterial);
+            back.position.z = -0.2;
+            back.castShadow = true;
+            bookshelf.add(back);
+            
+            const sideGeo = new THREE.BoxGeometry(0.1, 3, 0.5);
+            const leftSide = new THREE.Mesh(sideGeo, darkWoodMaterial);
+            leftSide.position.set(-0.95, 0, 0);
+            leftSide.castShadow = true;
+            bookshelf.add(leftSide);
+            
+            const rightSide = new THREE.Mesh(sideGeo, darkWoodMaterial);
+            rightSide.position.set(0.95, 0, 0);
+            rightSide.castShadow = true;
+            bookshelf.add(rightSide);
+            
+            const shelfGeo = new THREE.BoxGeometry(1.9, 0.08, 0.45);
+            for (let i = 0; i < 5; i++) {
+                const shelf = new THREE.Mesh(shelfGeo, darkWoodMaterial);
+                shelf.position.y = -1.4 + i * 0.7;
+                shelf.castShadow = true;
+                shelf.receiveShadow = true;
+                bookshelf.add(shelf);
+            }
+            
+            const bookColors = [0x8b0000, 0x006400, 0x00008b, 0x8b4513, 0x4b0082, 0x800000, 0x2f4f4f];
+            for (let shelf = 0; shelf < 4; shelf++) {
+                let xPos = -0.8;
+                while (xPos < 0.7) {
+                    const bookWidth = 0.08 + Math.random() * 0.1;
+                    const bookHeight = 0.4 + Math.random() * 0.2;
+                    const bookGeo = new THREE.BoxGeometry(bookWidth, bookHeight, 0.3);
+                    const bookMat = new THREE.MeshStandardMaterial({
+                        color: bookColors[Math.floor(Math.random() * bookColors.length)],
+                        roughness: 0.8
+                    });
+                    const book = new THREE.Mesh(bookGeo, bookMat);
+                    book.position.set(xPos, -1.05 + shelf * 0.7 + bookHeight / 2, 0);
+                    book.rotation.z = (Math.random() - 0.5) * 0.1;
+                    book.castShadow = true;
+                    bookshelf.add(book);
+                    xPos += bookWidth + 0.02;
+                }
+            }
+            
+            bookshelf.position.set(-6.6, 1.5, 2);
+            scene.add(bookshelf);
+            interactiveObjects.push(bookshelf);
+        }
+        createBookshelf();
+
+        function createTreasure() {
+            const treasure = new THREE.Group();
+            treasure.userData.name = "Glittering Treasure";
+            
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.2 });
+            const gemColors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0x00ffff];
+            
+            const coinGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.02, 12);
+            for (let i = 0; i < 80; i++) {
+                const coin = new THREE.Mesh(coinGeo, goldMat);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 0.8;
+                coin.position.set(
+                    Math.cos(angle) * radius,
+                    0.01 + Math.random() * 0.3,
+                    Math.sin(angle) * radius
+                );
+                coin.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+                coin.rotation.z = Math.random() * Math.PI;
+                coin.castShadow = true;
+                treasure.add(coin);
+            }
+            
+            const gemGeo = new THREE.OctahedronGeometry(0.1);
+            for (let i = 0; i < 15; i++) {
+                const gemMat = new THREE.MeshStandardMaterial({
+                    color: gemColors[Math.floor(Math.random() * gemColors.length)],
+                    metalness: 0.3,
+                    roughness: 0.1,
+                    emissive: gemColors[Math.floor(Math.random() * gemColors.length)],
+                    emissiveIntensity: 0.2
+                });
+                const gem = new THREE.Mesh(gemGeo, gemMat);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 0.6;
+                gem.position.set(
+                    Math.cos(angle) * radius,
+                    0.1 + Math.random() * 0.2,
+                    Math.sin(angle) * radius
+                );
+                gem.rotation.set(Math.random(), Math.random(), Math.random());
+                gem.castShadow = true;
+                treasure.add(gem);
+            }
+            
+            const barGeo = new THREE.BoxGeometry(0.2, 0.08, 0.1);
+            for (let i = 0; i < 5; i++) {
+                const bar = new THREE.Mesh(barGeo, goldMat);
+                bar.position.set(
+                    (Math.random() - 0.5) * 0.6,
+                    0.04 + Math.random() * 0.15,
+                    (Math.random() - 0.5) * 0.6
+                );
+                bar.rotation.y = Math.random() * Math.PI;
+                bar.castShadow = true;
+                treasure.add(bar);
+            }
+            
+            treasure.position.set(5, 0, 4);
+            scene.add(treasure);
+            interactiveObjects.push(treasure);
+        }
+        createTreasure();
+
+        function createChest() {
+            const chest = new THREE.Group();
+            chest.userData.name = "Mysterious Chest";
+            
+            const baseGeo = new THREE.BoxGeometry(1.2, 0.6, 0.8);
+            const base = new THREE.Mesh(baseGeo, darkWoodMaterial);
+            base.position.y = 0.3;
+            base.castShadow = true;
+            chest.add(base);
+            
+            const lidGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 16, 1, false, 0, Math.PI);
+            const lid = new THREE.Mesh(lidGeo, darkWoodMaterial);
+            lid.rotation.z = Math.PI / 2;
+            lid.position.y = 0.6;
+            lid.castShadow = true;
+            chest.add(lid);
+            
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.8, roughness: 0.4 });
+            const bandGeo = new THREE.BoxGeometry(1.25, 0.08, 0.85);
+            const band1 = new THREE.Mesh(bandGeo, metalMat);
+            band1.position.y = 0.15;
+            chest.add(band1);
+            
+            const band2 = new THREE.Mesh(bandGeo, metalMat);
+            band2.position.y = 0.45;
+            chest.add(band2);
+            
+            const lockGeo = new THREE.BoxGeometry(0.15, 0.2, 0.1);
+            const lock = new THREE.Mesh(lockGeo, metalMat);
+            lock.position.set(0, 0.5, 0.42);
+            chest.add(lock);
+            
+            const cornerGeo = new THREE.BoxGeometry(0.1, 0.65, 0.1);
+            [[-0.55, 0.32, 0.35], [0.55, 0.32, 0.35], [-0.55, 0.32, -0.35], [0.55, 0.32, -0.35]].forEach(pos => {
+                const corner = new THREE.Mesh(cornerGeo, metalMat);
+                corner.position.set(...pos);
+                chest.add(corner);
+            });
+            
+            chest.position.set(-3, 0, 5.5);
+            scene.add(chest);
+            interactiveObjects.push(chest);
+        }
+        createChest();
+
+        function createRug() {
+            const rug = new THREE.Group();
+            rug.userData.name = "Ornate Rug";
+            
+            const rugGeo = new THREE.PlaneGeometry(4, 3);
+            const rugMat = new THREE.MeshStandardMaterial({
+                map: createFabricTexture(100, 40, 40),
+                roughness: 0.95,
+                side: THREE.DoubleSide
+            });
+            const rugMesh = new THREE.Mesh(rugGeo, rugMat);
+            rugMesh.rotation.x = -Math.PI / 2;
+            rugMesh.position.y = 0.01;
+            rugMesh.receiveShadow = true;
+            rug.add(rugMesh);
+            
+            const borderGeo = new THREE.PlaneGeometry(4.2, 3.2);
+            const borderMat = new THREE.MeshStandardMaterial({
+                map: createFabricTexture(60, 30, 30),
+                roughness: 0.95,
+                side: THREE.DoubleSide
+            });
+            const border = new THREE.Mesh(borderGeo, borderMat);
+            border.rotation.x = -Math.PI / 2;
+            border.position.y = 0.005;
+            border.receiveShadow = true;
+            rug.add(border);
+            
+            rug.position.set(0, 0, 0);
+            scene.add(rug);
+            interactiveObjects.push(rug);
+        }
+        createRug();
+
+        function createPainting(x, y, z, rotY) {
+            const painting = new THREE.Group();
+            painting.userData.name = "Ancient Painting";
+            
+            const frameGeo = new THREE.BoxGeometry(1.5, 1.2, 0.1);
+            const frame = new THREE.Mesh(frameGeo, darkWoodMaterial);
+            frame.castShadow = true;
+            painting.add(frame);
+            
+            const canvasEl = document.createElement('canvas');
+            canvasEl.width = 256;
+            canvasEl.height = 200;
+            const ctx = canvasEl.getContext('2d');
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+            gradient.addColorStop(0, '#2a1a0a');
+            gradient.addColorStop(1, '#1a0a00');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 256, 200);
+            
+            for (let i = 0; i < 5; i++) {
+                ctx.fillStyle = `hsl(${Math.random() * 60 + 20}, 50%, ${30 + Math.random() * 20}%)`;
+                ctx.beginPath();
+                ctx.ellipse(
+                    50 + Math.random() * 156,
+                    40 + Math.random() * 120,
+                    20 + Math.random() * 40,
+                    20 + Math.random() * 40,
+                    Math.random() * Math.PI,
+                    0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+            
+            const canvasTexture = new THREE.CanvasTexture(canvasEl);
+            const canvasGeo = new THREE.PlaneGeometry(1.3, 1);
+            const canvasMat = new THREE.MeshStandardMaterial({ map: canvasTexture, roughness: 0.9 });
+            const canvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
+            canvasMesh.position.z = 0.06;
+            painting.add(canvasMesh);
+            
+            painting.position.set(x, y, z);
+            painting.rotation.y = rotY;
+            scene.add(painting);
+            interactiveObjects.push(painting);
+        }
+        createPainting(0, 3, -7.2, 0);
+        createPainting(-7.2, 3, -2, Math.PI / 2);
+
+        // ============== PARTICLE SYSTEM ==============
+        const particleCount = 200;
+        const particleGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const velocities = [];
+
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * roomSize * 0.9;
+            positions[i * 3 + 1] = Math.random() * wallHeight * 0.8 + 0.5;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * roomSize * 0.9;
+            velocities.push({
+                x: (Math.random() - 0.5) * 0.005,
+                y: (Math.random() - 0.5) * 0.002,
+                z: (Math.random() - 0.5) * 0.005
+            });
+        }
+
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        const particleMat = new THREE.PointsMaterial({
+            color: 0xffeedd,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.5,
+            sizeAttenuation: true
+        });
+
+        const particles = new THREE.Points(particleGeo, particleMat);
+        scene.add(particles);
+
+        // ============== CAMERA CONTROLS (360 ROTATION!) ==============
+        let cameraAngleX = 0;  // Horizontal rotation
+        let cameraAngleY = 0.4;  // Vertical rotation (start slightly above)
+        let cameraDistance = 7;
+        let isMouseDown = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // Mouse down - start dragging
+        document.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // Left click only
+                isMouseDown = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        // Mouse up - stop dragging
+        document.addEventListener('mouseup', () => {
+            isMouseDown = false;
+        });
+
+        // Mouse move - rotate camera when dragging
+        document.addEventListener('mousemove', (e) => {
+            // Tooltip handling
+            const mouse = new THREE.Vector2();
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+            
+            let foundObject = null;
+            for (const obj of interactiveObjects) {
+                const intersects = raycaster.intersectObject(obj, true);
+                if (intersects.length > 0) {
+                    foundObject = obj;
+                    break;
+                }
+            }
+            
+            const tooltip = document.getElementById('tooltip');
+            if (foundObject && foundObject.userData.name) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = e.clientX + 15 + 'px';
+                tooltip.style.top = e.clientY + 15 + 'px';
+                tooltip.textContent = foundObject.userData.name;
+            } else {
+                tooltip.style.display = 'none';
+            }
+
+            // Camera rotation when dragging
+            if (isMouseDown) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                cameraAngleX -= deltaX * 0.005;
+                cameraAngleY += deltaY * 0.005;
+                
+                // Clamp vertical angle to prevent flipping
+                cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY));
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        // Scroll to zoom
+        document.addEventListener('wheel', (e) => {
+            cameraDistance += e.deltaY * 0.01;
+            cameraDistance = Math.max(3, Math.min(15, cameraDistance));
+        });
+
+        // ============== MOVEMENT CONTROLS ==============
+        const keys = { w: false, a: false, s: false, d: false };
+        const moveSpeed = 0.08;
+        let isMoving = false;
+        let animationTime = 0;
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'arrowup') keys.w = true;
+            if (key === 's' || key === 'arrowdown') keys.s = true;
+            if (key === 'a' || key === 'arrowleft') keys.a = true;
+            if (key === 'd' || key === 'arrowright') keys.d = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'arrowup') keys.w = false;
+            if (key === 's' || key === 'arrowdown') keys.s = false;
+            if (key === 'a' || key === 'arrowleft') keys.a = false;
+            if (key === 'd' || key === 'arrowright') keys.d = false;
+        });
+
+        // ============== ANIMATION LOOP ==============
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // Movement relative to camera direction
+            const moveVector = new THREE.Vector3();
+            
+            // Calculate forward/right vectors based on camera angle
+            const forward = new THREE.Vector3(
+                -Math.sin(cameraAngleX),
+                0,
+                -Math.cos(cameraAngleX)
+            );
+            const right = new THREE.Vector3(
+                Math.cos(cameraAngleX),
+                0,
+                -Math.sin(cameraAngleX)
+            );
+            
+            if (keys.w) moveVector.add(forward);
+            if (keys.s) moveVector.sub(forward);
+            if (keys.a) moveVector.sub(right);
+            if (keys.d) moveVector.add(right);
+
+            isMoving = moveVector.length() > 0;
+
+            if (isMoving) {
+                moveVector.normalize().multiplyScalar(moveSpeed);
+                
+                // Face movement direction
+                const targetRotation = Math.atan2(moveVector.x, moveVector.z);
+                goblin.rotation.y = THREE.MathUtils.lerp(goblin.rotation.y, targetRotation, 0.1);
+                
+                // Move goblin
+                const newX = goblin.position.x + moveVector.x;
+                const newZ = goblin.position.z + moveVector.z;
+                
+                // Boundary check
+                const boundary = roomSize / 2 - 1;
+                goblin.position.x = THREE.MathUtils.clamp(newX, -boundary, boundary);
+                goblin.position.z = THREE.MathUtils.clamp(newZ, -boundary, boundary);
+                
+                // Walking animation
+                animationTime += delta * 10;
+                const limbAngle = Math.sin(animationTime) * 0.5;
+                goblin.userData.limbs.leftArmPivot.rotation.x = limbAngle;
+                goblin.userData.limbs.rightArmPivot.rotation.x = -limbAngle;
+                goblin.userData.limbs.leftLegPivot.rotation.x = -limbAngle;
+                goblin.userData.limbs.rightLegPivot.rotation.x = limbAngle;
+            } else {
+                // Idle - return limbs to neutral
+                goblin.userData.limbs.leftArmPivot.rotation.x *= 0.9;
+                goblin.userData.limbs.rightArmPivot.rotation.x *= 0.9;
+                goblin.userData.limbs.leftLegPivot.rotation.x *= 0.9;
+                goblin.userData.limbs.rightLegPivot.rotation.x *= 0.9;
+            }
+
+            // Camera orbit around goblin (360 degrees!)
+            const cameraX = goblin.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * cameraDistance;
+            const cameraY = goblin.position.y + Math.sin(cameraAngleY) * cameraDistance + 1;
+            const cameraZ = goblin.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * cameraDistance;
+            
+            camera.position.set(cameraX, cameraY, cameraZ);
+            camera.lookAt(goblin.position.x, goblin.position.y + 1, goblin.position.z);
+
+            // Torch flicker
+            torches.forEach((torch, i) => {
+                const flicker = 0.9 + Math.sin(time * 10 + i) * 0.1 + Math.random() * 0.1;
+                torch.userData.light.intensity = torch.userData.baseIntensity * flicker;
+                torch.userData.flame.scale.y = 1.5 * flicker;
+                torch.userData.flame.scale.x = flicker;
+            });
+
+            // Particle animation
+            const posArray = particles.geometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                posArray[i * 3] += velocities[i].x;
+                posArray[i * 3 + 1] += velocities[i].y + Math.sin(time + i) * 0.001;
+                posArray[i * 3 + 2] += velocities[i].z;
+
+                const bound = roomSize / 2 - 1;
+                if (posArray[i * 3] > bound) posArray[i * 3] = -bound;
+                if (posArray[i * 3] < -bound) posArray[i * 3] = bound;
+                if (posArray[i * 3 + 1] > wallHeight - 0.5) posArray[i * 3 + 1] = 0.5;
+                if (posArray[i * 3 + 1] < 0.5) posArray[i * 3 + 1] = wallHeight - 0.5;
+                if (posArray[i * 3 + 2] > bound) posArray[i * 3 + 2] = -bound;
+                if (posArray[i * 3 + 2] < -bound) posArray[i * 3 + 2] = bound;
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // ============== RESIZE HANDLER ==============
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>

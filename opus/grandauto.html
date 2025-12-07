@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DDA Autonomous Life Simulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+      color: #e4e4e4;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    
+    .header {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    h1 {
+      font-size: 1.8em;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf, #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      color: #888;
+      font-size: 0.9em;
+    }
+    
+    .main-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      min-height: calc(100vh - 80px);
+    }
+    
+    /* Left Panel - Controls */
+    .left-panel {
+      background: rgba(0,0,0,0.4);
+      padding: 20px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .section-title {
+      font-size: 0.85em;
+      color: #00d4ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(0,212,255,0.3);
+    }
+    
+    .world-btn {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #e4e4e4;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    
+    .world-btn:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: #00d4ff;
+    }
+    
+    .world-btn.active {
+      background: rgba(0,212,255,0.15);
+      border-color: #00d4ff;
+    }
+    
+    .world-btn .name {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    
+    .world-btn .desc {
+      font-size: 0.75em;
+      color: #888;
+    }
+    
+    .go-btn {
+      width: 100%;
+      padding: 16px;
+      margin-top: 15px;
+      background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 1.2em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .go-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 5px 25px rgba(0,212,255,0.4);
+    }
+    
+    .go-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .speed-control {
+      margin-top: 20px;
+    }
+    
+    .speed-control label {
+      display: block;
+      font-size: 0.85em;
+      margin-bottom: 8px;
+      color: #aaa;
+    }
+    
+    .speed-control input {
+      width: 100%;
+    }
+    
+    .speed-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7em;
+      color: #666;
+      margin-top: 4px;
+    }
+    
+    /* Center Panel - Narrative */
+    .center-panel {
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .narrative-box {
+      flex: 1;
+      background: rgba(0,0,0,0.3);
+      border-radius: 16px;
+      padding: 25px;
+      border: 1px solid rgba(255,255,255,0.1);
+      overflow-y: auto;
+      max-height: 70vh;
+    }
+    
+    .narrative-entry {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      animation: fadeIn 0.5s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .narrative-entry .step {
+      font-size: 0.75em;
+      color: #7b2cbf;
+      margin-bottom: 5px;
+    }
+    
+    .narrative-entry .situation {
+      font-size: 1.05em;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    
+    .narrative-entry .options {
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .narrative-entry .options-title {
+      font-size: 0.8em;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    
+    .narrative-entry .option {
+      padding: 6px 10px;
+      margin: 4px 0;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    
+    .narrative-entry .option.chosen {
+      background: rgba(0,212,255,0.2);
+      border-left: 3px solid #00d4ff;
+    }
+    
+    .narrative-entry .option.rejected {
+      color: #666;
+    }
+    
+    .narrative-entry .decision-box {
+      background: rgba(78,205,196,0.1);
+      border-left: 3px solid #4ecdc4;
+      padding: 12px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 12px;
+    }
+    
+    .narrative-entry .decision-box .label {
+      font-size: 0.75em;
+      color: #4ecdc4;
+      margin-bottom: 5px;
+    }
+    
+    .narrative-entry .outcome {
+      font-style: italic;
+      color: #aaa;
+      padding-left: 15px;
+      border-left: 2px solid #444;
+    }
+    
+    .narrative-entry .outcome.good { border-left-color: #4ecdc4; color: #4ecdc4; }
+    .narrative-entry .outcome.bad { border-left-color: #ff6b6b; color: #ff6b6b; }
+    .narrative-entry .outcome.neutral { border-left-color: #ffd93d; color: #ffd93d; }
+    
+    /* Right Panel - Agent State */
+    .right-panel {
+      background: rgba(0,0,0,0.4);
+      padding: 20px;
+      border-left: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .agent-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    
+    .agent-card .avatar {
+      font-size: 3em;
+      margin-bottom: 10px;
+    }
+    
+    .agent-card .name {
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 5px;
+    }
+    
+    .agent-card .persona {
+      font-size: 0.8em;
+      color: #7b2cbf;
+    }
+    
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .stat-box {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    
+    .stat-box .label {
+      font-size: 0.7em;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    
+    .stat-box .value {
+      font-size: 1.4em;
+      font-weight: bold;
+    }
+    
+    .stat-box.identity .value { color: #7b2cbf; }
+    .stat-box.trauma .value { color: #ff6b6b; }
+    .stat-box.state .value { color: #4ecdc4; }
+    .stat-box.resources .value { color: #ffd93d; }
+    
+    .stat-bar {
+      margin-bottom: 12px;
+    }
+    
+    .stat-bar .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8em;
+      margin-bottom: 4px;
+    }
+    
+    .stat-bar .bar-track {
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .stat-bar .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+    
+    .stat-bar.trauma .bar-fill { background: linear-gradient(90deg, #4ecdc4, #ff6b6b); }
+    .stat-bar.wellbeing .bar-fill { background: linear-gradient(90deg, #ff6b6b, #4ecdc4); }
+    
+    .status-desc {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.85em;
+      line-height: 1.5;
+      margin-bottom: 15px;
+    }
+    
+    .status-desc .highlight {
+      color: #ffd93d;
+    }
+    
+    /* K Chart */
+    #miniChart {
+      width: 100%;
+      height: 100px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    
+    /* Journey Stats */
+    .journey-stats {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .journey-stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.85em;
+    }
+    
+    .journey-stat:last-child {
+      border-bottom: none;
+    }
+    
+    .journey-stat .stat-label {
+      color: #888;
+    }
+    
+    /* Ending Screen */
+    .ending-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .ending-box {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      text-align: center;
+    }
+    
+    .ending-box h2 {
+      font-size: 2em;
+      margin-bottom: 20px;
+    }
+    
+    .ending-box .ending-good { color: #4ecdc4; }
+    .ending-box .ending-bad { color: #ff6b6b; }
+    .ending-box .ending-neutral { color: #ffd93d; }
+    
+    .ending-box p {
+      line-height: 1.7;
+      margin-bottom: 20px;
+      color: #aaa;
+    }
+    
+    .ending-box .final-stats {
+      background: rgba(0,0,0,0.3);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .restart-btn {
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1em;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌍 DDA Autonomous Life Simulator</h1>
+  <div class="subtitle">Pick a world. Hit GO. Watch an agent live.</div>
+</div>
+
+<div class="main-container">
+  
+  <!-- Left Panel -->
+  <div class="left-panel">
+    <div class="section-title">Choose World</div>
+    
+    <button class="world-btn active" onclick="selectWorld('theClimb')">
+      <div class="name">🏔️ The Climb</div>
+      <div class="desc">Rural poverty → financial security. Navigate opportunities, avoid traps.</div>
+    </button>
+    
+    <button class="world-btn" onclick="selectWorld('theBetrayals')">
+      <div class="name">🗡️ The Betrayals</div>
+      <div class="desc">Trust is tested repeatedly. Can identity survive deception?</div>
+    </button>
+    
+    <button class="world-btn" onclick="selectWorld('theRecovery')">
+      <div class="name">💔 The Recovery</div>
+      <div class="desc">Start traumatized. Find healing in a gentle world... or spiral.</div>
+    </button>
+    
+    <button class="world-btn" onclick="selectWorld('thePressure')">
+      <div class="name">🌪️ The Pressure Cooker</div>
+      <div class="desc">Escalating crises. How much can one agent take before breaking?</div>
+    </button>
+    
+    <button class="world-btn" onclick="selectWorld('theTemptation')">
+      <div class="name">🍎 The Temptation</div>
+      <div class="desc">Easy shortcuts vs. integrity. Will they stay true to themselves?</div>
+    </button>
+    
+    <button class="go-btn" id="goBtn" onclick="startSimulation()">▶️ GO</button>
+    
+    <div class="speed-control">
+      <label>Simulation Speed</label>
+      <input type="range" id="speedSlider" min="1" max="5" value="3">
+      <div class="speed-labels">
+        <span>Slow</span>
+        <span>Fast</span>
+      </div>
+    </div>
+    
+    <div style="margin-top: 20px; font-size: 0.75em; color: #666; line-height: 1.5;">
+      <strong>How it works:</strong><br>
+      The agent uses DDA to decide. High trauma (k) = rigid, ignores new info. Low trauma = adaptive. Watch how their history shapes their choices.
+    </div>
+  </div>
+  
+  <!-- Center Panel -->
+  <div class="center-panel">
+    <div class="narrative-box" id="narrativeBox">
+      <div style="text-align: center; padding: 50px; color: #666;">
+        <div style="font-size: 3em; margin-bottom: 20px;">🎬</div>
+        <div>Select a world and press GO to begin</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Right Panel -->
+  <div class="right-panel">
+    <div class="section-title">Agent Status</div>
+    
+    <div class="agent-card">
+      <div class="avatar" id="agentAvatar">👤</div>
+      <div class="name" id="agentName">Waiting...</div>
+      <div class="persona" id="agentPersona">-</div>
+    </div>
+    
+    <div class="stat-grid">
+      <div class="stat-box identity">
+        <div class="label">P₀ Identity</div>
+        <div class="value" id="statP0">-</div>
+      </div>
+      <div class="stat-box trauma">
+        <div class="label">k Trauma</div>
+        <div class="value" id="statK">-</div>
+      </div>
+      <div class="stat-box state">
+        <div class="label">F State</div>
+        <div class="value" id="statF">-</div>
+      </div>
+      <div class="stat-box resources">
+        <div class="label">Resources</div>
+        <div class="value" id="statResources">-</div>
+      </div>
+    </div>
+    
+    <div class="stat-bar trauma">
+      <div class="bar-label">
+        <span>Trauma Level</span>
+        <span id="traumaPercent">0%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="traumaBar" style="width: 20%"></div>
+      </div>
+    </div>
+    
+    <div class="stat-bar wellbeing">
+      <div class="bar-label">
+        <span>Wellbeing</span>
+        <span id="wellbeingPercent">50%</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="wellbeingBar" style="width: 50%"></div>
+      </div>
+    </div>
+    
+    <div class="status-desc" id="statusDesc">
+      Agent not initialized.
+    </div>
+    
+    <div class="section-title">Trauma Trajectory</div>
+    <canvas id="miniChart"></canvas>
+    
+    <div class="section-title">Journey Stats</div>
+    <div class="journey-stats">
+      <div class="journey-stat">
+        <span class="stat-label">Steps Taken</span>
+        <span id="journeySteps">0</span>
+      </div>
+      <div class="journey-stat">
+        <span class="stat-label">Betrayals</span>
+        <span id="journeyBetrayals">0</span>
+      </div>
+      <div class="journey-stat">
+        <span class="stat-label">Kindnesses</span>
+        <span id="journeyKindnesses">0</span>
+      </div>
+      <div class="journey-stat">
+        <span class="stat-label">Identity Violations</span>
+        <span id="journeyViolations">0</span>
+      </div>
+      <div class="journey-stat">
+        <span class="stat-label">Peak Trauma</span>
+        <span id="journeyPeakK">0.00</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ending Overlay -->
+<div class="ending-overlay" id="endingOverlay">
+  <div class="ending-box">
+    <h2 id="endingTitle">Journey Complete</h2>
+    <p id="endingText">The story has ended.</p>
+    <div class="final-stats" id="finalStats"></div>
+    <button class="restart-btn" onclick="resetAll()">🔄 Try Another World</button>
+  </div>
+</div>
+
+<script>
+// ============================================
+// DDA AGENT
+// ============================================
+
+class DDAgent {
+  constructor(config = {}) {
+    this.name = config.name || "Agent";
+    this.avatar = config.avatar || "👤";
+    this.P0 = config.P0 ?? 0.6;
+    this.k = config.k ?? 0.2;
+    this.F = config.F ?? this.P0;
+    this.alpha = config.alpha ?? 0.12;
+    this.delta = config.delta ?? 0.015;
+    this.beta = config.beta ?? 1.0;
+    this.resources = config.resources ?? 100;
+    this.wellbeing = config.wellbeing ?? 50;
+    
+    this.kHistory = [this.k];
+    this.peakK = this.k;
+    this.history = [];
+    this.lastPrediction = null;
+    this.stepCount = 0;
+    
+    // Stats
+    this.betrayals = 0;
+    this.kindnesses = 0;
+    this.violations = 0;
+  }
+
+  feel(T, m) {
+    const inertia = this.P0 * this.k * this.F;
+    const reality = (1 - this.k) * m * T;
+    this.F = Math.max(0, Math.min(1, inertia + reality));
+    return this.F;
+  }
+
+  predict() {
+    this.lastPrediction = this.F * 0.6 + this.P0 * 0.4;
+    return this.lastPrediction;
+  }
+
+  learn(actual) {
+    if (this.lastPrediction === null) this.predict();
+    const epsilon = Math.abs(this.lastPrediction - actual);
+    const traumaGain = this.alpha * Math.pow(epsilon, this.beta);
+    this.k = Math.max(0.05, Math.min(0.95, this.k + traumaGain - this.delta));
+    this.kHistory.push(this.k);
+    if (this.k > this.peakK) this.peakK = this.k;
+    this.stepCount++;
+    this.lastPrediction = null;
+    return epsilon;
+  }
+
+  // DDA decision: pick option most aligned with current state F
+  decide(options) {
+    let best = null;
+    let bestScore = -Infinity;
+    
+    for (const opt of options) {
+      // Score = alignment with F, modified by trauma
+      // High k = prefer safe/identity-consistent options
+      // Low k = more willing to take risks
+      
+      let score = 0;
+      
+      // Alignment with current state
+      const alignment = 1 - Math.abs(this.F - opt.alignment);
+      score += alignment * 2;
+      
+      // Risk aversion scales with trauma
+      if (opt.risky) {
+        score -= this.k * 1.5; // High trauma = avoid risk
+      }
+      
+      // Identity violation penalty
+      if (opt.violatesIdentity) {
+        score -= this.P0 * 2; // Strong identity = won't violate
+        score -= this.k * 0.5; // Trauma also discourages violation
+      }
+      
+      // Resource pressure
+      if (this.resources < 30 && opt.resourceGain > 0) {
+        score += (1 - this.k) * 1.5; // Low trauma = will adapt for survival
+      }
+      
+      // Small randomness
+      score += (Math.random() - 0.5) * 0.3;
+      
+      if (score > bestScore) {
+        bestScore = score;
+        best = opt;
+      }
+    }
+    
+    return best;
+  }
+
+  getStatus() {
+    if (this.k > 0.75) return "defensive and closed off";
+    if (this.k > 0.55) return "guarded and cautious";
+    if (this.k > 0.35) return "balanced but watchful";
+    if (this.k > 0.2) return "open and adaptive";
+    return "fluid and trusting";
+  }
+}
+
+// ============================================
+// WORLD SCENARIOS
+// ============================================
+
+const WORLDS = {
+  theClimb: {
+    name: "The Climb",
+    agent: { name: "Mira", avatar: "👩🏾", P0: 0.65, k: 0.18, resources: 50, wellbeing: 45 },
+    intro: "Mira grew up in a small village. She's smart, determined, and dreams of a better life. She has her grandmother's values burned into her soul: work hard, stay honest, never forget where you came from.",
+    steps: [
+      {
+        situation: "A stranger named Joseph offers Mira a 'shortcut' to a work permit in the city. He seems friendly, but something feels off. The official process takes months.",
+        options: [
+          { id: 1, text: "Trust Joseph and pay for the shortcut", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: -30, outcomeGood: 0.2 },
+          { id: 2, text: "Politely decline and pursue official channels", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: -10, outcomeGood: 0.7 },
+          { id: 3, text: "Investigate Joseph first before deciding", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: -5, outcomeGood: 0.8 }
+        ]
+      },
+      {
+        situation: "Mira finds work at a small hotel. The manager, Grace, is fair but demanding. A coworker suggests skimming from the register - 'everyone does it, and the owner is rich.'",
+        options: [
+          { id: 1, text: "Join the skimming - the money would help", alignment: 0.2, risky: true, violatesIdentity: true, resourceGain: 40, outcomeGood: 0.3 },
+          { id: 2, text: "Refuse and focus on honest work", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 10, outcomeGood: 0.75 },
+          { id: 3, text: "Report the coworker to Grace", alignment: 0.6, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.5 }
+        ]
+      },
+      {
+        situation: "A well-dressed man named Daniel approaches Mira. He offers triple her salary for 'client relations' work. He's vague about details and gets annoyed when questioned.",
+        options: [
+          { id: 1, text: "Accept - the money is too good to pass up", alignment: 0.2, risky: true, violatesIdentity: true, resourceGain: 100, outcomeGood: 0.15 },
+          { id: 2, text: "Firmly decline - this feels dangerous", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.85 },
+          { id: 3, text: "Ask to speak with current employees first", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "Mira's cousin calls in desperation - he needs money urgently for a 'business opportunity.' He's borrowed from her before and never repaid.",
+        options: [
+          { id: 1, text: "Send everything she has - family first", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: -50, outcomeGood: 0.25 },
+          { id: 2, text: "Send a small amount she can afford to lose", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -15, outcomeGood: 0.6 },
+          { id: 3, text: "Say no - she's been burned before", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "Grace offers Mira a promotion - but it requires moving to Nairobi and working nights. Her grandmother is getting older and needs care.",
+        options: [
+          { id: 1, text: "Take the promotion - this is her chance", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: 60, outcomeGood: 0.5 },
+          { id: 2, text: "Decline and stay close to family", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 10, outcomeGood: 0.65 },
+          { id: 3, text: "Negotiate - can she work days and visit weekends?", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 40, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "A former schoolmate, now successful, offers to invest in Mira's small side business. But he wants 60% ownership.",
+        options: [
+          { id: 1, text: "Accept - she needs the capital", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: 80, outcomeGood: 0.4 },
+          { id: 2, text: "Counter-offer 40% and see what happens", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 50, outcomeGood: 0.65 },
+          { id: 3, text: "Decline - she'll grow slowly on her own terms", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 15, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "Years pass. Mira has built something real. A corporation offers to buy her small business for a life-changing sum - but they'll fire her loyal employees.",
+        options: [
+          { id: 1, text: "Sell - this is financial security forever", alignment: 0.3, risky: false, violatesIdentity: true, resourceGain: 200, outcomeGood: 0.5 },
+          { id: 2, text: "Negotiate employee retention as a condition", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 120, outcomeGood: 0.75 },
+          { id: 3, text: "Decline and keep building her vision", alignment: 0.8, risky: true, violatesIdentity: false, resourceGain: 30, outcomeGood: 0.6 }
+        ]
+      }
+    ],
+    endings: {
+      good: { title: "🌟 Self-Made", text: "Mira built a life on her own terms. She never forgot her grandmother's values. The climb was hard, but she remained herself." },
+      bad: { title: "💔 Lost", text: "Somewhere along the way, Mira became someone she didn't recognize. The money came, but at a cost she's still paying." },
+      neutral: { title: "⚖️ Survivor", text: "Mira made it through. Not everything went right, but she's still standing. Still figuring it out. Still herself, mostly." }
+    }
+  },
+  
+  theBetrayals: {
+    name: "The Betrayals",
+    agent: { name: "Marcus", avatar: "👨🏻", P0: 0.55, k: 0.15, resources: 80, wellbeing: 60 },
+    intro: "Marcus is an optimist. He believes in people, gives second chances, and sees the best in everyone. His friends say he's too trusting. He says the world needs more trust, not less.",
+    steps: [
+      {
+        situation: "Marcus's business partner asks him to sign over temporary control of their joint account for 'tax purposes.' They've been friends for years.",
+        options: [
+          { id: 1, text: "Sign immediately - trust is everything", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.2 },
+          { id: 2, text: "Ask for documentation and a lawyer review", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -5, outcomeGood: 0.8 },
+          { id: 3, text: "Refuse - something feels wrong", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.75 }
+        ]
+      },
+      {
+        situation: "The partner vanished with the money. Marcus is devastated. Now a new investor appears, promising to help rebuild. The opportunity seems almost too good.",
+        options: [
+          { id: 1, text: "Trust again - can't let one betrayal change him", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: 50, outcomeGood: 0.25 },
+          { id: 2, text: "Proceed with extreme caution and verification", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 20, outcomeGood: 0.7 },
+          { id: 3, text: "Decline - he's not ready to trust anyone", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.6 }
+        ]
+      },
+      {
+        situation: "Marcus's girlfriend reveals she's been talking to his ex. She says it's 'nothing' but won't show him the messages.",
+        options: [
+          { id: 1, text: "Trust her completely - jealousy is toxic", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.3 },
+          { id: 2, text: "Have a serious conversation about boundaries", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.65 },
+          { id: 3, text: "End it - he can't handle more uncertainty", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.5 }
+        ]
+      },
+      {
+        situation: "A childhood friend resurfaces after years of silence. He needs a place to stay 'for a few weeks.' Marcus remembers he used to steal from their other friends.",
+        options: [
+          { id: 1, text: "Welcome him - people can change", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: -20, outcomeGood: 0.2 },
+          { id: 2, text: "Help him find a shelter or other resources", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -5, outcomeGood: 0.7 },
+          { id: 3, text: "Say no - protect himself first", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.75 }
+        ]
+      },
+      {
+        situation: "Marcus meets someone new. She's kind, patient, and doesn't push. But his walls are up. She asks why he won't let her in.",
+        options: [
+          { id: 1, text: "Open up completely - take the risk", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.6 },
+          { id: 2, text: "Share slowly, test the waters", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.75 },
+          { id: 3, text: "Keep walls up - he's been hurt too much", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.4 }
+        ]
+      },
+      {
+        situation: "Years later. Marcus has rebuilt. An old friend who stood by him through everything makes a mistake that costs Marcus money. It wasn't malicious, just careless.",
+        options: [
+          { id: 1, text: "Forgive instantly - this friend earned it", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: -30, outcomeGood: 0.8 },
+          { id: 2, text: "Forgive but establish new boundaries", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: -20, outcomeGood: 0.85 },
+          { id: 3, text: "Cut them off - can't trust anyone", alignment: 0.9, risky: false, violatesIdentity: true, resourceGain: 0, outcomeGood: 0.3 }
+        ]
+      }
+    ],
+    endings: {
+      good: { title: "💪 Tempered", text: "Marcus learned to trust wisely, not blindly. He's more careful now, but his heart is still open. The betrayals taught him, but didn't define him." },
+      bad: { title: "🔒 Closed", text: "Marcus trusts no one now. He's safe, but alone. The walls he built to protect himself became his prison." },
+      neutral: { title: "⚖️ Guarded", text: "Marcus found a middle ground. He's not the optimist he was, but he's not bitter either. Some doors stay locked. Some stay open." }
+    }
+  },
+  
+  theRecovery: {
+    name: "The Recovery",
+    agent: { name: "Elena", avatar: "👩🏼", P0: 0.5, k: 0.72, resources: 60, wellbeing: 25 },
+    intro: "Elena carries invisible wounds. Something happened - she doesn't talk about it. She flinches at loud noises, struggles to sleep, and trusts no one easily. But she's still here. Still trying.",
+    steps: [
+      {
+        situation: "A therapist is recommended by a friend. The first session is free. Elena hasn't talked to anyone about what happened.",
+        options: [
+          { id: 1, text: "Go and try to open up", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: -10, outcomeGood: 0.75 },
+          { id: 2, text: "Go but keep walls up - just observe", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -10, outcomeGood: 0.6 },
+          { id: 3, text: "Don't go - she's not ready", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.3 }
+        ]
+      },
+      {
+        situation: "A coworker invites Elena to a small gathering. Just five people, low-key. Elena hasn't socialized in months.",
+        options: [
+          { id: 1, text: "Go and try to enjoy herself", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.65 },
+          { id: 2, text: "Go for one hour then leave", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.7 },
+          { id: 3, text: "Decline - too overwhelming", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.35 }
+        ]
+      },
+      {
+        situation: "Elena's sister calls, crying. She needs Elena to visit - family drama. Elena's family was part of her trauma.",
+        options: [
+          { id: 1, text: "Go immediately - family needs her", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: -20, outcomeGood: 0.25 },
+          { id: 2, text: "Offer to video call instead", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.6 },
+          { id: 3, text: "Set a boundary - she can't help right now", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "Elena finds a stray cat. It's scared, defensive, hisses at her. Something in its eyes feels familiar.",
+        options: [
+          { id: 1, text: "Take it home and care for it", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: -10, outcomeGood: 0.8 },
+          { id: 2, text: "Leave food out and visit daily", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -5, outcomeGood: 0.75 },
+          { id: 3, text: "Walk away - she can barely take care of herself", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.4 }
+        ]
+      },
+      {
+        situation: "Months of therapy. The therapist suggests EMDR - it might help process the trauma faster, but it'll be intense.",
+        options: [
+          { id: 1, text: "Try it - she's ready to face this", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: -20, outcomeGood: 0.7 },
+          { id: 2, text: "Continue talk therapy - slow and steady", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -10, outcomeGood: 0.65 },
+          { id: 3, text: "Stop therapy - it's bringing up too much", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.2 }
+        ]
+      },
+      {
+        situation: "Elena is offered a chance to speak at a support group. Share her story. Help others. But it means being vulnerable in public.",
+        options: [
+          { id: 1, text: "Speak - her pain might help someone", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.75 },
+          { id: 2, text: "Attend but just listen for now", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.7 },
+          { id: 3, text: "Decline - too exposed", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.4 }
+        ]
+      }
+    ],
+    endings: {
+      good: { title: "🌱 Healing", text: "Elena's wounds haven't disappeared, but they're no longer in control. She learned that healing isn't linear, and asking for help isn't weakness. The cat sleeps at her feet every night." },
+      bad: { title: "🌀 Stuck", text: "Elena couldn't break the cycle. The walls she built for protection became permanent. She's surviving, but not living." },
+      neutral: { title: "🌤️ Recovering", text: "Elena is somewhere in the middle. Some days are hard. Some days she surprises herself. The journey continues." }
+    }
+  },
+  
+  thePressure: {
+    name: "The Pressure Cooker",
+    agent: { name: "James", avatar: "👨🏿", P0: 0.6, k: 0.25, resources: 100, wellbeing: 55 },
+    intro: "James has a good life. Stable job, loving family, solid foundation. But life is about to test him. Crisis after crisis. Let's see how much pressure one person can take.",
+    steps: [
+      {
+        situation: "James's company announces layoffs. His position is 'under review.' The uncertainty is killing him.",
+        options: [
+          { id: 1, text: "Start job hunting immediately - assume the worst", alignment: 0.4, risky: false, violatesIdentity: false, resourceGain: -10, outcomeGood: 0.7 },
+          { id: 2, text: "Talk to his manager, advocate for himself", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.65 },
+          { id: 3, text: "Wait and see - don't overreact", alignment: 0.7, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.4 }
+        ]
+      },
+      {
+        situation: "He kept his job, but now his mother calls - she's been diagnosed with something serious. She lives across the country.",
+        options: [
+          { id: 1, text: "Drop everything and fly to her", alignment: 0.4, risky: true, violatesIdentity: false, resourceGain: -40, outcomeGood: 0.6 },
+          { id: 2, text: "Arrange help and plan a visit soon", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -20, outcomeGood: 0.65 },
+          { id: 3, text: "Send money, can't leave work right now", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: -15, outcomeGood: 0.5 }
+        ]
+      },
+      {
+        situation: "While dealing with his mother's illness, James's car breaks down. Repair cost: significant. His savings are draining.",
+        options: [
+          { id: 1, text: "Put it on credit - deal with it later", alignment: 0.3, risky: true, violatesIdentity: false, resourceGain: -50, outcomeGood: 0.4 },
+          { id: 2, text: "Get a cheaper repair, even if temporary", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: -25, outcomeGood: 0.6 },
+          { id: 3, text: "Use public transit, save the money", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: -5, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "His wife says she feels disconnected. They haven't had quality time in months. She's not threatening to leave, but she's hurting.",
+        options: [
+          { id: 1, text: "Plan something special - prioritize her", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: -15, outcomeGood: 0.8 },
+          { id: 2, text: "Have an honest conversation about everything", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.75 },
+          { id: 3, text: "Ask her to be patient - he's overwhelmed", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.4 }
+        ]
+      },
+      {
+        situation: "James starts having chest pains. Stress, probably. A doctor visit would mean missing work and spending more money.",
+        options: [
+          { id: 1, text: "Go to the doctor immediately", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: -30, outcomeGood: 0.85 },
+          { id: 2, text: "Wait a week, see if it passes", alignment: 0.6, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.4 },
+          { id: 3, text: "Ignore it - can't afford to be sick right now", alignment: 0.8, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.2 }
+        ]
+      },
+      {
+        situation: "Everything reaches a breaking point. James can either ask for help - admit he's drowning - or keep pushing alone.",
+        options: [
+          { id: 1, text: "Reach out - to friends, family, anyone", alignment: 0.4, risky: false, violatesIdentity: false, resourceGain: 20, outcomeGood: 0.85 },
+          { id: 2, text: "Scale back expectations, simplify life", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 10, outcomeGood: 0.7 },
+          { id: 3, text: "Keep pushing - he can handle this alone", alignment: 0.8, risky: true, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.25 }
+        ]
+      }
+    ],
+    endings: {
+      good: { title: "💪 Resilient", text: "James bent but didn't break. He learned that asking for help isn't weakness - it's wisdom. The pressure revealed what mattered most." },
+      bad: { title: "💔 Broken", text: "James pushed until he couldn't anymore. Something gave. The lesson came too late." },
+      neutral: { title: "⚖️ Surviving", text: "James made it through, but he's not the same. Some things were lost. But he's still standing." }
+    }
+  },
+  
+  theTemptation: {
+    name: "The Temptation",
+    agent: { name: "Sofia", avatar: "👩🏽", P0: 0.7, k: 0.2, resources: 70, wellbeing: 50 },
+    intro: "Sofia has strong values. She knows who she is and what she stands for. But the world keeps offering shortcuts. Easy money. Easy success. The question is: what's she willing to trade?",
+    steps: [
+      {
+        situation: "Sofia's boss asks her to slightly exaggerate numbers in a report. Nothing illegal, just... optimistic. A promotion might follow.",
+        options: [
+          { id: 1, text: "Do it - everyone stretches the truth", alignment: 0.3, risky: false, violatesIdentity: true, resourceGain: 30, outcomeGood: 0.5 },
+          { id: 2, text: "Refuse but don't make a scene", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.65 },
+          { id: 3, text: "Push back and suggest accurate alternatives", alignment: 0.8, risky: true, violatesIdentity: false, resourceGain: -5, outcomeGood: 0.7 }
+        ]
+      },
+      {
+        situation: "An old flame reaches out. He's married now, but says he misses her. 'Just coffee, for old times.' Sofia is single and lonely.",
+        options: [
+          { id: 1, text: "Meet him - nothing will happen", alignment: 0.3, risky: true, violatesIdentity: true, resourceGain: 0, outcomeGood: 0.2 },
+          { id: 2, text: "Decline - this can't lead anywhere good", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.8 },
+          { id: 3, text: "Tell him to figure out his marriage first", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.75 }
+        ]
+      },
+      {
+        situation: "Sofia discovers a coworker has been taking credit for her work. She could expose him publicly and embarrass him, or handle it quietly.",
+        options: [
+          { id: 1, text: "Expose him in front of everyone - justice!", alignment: 0.3, risky: true, violatesIdentity: true, resourceGain: 10, outcomeGood: 0.35 },
+          { id: 2, text: "Document everything and report to HR", alignment: 0.7, risky: false, violatesIdentity: false, resourceGain: 5, outcomeGood: 0.7 },
+          { id: 3, text: "Confront him directly and privately first", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.65 }
+        ]
+      },
+      {
+        situation: "A friend offers Sofia insider information about a stock. 'Guaranteed money.' It's probably illegal, definitely unethical.",
+        options: [
+          { id: 1, text: "Take the tip - she needs the money", alignment: 0.2, risky: true, violatesIdentity: true, resourceGain: 80, outcomeGood: 0.3 },
+          { id: 2, text: "Decline and distance from this friend", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.8 },
+          { id: 3, text: "Decline but stay friends - his choice", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.6 }
+        ]
+      },
+      {
+        situation: "Sofia is offered her dream job - but it requires her to fire a team of people she knows are good. It's 'restructuring.'",
+        options: [
+          { id: 1, text: "Take the job - she can't control everything", alignment: 0.3, risky: false, violatesIdentity: true, resourceGain: 100, outcomeGood: 0.45 },
+          { id: 2, text: "Negotiate - can she save some positions?", alignment: 0.6, risky: false, violatesIdentity: false, resourceGain: 60, outcomeGood: 0.7 },
+          { id: 3, text: "Decline - she won't build success on others' pain", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.65 }
+        ]
+      },
+      {
+        situation: "Years later. Sofia didn't take the shortcuts. She has less than some, but she sleeps well. A young colleague asks for advice on navigating office politics.",
+        options: [
+          { id: 1, text: "Tell them to do whatever it takes to win", alignment: 0.2, risky: false, violatesIdentity: true, resourceGain: 0, outcomeGood: 0.3 },
+          { id: 2, text: "Share her philosophy - integrity over shortcuts", alignment: 0.8, risky: false, violatesIdentity: false, resourceGain: 5, outcomeGood: 0.85 },
+          { id: 3, text: "Stay neutral - let them figure it out", alignment: 0.5, risky: false, violatesIdentity: false, resourceGain: 0, outcomeGood: 0.5 }
+        ]
+      }
+    ],
+    endings: {
+      good: { title: "✨ Integrity Intact", text: "Sofia proved that success and integrity aren't mutually exclusive. The shortcuts would have been faster, but the long road led somewhere she actually wanted to be." },
+      bad: { title: "💸 Sold", text: "Sofia took too many shortcuts. She has more now, but she doesn't recognize herself in the mirror." },
+      neutral: { title: "⚖️ Compromised", text: "Sofia made some trades she's not proud of. Not the worst choices, not the best. She's still figuring out who she wants to be." }
+    }
+  }
+};
+
+// ============================================
+// SIMULATION STATE
+// ============================================
+
+let currentWorld = 'theClimb';
+let agent = null;
+let running = false;
+let stepIndex = 0;
+let simulationInterval = null;
+
+// ============================================
+// UI FUNCTIONS
+// ============================================
+
+function selectWorld(worldId) {
+  currentWorld = worldId;
+  document.querySelectorAll('.world-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.closest('.world-btn').classList.add('active');
+}
+
+function startSimulation() {
+  if (running) return;
+  
+  running = true;
+  stepIndex = 0;
+  document.getElementById('goBtn').disabled = true;
+  document.getElementById('goBtn').textContent = '⏳ Running...';
+  
+  const world = WORLDS[currentWorld];
+  agent = new DDAgent(world.agent);
+  
+  // Update agent display
+  document.getElementById('agentAvatar').textContent = agent.avatar;
+  document.getElementById('agentName').textContent = agent.name;
+  document.getElementById('agentPersona').textContent = world.name;
+  
+  // Clear narrative
+  document.getElementById('narrativeBox').innerHTML = '';
+  
+  // Add intro
+  addNarrativeEntry({
+    step: 'Prologue',
+    situation: world.intro,
+    isIntro: true
+  });
+  
+  updateAgentDisplay();
+  
+  // Start simulation loop
+  const speed = 6 - document.getElementById('speedSlider').value; // Invert so high = fast
+  const delay = speed * 800;
+  
+  setTimeout(() => runNextStep(delay), delay);
+}
+
+function runNextStep(delay) {
+  if (!running) return;
+  
+  const world = WORLDS[currentWorld];
+  
+  if (stepIndex >= world.steps.length) {
+    endSimulation();
+    return;
+  }
+  
+  const step = world.steps[stepIndex];
+  
+  // Agent predicts
+  agent.predict();
+  
+  // Agent decides using DDA
+  const decision = agent.decide(step.options);
+  
+  // Determine outcome
+  const roll = Math.random();
+  const success = roll < decision.outcomeGood;
+  
+  // Calculate actual outcome value
+  let actualOutcome;
+  if (success) {
+    actualOutcome = decision.alignment + Math.random() * 0.2;
+  } else {
+    actualOutcome = 1 - decision.alignment - Math.random() * 0.3;
+  }
+  actualOutcome = Math.max(0, Math.min(1, actualOutcome));
+  
+  // Agent learns (trauma update)
+  const epsilon = agent.learn(actualOutcome);
+  
+  // Update resources and wellbeing
+  agent.resources += decision.resourceGain * (success ? 1 : 0.3);
+  agent.resources = Math.max(0, Math.min(200, agent.resources));
+  
+  if (success) {
+    agent.wellbeing += 5;
+  } else {
+    agent.wellbeing -= 10;
+    if (epsilon > 0.4) agent.betrayals++;
+  }
+  
+  if (decision.violatesIdentity && success) {
+    agent.violations++;
+    agent.wellbeing -= 5;
+  }
+  
+  if (!decision.risky && success) {
+    agent.kindnesses++;
+  }
+  
+  agent.wellbeing = Math.max(0, Math.min(100, agent.wellbeing));
+  
+  // Generate outcome text
+  let outcomeText, outcomeClass;
+  if (success) {
+    outcomeText = generateOutcomeText(decision, true, step);
+    outcomeClass = 'good';
+  } else {
+    outcomeText = generateOutcomeText(decision, false, step);
+    outcomeClass = 'bad';
+  }
+  
+  // Add to narrative
+  addNarrativeEntry({
+    step: `Chapter ${stepIndex + 1}`,
+    situation: step.situation,
+    options: step.options,
+    chosen: decision,
+    outcomeText,
+    outcomeClass,
+    epsilon
+  });
+  
+  updateAgentDisplay();
+  
+  stepIndex++;
+  
+  // Schedule next step
+  setTimeout(() => runNextStep(delay), delay);
+}
+
+function generateOutcomeText(decision, success, step) {
+  const outcomes = {
+    good: [
+      "It worked out. Sometimes trust pays off.",
+      "The decision felt right, and reality agreed.",
+      "A small victory in an uncertain world.",
+      "Things went better than expected.",
+      "The gamble paid off this time."
+    ],
+    bad: [
+      "It didn't go as planned. Another lesson learned the hard way.",
+      "Reality had other plans.",
+      "The prediction error stings. Trust recalibrates.",
+      "Sometimes the world doesn't cooperate.",
+      "A setback. The walls grow a little higher."
+    ]
+  };
+  
+  const pool = success ? outcomes.good : outcomes.bad;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function addNarrativeEntry(data) {
+  const box = document.getElementById('narrativeBox');
+  const entry = document.createElement('div');
+  entry.className = 'narrative-entry';
+  
+  if (data.isIntro) {
+    entry.innerHTML = `
+      <div class="step">✦ ${data.step}</div>
+      <div class="situation">${data.situation}</div>
+    `;
+  } else {
+    let optionsHtml = data.options.map(opt => {
+      const isChosen = opt.id === data.chosen.id;
+      return `<div class="option ${isChosen ? 'chosen' : 'rejected'}">${isChosen ? '→ ' : ''}${opt.text}</div>`;
+    }).join('');
+    
+    entry.innerHTML = `
+      <div class="step">✦ ${data.step}</div>
+      <div class="situation">${data.situation}</div>
+      <div class="options">
+        <div class="options-title">Options considered:</div>
+        ${optionsHtml}
+      </div>
+      <div class="decision-box">
+        <div class="label">Agent chose (F=${agent.F.toFixed(2)}, k=${agent.k.toFixed(2)})</div>
+        <div>${data.chosen.text}</div>
+      </div>
+      <div class="outcome ${data.outcomeClass}">${data.outcomeText} (ε=${data.epsilon.toFixed(3)})</div>
+    `;
+  }
+  
+  box.appendChild(entry);
+  box.scrollTop = box.scrollHeight;
+}
+
+function updateAgentDisplay() {
+  document.getElementById('statP0').textContent = agent.P0.toFixed(2);
+  document.getElementById('statK').textContent = agent.k.toFixed(2);
+  document.getElementById('statF').textContent = agent.F.toFixed(2);
+  document.getElementById('statResources').textContent = Math.round(agent.resources);
+  
+  document.getElementById('traumaPercent').textContent = Math.round(agent.k * 100) + '%';
+  document.getElementById('traumaBar').style.width = (agent.k * 100) + '%';
+  
+  document.getElementById('wellbeingPercent').textContent = Math.round(agent.wellbeing) + '%';
+  document.getElementById('wellbeingBar').style.width = agent.wellbeing + '%';
+  
+  document.getElementById('statusDesc').innerHTML = `
+    ${agent.name} is currently <span class="highlight">${agent.getStatus()}</span>.
+    ${agent.k > 0.6 ? 'Past experiences weigh heavily on decisions.' : ''}
+    ${agent.k < 0.25 ? 'Open to new experiences and willing to adapt.' : ''}
+    ${agent.resources < 40 ? 'Resources are running low - survival pressure mounting.' : ''}
+  `;
+  
+  document.getElementById('journeySteps').textContent = agent.stepCount;
+  document.getElementById('journeyBetrayals').textContent = agent.betrayals;
+  document.getElementById('journeyKindnesses').textContent = agent.kindnesses;
+  document.getElementById('journeyViolations').textContent = agent.violations;
+  document.getElementById('journeyPeakK').textContent = agent.peakK.toFixed(2);
+  
+  drawMiniChart();
+}
+
+function drawMiniChart() {
+  const canvas = document.getElementById('miniChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * 2;
+  const H = canvas.height = canvas.offsetHeight * 2;
+  ctx.scale(2, 2);
+  const w = W / 2, h = H / 2;
+  
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, 0, w, h);
+  
+  if (agent.kHistory.length < 2) return;
+  
+  const padding = 10;
+  const chartW = w - padding * 2;
+  const chartH = h - padding * 2;
+  
+  const points = agent.kHistory.slice(-30);
+  const stepW = chartW / Math.max(points.length - 1, 1);
+  
+  // Draw line
+  ctx.beginPath();
+  ctx.strokeStyle = '#ff6b6b';
+  ctx.lineWidth = 2;
+  
+  points.forEach((k, i) => {
+    const x = padding + i * stepW;
+    const y = h - padding - (k * chartH);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  
+  // Current point
+  const lastX = padding + (points.length - 1) * stepW;
+  const lastY = h - padding - (points[points.length - 1] * chartH);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#ff6b6b';
+  ctx.fill();
+}
+
+function endSimulation() {
+  running = false;
+  document.getElementById('goBtn').disabled = false;
+  document.getElementById('goBtn').textContent = '▶️ GO';
+  
+  const world = WORLDS[currentWorld];
+  
+  // Determine ending
+  let endingType;
+  const score = (agent.wellbeing / 100) + (agent.resources / 200) - (agent.k * 0.5) - (agent.violations * 0.15);
+  
+  if (score > 0.8) endingType = 'good';
+  else if (score < 0.4) endingType = 'bad';
+  else endingType = 'neutral';
+  
+  const ending = world.endings[endingType];
+  
+  // Show ending overlay
+  document.getElementById('endingTitle').textContent = ending.title;
+  document.getElementById('endingTitle').className = `ending-${endingType}`;
+  document.getElementById('endingText').textContent = ending.text;
+  document.getElementById('finalStats').innerHTML = `
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
+      <div>Final Trauma (k): <strong>${agent.k.toFixed(2)}</strong></div>
+      <div>Peak Trauma: <strong>${agent.peakK.toFixed(2)}</strong></div>
+      <div>Wellbeing: <strong>${Math.round(agent.wellbeing)}%</strong></div>
+      <div>Resources: <strong>${Math.round(agent.resources)}</strong></div>
+      <div>Identity Violations: <strong>${agent.violations}</strong></div>
+      <div>Betrayals Faced: <strong>${agent.betrayals}</strong></div>
+    </div>
+  `;
+  
+  document.getElementById('endingOverlay').style.display = 'flex';
+}
+
+function resetAll() {
+  document.getElementById('endingOverlay').style.display = 'none';
+  document.getElementById('narrativeBox').innerHTML = `
+    <div style="text-align: center; padding: 50px; color: #666;">
+      <div style="font-size: 3em; margin-bottom: 20px;">🎬</div>
+      <div>Select a world and press GO to begin</div>
+    </div>
+  `;
+  
+  document.getElementById('agentAvatar').textContent = '👤';
+  document.getElementById('agentName').textContent = 'Waiting...';
+  document.getElementById('agentPersona').textContent = '-';
+  document.getElementById('statP0').textContent = '-';
+  document.getElementById('statK').textContent = '-';
+  document.getElementById('statF').textContent = '-';
+  document.getElementById('statResources').textContent = '-';
+  
+  document.getElementById('journeySteps').textContent = '0';
+  document.getElementById('journeyBetrayals').textContent = '0';
+  document.getElementById('journeyKindnesses').textContent = '0';
+  document.getElementById('journeyViolations').textContent = '0';
+  document.getElementById('journeyPeakK').textContent = '0.00';
+}
+
+// Init
+window.onload = () => {
+  const canvas = document.getElementById('miniChart');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = canvas.offsetHeight * 2;
+};
+</script>
+
+</body>
+</html>
