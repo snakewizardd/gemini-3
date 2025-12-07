@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDA v9.2 Ghost Hunter - Interactive Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.85rem;
+        }
+
+        .tab:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: transparent;
+            color: white;
+        }
+
+        .canvas-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            border-radius: 8px;
+        }
+
+        #mainCanvas {
+            background: #0d0d15;
+            margin-bottom: 10px;
+        }
+
+        #modeCanvas {
+            background: #0d0d15;
+            height: 50px;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+            font-size: 0.8rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 4px;
+            border-radius: 2px;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .metric-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            font-family: 'Consolas', monospace;
+        }
+
+        .metric-value.dda { color: #ff6b6b; }
+        .metric-value.kalman { color: #4ecdc4; }
+        .metric-value.improvement { color: #feca57; }
+
+        .mode-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .mode-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .mode-dot.pursuit { background: #3498db; }
+        .mode-dot.saccade { background: #e74c3c; }
+        .mode-dot.coasting { background: #2ecc71; }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .slider-label {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        input[type="range"] {
+            width: 150px;
+            height: 6px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        select {
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .explanation {
+            background: rgba(102, 126, 234, 0.1);
+            border-left: 3px solid #667eea;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .explanation h3 {
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .mode-legend {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            margin-top: 8px;
+            font-size: 0.75rem;
+        }
+
+        .mode-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .mode-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .mode-color.pursuit { background: #3498db; }
+        .mode-color.saccade { background: #e74c3c; }
+        .mode-color.coasting { background: #2ecc71; }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            color: #555;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>DDA v9.2 "Ghost Hunter"</h1>
+            <p class="subtitle">Biomimetic Signal Tracking with Saccadic Gating & Dead Reckoning</p>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-scenario="levy">Levy Flight (Teleporting)</div>
+            <div class="tab" data-scenario="packet">Packet Loss</div>
+            <div class="tab" data-scenario="crash">Flash Crash</div>
+            <div class="tab" data-scenario="chirp">High-Freq Chirp</div>
+        </div>
+
+        <div class="explanation" id="explanation">
+            <h3>Levy Flight Scenario</h3>
+            <p>A target that moves smoothly most of the time, but occasionally teleports to a random location.
+            Watch how DDA's <strong>saccadic gating</strong> instantly snaps to the new position (like your eye jumping to a new target),
+            while the Kalman filter struggles to catch up due to its momentum assumptions.</p>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="mainCanvas" width="960" height="300"></canvas>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color" style="background: #666"></div> True Signal</div>
+                <div class="legend-item"><div class="legend-color" style="background: #3498db; opacity: 0.5"></div> Observations</div>
+                <div class="legend-item"><div class="legend-color" style="background: #ff6b6b"></div> DDA Ghost Hunter</div>
+                <div class="legend-item"><div class="legend-color" style="background: #4ecdc4; border-style: dashed"></div> Kalman Filter</div>
+            </div>
+            <canvas id="modeCanvas" width="960" height="50"></canvas>
+            <div class="mode-legend">
+                <div class="mode-legend-item"><div class="mode-color pursuit"></div> Pursuit (Smooth Tracking)</div>
+                <div class="mode-legend-item"><div class="mode-color saccade"></div> Saccade (Instant Snap)</div>
+                <div class="mode-legend-item"><div class="mode-color coasting"></div> Coasting (Dead Reckoning)</div>
+            </div>
+        </div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-label">DDA Mean Squared Error</div>
+                <div class="metric-value dda" id="ddaMse">0.00</div>
+                <div class="mode-indicator">
+                    <div class="mode-dot" id="modeDot"></div>
+                    <span id="modeText">Initializing...</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Kalman Mean Squared Error</div>
+                <div class="metric-value kalman" id="kalmanMse">0.00</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">DDA Improvement</div>
+                <div class="metric-value improvement" id="improvement">+0.0%</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="btn-group">
+                <button class="btn-primary" id="playPause">Pause</button>
+                <button class="btn-secondary" id="reset">Reset</button>
+                <button class="btn-secondary" id="step">Step</button>
+            </div>
+
+            <div class="slider-group">
+                <span class="slider-label">Speed: <span id="speedVal">1x</span></span>
+                <input type="range" id="speed" min="1" max="4" value="2">
+            </div>
+
+            <div class="slider-group">
+                <span class="slider-label">Noise: <span id="noiseVal">0.5</span></span>
+                <input type="range" id="noise" min="1" max="20" value="5">
+            </div>
+
+            <div class="slider-group">
+                <span class="slider-label">Saccade Threshold: <span id="threshVal">4.0</span></span>
+                <input type="range" id="thresh" min="10" max="80" value="40">
+            </div>
+        </div>
+
+        <footer>
+            DDA v9.2 "Ghost Hunter" - Biomimetic Signal Tracking Algorithm
+        </footer>
+    </div>
+
+    <script>
+        // ============================================================
+        // DDA v9.2 "GHOST HUNTER" - JavaScript Implementation
+        // ============================================================
+
+        class DDAGhostHunter {
+            constructor(config = {}) {
+                this.c = {
+                    P0_pursuit: config.P0_pursuit || 0.95,
+                    P0_saccade: config.P0_saccade || 0.0,
+                    saccade_thresh: config.saccade_thresh || 4.0,
+                    derivative_boost: config.derivative_boost || 0.55,
+                    ema_alpha: config.ema_alpha || 0.2
+                };
+                this.reset();
+            }
+
+            reset() {
+                this.k = 1.0;
+                this.F_prev = 0.0;
+                this.I_prev = null;
+                this.dF = 0.0;
+                this.last_valid_dF = 0.0;
+                this.init = false;
+            }
+
+            update(I_n) {
+                if (!this.init) {
+                    this.F_prev = I_n;
+                    this.I_prev = I_n;
+                    this.init = true;
+                    return { estimate: I_n, mode: 0 };
+                }
+
+                // --- 1. DETECT SIGNAL FREEZE (PACKET LOSS) ---
+                const is_frozen = (I_n === this.I_prev);
+
+                if (is_frozen) {
+                    // MODE: DEAD RECKONING (Coast)
+                    const F = this.F_prev + this.last_valid_dF;
+                    this.F_prev = F;
+                    return { estimate: F, mode: 2 }; // Mode 2 = Coasting
+                }
+
+                // --- SIGNAL IS LIVE ---
+
+                // 1. Calc Derivative
+                const delta = I_n - this.I_prev;
+                this.dF = (this.c.ema_alpha * delta) + ((1 - this.c.ema_alpha) * this.dF);
+                this.last_valid_dF = this.dF;
+
+                // 2. Retinal Slip (error from prediction)
+                const error = Math.abs(I_n - this.F_prev);
+
+                // 3. Saccadic Gate
+                let effective_P0, effective_m, mode;
+
+                if (error > this.c.saccade_thresh) {
+                    // SNAP RECOVERY (Saccade)
+                    effective_P0 = this.c.P0_saccade;
+                    effective_m = 1.0;
+                    mode = 1;
+                    this.dF = 0.0;
+                    this.last_valid_dF = 0.0;
+                } else {
+                    // SMOOTH PURSUIT
+                    effective_P0 = this.c.P0_pursuit;
+                    effective_m = 1.0 - effective_P0;
+                    mode = 0;
+                }
+
+                // 4. Update Law
+                let L;
+                if (mode === 0) {
+                    L = I_n + (this.c.derivative_boost * this.dF);
+                } else {
+                    L = I_n;
+                }
+
+                const prior = effective_P0 * this.k * this.F_prev;
+                const F = prior + (effective_m * L);
+
+                // 5. Adaptive Gain
+                if (mode === 0) {
+                    const err = I_n - F;
+                    this.k += 0.001 * Math.sign(err) * Math.pow(Math.abs(err), 0.5);
+                    this.k = Math.max(0.9, Math.min(1.1, this.k));
+                } else {
+                    this.k = 1.0;
+                }
+
+                this.F_prev = F;
+                this.I_prev = I_n;
+                return { estimate: F, mode: mode };
+            }
+
+            setThreshold(thresh) {
+                this.c.saccade_thresh = thresh;
+            }
+        }
+
+        // ============================================================
+        // KALMAN FILTER - Competitor
+        // ============================================================
+
+        class KalmanFilter {
+            constructor(std_meas = 2.0) {
+                this.std_meas = std_meas;
+                this.reset();
+            }
+
+            reset() {
+                this.x = [0, 0]; // [position, velocity]
+                this.P = [[1, 0], [0, 1]]; // Covariance
+                this.init = false;
+            }
+
+            update(z) {
+                if (!this.init) {
+                    this.x[0] = z;
+                    this.init = true;
+                    return z;
+                }
+
+                // Predict
+                const x_pred = [
+                    this.x[0] + this.x[1],
+                    this.x[1]
+                ];
+
+                const F = [[1, 1], [0, 1]];
+                const Q = [[0.1, 0], [0, 0.1]];
+
+                const P_pred = [
+                    [this.P[0][0] + 2*this.P[0][1] + this.P[1][1] + Q[0][0], this.P[0][1] + this.P[1][1]],
+                    [this.P[0][1] + this.P[1][1], this.P[1][1] + Q[1][1]]
+                ];
+
+                // Update
+                const R = this.std_meas * this.std_meas;
+                const y = z - x_pred[0];
+                const S = P_pred[0][0] + R;
+                const K = [P_pred[0][0] / S, P_pred[0][1] / S];
+
+                this.x = [
+                    x_pred[0] + K[0] * y,
+                    x_pred[1] + K[1] * y
+                ];
+
+                this.P = [
+                    [(1 - K[0]) * P_pred[0][0], (1 - K[0]) * P_pred[0][1]],
+                    [-K[1] * P_pred[0][0] + P_pred[1][0], -K[1] * P_pred[0][1] + P_pred[1][1]]
+                ];
+
+                return this.x[0];
+            }
+        }
+
+        // ============================================================
+        // SIGNAL GENERATORS
+        // ============================================================
+
+        class SignalGenerator {
+            constructor() {
+                this.t = 0;
+                this.value = 0;
+                this.velocity = 0;
+                this.frozenValue = null;
+                this.freezeTimer = 0;
+            }
+
+            reset() {
+                this.t = 0;
+                this.value = 0;
+                this.velocity = 0;
+                this.frozenValue = null;
+                this.freezeTimer = 0;
+            }
+
+            // Gaussian random
+            randn() {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+            }
+
+            // Lévy Flight: smooth random walk with rare jumps
+            levyFlight(noise = 0.5) {
+                this.t++;
+
+                // Smooth drift
+                this.velocity += this.randn() * 0.1;
+                this.velocity *= 0.95; // Damping
+                this.value += this.velocity;
+
+                // Rare teleportation (5% chance)
+                if (Math.random() < 0.03) {
+                    const jump = (Math.random() - 0.5) * 30;
+                    this.value += jump;
+                    this.velocity = 0;
+                }
+
+                // Keep in bounds
+                if (this.value > 20) { this.value = 20; this.velocity = -Math.abs(this.velocity); }
+                if (this.value < -20) { this.value = -20; this.velocity = Math.abs(this.velocity); }
+
+                const observation = this.value + this.randn() * noise;
+                return { truth: this.value, observation: observation };
+            }
+
+            // Packet Loss: smooth sine with random freezes
+            packetLoss(noise = 0.5) {
+                this.t++;
+
+                // Check if currently frozen
+                if (this.freezeTimer > 0) {
+                    this.freezeTimer--;
+                    // Truth still moves, but observation frozen
+                    this.value = 10 * Math.sin(this.t * 0.05) + 5 * Math.cos(this.t * 0.02);
+                    return { truth: this.value, observation: this.frozenValue };
+                }
+
+                // Random freeze (8% chance, 15-30 frames)
+                if (Math.random() < 0.04) {
+                    this.freezeTimer = 15 + Math.floor(Math.random() * 15);
+                    this.frozenValue = this.value + this.randn() * noise;
+                }
+
+                this.value = 10 * Math.sin(this.t * 0.05) + 5 * Math.cos(this.t * 0.02);
+                const observation = this.value + this.randn() * noise;
+                return { truth: this.value, observation: observation };
+            }
+
+            // Flash Crash: climb, crash, volatile recovery
+            flashCrash(noise = 0.5) {
+                this.t++;
+
+                let target;
+                if (this.t < 100) {
+                    // Climb
+                    target = 5 + this.t * 0.1;
+                } else if (this.t < 120) {
+                    // Crash
+                    target = 15 - (this.t - 100) * 0.8;
+                } else if (this.t < 200) {
+                    // Volatile recovery
+                    target = -1 + (this.t - 120) * 0.08 + Math.sin(this.t * 0.3) * 3;
+                } else {
+                    // New climb
+                    target = 5 + Math.sin(this.t * 0.05) * 3;
+                }
+
+                // Smooth approach
+                this.value += (target - this.value) * 0.3;
+
+                const observation = this.value + this.randn() * noise;
+                return { truth: this.value, observation: observation };
+            }
+
+            // High-frequency chirp
+            chirp(noise = 0.5) {
+                this.t++;
+
+                // Frequency increases over time
+                const freq = 0.02 + this.t * 0.0002;
+                this.value = 10 * Math.sin(this.t * freq);
+
+                const observation = this.value + this.randn() * noise;
+                return { truth: this.value, observation: observation };
+            }
+        }
+
+        // ============================================================
+        // VISUALIZATION ENGINE
+        // ============================================================
+
+        class Visualizer {
+            constructor() {
+                this.mainCanvas = document.getElementById('mainCanvas');
+                this.modeCanvas = document.getElementById('modeCanvas');
+                this.mainCtx = this.mainCanvas.getContext('2d');
+                this.modeCtx = this.modeCanvas.getContext('2d');
+
+                this.dda = new DDAGhostHunter();
+                this.kalman = new KalmanFilter();
+                this.signal = new SignalGenerator();
+
+                this.scenario = 'levy';
+                this.running = true;
+                this.speed = 2;
+                this.noise = 0.5;
+                this.frameCount = 0;
+
+                this.windowSize = 200;
+                this.data = {
+                    truth: [],
+                    observations: [],
+                    dda: [],
+                    kalman: [],
+                    modes: []
+                };
+
+                this.ddaErrors = [];
+                this.kalmanErrors = [];
+
+                this.setupEventListeners();
+                this.reset();
+                this.animate();
+            }
+
+            setupEventListeners() {
+                // Tabs
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        this.scenario = tab.dataset.scenario;
+                        this.updateExplanation();
+                        this.reset();
+                    });
+                });
+
+                // Buttons
+                document.getElementById('playPause').addEventListener('click', () => {
+                    this.running = !this.running;
+                    document.getElementById('playPause').textContent = this.running ? 'Pause' : 'Play';
+                });
+
+                document.getElementById('reset').addEventListener('click', () => this.reset());
+                document.getElementById('step').addEventListener('click', () => this.step());
+
+                // Sliders
+                document.getElementById('speed').addEventListener('input', (e) => {
+                    this.speed = parseInt(e.target.value);
+                    const speeds = ['0.5x', '1x', '2x', '4x'];
+                    document.getElementById('speedVal').textContent = speeds[this.speed - 1];
+                });
+
+                document.getElementById('noise').addEventListener('input', (e) => {
+                    this.noise = parseInt(e.target.value) / 10;
+                    document.getElementById('noiseVal').textContent = this.noise.toFixed(1);
+                });
+
+                document.getElementById('thresh').addEventListener('input', (e) => {
+                    const thresh = parseInt(e.target.value) / 10;
+                    document.getElementById('threshVal').textContent = thresh.toFixed(1);
+                    this.dda.setThreshold(thresh);
+                });
+            }
+
+            updateExplanation() {
+                const explanations = {
+                    levy: {
+                        title: 'Lévy Flight (Teleporting Target)',
+                        text: `A target that moves smoothly most of the time, but occasionally <strong>teleports</strong> to a random location.
+                        Watch how DDA's <strong>saccadic gating</strong> instantly snaps to the new position (like your eye jumping to a new target),
+                        while the Kalman filter struggles to catch up due to its momentum assumptions.`
+                    },
+                    packet: {
+                        title: 'Packet Loss (Signal Freeze)',
+                        text: `Simulates network packet loss where the signal <strong>freezes</strong> for 15-30 frames at random intervals.
+                        Watch how DDA's <strong>dead reckoning</strong> continues tracking by coasting on the last known velocity,
+                        while Kalman gets confused by the frozen signal and drifts.`
+                    },
+                    crash: {
+                        title: 'Flash Crash & Recovery',
+                        text: `A price signal that climbs steadily, then <strong>crashes rapidly</strong>, followed by volatile recovery.
+                        DDA's pre-cognitive boost helps it anticipate the crash direction, while its saccadic gating
+                        helps it snap to the new regime faster than Kalman's conservative momentum model.`
+                    },
+                    chirp: {
+                        title: 'High-Frequency Chirp',
+                        text: `A sine wave with <strong>increasing frequency</strong>. At low frequencies both trackers perform similarly,
+                        but as frequency increases, Kalman develops increasing <strong>phase lag</strong> while DDA maintains
+                        <strong>zero phase-lag</strong> tracking due to its derivative boost acting as a phase-lead compensator.`
+                    }
+                };
+
+                const exp = explanations[this.scenario];
+                document.getElementById('explanation').innerHTML = `<h3>${exp.title}</h3><p>${exp.text}</p>`;
+            }
+
+            reset() {
+                this.dda.reset();
+                this.kalman.reset();
+                this.signal.reset();
+                this.frameCount = 0;
+
+                this.data = {
+                    truth: [],
+                    observations: [],
+                    dda: [],
+                    kalman: [],
+                    modes: []
+                };
+
+                this.ddaErrors = [];
+                this.kalmanErrors = [];
+
+                // Clear canvases
+                this.mainCtx.fillStyle = '#0d0d15';
+                this.mainCtx.fillRect(0, 0, this.mainCanvas.width, this.mainCanvas.height);
+                this.modeCtx.fillStyle = '#0d0d15';
+                this.modeCtx.fillRect(0, 0, this.modeCanvas.width, this.modeCanvas.height);
+            }
+
+            step() {
+                // Generate signal based on scenario
+                let signalData;
+                switch (this.scenario) {
+                    case 'levy': signalData = this.signal.levyFlight(this.noise); break;
+                    case 'packet': signalData = this.signal.packetLoss(this.noise); break;
+                    case 'crash': signalData = this.signal.flashCrash(this.noise); break;
+                    case 'chirp': signalData = this.signal.chirp(this.noise); break;
+                }
+
+                // Update trackers
+                const ddaResult = this.dda.update(signalData.observation);
+                const kalmanResult = this.kalman.update(signalData.observation);
+
+                // Store data
+                this.data.truth.push(signalData.truth);
+                this.data.observations.push(signalData.observation);
+                this.data.dda.push(ddaResult.estimate);
+                this.data.kalman.push(kalmanResult);
+                this.data.modes.push(ddaResult.mode);
+
+                // Calculate errors
+                const ddaError = Math.pow(signalData.truth - ddaResult.estimate, 2);
+                const kalmanError = Math.pow(signalData.truth - kalmanResult, 2);
+                this.ddaErrors.push(ddaError);
+                this.kalmanErrors.push(kalmanError);
+
+                // Trim to window size
+                if (this.data.truth.length > this.windowSize) {
+                    this.data.truth.shift();
+                    this.data.observations.shift();
+                    this.data.dda.shift();
+                    this.data.kalman.shift();
+                    this.data.modes.shift();
+                }
+
+                // Update mode indicator
+                this.updateModeIndicator(ddaResult.mode);
+
+                this.frameCount++;
+            }
+
+            updateModeIndicator(mode) {
+                const dot = document.getElementById('modeDot');
+                const text = document.getElementById('modeText');
+
+                dot.className = 'mode-dot';
+
+                switch (mode) {
+                    case 0:
+                        dot.classList.add('pursuit');
+                        text.textContent = 'Smooth Pursuit';
+                        break;
+                    case 1:
+                        dot.classList.add('saccade');
+                        text.textContent = 'SACCADE!';
+                        break;
+                    case 2:
+                        dot.classList.add('coasting');
+                        text.textContent = 'Coasting (Dead Reckoning)';
+                        break;
+                }
+            }
+
+            draw() {
+                const ctx = this.mainCtx;
+                const width = this.mainCanvas.width;
+                const height = this.mainCanvas.height;
+                const padding = 40;
+
+                // Clear
+                ctx.fillStyle = '#0d0d15';
+                ctx.fillRect(0, 0, width, height);
+
+                if (this.data.truth.length < 2) return;
+
+                // Calculate Y range
+                const allValues = [...this.data.truth, ...this.data.dda, ...this.data.kalman];
+                const yMin = Math.min(...allValues) - 2;
+                const yMax = Math.max(...allValues) + 2;
+                const yRange = yMax - yMin;
+
+                const toX = (i) => padding + (i / (this.windowSize - 1)) * (width - 2 * padding);
+                const toY = (v) => height - padding - ((v - yMin) / yRange) * (height - 2 * padding);
+
+                // Draw grid
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 5; i++) {
+                    const y = padding + (i / 5) * (height - 2 * padding);
+                    ctx.beginPath();
+                    ctx.moveTo(padding, y);
+                    ctx.lineTo(width - padding, y);
+                    ctx.stroke();
+                }
+
+                // Draw truth (gray)
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                this.data.truth.forEach((v, i) => {
+                    const x = toX(i);
+                    const y = toY(v);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+
+                // Draw observations (blue dots)
+                ctx.fillStyle = 'rgba(52, 152, 219, 0.4)';
+                this.data.observations.forEach((v, i) => {
+                    ctx.beginPath();
+                    ctx.arc(toX(i), toY(v), 2, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Draw Kalman (teal dashed)
+                ctx.strokeStyle = '#4ecdc4';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                this.data.kalman.forEach((v, i) => {
+                    const x = toX(i);
+                    const y = toY(v);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw DDA (red solid)
+                ctx.strokeStyle = '#ff6b6b';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                this.data.dda.forEach((v, i) => {
+                    const x = toX(i);
+                    const y = toY(v);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+
+                // Draw mode strip
+                this.drawModeStrip();
+
+                // Update metrics
+                this.updateMetrics();
+            }
+
+            drawModeStrip() {
+                const ctx = this.modeCtx;
+                const width = this.modeCanvas.width;
+                const height = this.modeCanvas.height;
+                const padding = 40;
+
+                ctx.fillStyle = '#0d0d15';
+                ctx.fillRect(0, 0, width, height);
+
+                if (this.data.modes.length < 1) return;
+
+                const barWidth = (width - 2 * padding) / this.windowSize;
+
+                this.data.modes.forEach((mode, i) => {
+                    let color;
+                    switch (mode) {
+                        case 0: color = '#3498db'; break; // Pursuit
+                        case 1: color = '#e74c3c'; break; // Saccade
+                        case 2: color = '#2ecc71'; break; // Coasting
+                    }
+
+                    ctx.fillStyle = color;
+                    ctx.fillRect(
+                        padding + i * barWidth,
+                        10,
+                        barWidth + 1,
+                        height - 20
+                    );
+                });
+            }
+
+            updateMetrics() {
+                if (this.ddaErrors.length < 10) return;
+
+                // Use recent errors for smoother display
+                const recentDda = this.ddaErrors.slice(-100);
+                const recentKalman = this.kalmanErrors.slice(-100);
+
+                const ddaMse = recentDda.reduce((a, b) => a + b, 0) / recentDda.length;
+                const kalmanMse = recentKalman.reduce((a, b) => a + b, 0) / recentKalman.length;
+
+                document.getElementById('ddaMse').textContent = ddaMse.toFixed(3);
+                document.getElementById('kalmanMse').textContent = kalmanMse.toFixed(3);
+
+                const improvement = ((kalmanMse - ddaMse) / kalmanMse) * 100;
+                const impEl = document.getElementById('improvement');
+                impEl.textContent = (improvement >= 0 ? '+' : '') + improvement.toFixed(1) + '%';
+                impEl.style.color = improvement >= 0 ? '#2ecc71' : '#e74c3c';
+            }
+
+            animate() {
+                if (this.running) {
+                    // Speed control: how many steps per frame
+                    const stepsPerFrame = [1, 2, 4, 8][this.speed - 1];
+
+                    for (let i = 0; i < stepsPerFrame; i++) {
+                        this.step();
+                    }
+
+                    this.draw();
+                }
+
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // ============================================================
+        // INITIALIZE
+        // ============================================================
+
+        const viz = new Visualizer();
+    </script>
+</body>
+</html>

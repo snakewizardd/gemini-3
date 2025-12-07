@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDA v9.2: The Ghost Hunter (FIXED)</title>
+    <style>
+        :root { --bg: #0f0f13; --panel: #181825; --text: #a0a0b0; --accent: #00ff9d; --danger: #ff4757; }
+        body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; margin: 0; padding: 20px; overflow: hidden; }
+        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto; height: 95vh; gap: 20px; }
+        
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        h1 { margin: 0; color: #fff; text-transform: uppercase; letter-spacing: 2px; font-size: 1.5rem; }
+        .badge { background: var(--accent); color: #000; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; }
+
+        /* Vis */
+        .vis-panel { background: var(--panel); border: 1px solid #333; border-radius: 8px; padding: 10px; position: relative; display: flex; flex-direction: column; }
+        canvas { background: #000; border: 1px solid #333; width: 100%; flex-grow: 1; image-rendering: pixelated; }
+        
+        /* Metrics Overlay */
+        .hud { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .stat-box { background: #000; border: 1px solid #333; padding: 10px; text-align: center; }
+        .stat-val { font-size: 1.5rem; font-weight: bold; color: #fff; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; color: #666; }
+        .winner-dda { color: var(--accent); }
+        .winner-kalman { color: var(--danger); }
+
+        /* Controls */
+        .controls { display: flex; gap: 10px; justify-content: center; background: var(--panel); padding: 15px; border-radius: 8px; border: 1px solid #333; }
+        button { background: #333; color: #fff; border: 1px solid #555; padding: 10px 20px; cursor: pointer; font-family: inherit; text-transform: uppercase; transition: 0.2s; }
+        button:hover { background: #444; border-color: #fff; }
+        button.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: bold; }
+        
+        .mode-strip { height: 20px; margin-top: 5px; display: flex; }
+        .mode-block { flex: 1; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>DDA v9.2 <span class="badge">GHOST HUNTER</span></h1>
+            <div style="font-size: 0.8rem; margin-top: 5px;">BIOMIMETIC CONTROL // PACKET LOSS RECOVERY</div>
+        </div>
+        <div style="text-align: right;">
+            <div>STATUS: <span style="color:var(--accent)">ONLINE</span></div>
+            <div style="font-size: 0.8rem">SIMULATION: 60Hz</div>
+        </div>
+    </header>
+
+    <div class="vis-panel">
+        <div class="hud">
+            <div class="stat-box" style="border-color: var(--accent);">
+                <div class="stat-label">DDA v9.2 MSE</div>
+                <div class="stat-val" id="dda-score">0.00</div>
+            </div>
+            <div class="stat-box" style="border-color: var(--danger);">
+                <div class="stat-label">KALMAN MSE</div>
+                <div class="stat-val" id="kf-score">0.00</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">IMPROVEMENT</div>
+                <div class="stat-val" id="imp-score">0.0%</div>
+            </div>
+        </div>
+        <canvas id="simCanvas"></canvas>
+        <div class="mode-strip" id="modeStrip"></div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #666; margin-top: 5px;">
+            <span>■ PURSUIT (Tracking)</span>
+            <span>■ SACCADE (Snap)</span>
+            <span>■ COAST (Dead Reckoning)</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="setScenario('levy')" id="btn-levy" class="active">SCENARIO 1: TELEPORT (Lévy)</button>
+        <button onclick="setScenario('ghost')" id="btn-ghost">SCENARIO 2: PACKET LOSS (Ghost)</button>
+        <button onclick="resetSim()">RESET SIMULATION</button>
+    </div>
+</div>
+
+<script>
+// --- ENGINE CONFIG ---
+const HIST = 300;
+let scenario = 'levy';
+let frame = 0;
+
+// --- DDA GHOST HUNTER v9.2 (JS PORT) ---
+class DDAGhostHunter {
+    constructor() {
+        this.reset();
+        // Tuning matched to Python "Ghost Hunter" Victory
+        this.config = {
+            p0_pursuit: 0.95,
+            p0_saccade: 0.0,
+            saccade_thresh: 4.0, 
+            boost: 0.55,
+            alpha: 0.2 // Input filter strength
+        };
+    }
+
+    reset() {
+        this.F = 0; this.prev_F = 0;
+        this.I_prev = null;
+        this.dF = 0;
+        this.last_valid_dF = 0;
+        this.k = 1.0;
+        this.init = false;
+    }
+
+    update(I_n) {
+        if (!this.init) {
+            this.F = I_n; this.prev_F = I_n; this.I_prev = I_n;
+            this.init = true;
+            return { val: I_n, mode: 0 }; // 0: Pursuit
+        }
+
+        // 1. DEAD RECKONING (Packet Loss)
+        // If input is IDENTICAL to last frame, it's frozen
+        if (I_n === this.I_prev) {
+            // Coast on last known momentum
+            this.F = this.prev_F + this.last_valid_dF;
+            this.prev_F = this.F;
+            return { val: this.F, mode: 2 }; // 2: Coast
+        }
+
+        // --- SIGNAL IS LIVE ---
+        
+        // Filtered Derivative
+        let delta = I_n - this.I_prev;
+        this.dF = (this.config.alpha * delta) + ((1 - this.config.alpha) * this.dF);
+        this.last_valid_dF = this.dF; // Store for coasting
+
+        // Retinal Slip (Error from prediction)
+        let error = Math.abs(I_n - this.prev_F);
+        
+        // Saccadic Gate
+        let p0, m, mode;
+        
+        // Note: Threshold needs to account for noise scale (~0.5)
+        // Python used 4.0. We use 3.5 here for visual scale adaptation.
+        if (error > 3.5) {
+            // SACCADE (Snap)
+            p0 = this.config.p0_saccade;
+            m = 1.0;
+            mode = 1; // 1: Saccade
+            this.dF = 0; // Kill momentum
+        } else {
+            // PURSUIT (Lock)
+            p0 = this.config.p0_pursuit;
+            m = 1.0 - p0;
+            mode = 0;
+        }
+
+        // Update Law
+        let L = I_n;
+        if (mode === 0) L += (this.config.boost * this.dF); // Pre-Cognition
+
+        let prior = p0 * this.k * this.prev_F;
+        this.F = prior + (m * L);
+
+        // Adaptation
+        if (mode === 0) {
+            let err = I_n - this.F;
+            this.k += 0.001 * Math.sign(err) * Math.sqrt(Math.abs(err));
+            this.k = Math.max(0.9, Math.min(1.1, this.k));
+        } else {
+            this.k = 1.0;
+        }
+
+        this.prev_F = this.F;
+        this.I_prev = I_n;
+        
+        return { val: this.F, mode: mode };
+    }
+}
+
+// --- KALMAN FILTER (CV MODEL) ---
+class KalmanFilter {
+    constructor() {
+        this.reset();
+    }
+    reset() {
+        this.x = 0; this.v = 0;
+        this.p11 = 1; this.p12 = 0; this.p21 = 0; this.p22 = 1;
+        this.init = false;
+        // Optimized Constants for this scale
+        this.q = 0.1; // Process Noise
+        this.r = 2.0; // Measurement Noise (High to match Python)
+    }
+    update(z) {
+        if (!this.init) { this.x = z; this.init = true; return z; }
+        
+        // Predict
+        let x_pred = this.x + this.v;
+        let p11_pred = this.p11 + this.p12 + this.p21 + this.p22 + this.q;
+        let p12_pred = this.p12 + this.p22;
+        let p21_pred = this.p21 + this.p22;
+        let p22_pred = this.p22 + this.q;
+
+        // Update
+        let y = z - x_pred;
+        let s = p11_pred + this.r;
+        let k1 = p11_pred / s;
+        let k2 = p21_pred / s;
+
+        this.x = x_pred + k1 * y;
+        this.v = this.v + k2 * y;
+
+        // Covariance Update (Simplified)
+        let p11_new = (1 - k1) * p11_pred;
+        let p12_new = (1 - k1) * p12_pred;
+        let p21_new = -k2 * p11_pred + p21_pred;
+        let p22_new = -k2 * p12_pred + p22_pred;
+        
+        this.p11 = p11_new; this.p12 = p12_new;
+        this.p21 = p21_new; this.p22 = p22_new;
+
+        return this.x;
+    }
+}
+
+// --- SIMULATION ---
+const cvs = document.getElementById('simCanvas');
+const ctx = cvs.getContext('2d');
+const dda = new DDAGhostHunter();
+const kf = new KalmanFilter();
+
+// Data Buffers
+let truth = [], obs = [], ddaPath = [], kfPath = [], modes = [];
+let t = 0;
+let val = 50; // Center
+let freezeTimer = 0;
+let frozenVal = 0;
+
+function resetSim() {
+    truth = []; obs = []; ddaPath = []; kfPath = []; modes = [];
+    t = 0; val = 50; freezeTimer = 0;
+    dda.reset(); kf.reset();
+}
+
+function resize() {
+    cvs.width = cvs.offsetWidth;
+    cvs.height = cvs.offsetHeight;
+}
+window.onresize = resize;
+resize();
+
+function setScenario(s) {
+    scenario = s;
+    document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    document.getElementById(`btn-${s}`).classList.add('active');
+    resetSim();
+}
+
+function step() {
+    t++;
+    let input = 0;
+    
+    // SCENARIO 1: LÉVY FLIGHT (The "Teleporting Drunkard")
+    // Note: Pure random walk, NO MOMENTUM. This breaks Kalman.
+    if (scenario === 'levy') {
+        let jump = (Math.random() - 0.5); // Small drift
+        if (Math.random() < 0.05) jump = (Math.random() - 0.5) * 40; // TELEPORT
+        
+        val += jump;
+        // Wall bounce
+        if (val > 90) val = 90; if (val < 10) val = 10;
+        
+        input = val + (Math.random() - 0.5) * 2; // Noise
+    }
+    
+    // SCENARIO 2: GHOST DRONE (Sine Wave + Packet Loss)
+    if (scenario === 'ghost') {
+        val = 50 + 30 * Math.sin(t * 0.05);
+        
+        // Packet Loss Logic
+        if (freezeTimer > 0) {
+            freezeTimer--;
+            input = frozenVal; // SEND EXACT SAME VALUE
+        } else {
+            // 5% chance to freeze
+            if (Math.random() < 0.02) {
+                freezeTimer = 30; // Freeze for 30 frames
+                frozenVal = val + (Math.random() - 0.5) * 5;
+                input = frozenVal;
+            } else {
+                input = val + (Math.random() - 0.5) * 5; // High Noise
+            }
+        }
+    }
+
+    // UPDATE ALGOS
+    let res = dda.update(input);
+    let kRes = kf.update(input);
+
+    // STORE
+    truth.push(val);
+    obs.push(input);
+    ddaPath.push(res.val);
+    kfPath.push(kRes);
+    modes.push(res.mode);
+
+    if (truth.length > HIST) {
+        truth.shift(); obs.shift(); ddaPath.shift(); kfPath.shift(); modes.shift();
+    }
+}
+
+function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,cvs.width,cvs.height);
+    
+    // Grid
+    ctx.strokeStyle = '#222';
+    ctx.beginPath();
+    for(let i=0; i<cvs.width; i+=50) { ctx.moveTo(i,0); ctx.lineTo(i,cvs.height); }
+    ctx.stroke();
+
+    // Plotter
+    function plot(arr, color, width, style=[]) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.setLineDash(style);
+        for (let i=0; i<arr.length; i++) {
+            let x = (i / HIST) * cvs.width;
+            let y = cvs.height - (arr[i] / 100 * cvs.height);
+            if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Draw
+    plot(truth, '#444', 4); // TRUTH (Thick Grey)
+    plot(obs, '#1a1a1a', 1); // NOISE (Thin BG)
+    plot(kfPath, '#ff4757', 2, [5,5]); // KALMAN (Red Dashed)
+    plot(ddaPath, '#00ff9d', 2); // DDA (Green Solid)
+
+    // Update Mode Strip
+    let strip = document.getElementById('modeStrip');
+    strip.innerHTML = '';
+    modes.forEach(m => {
+        let d = document.createElement('div');
+        d.className = 'mode-block';
+        if(m===0) d.style.background = '#222'; // Pursuit
+        if(m===1) d.style.background = '#00ff9d'; // Saccade
+        if(m===2) d.style.background = '#33ccff'; // Coast
+        strip.appendChild(d);
+    });
+
+    // Calc Stats
+    let mseD = 0, mseK = 0;
+    for(let i=0; i<truth.length; i++) {
+        mseD += (truth[i] - ddaPath[i])**2;
+        mseK += (truth[i] - kfPath[i])**2;
+    }
+    mseD /= truth.length;
+    mseK /= truth.length;
+
+    document.getElementById('dda-score').innerText = mseD.toFixed(1);
+    document.getElementById('kf-score').innerText = mseK.toFixed(1);
+    
+    let imp = ((mseK - mseD) / mseK) * 100;
+    let impEl = document.getElementById('imp-score');
+    impEl.innerText = (imp > 0 ? "+" : "") + imp.toFixed(1) + "%";
+    
+    if(mseD < mseK) {
+        impEl.className = 'stat-val winner-dda';
+        document.getElementById('dda-score').style.color = '#00ff9d';
+        document.getElementById('kf-score').style.color = '#555';
+    } else {
+        impEl.className = 'stat-val winner-kalman';
+        document.getElementById('dda-score').style.color = '#555';
+        document.getElementById('kf-score').style.color = '#ff4757';
+    }
+}
+
+// Loop
+setInterval(() => {
+    step();
+    draw();
+}, 16); // 60 FPS
+
+</script>
+</body>
+</html>
