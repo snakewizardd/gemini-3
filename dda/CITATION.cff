@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Your_Surname" # <--- Replace with your actual surname
+  given-names: "snakewizardd"        # <--- Inferred from your file path
+  orcid: ""                    # Optional: Add your ORCID if you have one
+title: "Dynamic Decision Algorithm (DDA): A Recursive Bayesian Framework for Zero-Lag Control"
+version: 7.0.0
+date-released: 2025-12-07
+url: "https://github.com/your-username/dda" # <--- Update with your repo URL
+license: MIT
+keywords:
+  - control-theory
+  - bayesian-inference
+  - signal-processing
+  - adaptive-control
+  - phase-lead-compensator
+  - zero-lag-filtering
+abstract: >-
+  The Dynamic Decision Algorithm (DDA) is a recursive control framework that solves the "Inertia Paradox" in sequential decision-making. 
+  By decoupling phase-lag reduction from noise rejection via a pre-cognitive unity-gain update law, DDA achieves zero-lag tracking 
+  in non-stationary environments while maintaining stability in high-noise regimes. Validated against optimized EMA baselines 
+  with >25% improvement in tracking error.
