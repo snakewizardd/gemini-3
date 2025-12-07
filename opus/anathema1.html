@@ -1,0 +1,230 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hitman 2D</title>
+  <style>
+    body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    canvas { border: 2px solid #333; }
+  </style>
+</head>
+<body>
+<canvas id="game" width="800" height="600"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Game state
+let player = { x: 400, y: 500, size: 20, speed: 4, angle: 0, health: 100, ammo: 30 };
+let bullets = [];
+let enemies = [
+  { x: 200, y: 150, size: 18, health: 3, patrolA: { x: 100, y: 150 }, patrolB: { x: 300, y: 150 }, speed: 1.5, target: 'B', alert: false },
+  { x: 500, y: 200, size: 18, health: 3, patrolA: { x: 450, y: 200 }, patrolB: { x: 650, y: 200 }, speed: 1.5, target: 'B', alert: false },
+  { x: 300, y: 350, size: 18, health: 3, patrolA: { x: 200, y: 350 }, patrolB: { x: 400, y: 350 }, speed: 1.5, target: 'B', alert: false },
+  { x: 600, y: 400, size: 18, health: 3, patrolA: { x: 550, y: 350 }, patrolB: { x: 700, y: 450 }, speed: 1.5, target: 'B', alert: false }
+];
+let walls = [
+  { x: 0, y: 0, w: 800, h: 20 }, { x: 0, y: 580, w: 800, h: 20 }, { x: 0, y: 0, w: 20, h: 600 }, { x: 780, y: 0, w: 20, h: 600 },
+  { x: 150, y: 100, w: 20, h: 150 }, { x: 150, y: 100, w: 150, h: 20 }, { x: 400, y: 50, w: 20, h: 200 },
+  { x: 500, y: 150, w: 150, h: 20 }, { x: 250, y: 300, w: 200, h: 20 }, { x: 100, y: 400, w: 20, h: 150 },
+  { x: 550, y: 300, w: 20, h: 200 }, { x: 300, y: 450, w: 150, h: 20 }, { x: 650, y: 250, w: 100, h: 20 }
+];
+let ammoPickups = [];
+let keys = {};
+let gameOver = false;
+let win = false;
+let damageFlash = 0;
+let enemyShootCooldown = {};
+
+// Input
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+document.addEventListener('keydown', e => { if (e.code === 'Space') shoot(player, player.angle, true); });
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  player.angle = Math.atan2(my - player.y, mx - player.x);
+  shoot(player, player.angle, true);
+});
+
+function shoot(from, angle, isPlayer) {
+  if (isPlayer && player.ammo <= 0) return;
+  if (isPlayer) player.ammo--;
+  bullets.push({ x: from.x, y: from.y, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, isPlayer });
+}
+
+function rectCollision(x, y, size, wall) {
+  return x - size < wall.x + wall.w && x + size > wall.x && y - size < wall.y + wall.h && y + size > wall.y;
+}
+
+function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+function update() {
+  if (gameOver || win) return;
+
+  // Player movement
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup']) dy -= player.speed;
+  if (keys['s'] || keys['arrowdown']) dy += player.speed;
+  if (keys['a'] || keys['arrowleft']) dx -= player.speed;
+  if (keys['d'] || keys['arrowright']) dx += player.speed;
+  if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+  if (dx || dy) player.angle = Math.atan2(dy, dx);
+
+  let newX = player.x + dx, newY = player.y + dy;
+  let canMove = true;
+  for (let w of walls) if (rectCollision(newX, newY, player.size / 2, w)) canMove = false;
+  if (canMove) { player.x = newX; player.y = newY; }
+
+  // Enemies
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    let e = enemies[i];
+    let dist = distance(e, player);
+
+    if (dist < 200) {
+      e.alert = true;
+      let angle = Math.atan2(player.y - e.y, player.x - e.x);
+      let ex = e.x + Math.cos(angle) * e.speed * 1.5;
+      let ey = e.y + Math.sin(angle) * e.speed * 1.5;
+      let canMoveE = true;
+      for (let w of walls) if (rectCollision(ex, ey, e.size / 2, w)) canMoveE = false;
+      if (canMoveE && dist > 50) { e.x = ex; e.y = ey; }
+
+      if (!enemyShootCooldown[i] || Date.now() - enemyShootCooldown[i] > 1000) {
+        shoot(e, angle, false);
+        enemyShootCooldown[i] = Date.now();
+      }
+    } else {
+      e.alert = false;
+      let target = e.target === 'A' ? e.patrolA : e.patrolB;
+      let angle = Math.atan2(target.y - e.y, target.x - e.x);
+      e.x += Math.cos(angle) * e.speed;
+      e.y += Math.sin(angle) * e.speed;
+      if (distance(e, target) < 5) e.target = e.target === 'A' ? 'B' : 'A';
+    }
+  }
+
+  // Bullets
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    let b = bullets[i];
+    b.x += b.vx; b.y += b.vy;
+
+    // Wall collision
+    let hitWall = false;
+    for (let w of walls) if (rectCollision(b.x, b.y, 3, w)) hitWall = true;
+    if (hitWall || b.x < 0 || b.x > 800 || b.y < 0 || b.y > 600) { bullets.splice(i, 1); continue; }
+
+    if (b.isPlayer) {
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        if (distance(b, enemies[j]) < enemies[j].size) {
+          enemies[j].health--;
+          bullets.splice(i, 1);
+          if (enemies[j].health <= 0) {
+            ammoPickups.push({ x: enemies[j].x, y: enemies[j].y });
+            enemies.splice(j, 1);
+          }
+          break;
+        }
+      }
+    } else {
+      if (distance(b, player) < player.size) {
+        player.health -= 10;
+        damageFlash = 10;
+        bullets.splice(i, 1);
+        if (player.health <= 0) gameOver = true;
+      }
+    }
+  }
+
+  // Ammo pickup
+  for (let i = ammoPickups.length - 1; i >= 0; i--) {
+    if (distance(player, ammoPickups[i]) < 25) {
+      player.ammo += 10;
+      ammoPickups.splice(i, 1);
+    }
+  }
+
+  if (enemies.length === 0) win = true;
+  if (damageFlash > 0) damageFlash--;
+}
+
+function draw() {
+  // Floor
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, 800, 600);
+
+  // Walls
+  ctx.fillStyle = '#4a4a5a';
+  for (let w of walls) ctx.fillRect(w.x, w.y, w.w, w.h);
+
+  // Ammo pickups
+  ctx.fillStyle = '#ffcc00';
+  for (let a of ammoPickups) { ctx.beginPath(); ctx.arc(a.x, a.y, 8, 0, Math.PI * 2); ctx.fill(); }
+
+  // Enemies
+  for (let e of enemies) {
+    ctx.fillStyle = e.alert ? '#ff6666' : '#cc9966';
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(e.x, e.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Player
+  ctx.fillStyle = '#2d2d44';
+  ctx.beginPath(); ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#ff3333';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(player.x, player.y);
+  ctx.lineTo(player.x + Math.cos(player.angle) * 25, player.y + Math.sin(player.angle) * 25);
+  ctx.stroke();
+
+  // Bullets
+  for (let b of bullets) {
+    ctx.fillStyle = b.isPlayer ? '#ff4444' : '#ffaa00';
+    ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Damage flash
+  if (damageFlash > 0) {
+    ctx.fillStyle = `rgba(255,0,0,${damageFlash / 20})`;
+    ctx.fillRect(0, 0, 800, 600);
+  }
+
+  // HUD
+  ctx.fillStyle = '#333';
+  ctx.fillRect(10, 10, 150, 20);
+  ctx.fillStyle = '#ff4444';
+  ctx.fillRect(10, 10, player.health * 1.5, 20);
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px Arial';
+  ctx.fillText(`AMMO: ${player.ammo}`, 700, 25);
+  ctx.fillText(`ENEMIES: ${enemies.length}`, 10, 50);
+
+  // Game over / Win
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, 800, 600);
+    ctx.fillStyle = '#ff0000';
+    ctx.font = '60px Arial';
+    ctx.fillText('GAME OVER', 250, 320);
+  }
+  if (win) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, 800, 600);
+    ctx.fillStyle = '#00ff00';
+    ctx.font = '60px Arial';
+    ctx.fillText('YOU WIN', 280, 320);
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>

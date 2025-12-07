@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle of Fifths Music Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        h1 {
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(100, 200, 255, 0.5);
+        }
+        
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+        
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            max-width: 1200px;
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .circle-container {
+            width: 350px;
+            height: 350px;
+            position: relative;
+        }
+        
+        .circle-of-fifths {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .note-segment {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            background: rgba(100, 150, 255, 0.3);
+            border: 2px solid rgba(100, 150, 255, 0.5);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .note-segment:hover {
+            transform: scale(1.1);
+            background: rgba(100, 150, 255, 0.5);
+        }
+        
+        .note-segment.active {
+            background: rgba(255, 200, 100, 0.8);
+            border-color: #ffcc00;
+            box-shadow: 0 0 30px rgba(255, 200, 100, 0.6);
+            transform: scale(1.15);
+        }
+        
+        .controls {
+            width: 300px;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #64b5f6;
+            cursor: pointer;
+        }
+        
+        select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        select option {
+            background: #1a1a2e;
+        }
+        
+        .btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn-play {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+        
+        .btn-stop {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .visualizer {
+            width: 100%;
+            max-width: 800px;
+            height: 150px;
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        #waveform {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .info-panel {
+            width: 250px;
+            text-align: center;
+        }
+        
+        .current-info {
+            font-size: 24px;
+            margin: 10px 0;
+            color: #64b5f6;
+        }
+        
+        .chord-display {
+            font-size: 36px;
+            font-weight: bold;
+            color: #ffcc00;
+            text-shadow: 0 0 20px rgba(255, 200, 0, 0.5);
+        }
+        
+        .progression-display {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+        
+        .progression-display span {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 3px;
+            background: rgba(100, 150, 255, 0.3);
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        
+        .progression-display span.current {
+            background: rgba(255, 200, 100, 0.8);
+            color: #000;
+        }
+        
+        .button-container {
+            margin-top: 20px;
+            text-align: center;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Circle of Fifths Music Generator</h1>
+    <p class="subtitle">Real-time generative music using Web Audio API</p>
+    
+    <div class="container">
+        <div class="panel circle-container">
+            <div class="circle-of-fifths" id="circleOfFifths"></div>
+        </div>
+        
+        <div class="panel controls">
+            <div class="control-group">
+                <label>Tempo: <span id="tempoValue">120</span> BPM</label>
+                <input type="range" id="tempo" min="60" max="180" value="120">
+            </div>
+            
+            <div class="control-group">
+                <label>Volume: <span id="volumeValue">50</span>%</label>
+                <input type="range" id="volume" min="0" max="100" value="50">
+            </div>
+            
+            <div class="control-group">
+                <label>Progression Style</label>
+                <select id="progressionStyle">
+                    <option value="classic">Classic (I-IV-V-I)</option>
+                    <option value="fifths">Circle of Fifths</option>
+                    <option value="pop">Pop (I-V-vi-IV)</option>
+                    <option value="jazz">Jazz (ii-V-I)</option>
+                    <option value="random">Random Walk</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Key</label>
+                <select id="keySelect">
+                    <option value="0">C Major</option>
+                    <option value="7">G Major</option>
+                    <option value="2">D Major</option>
+                    <option value="9">A Major</option>
+                    <option value="4">E Major</option>
+                    <option value="11">B Major</option>
+                    <option value="5">F Major</option>
+                    <option value="10">Bb Major</option>
+                    <option value="3">Eb Major</option>
+                    <option value="8">Ab Major</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Sound Type</label>
+                <select id="soundType">
+                    <option value="synth">Synth Pad</option>
+                    <option value="piano">Piano-like</option>
+                    <option value="organ">Organ</option>
+                    <option value="bells">Bells</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="panel info-panel">
+            <p>Current Chord</p>
+            <div class="chord-display" id="chordDisplay">-</div>
+            <p class="current-info" id="noteInfo">Press Play</p>
+            
+            <div class="progression-display" id="progressionDisplay">
+                <p style="color: #888; margin-bottom: 10px;">Progression:</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="visualizer">
+        <canvas id="waveform"></canvas>
+    </div>
+    
+    <div class="button-container">
+        <button class="btn btn-play" id="playBtn">▶ Play</button>
+        <button class="btn btn-stop" id="stopBtn" disabled>■ Stop</button>
+    </div>
+
+    <script>
+        // Music Theory Constants
+        const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const CIRCLE_OF_FIFTHS = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]; // C, G, D, A, E, B, F#, C#, Ab, Eb, Bb, F
+        
+        // Chord intervals (semitones from root)
+        const CHORD_TYPES = {
+            major: [0, 4, 7],
+            minor: [0, 3, 7],
+            dim: [0, 3, 6],
+            maj7: [0, 4, 7, 11],
+            min7: [0, 3, 7, 10],
+            dom7: [0, 4, 7, 10]
+        };
+        
+        // Scale degrees for major scale
+        const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
+        const SCALE_CHORD_TYPES = ['major', 'minor', 'minor', 'major', 'major', 'minor', 'dim'];
+        
+        // Audio Context
+        let audioCtx = null;
+        let masterGain = null;
+        let analyser = null;
+        let isPlaying = false;
+        let currentChordIndex = 0;
+        let progression = [];
+        let schedulerInterval = null;
+        let nextNoteTime = 0;
+        let currentKey = 0;
+        
+        // UI Elements
+        const circleDiv = document.getElementById('circleOfFifths');
+        const playBtn = document.getElementById('playBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const tempoSlider = document.getElementById('tempo');
+        const volumeSlider = document.getElementById('volume');
+        const progressionSelect = document.getElementById('progressionStyle');
+        const keySelect = document.getElementById('keySelect');
+        const soundTypeSelect = document.getElementById('soundType');
+        const chordDisplay = document.getElementById('chordDisplay');
+        const noteInfo = document.getElementById('noteInfo');
+        const progressionDisplay = document.getElementById('progressionDisplay');
+        const canvas = document.getElementById('waveform');
+        const canvasCtx = canvas.getContext('2d');
+        
+        // Initialize Circle of Fifths visualization
+        function initCircle() {
+            const centerX = 175;
+            const centerY = 175;
+            const radius = 130;
+            
+            CIRCLE_OF_FIFTHS.forEach((noteIndex, i) => {
+                const angle = (i * 30 - 90) * (Math.PI / 180);
+                const x = centerX + radius * Math.cos(angle) - 30;
+                const y = centerY + radius * Math.sin(angle) - 30;
+                
+                const segment = document.createElement('div');
+                segment.className = 'note-segment';
+                segment.id = `note-${noteIndex}`;
+                segment.textContent = NOTE_NAMES[noteIndex];
+                segment.style.left = `${x}px`;
+                segment.style.top = `${y}px`;
+                segment.onclick = () => setKey(noteIndex);
+                circleDiv.appendChild(segment);
+            });
+        }
+        
+        // Set key and update UI
+        function setKey(noteIndex) {
+            currentKey = noteIndex;
+            keySelect.value = noteIndex;
+            document.querySelectorAll('.note-segment').forEach(s => s.classList.remove('active'));
+            document.getElementById(`note-${noteIndex}`).classList.add('active');
+            generateProgression();
+        }
+        
+        // Generate chord progression based on style
+        function generateProgression() {
+            const style = progressionSelect.value;
+            progression = [];
+            
+            switch(style) {
+                case 'classic': // I-IV-V-I
+                    progression = [0, 3, 4, 0];
+                    break;
+                case 'fifths': // Following circle of fifths
+                    progression = [0, 3, 6, 2, 5, 1, 4, 0]; // I-IV-vii°-iii-vi-ii-V-I
+                    break;
+                case 'pop': // I-V-vi-IV
+                    progression = [0, 4, 5, 3];
+                    break;
+                case 'jazz': // ii-V-I with extensions
+                    progression = [1, 4, 0, 0, 1, 4, 0, 5];
+                    break;
+                case 'random':
+                    for(let i = 0; i < 8; i++) {
+                        progression.push(Math.floor(Math.random() * 7));
+                    }
+                    break;
+            }
+            
+            updateProgressionDisplay();
+        }
+        
+        // Update progression display
+        function updateProgressionDisplay() {
+            const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+            let html = '<p style="color: #888; margin-bottom: 10px;">Progression:</p>';
+            progression.forEach((deg, i) => {
+                const isCurrent = i === currentChordIndex % progression.length;
+                html += `<span class="${isCurrent ? 'current' : ''}">${romanNumerals[deg]}</span>`;
+            });
+            progressionDisplay.innerHTML = html;
+        }
+        
+        // Get frequency from MIDI note
+        function midiToFreq(midi) {
+            return 440 * Math.pow(2, (midi - 69) / 12);
+        }
+        
+        // Get chord notes
+        function getChordNotes(rootMidi, chordType) {
+            return CHORD_TYPES[chordType].map(interval => rootMidi + interval);
+        }
+        
+        // Create oscillator with envelope
+        function playNote(freq, startTime, duration, type = 'synth') {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            const filterNode = audioCtx.createBiquadFilter();
+            
+            // Sound type settings
+            switch(type) {
+                case 'synth':
+                    osc.type = 'sawtooth';
+                    filterNode.type = 'lowpass';
+                    filterNode.frequency.value = 2000;
+                    filterNode.Q.value = 2;
+                    break;
+                case 'piano':
+                    osc.type = 'triangle';
+                    filterNode.type = 'lowpass';
+                    filterNode.frequency.setValueAtTime(4000, startTime);
+                    filterNode.frequency.exponentialRampToValueAtTime(500, startTime + duration);
+                    break;
+                case 'organ':
+                    osc.type = 'sine';
+                    filterNode.type = 'lowpass';
+                    filterNode.frequency.value = 3000;
+                    break;
+                case 'bells':
+                    osc.type = 'sine';
+                    filterNode.type = 'highpass';
+                    filterNode.frequency.value = 500;
+                    break;
+            }
+            
+            osc.frequency.value = freq;
+            
+            // ADSR envelope
+            const attack = 0.05;
+            const decay = 0.1;
+            const sustain = 0.7;
+            const release = 0.3;
+            
+            gainNode.gain.setValueAtTime(0, startTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, startTime + attack);
+            gainNode.gain.linearRampToValueAtTime(0.3 * sustain, startTime + attack + decay);
+            gainNode.gain.setValueAtTime(0.3 * sustain, startTime + duration - release);
+            gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+            
+            osc.connect(filterNode);
+            filterNode.connect(gainNode);
+            gainNode.connect(masterGain);
+            
+            osc.start(startTime);
+            osc.stop(startTime + duration + 0.1);
+        }
+        
+        // Play chord
+        function playChord(scaleDegree, startTime, duration) {
+            const rootNote = currentKey + MAJOR_SCALE[scaleDegree];
+            const chordType = SCALE_CHORD_TYPES[scaleDegree];
+            const baseMidi = 48 + rootNote; // Start from C3
+            
+            const chordNotes = getChordNotes(baseMidi, chordType);
+            const soundType = soundTypeSelect.value;
+            
+            chordNotes.forEach(midi => {
+                playNote(midiToFreq(midi), startTime, duration, soundType);
+            });
+            
+            // Play melody note
+            playMelody(scaleDegree, startTime, duration);
+            
+            // Update display
+            const chordName = NOTE_NAMES[rootNote % 12] + (chordType === 'major' ? '' : chordType === 'minor' ? 'm' : '°');
+            setTimeout(() => {
+                chordDisplay.textContent = chordName;
+                noteInfo.textContent = `Root: ${NOTE_NAMES[rootNote % 12]}`;
+                highlightCircleNote(rootNote % 12);
+                updateProgressionDisplay();
+            }, (startTime - audioCtx.currentTime) * 1000);
+        }
+        
+        // Play melody based on chord tones
+        function playMelody(scaleDegree, startTime, duration) {
+            const rootNote = currentKey + MAJOR_SCALE[scaleDegree];
+            const chordType = SCALE_CHORD_TYPES[scaleDegree];
+            const baseMidi = 60 + rootNote; // Higher octave for melody
+            
+            const chordNotes = getChordNotes(baseMidi, chordType);
+            const soundType = soundTypeSelect.value;
+            
+            // Play arpeggiated melody
+            const noteDuration = duration / 4;
+            for(let i = 0; i < 4; i++) {
+                const noteIndex = Math.floor(Math.random() * chordNotes.length);
+                const octaveShift = Math.random() > 0.7 ? 12 : 0;
+                playNote(
+                    midiToFreq(chordNotes[noteIndex] + octaveShift), 
+                    startTime + i * noteDuration, 
+                    noteDuration * 0.8,
+                    soundType
+                );
+            }
+        }
+        
+        // Highlight note on circle
+        function highlightCircleNote(noteIndex) {
+            document.querySelectorAll('.note-segment').forEach(s => s.classList.remove('active'));
+            const noteEl = document.getElementById(`note-${noteIndex}`);
+            if(noteEl) noteEl.classList.add('active');
+        }
+        
+        // Scheduler
+        function scheduler() {
+            const tempo = parseInt(tempoSlider.value);
+            const secondsPerBeat = 60.0 / tempo;
+            const chordDuration = secondsPerBeat * 2; // Half note chords
+            
+            while(nextNoteTime < audioCtx.currentTime + 0.1) {
+                const scaleDegree = progression[currentChordIndex % progression.length];
+                playChord(scaleDegree, nextNoteTime, chordDuration);
+                
+                nextNoteTime += chordDuration;
+                currentChordIndex++;
+            }
+        }
+        
+        // Visualizer
+        function drawVisualizer() {
+            if(!analyser) return;
+            
+            requestAnimationFrame(drawVisualizer);
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+            
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = '#64b5f6';
+            canvasCtx.beginPath();
+            
+            const sliceWidth = canvas.width / bufferLength;
+            let x = 0;
+            
+            for(let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * canvas.height / 2;
+                
+                if(i === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+            
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
+        }
+        
+        // Start playing
+        function startPlaying() {
+            if(!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 2048;
+                masterGain.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
+            
+            if(audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            masterGain.gain.value = volumeSlider.value / 100;
+            
+            isPlaying = true;
+            currentChordIndex = 0;
+            nextNoteTime = audioCtx.currentTime;
+            
+            generateProgression();
+            schedulerInterval = setInterval(scheduler, 25);
+            drawVisualizer();
+            
+            playBtn.disabled = true;
+            stopBtn.disabled = false;
+        }
+        
+        // Stop playing
+        function stopPlaying() {
+            isPlaying = false;
+            if(schedulerInterval) {
+                clearInterval(schedulerInterval);
+                schedulerInterval = null;
+            }
+            
+            playBtn.disabled = false;
+            stopBtn.disabled = true;
+            chordDisplay.textContent = '-';
+            noteInfo.textContent = 'Press Play';
+        }
+        
+        // Event listeners
+        playBtn.addEventListener('click', startPlaying);
+        stopBtn.addEventListener('click', stopPlaying);
+        
+        tempoSlider.addEventListener('input', (e) => {
+            document.getElementById('tempoValue').textContent = e.target.value;
+        });
+        
+        volumeSlider.addEventListener('input', (e) => {
+            document.getElementById('volumeValue').textContent = e.target.value;
+            if(masterGain) masterGain.gain.value = e.target.value / 100;
+        });
+        
+        progressionSelect.addEventListener('change', () => {
+            if(isPlaying) {
+                currentChordIndex = 0;
+                generateProgression();
+            }
+        });
+        
+        keySelect.addEventListener('change', (e) => {
+            setKey(parseInt(e.target.value));
+        });
+        
+        // Initialize
+        initCircle();
+        setKey(0);
+        generateProgression();
+    </script>
+</body>
+</html>

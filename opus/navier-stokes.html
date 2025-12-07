@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Procedural World</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        #ui h3 { margin-bottom: 10px; border-bottom: 1px solid #555; padding-bottom: 5px; }
+        #ui p { margin: 5px 0; }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        #timeSlider { width: 150px; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="ui">
+        <h3>🌍 Procedural World</h3>
+        <p>Position: <span id="pos">0, 0</span></p>
+        <p>Biome: <span id="biome">-</span></p>
+        <p>Elevation: <span id="elevation">-</span></p>
+        <p>Time: <span id="time">12:00</span></p>
+        <p>FPS: <span id="fps">0</span></p>
+    </div>
+    <div id="controls">
+        <label>Time Speed: <input type="range" id="timeSlider" min="0" max="100" value="20"></label><br>
+        <small>WASD/Arrows to move, Mouse to look</small>
+    </div>
+
+    <script>
+        // ============== NOISE FUNCTIONS ==============
+        class PerlinNoise {
+            constructor(seed = Math.random() * 10000) {
+                this.seed = seed;
+                this.p = new Uint8Array(512);
+                this.permutation = new Uint8Array(256);
+                for (let i = 0; i < 256; i++) this.permutation[i] = i;
+                
+                // Shuffle with seed
+                let n = seed;
+                for (let i = 255; i > 0; i--) {
+                    n = (n * 16807) % 2147483647;
+                    const j = n % (i + 1);
+                    [this.permutation[i], this.permutation[j]] = [this.permutation[j], this.permutation[i]];
+                }
+                for (let i = 0; i < 512; i++) this.p[i] = this.permutation[i & 255];
+            }
+
+            fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+            lerp(a, b, t) { return a + t * (b - a); }
+            grad(hash, x, y) {
+                const h = hash & 3;
+                const u = h < 2 ? x : y;
+                const v = h < 2 ? y : x;
+                return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+            }
+
+            noise2D(x, y) {
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                x -= Math.floor(x);
+                y -= Math.floor(y);
+                const u = this.fade(x);
+                const v = this.fade(y);
+                const A = this.p[X] + Y, B = this.p[X + 1] + Y;
+                return this.lerp(
+                    this.lerp(this.grad(this.p[A], x, y), this.grad(this.p[B], x - 1, y), u),
+                    this.lerp(this.grad(this.p[A + 1], x, y - 1), this.grad(this.p[B + 1], x - 1, y - 1), u),
+                    v
+                );
+            }
+
+            // Layered noise (FBM)
+            fbm(x, y, octaves = 6, lacunarity = 2, persistence = 0.5) {
+                let value = 0, amplitude = 1, frequency = 1, maxValue = 0;
+                for (let i = 0; i < octaves; i++) {
+                    value += amplitude * this.noise2D(x * frequency, y * frequency);
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    frequency *= lacunarity;
+                }
+                return value / maxValue;
+            }
+        }
+
+        // ============== TERRAIN GENERATOR ==============
+        class TerrainGenerator {
+            constructor(seed) {
+                this.elevationNoise = new PerlinNoise(seed);
+                this.moistureNoise = new PerlinNoise(seed + 1000);
+                this.detailNoise = new PerlinNoise(seed + 2000);
+                this.erosionCache = new Map();
+            }
+
+            getElevation(x, y) {
+                const scale = 0.002;
+                // Continental base
+                let elevation = this.elevationNoise.fbm(x * scale, y * scale, 4, 2, 0.5) * 0.6;
+                // Mountain ridges
+                elevation += Math.abs(this.elevationNoise.fbm(x * scale * 2, y * scale * 2, 3, 2, 0.5)) * 0.3;
+                // Fine detail
+                elevation += this.detailNoise.fbm(x * scale * 8, y * scale * 8, 2, 2, 0.5) * 0.1;
+                return elevation;
+            }
+
+            getMoisture(x, y) {
+                const scale = 0.003;
+                return (this.moistureNoise.fbm(x * scale, y * scale, 4, 2, 0.5) + 1) * 0.5;
+            }
+
+            // Simplified hydraulic erosion
+            simulateErosion(elevation, x, y) {
+                const key = `${Math.floor(x/10)},${Math.floor(y/10)}`;
+                if (this.erosionCache.has(key)) {
+                    return elevation + this.erosionCache.get(key) * 0.05;
+                }
+                
+                // Simulate water flow creating valleys
+                let erosionFactor = 0;
+                const steps = 8;
+                let cx = x, cy = y;
+                
+                for (let i = 0; i < steps; i++) {
+                    let lowestX = cx, lowestY = cy;
+                    let lowestElev = this.getElevation(cx, cy);
+                    
+                    for (let dx = -1; dx <= 1; dx++) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const e = this.getElevation(cx + dx * 5, cy + dy * 5);
+                            if (e < lowestElev) {
+                                lowestElev = e;
+                                lowestX = cx + dx * 5;
+                                lowestY = cy + dy * 5;
+                            }
+                        }
+                    }
+                    
+                    if (lowestX === cx && lowestY === cy) break;
+                    erosionFactor -= 0.01 * (1 - i / steps);
+                    cx = lowestX;
+                    cy = lowestY;
+                }
+                
+                this.erosionCache.set(key, erosionFactor);
+                return elevation + erosionFactor;
+            }
+
+            getBiome(elevation, moisture) {
+                if (elevation < -0.1) return { name: 'Ocean', color: [30, 90, 150] };
+                if (elevation < 0) return { name: 'Shallow Water', color: [50, 120, 180] };
+                if (elevation < 0.05) return { name: 'Beach', color: [238, 214, 175] };
+                
+                if (elevation > 0.5) {
+                    if (elevation > 0.7) return { name: 'Snow Peak', color: [250, 250, 255] };
+                    return { name: 'Mountain', color: [140, 140, 140] };
+                }
+                
+                if (moisture < 0.3) {
+                    if (elevation < 0.2) return { name: 'Desert', color: [220, 190, 130] };
+                    return { name: 'Savanna', color: [180, 170, 100] };
+                }
+                if (moisture < 0.5) {
+                    return { name: 'Grassland', color: [100, 160, 70] };
+                }
+                if (moisture < 0.7) {
+                    return { name: 'Forest', color: [50, 120, 50] };
+                }
+                return { name: 'Rainforest', color: [30, 90, 40] };
+            }
+
+            getTerrainData(x, y) {
+                let elevation = this.getElevation(x, y);
+                elevation = this.simulateErosion(elevation, x, y);
+                const moisture = this.getMoisture(x, y);
+                const biome = this.getBiome(elevation, moisture);
+                return { elevation, moisture, biome };
+            }
+        }
+
+        // ============== VEGETATION GENERATOR ==============
+        class VegetationGenerator {
+            constructor(seed) {
+                this.noise = new PerlinNoise(seed + 5000);
+                this.treeNoise = new PerlinNoise(seed + 6000);
+            }
+
+            getVegetation(x, y, biome, elevation) {
+                const vegetation = [];
+                const density = this.noise.noise2D(x * 0.1, y * 0.1);
+                
+                if (biome.name === 'Forest' || biome.name === 'Rainforest') {
+                    if (this.treeNoise.noise2D(x * 0.5, y * 0.5) > 0.2) {
+                        vegetation.push({ type: 'tree', size: 0.5 + density * 0.5 });
+                    }
+                    if (density > 0.3) vegetation.push({ type: 'bush', size: 0.3 });
+                } else if (biome.name === 'Grassland') {
+                    if (this.treeNoise.noise2D(x * 0.3, y * 0.3) > 0.6) {
+                        vegetation.push({ type: 'tree', size: 0.4 });
+                    }
+                    vegetation.push({ type: 'grass', size: 0.2 + density * 0.1 });
+                } else if (biome.name === 'Savanna') {
+                    if (this.treeNoise.noise2D(x * 0.2, y * 0.2) > 0.7) {
+                        vegetation.push({ type: 'acacia', size: 0.6 });
+                    }
+                } else if (biome.name === 'Desert') {
+                    if (this.treeNoise.noise2D(x * 0.15, y * 0.15) > 0.8) {
+                        vegetation.push({ type: 'cactus', size: 0.4 });
+                    }
+                }
+                
+                return vegetation;
+            }
+        }
+
+        // ============== RENDERER ==============
+        class WorldRenderer {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                this.terrain = new TerrainGenerator(12345);
+                this.vegetation = new VegetationGenerator(12345);
+                
+                this.camera = { x: 0, y: 0, zoom: 1 };
+                this.timeOfDay = 0.5; // 0-1, 0.5 = noon
+                this.timeSpeed = 0.02;
+                
+                this.chunkSize = 64;
+                this.tileSize = 8;
+                this.chunks = new Map();
+                
+                this.setupControls();
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            setupControls() {
+                this.keys = {};
+                window.addEventListener('keydown', e => this.keys[e.key.toLowerCase()] = true);
+                window.addEventListener('keyup', e => this.keys[e.key.toLowerCase()] = false);
+                
+                this.canvas.addEventListener('wheel', e => {
+                    this.camera.zoom *= e.deltaY > 0 ? 0.9 : 1.1;
+                    this.camera.zoom = Math.max(0.5, Math.min(3, this.camera.zoom));
+                });
+            }
+
+            update(dt) {
+                const speed = 200 / this.camera.zoom;
+                if (this.keys['w'] || this.keys['arrowup']) this.camera.y -= speed * dt;
+                if (this.keys['s'] || this.keys['arrowdown']) this.camera.y += speed * dt;
+                if (this.keys['a'] || this.keys['arrowleft']) this.camera.x -= speed * dt;
+                if (this.keys['d'] || this.keys['arrowright']) this.camera.x += speed * dt;
+                
+                this.timeOfDay = (this.timeOfDay + this.timeSpeed * dt) % 1;
+            }
+
+            getSkyColor() {
+                const t = this.timeOfDay;
+                // Night (0-0.25), Dawn (0.25-0.35), Day (0.35-0.65), Dusk (0.65-0.75), Night (0.75-1)
+                let r, g, b;
+                
+                if (t < 0.25 || t > 0.75) { // Night
+                    r = 10; g = 15; b = 40;
+                } else if (t < 0.35) { // Dawn
+                    const p = (t - 0.25) / 0.1;
+                    r = 10 + p * 245; g = 15 + p * 155; b = 40 + p * 160;
+                } else if (t < 0.65) { // Day
+                    r = 135; g = 206; b = 235;
+                } else { // Dusk
+                    const p = (t - 0.65) / 0.1;
+                    r = 255 - p * 150; g = 140 - p * 100; b = 100 + p * 50;
+                }
+                
+                return `rgb(${r},${g},${b})`;
+            }
+
+            getLightIntensity() {
+                const t = this.timeOfDay;
+                if (t < 0.25 || t > 0.75) return 0.2;
+                if (t < 0.35) return 0.2 + (t - 0.25) / 0.1 * 0.8;
+                if (t > 0.65) return 1 - (t - 0.65) / 0.1 * 0.8;
+                return 1;
+            }
+
+            applyLighting(color) {
+                const intensity = this.getLightIntensity();
+                const sunAngle = this.timeOfDay * Math.PI * 2;
+                const warmth = Math.sin(sunAngle) > 0 ? 1.1 : 0.9;
+                
+                return [
+                    Math.floor(color[0] * intensity * warmth),
+                    Math.floor(color[1] * intensity),
+                    Math.floor(color[2] * intensity * (2 - warmth))
+                ];
+            }
+
+            generateChunk(cx, cy) {
+                const key = `${cx},${cy}`;
+                if (this.chunks.has(key)) return this.chunks.get(key);
+                
+                const chunk = {
+                    x: cx,
+                    y: cy,
+                    tiles: [],
+                    vegetation: []
+                };
+                
+                for (let ly = 0; ly < this.chunkSize; ly++) {
+                    for (let lx = 0; lx < this.chunkSize; lx++) {
+                        const wx = cx * this.chunkSize + lx;
+                        const wy = cy * this.chunkSize + ly;
+                        const data = this.terrain.getTerrainData(wx, wy);
+                        chunk.tiles.push(data);
+                        
+                        // Add vegetation
+                        const veg = this.vegetation.getVegetation(wx, wy, data.biome, data.elevation);
+                        if (veg.length > 0) {
+                            chunk.vegetation.push({ x: lx, y: ly, items: veg });
+                        }
+                    }
+                }
+                
+                this.chunks.set(key, chunk);
+                return chunk;
+            }
+
+            renderChunk(chunk) {
+                const baseX = chunk.x * this.chunkSize * this.tileSize - this.camera.x;
+                const baseY = chunk.y * this.chunkSize * this.tileSize - this.camera.y;
+                const screenX = this.canvas.width / 2 + baseX * this.camera.zoom;
+                const screenY = this.canvas.height / 2 + baseY * this.camera.zoom;
+                
+                const tileScreenSize = this.tileSize * this.camera.zoom;
+                
+                // Render terrain
+                for (let ly = 0; ly < this.chunkSize; ly++) {
+                    for (let lx = 0; lx < this.chunkSize; lx++) {
+                        const tile = chunk.tiles[ly * this.chunkSize + lx];
+                        const color = this.applyLighting(tile.biome.color);
+                        
+                        this.ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
+                        this.ctx.fillRect(
+                            screenX + lx * tileScreenSize,
+                            screenY + ly * tileScreenSize,
+                            tileScreenSize + 1,
+                            tileScreenSize + 1
+                        );
+                    }
+                }
+                
+                // Render vegetation
+                const lightInt = this.getLightIntensity();
+                for (const veg of chunk.vegetation) {
+                    const vx = screenX + veg.x * tileScreenSize + tileScreenSize / 2;
+                    const vy = screenY + veg.y * tileScreenSize + tileScreenSize / 2;
+                    
+                    for (const item of veg.items) {
+                        const size = item.size * tileScreenSize * 2;
+                        
+                        // Shadow
+                        if (lightInt > 0.3) {
+                            const shadowOffset = (0.5 - this.timeOfDay) * size * 2;
+                            this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                            this.ctx.beginPath();
+                            this.ctx.ellipse(vx + shadowOffset, vy + size/4, size/2, size/4, 0, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        }
+                        
+                        if (item.type === 'tree') {
+                            // Trunk
+                            this.ctx.fillStyle = `rgb(${80*lightInt},${50*lightInt},${30*lightInt})`;
+                            this.ctx.fillRect(vx - size/8, vy - size/2, size/4, size/2);
+                            // Foliage
+                            this.ctx.fillStyle = `rgb(${30*lightInt},${100*lightInt},${30*lightInt})`;
+                            this.ctx.beginPath();
+                            this.ctx.arc(vx, vy - size/2, size/2, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        } else if (item.type === 'acacia') {
+                            this.ctx.fillStyle = `rgb(${90*lightInt},${60*lightInt},${30*lightInt})`;
+                            this.ctx.fillRect(vx - size/10, vy - size, size/5, size);
+                            this.ctx.fillStyle = `rgb(${60*lightInt},${90*lightInt},${30*lightInt})`;
+                            this.ctx.beginPath();
+                            this.ctx.ellipse(vx, vy - size, size/1.5, size/4, 0, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        } else if (item.type === 'cactus') {
+                            this.ctx.fillStyle = `rgb(${50*lightInt},${120*lightInt},${50*lightInt})`;
+                            this.ctx.fillRect(vx - size/6, vy - size, size/3, size);
+                            this.ctx.fillRect(vx - size/2, vy - size*0.7, size/4, size/3);
+                            this.ctx.fillRect(vx + size/4, vy - size*0.5, size/4, size/3);
+                        } else if (item.type === 'bush') {
+                            this.ctx.fillStyle = `rgb(${40*lightInt},${80*lightInt},${30*lightInt})`;
+                            this.ctx.beginPath();
+                            this.ctx.arc(vx, vy, size/2, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        }
+                    }
+                }
+            }
+
+            renderSun() {
+                const angle = this.timeOfDay * Math.PI * 2 - Math.PI / 2;
+                const radius = Math.min(this.canvas.width, this.canvas.height) * 0.4;
+                const cx = this.canvas.width / 2;
+                const cy = this.canvas.height;
+                
+                const sunX = cx + Math.cos(angle) * radius;
+                const sunY = cy + Math.sin(angle) * radius;
+                
+                if (sunY < this.canvas.height) {
+                    // Sun glow
+                    const gradient = this.ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 60);
+                    gradient.addColorStop(0, 'rgba(255, 255, 200, 1)');
+                    gradient.addColorStop(0.3, 'rgba(255, 200, 100, 0.5)');
+                    gradient.addColorStop(1, 'rgba(255, 150, 50, 0)');
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.beginPath();
+                    this.ctx.arc(sunX, sunY, 60, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Sun
+                    this.ctx.fillStyle = '#FFF8DC';
+                    this.ctx.beginPath();
+                    this.ctx.arc(sunX, sunY, 20, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                // Moon at opposite side
+                const moonX = cx + Math.cos(angle + Math.PI) * radius;
+                const moonY = cy + Math.sin(angle + Math.PI) * radius;
+                
+                if (moonY < this.canvas.height) {
+                    this.ctx.fillStyle = '#E8E8E8';
+                    this.ctx.beginPath();
+                    this.ctx.arc(moonX, moonY, 15, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                // Stars at night
+                if (this.getLightIntensity() < 0.5) {
+                    const starAlpha = 1 - this.getLightIntensity() * 2;
+                    this.ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
+                    for (let i = 0; i < 100; i++) {
+                        const sx = (Math.sin(i * 123.456) * 0.5 + 0.5) * this.canvas.width;
+                        const sy = (Math.cos(i * 789.012) * 0.5 + 0.5) * this.canvas.height * 0.7;
+                        this.ctx.fillRect(sx, sy, 2, 2);
+                    }
+                }
+            }
+
+            render() {
+                // Sky
+                this.ctx.fillStyle = this.getSkyColor();
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Sun/Moon/Stars
+                this.renderSun();
+                
+                // Determine visible chunks
+                const viewWidth = this.canvas.width / this.camera.zoom / this.tileSize;
+                const viewHeight = this.canvas.height / this.camera.zoom / this.tileSize;
+                
+                const startCX = Math.floor((this.camera.x / this.tileSize - viewWidth / 2) / this.chunkSize) - 1;
+                const endCX = Math.ceil((this.camera.x / this.tileSize + viewWidth / 2) / this.chunkSize) + 1;
+                const startCY = Math.floor((this.camera.y / this.tileSize - viewHeight / 2) / this.chunkSize) - 1;
+                const endCY = Math.ceil((this.camera.y / this.tileSize + viewHeight / 2) / this.chunkSize) + 1;
+                
+                for (let cy = startCY; cy <= endCY; cy++) {
+                    for (let cx = startCX; cx <= endCX; cx++) {
+                        const chunk = this.generateChunk(cx, cy);
+                        this.renderChunk(chunk);
+                    }
+                }
+                
+                // Update UI
+                const wx = Math.floor(this.camera.x / this.tileSize);
+                const wy = Math.floor(this.camera.y / this.tileSize);
+                const centerData = this.terrain.getTerrainData(wx, wy);
+                
+                document.getElementById('pos').textContent = `${wx}, ${wy}`;
+                document.getElementById('biome').textContent = centerData.biome.name;
+                document.getElementById('elevation').textContent = centerData.elevation.toFixed(2);
+                
+                const hours = Math.floor(this.timeOfDay * 24);
+                const mins = Math.floor((this.timeOfDay * 24 - hours) * 60);
+                document.getElementById('time').textContent = 
+                    `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+            }
+        }
+
+        // ============== MAIN LOOP ==============
+        const canvas = document.getElementById('canvas');
+        const renderer = new WorldRenderer(canvas);
+
+        let lastTime = 0;
+        let frameCount = 0;
+        let fpsTime = 0;
+
+        document.getElementById('timeSlider').addEventListener('input', (e) => {
+            renderer.timeSpeed = e.target.value / 1000;
+        });
+
+        function gameLoop(timestamp) {
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+            lastTime = timestamp;
+            
+            frameCount++;
+            fpsTime += dt;
+            if (fpsTime >= 1) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                fpsTime = 0;
+            }
+            
+            renderer.update(dt);
+            renderer.render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

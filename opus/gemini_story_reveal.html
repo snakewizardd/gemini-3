@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Hidden Confession</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --paper-color: #f4f1ea;
+            --text-color: #2c2c2c;
+            --accent-color: #8b0000; /* Blood red */
+            --highlight-color: #ff3333;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--paper-color);
+            width: 100%;
+            max-width: 700px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 2px;
+            position: relative;
+        }
+
+        /* Paper texture effect */
+        .container::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+
+        h1 {
+            text-align: center;
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .prompt-box {
+            background: #e0e0e0;
+            padding: 15px;
+            font-size: 0.85em;
+            border-left: 4px solid var(--text-color);
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+
+        .story-text {
+            font-size: 1.1em;
+            line-height: 1.8;
+            text-align: justify;
+            margin-bottom: 30px;
+        }
+
+        .story-text p {
+            margin-bottom: 15px;
+        }
+
+        /* The hidden letters */
+        .cipher {
+            transition: color 0.5s ease, font-weight 0.5s ease;
+        }
+
+        /* State when revealed */
+        .revealed .cipher {
+            color: var(--accent-color);
+            font-weight: 900;
+            text-shadow: 0 0 1px rgba(139, 0, 0, 0.3);
+            font-size: 1.2em;
+        }
+
+        .revealed .fill-text {
+            opacity: 0.6;
+        }
+
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: var(--text-color);
+            color: var(--paper-color);
+            border: none;
+            padding: 12px 24px;
+            font-family: inherit;
+            font-size: 1em;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--accent-color);
+        }
+
+        #message-output {
+            margin-top: 20px;
+            height: 40px;
+            font-weight: bold;
+            color: var(--accent-color);
+            font-size: 1.2em;
+            text-align: center;
+            letter-spacing: 3px;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        #message-output.visible {
+            opacity: 1;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Case File: #8921</h1>
+        
+        <div class="prompt-box">
+            <strong>The Challenge:</strong> Write a story where the first letter of each sentence spells out a hidden message revealing the narrator is the murderer. The story must function as a complete satisfying mystery where a detective solves a different crime, but a reader who notices the acrostic sees the truth.
+        </div>
+
+        <div class="story-text" id="story">
+            <p>
+                <span class="cipher">I</span><span class="fill-text">nspector Vance surveyed the chaotic study, noting the shattered windowpane near the balcony.</span>
+                <span class="cipher">K</span><span class="fill-text">nocked over during the violent entry, a heavy vase lay in pieces next to the body.</span>
+                <span class="cipher">I</span><span class="fill-text">t was a clear case of burglary gone wrong, Vance announced to the room confidently.</span>
+                <span class="cipher">L</span><span class="fill-text">eo, the estranged nephew, had been found hiding in the garden clutching the family silver.</span>
+                <span class="cipher">L</span><span class="fill-text">ittle could be said in his defense, as his pockets jingled with the stolen loot.</span>
+                <span class="cipher">E</span><span class="fill-text">ven the medical examiner agreed that the sheer shock of the intrusion had stopped the heart.</span>
+                <span class="cipher">D</span><span class="fill-text">eath was ruled natural, albeit triggered by the boy's criminal stupidity and greed.</span>
+                <span class="cipher">T</span><span class="fill-text">he handcuffs clicked, and Leo sobbed that he never even touched his uncle.</span>
+                <span class="cipher">H</span><span class="fill-text">is pleas fell on deaf ears, for the physical evidence of the theft was absolute.</span>
+                <span class="cipher">E</span><span class="fill-text">veryone watched as the police hauled the "murderer" away to the station for booking.</span>
+            </p>
+            <p>
+                <span class="cipher">O</span><span class="fill-text">nly I remained behind to tidy the mess left by the investigation.</span>
+                <span class="cipher">L</span><span class="fill-text">ooking at the empty medicine glass on the table, I felt a wave of relief pass.</span>
+                <span class="cipher">D</span><span class="fill-text">etective Vance patted my shoulder, praising my calm demeanor during the crisis.</span>
+                <span class="cipher">M</span><span class="fill-text">y employment was over, but the master had left me a generous stipend.</span>
+                <span class="cipher">A</span><span class="fill-text">ll loose ends were tied up, and the police were satisfied with the result.</span>
+                <span class="cipher">N</span><span class="fill-text">obody would ever look closer at the bitter tea I served before the break-in.</span>
+            </p>
+        </div>
+
+        <div class="controls">
+            <button id="reveal-btn" onclick="toggleReveal()">Reveal The Truth</button>
+        </div>
+
+        <div id="message-output"></div>
+    </div>
+
+    <script>
+        let isRevealed = false;
+        const storyContainer = document.getElementById('story');
+        const btn = document.getElementById('reveal-btn');
+        const output = document.getElementById('message-output');
+        const secretMessage = "I KILLED THE OLD MAN";
+
+        function toggleReveal() {
+            if (!isRevealed) {
+                // Reveal
+                storyContainer.classList.add('revealed');
+                btn.textContent = "Hide The Truth";
+                output.textContent = secretMessage;
+                output.classList.add('visible');
+                isRevealed = true;
+            } else {
+                // Hide
+                storyContainer.classList.remove('revealed');
+                btn.textContent = "Reveal The Truth";
+                output.classList.remove('visible');
+                // clear text after fade out
+                setTimeout(() => {
+                    if(!isRevealed) output.textContent = "";
+                }, 1000);
+                isRevealed = false;
+            }
+        }
+    </script>
+</body>
+</html>

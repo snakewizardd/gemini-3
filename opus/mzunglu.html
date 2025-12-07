@@ -1,0 +1,578 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>OgaHosting - Di FASTEST Server!</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a472a;color:#FFD700;font-family:Arial;min-height:100vh}
+.marquee{background:#FF0000;padding:10px;overflow:hidden;white-space:nowrap}
+.marquee span{display:inline-block;animation:scroll 10s linear infinite}
+@keyframes scroll{0%{transform:translateX(100vw)}100%{transform:translateX(-100%)}}
+header{text-align:center;padding:40px;background:#000}
+h1{font-size:3rem;color:#00FF00;text-shadow:3px 3px #FF0000;animation:bounce .5s infinite alternate}
+@keyframes bounce{to{transform:scale(1.1)}}
+.tagline{color:#FFD700;font-size:1.2rem;margin-top:10px}
+.blink{animation:blink 1s infinite}
+@keyframes blink{50%{opacity:0}}
+.about{background:#000;padding:30px;margin:20px;border:3px solid #00FF00}
+.about h2{color:#00FF00;margin-bottom:20px}
+.about p{line-height:2;color:#FFF}
+.highlight{color:#00FF00;font-weight:bold}
+.stats{display:flex;flex-wrap:wrap;justify-content:center;gap:20px;padding:30px;background:linear-gradient(90deg,#FF0000,#00FF00,#0000FF);animation:gradient 3s infinite}
+@keyframes gradient{0%,100%{filter:hue-rotate(0deg)}50%{filter:hue-rotate(180deg)}}
+.stat{background:#000;padding:20px 30px;text-align:center}
+.stat h3{font-size:2rem;color:#00FF00}
+.stat p{color:#FF0000}
+.packages{padding:40px 20px}
+.packages h2{text-align:center;font-size:2rem;color:#FFD700;margin-bottom:30px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;max-width:1000px;margin:0 auto}
+.card{background:#000;border:3px solid #FFD700;padding:20px;text-align:center;transition:.3s}
+.card:hover{transform:scale(1.05);box-shadow:0 0 30px #FFD700}
+.card .icon{font-size:4rem}
+.card h3{color:#00FF00;margin:15px 0}
+.card ul{list-style:none;text-align:left;color:#FFF;margin:15px 0}
+.card li{padding:5px 0;border-bottom:1px dashed #333}
+.card li::before{content:"✓ ";color:#00FF00}
+.price{color:#FFD700;font-size:1.2rem;font-weight:bold}
+.btn{background:#00FF00;border:none;padding:15px 30px;font-size:1rem;cursor:pointer;margin-top:15px;transition:.3s}
+.btn:hover{background:#FF0000;color:#FFF}
+.outage{background:#FF0000;padding:30px;text-align:center}
+.outage h3{color:#FFF;margin-bottom:10px}
+.counter{font-size:4rem;color:#FFFF00;animation:pulse 1s infinite}
+@keyframes pulse{50%{transform:scale(1.2)}}
+.testimonials{background:#000;padding:40px 20px;margin:20px}
+.testimonials h2{text-align:center;color:#FFD700;margin-bottom:30px}
+.test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:1000px;margin:0 auto}
+.testimonial{background:#111;padding:20px;border-left:4px solid #00FF00}
+.testimonial p{color:#FFF;font-style:italic;margin-bottom:10px}
+.testimonial .author{color:#FFD700}
+.testimonial .stars{color:#FFD700}
+footer{background:#000;padding:40px;text-align:center;border-top:5px solid #00FF00}
+footer p{color:#00FF00;margin:10px 0}
+.visitor{background:#000080;display:inline-block;padding:10px 20px;color:#00FF00;font-family:monospace;margin:20px 0}
+
+/* MUSIC PLAYER STYLES */
+.music-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(90deg,#000,#1a1a1a);padding:15px;display:flex;align-items:center;justify-content:center;gap:20px;border-top:3px solid #00FF00;z-index:9999}
+.music-bar button{background:#00FF00;border:none;width:50px;height:50px;border-radius:50%;font-size:1.5rem;cursor:pointer;transition:.3s;animation:glow 1s infinite alternate}
+.music-bar button:hover{transform:scale(1.2)}
+.music-bar button.playing{background:#FF0000}
+@keyframes glow{from{box-shadow:0 0 10px #00FF00}to{box-shadow:0 0 30px #00FF00}}
+.visualizer{display:flex;align-items:flex-end;gap:3px;height:40px}
+.vbar{width:6px;background:linear-gradient(#FF0000,#FFFF00,#00FF00);border-radius:2px}
+.music-bar select{background:#000;color:#00FF00;border:2px solid #00FF00;padding:10px;font-size:1rem;cursor:pointer}
+.music-bar .track-name{color:#FFD700;font-size:0.9rem;max-width:200px;overflow:hidden}
+.music-bar .status{color:#00FF00;font-family:monospace}
+body{padding-bottom:80px}
+</style>
+</head>
+<body>
+
+<div class="marquee">
+<span>🔥 HOT!!! NEW SERVER DROP!!! 🔥 ONLY 3 POWER CUTS TODAY!!! 🔥 UPTIME ALMOST 12%!!! 🔥 NEPA DEY COOPERATE!!! 🔥 PRESS PLAY FOR VIBES!!! 🎵</span>
+</div>
+
+<header>
+<div style="font-size:4rem">🦁</div>
+<h1>OgaHosting</h1>
+<p class="tagline">🌴 Di MOST SOMETIMES RELIABLE Hosting For Naija! 🌴</p>
+<p class="blink" style="color:#FF0000;margin-top:20px">⚠️ SITE DEY UNDER CONSTRUCTION SINCE 1999 ⚠️</p>
+<p style="color:#00FF00;margin-top:10px">🎵 CLICK PLAY BUTTON BELOW FOR FULL EXPERIENCE 🎵</p>
+</header>
+
+<section class="about">
+<h2>🦁 WHO WE BE</h2>
+<p>
+WELCOME TO <span class="highlight">OGAHOSTING</span>!!! We be di NUMBER 1 (self-proclaimed) VPS provider for West Africa!
+<br><br>
+Our data center dey located for my <span class="highlight">uncle backyard</span> for Lagos, right next to di generator wey we share with 47 neighbors.
+<br><br>
+We dey offer <span class="highlight">BLAZING FAST</span> 0.69 Mbps through our BONDED DIAL-UP + NEIGHBOR WIFI!
+<br><br>
+⚡ We lose power around <span class="highlight">7-23 times per day</span> but no worry! As NEPA bring light back, your server go dey up! Sometimes we get <span class="highlight">FULL 45 MINUTES</span> uptime! 🎉
+</p>
+</section>
+
+<div class="stats">
+<div class="stat"><h3 id="uptime">11.7%</h3><p>UPTIME</p></div>
+<div class="stat"><h3>0.69 Mbps</h3><p>MAX SPEED</p></div>
+<div class="stat"><h3>47</h3><p>NEIGHBORS ON GENERATOR</p></div>
+<div class="stat"><h3 id="customers">3.5</h3><p>HAPPY CUSTOMERS</p></div>
+</div>
+
+<section class="packages">
+<h2>🔥 VPS PACKAGES 🔥</h2>
+<div class="grid">
+
+<div class="card">
+<div class="icon">🐀</div>
+<h3>AGAMA VPS</h3>
+<ul>
+<li>8MB RAM</li>
+<li>0.5 Pentium II CPU</li>
+<li>50MB HDD (Floppy)</li>
+<li>0.28 Mbps Speed</li>
+<li>Windows 95</li>
+</ul>
+<p class="price">₦45,000/month<br>(or 3 chickens)</p>
+<button class="btn">ORDER!</button>
+</div>
+
+<div class="card">
+<div class="icon">🐔</div>
+<h3>CHICKEN VPS</h3>
+<ul>
+<li>16MB RAM</li>
+<li>1 Pentium III CPU</li>
+<li>128MB HDD</li>
+<li>0.56 Mbps Speed</li>
+<li>Windows 98</li>
+</ul>
+<p class="price">₦89,000/month<br>(or 1 goat)</p>
+<button class="btn">ORDER!</button>
+</div>
+
+<div class="card">
+<div class="icon">🦁</div>
+<h3>LION VPS ⭐</h3>
+<ul>
+<li>64MB RAM</li>
+<li>2 Pentium IV CPU</li>
+<li>512MB HDD</li>
+<li>1.41 Mbps Speed</li>
+<li>Windows XP</li>
+</ul>
+<p class="price">₦175,000/month<br>(or 1 cow leg)</p>
+<button class="btn">ORDER!</button>
+</div>
+
+<div class="card">
+<div class="icon">👑</div>
+<h3>OGA VPS 💎</h3>
+<ul>
+<li>256MB RAM</li>
+<li>4 AMD Athlon CPU</li>
+<li>2GB HDD</li>
+<li>2.82 Mbps BONDED</li>
+<li>Free Jollof Friday</li>
+</ul>
+<p class="price">₦450,000/month<br>(or 1 full cow)</p>
+<button class="btn" style="background:#FF0000;color:#FFF;text-decoration:line-through">SOLD OUT!</button>
+</div>
+
+</div>
+</section>
+
+<section class="outage">
+<h3>⚡ NEPA OUTAGE COUNTER TODAY ⚡</h3>
+<div class="counter" id="outage">7</div>
+<p>Times light don take today</p>
+</section>
+
+<section class="testimonials">
+<h2>💬 CUSTOMER REVIEWS 💬</h2>
+<div class="test-grid">
+
+<div class="testimonial">
+<p>"OgaHosting get my scam-- I mean LEGITIMATE BUSINESS site running quick! I don make plenty money!"</p>
+<p class="author">— Prince Emeka, Lagos 👑</p>
+<p class="stars">⭐⭐⭐⭐⭐</p>
+</div>
+
+<div class="testimonial">
+<p>"Server only go down 47 times last month. MASSIVE improvement! OgaHosting dey try!"</p>
+<p class="author">— Chioma, Blogger 💅</p>
+<p class="stars">⭐⭐⭐⭐</p>
+</div>
+
+<div class="testimonial">
+<p>"Dem give me free jollof rice when server crash for di 100th time. Customer service 10/10!"</p>
+<p class="author">— Anonymous 🍚</p>
+<p class="stars">⭐⭐⭐⭐⭐</p>
+</div>
+
+<div class="testimonial">
+<p>"I send support ticket 6 months ago. Dem reply last week say 'We dey come'. Patience na virtue!"</p>
+<p class="author">— Patience (literally) 🙏</p>
+<p class="stars">⭐⭐⭐⭐</p>
+</div>
+
+</div>
+</section>
+
+<section class="about" style="border-color:#FF0000;text-align:center">
+<h2 style="color:#FF0000">🚨 SPECIAL OFFER 🚨</h2>
+<p style="font-size:2rem;color:#FFD700;animation:blink 0.5s infinite">BUY 1 GET 0 FREE!!!</p>
+<p style="margin-top:10px">Use code: NEPACOOPERATE for 0.5% discount!</p>
+</section>
+
+<footer>
+<div style="font-size:3rem">🦁🌴💻⚡🐔</div>
+<p style="font-size:2rem">OGAHOSTING - WE DEY TRY!</p>
+<p>© 1999-2025 OgaHosting, Lagos</p>
+<p>Email: ogahosting@yahoo.com.ng</p>
+<div class="visitor">VISITORS: <span id="visitors">048293</span></div>
+<p style="margin-top:20px;font-style:italic">"If your website work, na bonus. If e no work, na normal."</p>
+</footer>
+
+<!-- MUSIC PLAYER BAR -->
+<div class="music-bar">
+<button id="playBtn" onclick="togglePlay()">▶️</button>
+<div class="visualizer" id="visualizer"></div>
+<select id="trackSelect" onchange="changeTrack()">
+<option value="afro">🌴 Classic Afro Vibes</option>
+<option value="anthem">🎤 OgaHosting Anthem</option>
+<option value="techno">🤖 Server Room Techno</option>
+</select>
+<div class="track-name" id="trackName">Select track & press play!</div>
+<div class="status" id="status">▢ STOPPED</div>
+</div>
+
+<script>
+// ============ WEB AUDIO MUSIC SYSTEM ============
+let audioCtx = null;
+let isPlaying = false;
+let currentOscillators = [];
+let currentGains = [];
+let intervalId = null;
+
+// Create visualizer bars
+const vizContainer = document.getElementById('visualizer');
+for(let i = 0; i < 12; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'vbar';
+    bar.style.height = '5px';
+    vizContainer.appendChild(bar);
+}
+const bars = document.querySelectorAll('.vbar');
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+function stopAll() {
+    currentOscillators.forEach(osc => {
+        try { osc.stop(); } catch(e) {}
+    });
+    currentGains.forEach(gain => {
+        try { gain.disconnect(); } catch(e) {}
+    });
+    currentOscillators = [];
+    currentGains = [];
+    if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+    }
+}
+
+// TRACK 1: Afro Vibes - Chill African-inspired beat
+function playAfroVibes() {
+    const bpm = 95;
+    const beatTime = 60 / bpm;
+    let beat = 0;
+    
+    // Afro scale notes (pentatonic with African flavor)
+    const scale = [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63];
+    
+    intervalId = setInterval(() => {
+        // Kick drum on 1 and 3
+        if (beat % 4 === 0 || beat % 4 === 2) {
+            playDrum(60, 0.15, 'sine', 0.5);
+        }
+        
+        // Hi-hat pattern
+        if (beat % 2 === 0) {
+            playNoise(0.02, 0.15);
+        }
+        
+        // Shaker on off-beats
+        if (beat % 2 === 1) {
+            playNoise(0.015, 0.08);
+        }
+        
+        // Melodic pattern
+        if (beat % 8 === 0 || beat % 8 === 3 || beat % 8 === 5) {
+            const note = scale[Math.floor(Math.random() * scale.length)];
+            playTone(note, 0.3, 'triangle', 0.15);
+        }
+        
+        // Bass line
+        if (beat % 4 === 0) {
+            playTone(scale[0] / 2, 0.4, 'sawtooth', 0.2);
+        }
+        
+        // Conga-like percussion
+        if (beat % 8 === 2 || beat % 8 === 6 || beat % 8 === 7) {
+            playDrum(200 + Math.random() * 100, 0.1, 'triangle', 0.3);
+        }
+        
+        beat++;
+        updateVisualizer();
+    }, beatTime * 250);
+}
+
+// TRACK 2: OgaHosting Anthem - The CEO's rap beat
+function playAnthem() {
+    const bpm = 85;
+    const beatTime = 60 / bpm;
+    let beat = 0;
+    
+    // Hip-hop inspired scale
+    const bassNotes = [55, 58.27, 65.41, 73.42];
+    const melodyNotes = [220, 246.94, 261.63, 293.66, 329.63, 349.23];
+    
+    intervalId = setInterval(() => {
+        // Heavy kick
+        if (beat % 4 === 0 || beat % 4 === 2) {
+            playDrum(50, 0.2, 'sine', 0.7);
+            playDrum(100, 0.05, 'sine', 0.3);
+        }
+        
+        // Snare on 2 and 4
+        if (beat % 4 === 1 || beat % 4 === 3) {
+            playNoise(0.1, 0.4);
+            playDrum(180, 0.08, 'triangle', 0.3);
+        }
+        
+        // Hi-hats
+        playNoise(0.02, 0.1);
+        
+        // Funky bass
+        if (beat % 2 === 0) {
+            const bassNote = bassNotes[Math.floor(beat / 2) % bassNotes.length];
+            playTone(bassNote, 0.25, 'sawtooth', 0.25);
+        }
+        
+        // Synth stabs (like the OG)
+        if (beat % 8 === 0 || beat % 8 === 6) {
+            const chord = [melodyNotes[0], melodyNotes[2], melodyNotes[4]];
+            chord.forEach(note => {
+                playTone(note, 0.15, 'square', 0.08);
+            });
+        }
+        
+        // Random melodic hits
+        if (Math.random() > 0.7) {
+            const note = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
+            playTone(note, 0.1, 'sine', 0.1);
+        }
+        
+        beat++;
+        updateVisualizer();
+    }, beatTime * 250);
+}
+
+// TRACK 3: Server Room Techno
+function playTechno() {
+    const bpm = 130;
+    const beatTime = 60 / bpm;
+    let beat = 0;
+    
+    const bassFreq = 55;
+    const acidNotes = [130.81, 138.59, 155.56, 174.61, 185.00, 207.65];
+    
+    intervalId = setInterval(() => {
+        // Four-on-the-floor kick
+        if (beat % 2 === 0) {
+            playDrum(55, 0.15, 'sine', 0.6);
+        }
+        
+        // Off-beat hi-hat
+        if (beat % 2 === 1) {
+            playNoise(0.03, 0.2);
+        }
+        
+        // Acid bass line
+        if (beat % 4 === 0 || beat % 4 === 3) {
+            const note = acidNotes[beat % acidNotes.length];
+            playTone(note, 0.15, 'sawtooth', 0.2);
+        }
+        
+        // Robotic arpeggios
+        if (beat % 8 < 4) {
+            const arpNote = acidNotes[(beat * 3) % acidNotes.length] * 2;
+            playTone(arpNote, 0.05, 'square', 0.08);
+        }
+        
+        // Clap on 2 and 4
+        if (beat % 8 === 2 || beat % 8 === 6) {
+            playNoise(0.08, 0.35);
+        }
+        
+        // Sub bass
+        if (beat % 4 === 0) {
+            playTone(bassFreq, 0.3, 'sine', 0.3);
+        }
+        
+        beat++;
+        updateVisualizer();
+    }, beatTime * 250);
+}
+
+function playTone(freq, duration, type, volume) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+    
+    currentOscillators.push(osc);
+    currentGains.push(gain);
+}
+
+function playDrum(freq, duration, type, volume) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1, audioCtx.currentTime + duration);
+    
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+function playNoise(duration, volume) {
+    const bufferSize = audioCtx.sampleRate * duration;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    
+    const noise = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    
+    filter.type = 'highpass';
+    filter.frequency.value = 5000;
+    
+    noise.buffer = buffer;
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    noise.start();
+}
+
+function updateVisualizer() {
+    bars.forEach(bar => {
+        const height = Math.random() * 35 + 5;
+        bar.style.height = height + 'px';
+        bar.style.background = `linear-gradient(#FF0000, #FFFF00, #00FF00)`;
+    });
+}
+
+function resetVisualizer() {
+    bars.forEach(bar => {
+        bar.style.height = '5px';
+    });
+}
+
+function togglePlay() {
+    const btn = document.getElementById('playBtn');
+    const status = document.getElementById('status');
+    const trackName = document.getElementById('trackName');
+    
+    if (!isPlaying) {
+        initAudio();
+        stopAll();
+        
+        const track = document.getElementById('trackSelect').value;
+        
+        if (track === 'afro') {
+            playAfroVibes();
+            trackName.textContent = '🌴 Now Playing: Classic Afro Vibes';
+        } else if (track === 'anthem') {
+            playAnthem();
+            trackName.textContent = '🎤 Now Playing: OgaHosting Anthem';
+        } else {
+            playTechno();
+            trackName.textContent = '🤖 Now Playing: Server Room Techno';
+        }
+        
+        btn.textContent = '⏸️';
+        btn.classList.add('playing');
+        status.textContent = '▶ PLAYING';
+        status.style.color = '#00FF00';
+        isPlaying = true;
+    } else {
+        stopAll();
+        resetVisualizer();
+        btn.textContent = '▶️';
+        btn.classList.remove('playing');
+        status.textContent = '▢ STOPPED';
+        status.style.color = '#FF0000';
+        trackName.textContent = 'Select track & press play!';
+        isPlaying = false;
+    }
+}
+
+function changeTrack() {
+    if (isPlaying) {
+        stopAll();
+        isPlaying = false;
+        togglePlay();
+    }
+}
+
+// ============ SITE FUNCTIONALITY ============
+let outages = 7;
+setInterval(() => {
+    if(Math.random() > 0.7) {
+        outages++;
+        document.getElementById('outage').textContent = outages;
+        document.body.style.background = '#000';
+        setTimeout(() => document.body.style.background = '#1a472a', 200);
+    }
+}, 8000);
+
+let v = 48293;
+setInterval(() => {
+    v += Math.floor(Math.random() * 3);
+    document.getElementById('visitors').textContent = v.toString().padStart(6, '0');
+}, 2000);
+
+setInterval(() => {
+    document.getElementById('uptime').textContent = (Math.random() * 15 + 5).toFixed(1) + '%';
+}, 5000);
+
+setInterval(() => {
+    document.getElementById('customers').textContent = (Math.random() * 2 + 2.5).toFixed(1);
+}, 7000);
+
+setTimeout(() => {
+    if(Math.random() > 0.5) alert('⚡ NEPA DON TAKE LIGHT! ⚡\n\nGenerator go start... eventually.\n\n(Music go continue, server no go)');
+}, 25000);
+
+console.log('%c 🦁 OGAHOSTING 🦁 ', 'background:#00FF00;color:#000;font-size:20px');
+console.log('%c Press play for di VIBES! 🎵 ', 'color:#FFD700');
+</script>
+
+</body>
+</html>

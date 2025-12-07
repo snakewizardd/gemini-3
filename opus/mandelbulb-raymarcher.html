@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mandelbulb - Canvas 2D Ray Marching</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        canvas {
+            border: 1px solid #333;
+        }
+        #info {
+            margin: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Rendering Mandelbulb... 0%</div>
+    <canvas id="canvas"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+        
+        // Resolution (lower = faster, higher = prettier)
+        const WIDTH = 400;
+        const HEIGHT = 400;
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+        
+        const imageData = ctx.createImageData(WIDTH, HEIGHT);
+        const data = imageData.data;
+        
+        // Mandelbulb params
+        const POWER = 8;
+        const MAX_ITERATIONS = 10;
+        const BAILOUT = 2;
+        
+        // Ray marching params
+        const MAX_STEPS = 100;
+        const MAX_DIST = 10;
+        const SURF_DIST = 0.001;
+        
+        // Camera
+        let camAngle = 0;
+        const camDist = 2.5;
+        
+        // Vector math helpers
+        const vec3 = (x, y, z) => ({ x, y, z });
+        const add = (a, b) => vec3(a.x + b.x, a.y + b.y, a.z + b.z);
+        const sub = (a, b) => vec3(a.x - b.x, a.y - b.y, a.z - b.z);
+        const mul = (a, s) => vec3(a.x * s, a.y * s, a.z * s);
+        const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        const length = (a) => Math.sqrt(dot(a, a));
+        const normalize = (a) => { const l = length(a); return vec3(a.x / l, a.y / l, a.z / l); };
+        
+        // Mandelbulb distance estimator
+        function mandelbulbDE(pos) {
+            let z = vec3(pos.x, pos.y, pos.z);
+            let dr = 1.0;
+            let r = 0.0;
+            
+            for (let i = 0; i < MAX_ITERATIONS; i++) {
+                r = length(z);
+                if (r > BAILOUT) break;
+                
+                // Convert to spherical coords
+                let theta = Math.acos(z.z / r);
+                let phi = Math.atan2(z.y, z.x);
+                dr = Math.pow(r, POWER - 1) * POWER * dr + 1.0;
+                
+                // Scale and rotate
+                let zr = Math.pow(r, POWER);
+                theta *= POWER;
+                phi *= POWER;
+                
+                // Back to cartesian
+                z = vec3(
+                    zr * Math.sin(theta) * Math.cos(phi),
+                    zr * Math.sin(theta) * Math.sin(phi),
+                    zr * Math.cos(theta)
+                );
+                z = add(z, pos);
+            }
+            
+            return 0.5 * Math.log(r) * r / dr;
+        }
+        
+        // Estimate normal via gradient
+        function getNormal(p) {
+            const e = 0.0005;
+            const d = mandelbulbDE(p);
+            return normalize(vec3(
+                mandelbulbDE(vec3(p.x + e, p.y, p.z)) - d,
+                mandelbulbDE(vec3(p.x, p.y + e, p.z)) - d,
+                mandelbulbDE(vec3(p.x, p.y, p.z + e)) - d
+            ));
+        }
+        
+        // Ray march
+        function rayMarch(ro, rd) {
+            let t = 0;
+            for (let i = 0; i < MAX_STEPS; i++) {
+                let p = add(ro, mul(rd, t));
+                let d = mandelbulbDE(p);
+                if (d < SURF_DIST) return { hit: true, t, steps: i };
+                if (t > MAX_DIST) break;
+                t += d;
+            }
+            return { hit: false, t, steps: MAX_STEPS };
+        }
+        
+        // Render a chunk of rows (for progressive rendering)
+        function renderRows(startY, endY, angle) {
+            const camX = Math.sin(angle) * camDist;
+            const camZ = Math.cos(angle) * camDist;
+            const camPos = vec3(camX, 0, camZ);
+            
+            const forward = normalize(sub(vec3(0, 0, 0), camPos));
+            const right = normalize(vec3(forward.z, 0, -forward.x));
+            const up = vec3(0, 1, 0);
+            
+            const lightDir = normalize(vec3(1, 1, 1));
+            
+            for (let y = startY; y < endY; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    // Normalized coords (-1 to 1)
+                    const u = (x / WIDTH) * 2 - 1;
+                    const v = (y / HEIGHT) * 2 - 1;
+                    
+                    // Ray direction
+                    const rd = normalize(add(add(mul(right, u), mul(up, -v)), mul(forward, 1.5)));
+                    
+                    // March!
+                    const result = rayMarch(camPos, rd);
+                    
+                    let r = 0, g = 0, b = 0;
+                    
+                    if (result.hit) {
+                        const p = add(camPos, mul(rd, result.t));
+                        const n = getNormal(p);
+                        
+                        // Diffuse lighting
+                        const diff = Math.max(0, dot(n, lightDir));
+                        
+                        // Ambient occlusion approximation
+                        const ao = 1 - result.steps / MAX_STEPS;
+                        
+                        // Fresnel-ish rim lighting
+                        const rim = Math.pow(1 - Math.abs(dot(n, rd)), 2);
+                        
+                        // Color based on position + normal
+                        const hue = (Math.atan2(p.x, p.z) / Math.PI + 1) * 0.5;
+                        
+                        // HSV to RGB (simplified)
+                        const h = hue * 6;
+                        const c = 0.7;
+                        const xx = c * (1 - Math.abs(h % 2 - 1));
+                        let r1 = 0, g1 = 0, b1 = 0;
+                        if (h < 1) { r1 = c; g1 = xx; }
+                        else if (h < 2) { r1 = xx; g1 = c; }
+                        else if (h < 3) { g1 = c; b1 = xx; }
+                        else if (h < 4) { g1 = xx; b1 = c; }
+                        else if (h < 5) { r1 = xx; b1 = c; }
+                        else { r1 = c; b1 = xx; }
+                        
+                        const intensity = (diff * 0.6 + 0.4) * ao + rim * 0.3;
+                        r = Math.min(255, (r1 + 0.3) * intensity * 255);
+                        g = Math.min(255, (g1 + 0.3) * intensity * 255);
+                        b = Math.min(255, (b1 + 0.3) * intensity * 255);
+                    } else {
+                        // Background gradient
+                        const grad = (y / HEIGHT);
+                        r = 10 + grad * 20;
+                        g = 10 + grad * 30;
+                        b = 30 + grad * 40;
+                    }
+                    
+                    const idx = (y * WIDTH + x) * 4;
+                    data[idx] = r;
+                    data[idx + 1] = g;
+                    data[idx + 2] = b;
+                    data[idx + 3] = 255;
+                }
+            }
+        }
+        
+        // Progressive rendering
+        let currentRow = 0;
+        const CHUNK_SIZE = 10;
+        
+        function renderChunk() {
+            const endRow = Math.min(currentRow + CHUNK_SIZE, HEIGHT);
+            renderRows(currentRow, endRow, camAngle);
+            
+            ctx.putImageData(imageData, 0, 0);
+            
+            const progress = Math.floor((endRow / HEIGHT) * 100);
+            info.textContent = `Rendering Mandelbulb... ${progress}%`;
+            
+            currentRow = endRow;
+            
+            if (currentRow < HEIGHT) {
+                requestAnimationFrame(renderChunk);
+            } else {
+                info.textContent = `Mandelbulb rendered! Click to rotate.`;
+                canvas.onclick = () => {
+                    camAngle += 0.5;
+                    currentRow = 0;
+                    renderChunk();
+                };
+            }
+        }
+        
+        renderChunk();
+    </script>
+</body>
+</html>

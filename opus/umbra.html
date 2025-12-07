@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROJECT UMBRA - The Glass Tower</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0a0f;
+            color: #00ff88;
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* Scanline effect */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 40px 0;
+            border-bottom: 2px solid #00ff88;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        .header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3em;
+            font-weight: 900;
+            text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88;
+            letter-spacing: 10px;
+            animation: glitch 3s infinite;
+        }
+        
+        .header .subtitle {
+            font-size: 1.2em;
+            color: #ff3366;
+            margin-top: 10px;
+            letter-spacing: 5px;
+        }
+        
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            92% { transform: translate(-2px, 1px); }
+            94% { transform: translate(2px, -1px); }
+            96% { transform: translate(-1px, 2px); }
+            98% { transform: translate(1px, -2px); }
+        }
+        
+        /* Mission Briefing */
+        .briefing-panel {
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            border: 1px solid #00ff88;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .briefing-panel::before {
+            content: "CLASSIFIED";
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            color: #ff3366;
+            font-size: 0.8em;
+            letter-spacing: 3px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .oracle-voice {
+            background: #0a0a0f;
+            border-left: 4px solid #00ff88;
+            padding: 20px;
+            margin: 20px 0;
+            font-style: italic;
+            position: relative;
+        }
+        
+        .oracle-voice::before {
+            content: "ORACLE";
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            background: #0a0a0f;
+            padding: 0 10px;
+            color: #00ff88;
+            font-size: 0.8em;
+        }
+        
+        .waveform {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            margin: 20px 0;
+        }
+        
+        .waveform .bar {
+            width: 4px;
+            background: #00ff88;
+            animation: wave 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes wave {
+            0%, 100% { height: 10px; }
+            50% { height: 50px; }
+        }
+        
+        /* Arcology Map */
+        .arcology-map {
+            background: #0d1117;
+            border: 1px solid #00ff88;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .arcology-map h2 {
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .floor-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .floor {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #161b22;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+        
+        .floor:hover {
+            border-color: #00ff88;
+            transform: translateX(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .floor.target {
+            border-color: #ff3366;
+            background: linear-gradient(90deg, #161b22 0%, rgba(255, 51, 102, 0.2) 100%);
+        }
+        
+        .floor-number {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            width: 120px;
+            color: #00ff88;
+        }
+        
+        .floor-name {
+            flex: 1;
+            color: #ffffff;
+        }
+        
+        .floor-security {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+        }
+        
+        .security-low { background: #238636; }
+        .security-medium { background: #9e6a03; }
+        .security-high { background: #da3633; }
+        
+        /* Methods Panel */
+        .methods-panel {
+            margin-bottom: 30px;
+        }
+        
+        .methods-panel h2 {
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 20px;
+            color: #00ff88;
+        }
+        
+        .method-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .method-card {
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .method-card:hover {
+            border-color: #00ff88;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 255, 136, 0.2);
+        }
+        
+        .method-card.selected {
+            border-color: #00ff88;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
+        }
+        
+        .method-card h3 {
+            font-family: 'Orbitron', sans-serif;
+            color: #ffffff;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .method-card .codename {
+            color: #ff3366;
+            font-size: 0.8em;
+            margin-bottom: 15px;
+        }
+        
+        .method-card .description {
+            color: #8b949e;
+            line-height: 1.6;
+        }
+        
+        .method-card .rating {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #30363d;
+            font-size: 0.9em;
+        }
+        
+        .rating-tag {
+            display: inline-block;
+            padding: 3px 10px;
+            margin: 2px;
+            border-radius: 15px;
+            font-size: 0.8em;
+        }
+        
+        .tag-silent { background: #238636; }
+        .tag-ghost { background: #1f6feb; }
+        .tag-surgical { background: #8957e5; }
+        .tag-chaotic { background: #da3633; }
+        
+        /* Mission Execution */
+        .execution-panel {
+            background: #0d1117;
+            border: 1px solid #00ff88;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            display: none;
+        }
+        
+        .execution-panel.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .execution-panel h2 {
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 20px;
+        }
+        
+        .step {
+            background: #161b22;
+            border-left: 4px solid #00ff88;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 0 5px 5px 0;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active {
+            opacity: 1;
+            border-left-color: #ff3366;
+        }
+        
+        .step.completed {
+            opacity: 1;
+            border-left-color: #238636;
+        }
+        
+        .step-number {
+            font-family: 'Orbitron', sans-serif;
+            color: #00ff88;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        
+        .step-title {
+            color: #ffffff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .step-description {
+            color: #8b949e;
+            line-height: 1.6;
+        }
+        
+        /* Action Button */
+        .action-btn {
+            background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+            color: #0a0a0f;
+            border: none;
+            padding: 15px 40px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+        
+        .action-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+        
+        .action-btn:disabled {
+            background: #30363d;
+            color: #8b949e;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Gadgets Panel */
+        .gadgets-panel {
+            margin-bottom: 30px;
+        }
+        
+        .gadgets-panel h2 {
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 20px;
+            color: #00ff88;
+        }
+        
+        .gadget {
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .gadget:hover {
+            border-color: #8957e5;
+        }
+        
+        .gadget h3 {
+            font-family: 'Orbitron', sans-serif;
+            color: #8957e5;
+            margin-bottom: 5px;
+        }
+        
+        .gadget .tier {
+            color: #ff3366;
+            font-size: 0.8em;
+            margin-bottom: 15px;
+        }
+        
+        .gadget .features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .feature-tag {
+            background: #21262d;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            color: #00ff88;
+        }
+        
+        /* Dialogue Panel */
+        .dialogue-panel {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .dialogue-panel h2 {
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 20px;
+            color: #ff3366;
+        }
+        
+        .dialogue-line {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            animation: typeIn 0.5s ease;
+        }
+        
+        @keyframes typeIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .dialogue-line.oracle {
+            background: linear-gradient(90deg, rgba(0, 255, 136, 0.1) 0%, transparent 100%);
+            border-left: 3px solid #00ff88;
+        }
+        
+        .dialogue-line.kael {
+            background: linear-gradient(90deg, rgba(255, 51, 102, 0.1) 0%, transparent 100%);
+            border-left: 3px solid #ff3366;
+        }
+        
+        .speaker {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .dialogue-line.oracle .speaker { color: #00ff88; }
+        .dialogue-line.kael .speaker { color: #ff3366; }
+        
+        /* Mission Complete */
+        .mission-complete {
+            text-align: center;
+            padding: 50px;
+            display: none;
+        }
+        
+        .mission-complete.active {
+            display: block;
+            animation: fadeIn 1s ease;
+        }
+        
+        .mission-complete h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5em;
+            color: #00ff88;
+            text-shadow: 0 0 30px #00ff88;
+            margin-bottom: 20px;
+        }
+        
+        .rating-display {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 30px 0;
+        }
+        
+        .rating-display .rating-tag {
+            font-size: 1.2em;
+            padding: 10px 25px;
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            background: #161b22;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background: #30363d;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00cc6a);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            transition: all 0.3s ease;
+        }
+        
+        .tab:hover {
+            border-color: #00ff88;
+        }
+        
+        .tab.active {
+            background: #00ff88;
+            color: #0a0a0f;
+            border-color: #00ff88;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Status indicators */
+        .status-bar {
+            display: flex;
+            gap: 30px;
+            padding: 15px;
+            background: #161b22;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .status-icon.green { background: #238636; }
+        .status-icon.yellow { background: #9e6a03; }
+        .status-icon.red { background: #da3633; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>PROJECT UMBRA</h1>
+            <div class="subtitle">OPERATION: THE GLASS TOWER</div>
+        </header>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-icon green"></div>
+                <span>AGENT STATUS: ACTIVE</span>
+            </div>
+            <div class="status-item">
+                <div class="status-icon yellow"></div>
+                <span>THREAT LEVEL: MODERATE</span>
+            </div>
+            <div class="status-item">
+                <div class="status-icon green"></div>
+                <span>COMMS: SECURE</span>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('briefing')">BRIEFING</div>
+            <div class="tab" onclick="showTab('mission')">MISSION</div>
+            <div class="tab" onclick="showTab('gadgets')">GADGETS</div>
+            <div class="tab" onclick="showTab('dialogue')">INTEL</div>
+        </div>
+        
+        <!-- BRIEFING TAB -->
+        <div id="briefing" class="tab-content active">
+            <div class="briefing-panel">
+                <h2 style="font-family: 'Orbitron', sans-serif; margin-bottom: 20px;">📡 MISSION BRIEFING</h2>
+                
+                <div class="waveform" id="waveform">
+                    <!-- Generated by JS -->
+                </div>
+                
+                <div class="oracle-voice" id="oracleMessage">
+                    <p>"Echo-3, your target is Marcus Chen—alias 'Mr. Tanaka.' He's a data thief with a talent for disappearing. He's attending the NeoHorizon Expo as a buyer, but our client wants the stolen data retrieved and Chen... retired. Permanently. He's staying in Suite 4701. The arcology is a vertical city—47 floors of corporate glitz, tight security, and a thousand witnesses. Make it clean. Make it quiet. Oracle out."</p>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <h3 style="color: #ff3366; margin-bottom: 15px;">TARGET PROFILE</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div style="background: #161b22; padding: 15px; border-radius: 5px;">
+                            <div style="color: #8b949e; font-size: 0.8em;">NAME</div>
+                            <div style="color: #fff;">Marcus Chen</div>
+                        </div>
+                        <div style="background: #161b22; padding: 15px; border-radius: 5px;">
+                            <div style="color: #8b949e; font-size: 0.8em;">ALIAS</div>
+                            <div style="color: #fff;">Mr. Tanaka</div>
+                        </div>
+                        <div style="background: #161b22; padding: 15px; border-radius: 5px;">
+                            <div style="color: #8b949e; font-size: 0.8em;">LOCATION</div>
+                            <div style="color: #fff;">Suite 4701</div>
+                        </div>
+                        <div style="background: #161b22; padding: 15px; border-radius: 5px;">
+                            <div style="color: #8b949e; font-size: 0.8em;">OCCUPATION</div>
+                            <div style="color: #fff;">Corporate Espionage</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arcology-map">
+                <h2>🏢 SKYLINE ARCOLOGY - OSAKA, JAPAN</h2>
+                <div class="floor-grid">
+                    <div class="floor target" onclick="selectFloor(this)">
+                        <div class="floor-number">FLOOR 47</div>
+                        <div class="floor-name">Penthouse Level (TARGET LOCATION)</div>
+                        <div class="floor-security security-high">HIGH SECURITY</div>
+                    </div>
+                    <div class="floor" onclick="selectFloor(this)">
+                        <div class="floor-number">FLOOR 46</div>
+                        <div class="floor-name">Rooftop Garden & Helipad</div>
+                        <div class="floor-security security-medium">SERVICE ACCESS</div>
+                    </div>
+                    <div class="floor" onclick="selectFloor(this)">
+                        <div class="floor-number">FLOORS 36-45</div>
+                        <div class="floor-name">Executive Suites & Spa</div>
+                        <div class="floor-security security-high">VIP ONLY</div>
+                    </div>
+                    <div class="floor" onclick="selectFloor(this)">
+                        <div class="floor-number">FLOORS 21-35</div>
+                        <div class="floor-name">Hotel Rooms</div>
+                        <div class="floor-security security-medium">GUEST KEYCARD</div>
+                    </div>
+                    <div class="floor" onclick="selectFloor(this)">
+                        <div class="floor-number">FLOORS 6-20</div>
+                        <div class="floor-name">Corporate Offices</div>
+                        <div class="floor-security security-medium">EMPLOYEE ACCESS</div>
+                    </div>
+                    <div class="floor" onclick="selectFloor(this)">
+                        <div class="floor-number">FLOORS 1-5</div>
+                        <div class="floor-name">Public Expo & Atrium</div>
+                        <div class="floor-security security-low">LOW SECURITY</div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="action-btn" onclick="showTab('mission')">PROCEED TO MISSION PLANNING →</button>
+        </div>
+        
+        <!-- MISSION TAB -->
+        <div id="mission" class="tab-content">
+            <div class="progress-container">
+                <div class="progress-label">
+                    <span>MISSION PROGRESS</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+            
+            <div class="methods-panel">
+                <h2>🎯 SELECT ELIMINATION METHOD</h2>
+                <div class="method-cards">
+                    <div class="method-card" onclick="selectMethod('poison')">
+                        <h3>☠️ THE CONNOISSEUR</h3>
+                        <div class="codename">// POISON OPPORTUNITY</div>
+                        <div class="description">
+                            Target has imported Oolong tea delivered hourly. Infiltrate as waiter, acquire poison from medical station, lace the teapot. Clean. Elegant. Untraceable.
+                        </div>
+                        <div class="rating">
+                            <span class="rating-tag tag-silent">SILENT ASSASSIN</span>
+                            <span class="rating-tag tag-ghost">GHOST</span>
+                            <span class="rating-tag tag-surgical">SURGICAL</span>
+                        </div>
+                    </div>
+                    
+                    <div class="method-card" onclick="selectMethod('electro')">
+                        <h3>⚡ SHORT CIRCUIT</h3>
+                        <div class="codename">// ACCIDENTAL ELECTROCUTION</div>
+                        <div class="description">
+                            Faulty wiring in Suite 4701's hot tub. Acquire maintenance disguise, worsen the electrical fault, lure target to the tub. Death by "accident."
+                        </div>
+                        <div class="rating">
+                            <span class="rating-tag tag-silent">SILENT ASSASSIN</span>
+                            <span class="rating-tag tag-ghost">GHOST</span>
+                            <span class="rating-tag tag-surgical">SURGICAL</span>
+                        </div>
+                    </div>
+                    
+                    <div class="method-card" onclick="selectMethod('direct')">
+                        <h3>🔫 DIRECT APPROACH</h3>
+                        <div class="codename">// SILENCED PISTOL ELIMINATION</div>
+                        <div class="description">
+                            Infiltrate vertically through service areas and air ducts. Bypass biometric security. Confront and eliminate. Fast but risky—bodyguard in adjacent room.
+                        </div>
+                        <div class="rating">
+                            <span class="rating-tag tag-silent">SILENT ASSASSIN</span>
+                            <span class="rating-tag tag-ghost">GHOST</span>
+                            <span class="rating-tag tag-chaotic">CHAOTIC</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="execution-panel" id="executionPanel">
+                <h2>📋 EXECUTION PLAN</h2>
+                <div id="executionSteps"></div>
+                <button class="action-btn" id="executeBtn" onclick="executeStep()">EXECUTE NEXT STEP</button>
+            </div>
+            
+            <div class="mission-complete" id="missionComplete">
+                <h2>✓ CONTRACT FULFILLED</h2>
+                <p style="color: #8b949e; margin-bottom: 20px;">Target Neutralized • Collateral: Zero • Witnesses: Zero</p>
+                <div class="rating-display" id="finalRating"></div>
+                <button class="action-btn" onclick="resetMission()">NEW OPERATION</button>
+            </div>
+        </div>
+        
+        <!-- GADGETS TAB -->
+        <div id="gadgets" class="tab-content">
+            <div class="gadgets-panel">
+                <h2>🔧 HIGH-TIER GADGET ARSENAL</h2>
+                
+                <div class="gadget">
+                    <h3>SPECTER KEY</h3>
+                    <div class="tier">TECHNICIAN TREE • TIER 4</div>
+                    <p style="color: #8b949e; line-height: 1.6;">Adaptive RFID/Biometric Cloner. A sleek, pen-sized device that can scan and store up to three different access credentials: RFID signals, NFC data, and latent fingerprints.</p>
+                    <div class="features">
+                        <span class="feature-tag">Passive Scan (0.5m)</span>
+                        <span class="feature-tag">Print Lift</span>
+                        <span class="feature-tag">Auto Broadcast</span>
+                        <span class="feature-tag">10min Decay</span>
+                    </div>
+                </div>
+                
+                <div class="gadget">
+                    <h3>SONIC CATALYST</h3>
+                    <div class="tier">TECHNICIAN TREE • TIER 5</div>
+                    <p style="color: #8b949e; line-height: 1.6;">Resonance Destabilizer. Emits focused, high-frequency sonic pulses. Silent to human ears, devastating to glass and structural materials.</p>
+                    <div class="features">
+                        <span class="feature-tag">Glass Shatter</span>
+                        <span class="feature-tag">Structural Weaken</span>
+                        <span class="feature-tag">Electronic Disruption</span>
+                        <span class="feature-tag">3-4 Uses</span>
+                    </div>
+                </div>
+                
+                <div class="gadget">
+                    <h3>REVENANT PROTOCOL</h3>
+                    <div class="tier">GHOST TREE • TIER 5</div>
+                    <p style="color: #8b949e; line-height: 1.6;">AI Decoy Drone. Miniaturized drone with holographic projector and speaker array. The ultimate tool for misdirection and psychological manipulation.</p>
+                    <div class="features">
+                        <span class="feature-tag">Holographic Lure</span>
+                        <span class="feature-tag">Voice Mimic</span>
+                        <span class="feature-tag">Mobile Distraction</span>
+                        <span class="feature-tag">5min Battery</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- DIALOGUE/INTEL TAB -->
+        <div id="dialogue" class="tab-content">
+            <div class="dialogue-panel">
+                <h2>📡 INTERCEPTED TRANSMISSION: "GHOSTS IN THE MACHINE"</h2>
+                <p style="color: #8b949e; margin-bottom: 20px;">Post-Lagos Mission Debrief • Safehouse Intel Station • 02:47 UTC</p>
+                
+                <div id="dialogueContainer"></div>
+                
+                <button class="action-btn" id="dialogueBtn" onclick="playNextDialogue()">▶ PLAY TRANSMISSION</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize waveform
+        const waveform = document.getElementById('waveform');
+        for (let i = 0; i < 40; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            bar.style.animationDelay = `${Math.random() * 0.5}s`;
+            waveform.appendChild(bar);
+        }
+        
+        // Tab switching
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+        
+        // Floor selection
+        function selectFloor(element) {
+            document.querySelectorAll('.floor').forEach(f => f.style.background = '#161b22');
+            element.style.background = 'linear-gradient(90deg, #161b22 0%, rgba(0, 255, 136, 0.2) 100%)';
+        }
+        
+        // Method selection and execution
+        let selectedMethod = null;
+        let currentStep = 0;
+        
+        const methods = {
+            poison: {
+                name: "THE CONNOISSEUR",
+                steps: [
+                    { title: "Acquire Disguise", desc: "Subdue a waiter in the back storage room. Take his uniform and service keycard." },
+                    { title: "Acquire Poison", desc: "Infiltrate the medical station on Floor 3. Steal a vial of untraceable cardiac agent from the locked medicine cabinet." },
+                    { title: "Intercept Tea Service", desc: "Go to the executive kitchen on Floor 40. Distract the chef by tampering with a stove to cause a small fire. Lace the teapot." },
+                    { title: "Deliver the Tea", desc: "Deliver the tea yourself or let normal staff deliver it. Observe from a hidden vantage point." },
+                    { title: "Exfiltrate", desc: "Chen drinks the tea. Minutes later, he suffers a 'heart attack.' Exit through the service elevator." }
+                ],
+                ratings: ["SILENT ASSASSIN", "GHOST", "SURGICAL"]
+            },
+            electro: {
+                name: "SHORT CIRCUIT",
+                steps: [
+                    { title: "Acquire Disguise", desc: "Find and subdue a building maintenance technician in the basement utility area. Take his uniform and master access keycard." },
+                    { title: "Access Electrical Hub", desc: "Use technician access to reach the electrical hub on Floor 44. Locate the circuit for Suite 4701's bathroom." },
+                    { title: "Sabotage Wiring", desc: "Use hacking skills to worsen the fault remotely, making it lethal instead of just 'sparky.'" },
+                    { title: "Lure the Target", desc: "Hack the hotel's climate control to make his suite uncomfortably hot, encouraging him to use the tub sooner." },
+                    { title: "The Accident", desc: "When Chen enters the hot tub, the lethal wiring does the rest. Official report: 'accidental electrocution.'" }
+                ],
+                ratings: ["SILENT ASSASSIN", "GHOST", "SURGICAL"]
+            },
+            direct: {
+                name: "DIRECT APPROACH",
+                steps: [
+                    { title: "Infiltrate Vertically", desc: "Use the service stairwell and air ducts to bypass most security. Requires basic vent navigation ability." },
+                    { title: "Bypass Biometrics", desc: "Hack a security terminal on Floor 40 to register a temporary bypass, or clone a VIP's fingerprint." },
+                    { title: "Enter Suite 4701", desc: "Pick the lock or use a cloned keycard to gain entry." },
+                    { title: "Confront & Eliminate", desc: "Chen is working on his laptop. Time your silenced shot perfectly—bodyguard is in the adjacent room." },
+                    { title: "Exfiltrate", desc: "Escape via the rooftop helipad service ladder." }
+                ],
+                ratings: ["SILENT ASSASSIN", "GHOST", "CHAOTIC"]
+            }
+        };
+        
+        function selectMethod(method) {
+            selectedMethod = method;
+            currentStep = 0;
+            
+            document.querySelectorAll('.method-card').forEach(card => card.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            
+            const panel = document.getElementById('executionPanel');
+            const stepsContainer = document.getElementById('executionSteps');
+            
+            stepsContainer.innerHTML = methods[method].steps.map((step, index) => `
+                <div class="step" id="step${index}">
+                    <div class="step-number">STEP ${index + 1}</div>
+                    <div class="step-title">${step.title}</div>
+                    <div class="step-description">${step.desc}</div>
+                </div>
+            `).join('');
+            
+            panel.classList.add('active');
+            document.getElementById('step0').classList.add('active');
+            document.getElementById('executeBtn').disabled = false;
+            document.getElementById('missionComplete').classList.remove('active');
+            updateProgress(0);
+        }
+        
+        function executeStep() {
+            if (!selectedMethod) return;
+            
+            const steps = methods[selectedMethod].steps;
+            
+            document.getElementById(`step${currentStep}`).classList.remove('active');
+            document.getElementById(`step${currentStep}`).classList.add('completed');
+            
+            currentStep++;
+            updateProgress((currentStep / steps.length) * 100);
+            
+            if (currentStep >= steps.length) {
+                document.getElementById('executeBtn').disabled = true;
+                setTimeout(showMissionComplete, 500);
+            } else {
+                document.getElementById(`step${currentStep}`).classList.add('active');
+            }
+        }
+        
+        function updateProgress(percent) {
+            document.getElementById('progressFill').style.width = `${percent}%`;
+            document.getElementById('progressPercent').textContent = `${Math.round(percent)}%`;
+        }
+        
+        function showMissionComplete() {
+            const complete = document.getElementById('missionComplete');
+            const ratingDisplay = document.getElementById('finalRating');
+            
+            const ratingClasses = {
+                "SILENT ASSASSIN": "tag-silent",
+                "GHOST": "tag-ghost",
+                "SURGICAL": "tag-surgical",
+                "CHAOTIC": "tag-chaotic"
+            };
+            
+            ratingDisplay.innerHTML = methods[selectedMethod].ratings.map(rating => 
+                `<span class="rating-tag ${ratingClasses[rating]}">${rating}</span>`
+            ).join('');
+            
+            complete.classList.add('active');
+        }
+        
+        function resetMission() {
+            selectedMethod = null;
+            currentStep = 0;
+            document.querySelectorAll('.method-card').forEach(card => card.classList.remove('selected'));
+            document.getElementById('executionPanel').classList.remove('active');
+            document.getElementById('missionComplete').classList.remove('active');
+            updateProgress(0);
+        }
+        
+        // Dialogue system
+        const dialogueLines = [
+            { speaker: "ORACLE", type: "oracle", text: "...contract fulfilled. Target neutralized. Collateral: zero. Witnesses: zero. However, telemetry shows a seventeen-minute deviation from the projected mission timeline. Explain." },
+            { speaker: "KAEL", type: "kael", text: "Target had a guest. An unscheduled variable." },
+            { speaker: "ORACLE", type: "oracle", text: "Our intel showed he would be alone. Who was the guest?" },
+            { speaker: "KAEL", type: "kael", text: "A journalist. Adaora Obi. She was about to receive a data package from our target. Evidence of something big. Arms flowing through his port, but not TO anyone. FROM someone. A supplier we weren't told about." },
+            { speaker: "ORACLE", type: "oracle", text: "And the journalist? The data?" },
+            { speaker: "KAEL", type: "kael", text: "Gone. I let her walk." },
+            { speaker: "ORACLE", type: "oracle", text: "That was not your call to make, Echo-3. Your contract was Chen. Chen alone. Operational parameters are not suggestions." },
+            { speaker: "KAEL", type: "kael", text: "My 'operational parameters' didn't include the fact that Chen was a loose end for someone ELSE. Someone who wanted that data buried with him. Who, Oracle? Who fed you the intel for this contract?" },
+            { speaker: "ORACLE", type: "oracle", text: "You are perceptive, Kael. It's why you were chosen. But perception without context is a dangerous tool. The world you operate in has layers you are not yet... cleared to see." },
+            { speaker: "KAEL", type: "kael", text: "Then clear me." },
+            { speaker: "ORACLE", type: "oracle", text: "In time. For now, trust that your actions serve a necessary purpose. The journalist and her data... are irrelevant noise. The signal is what matters. And the signal... is getting clearer. Standby for your next assignment. Oracle out." },
+            { speaker: "KAEL", type: "kael", text: "[To himself] Irrelevant noise... or the only honest voice in the room?" }
+        ];
+        
+        let currentDialogue = 0;
+        
+        function playNextDialogue() {
+            if (currentDialogue >= dialogueLines.length) {
+                currentDialogue = 0;
+                document.getElementById('dialogueContainer').innerHTML = '';
+                document.getElementById('dialogueBtn').textContent = '▶ PLAY TRANSMISSION';
+                return;
+            }
+            
+            const line = dialogueLines[currentDialogue];
+            const container = document.getElementById('dialogueContainer');
+            
+            const div = document.createElement('div');
+            div.className = `dialogue-line ${line.type}`;
+            div.innerHTML = `
+                <div class="speaker">${line.speaker}</div>
+                <div>${line.text}</div>
+            `;
+            container.appendChild(div);
+            
+            currentDialogue++;
+            document.getElementById('dialogueBtn').textContent = currentDialogue >= dialogueLines.length ? '↻ RESTART' : '▶ CONTINUE';
+            
+            // Auto-scroll
+            container.scrollTop = container.scrollHeight;
+        }
+    </script>
+</body>
+</html>

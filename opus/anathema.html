@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Agent - Stealth Shooter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #0a0a0a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+        }
+        #gameContainer {
+            position: relative;
+        }
+        canvas {
+            border: 3px solid #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+            height: 600px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            text-align: center;
+        }
+        #overlay h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px #000;
+        }
+        #overlay p {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #restartBtn {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #444;
+            color: white;
+            border: 2px solid #666;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        #restartBtn:hover {
+            background: #555;
+        }
+        .win { color: #4a4; }
+        .lose { color: #a44; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="overlay">
+            <h1 id="overlayTitle">GAME OVER</h1>
+            <p id="overlayText">You have been eliminated.</p>
+            <button id="restartBtn">RESTART MISSION</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlayText = document.getElementById('overlayText');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Game state
+        let gameRunning = true;
+        let damageFlash = 0;
+
+        // Input handling
+        const keys = {};
+        let mouseX = 0, mouseY = 0;
+        let mouseDown = false;
+
+        // Player
+        const player = {
+            x: 100,
+            y: 300,
+            width: 20,
+            height: 20,
+            speed: 3,
+            health: 100,
+            maxHealth: 100,
+            ammo: 30,
+            angle: 0,
+            shootCooldown: 0
+        };
+
+        // Bullets
+        let bullets = [];
+        let enemyBullets = [];
+
+        // Enemies
+        let enemies = [];
+
+        // Pickups
+        let pickups = [];
+
+        // Walls/Level
+        const walls = [
+            // Outer walls
+            { x: 0, y: 0, width: 800, height: 20 },
+            { x: 0, y: 580, width: 800, height: 20 },
+            { x: 0, y: 0, width: 20, height: 600 },
+            { x: 780, y: 0, width: 20, height: 600 },
+            
+            // Room dividers - vertical
+            { x: 200, y: 20, width: 20, height: 150 },
+            { x: 200, y: 250, width: 20, height: 150 },
+            { x: 200, y: 480, width: 20, height: 100 },
+            
+            { x: 400, y: 20, width: 20, height: 200 },
+            { x: 400, y: 300, width: 20, height: 280 },
+            
+            { x: 600, y: 20, width: 20, height: 150 },
+            { x: 600, y: 250, width: 20, height: 200 },
+            { x: 600, y: 530, width: 20, height: 50 },
+            
+            // Horizontal dividers
+            { x: 220, y: 200, width: 100, height: 20 },
+            { x: 500, y: 150, width: 100, height: 20 },
+            { x: 620, y: 350, width: 100, height: 20 },
+            
+            // Obstacles/Cover
+            { x: 80, y: 100, width: 40, height: 40 },
+            { x: 280, y: 400, width: 60, height: 30 },
+            { x: 500, y: 500, width: 50, height: 50 },
+            { x: 700, y: 100, width: 40, height: 60 },
+            { x: 450, y: 250, width: 30, height: 30 },
+            { x: 320, y: 100, width: 50, height: 30 }
+        ];
+
+        function initEnemies() {
+            enemies = [
+                {
+                    x: 300, y: 150, width: 18, height: 18,
+                    health: 3, speed: 1.5, angle: 0,
+                    patrolPoints: [{ x: 250, y: 150 }, { x: 350, y: 150 }],
+                    patrolIndex: 0,
+                    state: 'patrol',
+                    visionRange: 150,
+                    visionAngle: Math.PI / 3,
+                    shootCooldown: 0,
+                    alertTimer: 0
+                },
+                {
+                    x: 500, y: 400, width: 18, height: 18,
+                    health: 3, speed: 1.5, angle: 0,
+                    patrolPoints: [{ x: 450, y: 350 }, { x: 550, y: 450 }],
+                    patrolIndex: 0,
+                    state: 'patrol',
+                    visionRange: 150,
+                    visionAngle: Math.PI / 3,
+                    shootCooldown: 0,
+                    alertTimer: 0
+                },
+                {
+                    x: 700, y: 250, width: 18, height: 18,
+                    health: 3, speed: 1.5, angle: 0,
+                    patrolPoints: [{ x: 650, y: 200 }, { x: 750, y: 300 }],
+                    patrolIndex: 0,
+                    state: 'patrol',
+                    visionRange: 150,
+                    visionAngle: Math.PI / 3,
+                    shootCooldown: 0,
+                    alertTimer: 0
+                },
+                {
+                    x: 300, y: 500, width: 18, height: 18,
+                    health: 3, speed: 1.5, angle: 0,
+                    patrolPoints: [{ x: 250, y: 450 }, { x: 350, y: 550 }],
+                    patrolIndex: 0,
+                    state: 'patrol',
+                    visionRange: 150,
+                    visionAngle: Math.PI / 3,
+                    shootCooldown: 0,
+                    alertTimer: 0
+                },
+                {
+                    x: 700, y: 500, width: 18, height: 18,
+                    health: 3, speed: 1.8, angle: 0,
+                    patrolPoints: [{ x: 650, y: 480 }, { x: 750, y: 550 }],
+                    patrolIndex: 0,
+                    state: 'patrol',
+                    visionRange: 180,
+                    visionAngle: Math.PI / 2.5,
+                    shootCooldown: 0,
+                    alertTimer: 0
+                }
+            ];
+        }
+
+        function resetGame() {
+            player.x = 100;
+            player.y = 300;
+            player.health = 100;
+            player.ammo = 30;
+            player.shootCooldown = 0;
+            bullets = [];
+            enemyBullets = [];
+            pickups = [];
+            initEnemies();
+            gameRunning = true;
+            damageFlash = 0;
+            overlay.style.display = 'none';
+        }
+
+        // Input events
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') {
+                e.preventDefault();
+                shoot();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            mouseDown = true;
+            shoot();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            mouseDown = false;
+        });
+
+        restartBtn.addEventListener('click', resetGame);
+
+        function shoot() {
+            if (!gameRunning || player.ammo <= 0 || player.shootCooldown > 0) return;
+            
+            player.ammo--;
+            player.shootCooldown = 15;
+            
+            const bulletSpeed = 8;
+            bullets.push({
+                x: player.x + player.width / 2,
+                y: player.y + player.height / 2,
+                vx: Math.cos(player.angle) * bulletSpeed,
+                vy: Math.sin(player.angle) * bulletSpeed,
+                width: 4,
+                height: 4
+            });
+        }
+
+        function enemyShoot(enemy) {
+            if (enemy.shootCooldown > 0) return;
+            
+            enemy.shootCooldown = 60;
+            const bulletSpeed = 5;
+            const angle = Math.atan2(
+                player.y + player.height / 2 - (enemy.y + enemy.height / 2),
+                player.x + player.width / 2 - (enemy.x + enemy.width / 2)
+            );
+            
+            enemyBullets.push({
+                x: enemy.x + enemy.width / 2,
+                y: enemy.y + enemy.height / 2,
+                vx: Math.cos(angle) * bulletSpeed,
+                vy: Math.sin(angle) * bulletSpeed,
+                width: 4,
+                height: 4
+            });
+        }
+
+        function rectCollision(a, b) {
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
+        }
+
+        function pointInWall(x, y, width, height) {
+            const testRect = { x, y, width, height };
+            for (const wall of walls) {
+                if (rectCollision(testRect, wall)) return true;
+            }
+            return false;
+        }
+
+        function lineOfSight(x1, y1, x2, y2) {
+            const steps = 20;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = x1 + (x2 - x1) * t;
+                const y = y1 + (y2 - y1) * t;
+                if (pointInWall(x - 2, y - 2, 4, 4)) return false;
+            }
+            return true;
+        }
+
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+
+        function updatePlayer() {
+            if (player.shootCooldown > 0) player.shootCooldown--;
+            
+            // Calculate angle to mouse
+            player.angle = Math.atan2(
+                mouseY - (player.y + player.height / 2),
+                mouseX - (player.x + player.width / 2)
+            );
+            
+            // Movement
+            let dx = 0, dy = 0;
+            if (keys['w'] || keys['arrowup']) dy = -1;
+            if (keys['s'] || keys['arrowdown']) dy = 1;
+            if (keys['a'] || keys['arrowleft']) dx = -1;
+            if (keys['d'] || keys['arrowright']) dx = 1;
+            
+            // Normalize diagonal movement
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.707;
+                dy *= 0.707;
+            }
+            
+            // Apply movement with collision
+            const newX = player.x + dx * player.speed;
+            const newY = player.y + dy * player.speed;
+            
+            if (!pointInWall(newX, player.y, player.width, player.height)) {
+                player.x = newX;
+            }
+            if (!pointInWall(player.x, newY, player.width, player.height)) {
+                player.y = newY;
+            }
+            
+            // Clamp to canvas
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+        }
+
+        function updateEnemies() {
+            for (const enemy of enemies) {
+                if (enemy.shootCooldown > 0) enemy.shootCooldown--;
+                
+                const playerCenterX = player.x + player.width / 2;
+                const playerCenterY = player.y + player.height / 2;
+                const enemyCenterX = enemy.x + enemy.width / 2;
+                const enemyCenterY = enemy.y + enemy.height / 2;
+                const dist = distance(playerCenterX, playerCenterY, enemyCenterX, enemyCenterY);
+                
+                // Check if player is in vision
+                const angleToPlayer = Math.atan2(playerCenterY - enemyCenterY, playerCenterX - enemyCenterX);
+                let angleDiff = Math.abs(angleToPlayer - enemy.angle);
+                if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+                
+                const canSeePlayer = dist < enemy.visionRange && 
+                                    angleDiff < enemy.visionAngle / 2 &&
+                                    lineOfSight(enemyCenterX, enemyCenterY, playerCenterX, playerCenterY);
+                
+                const tooClose = dist < 80 && lineOfSight(enemyCenterX, enemyCenterY, playerCenterX, playerCenterY);
+                
+                if (canSeePlayer || tooClose) {
+                    enemy.state = 'chase';
+                    enemy.alertTimer = 180;
+                } else if (enemy.alertTimer > 0) {
+                    enemy.alertTimer--;
+                    if (enemy.alertTimer <= 0) {
+                        enemy.state = 'patrol';
+                    }
+                }
+                
+                if (enemy.state === 'chase') {
+                    // Chase player
+                    enemy.angle = angleToPlayer;
+                    
+                    if (dist > 60) {
+                        const moveX = Math.cos(enemy.angle) * enemy.speed;
+                        const moveY = Math.sin(enemy.angle) * enemy.speed;
+                        
+                        const newX = enemy.x + moveX;
+                        const newY = enemy.y + moveY;
+                        
+                        if (!pointInWall(newX, enemy.y, enemy.width, enemy.height)) {
+                            enemy.x = newX;
+                        }
+                        if (!pointInWall(enemy.x, newY, enemy.width, enemy.height)) {
+                            enemy.y = newY;
+                        }
+                    }
+                    
+                    // Shoot at player
+                    if (dist < 200 && lineOfSight(enemyCenterX, enemyCenterY, playerCenterX, playerCenterY)) {
+                        enemyShoot(enemy);
+                    }
+                } else {
+                    // Patrol
+                    const target = enemy.patrolPoints[enemy.patrolIndex];
+                    const distToTarget = distance(enemy.x, enemy.y, target.x, target.y);
+                    
+                    if (distToTarget < 5) {
+                        enemy.patrolIndex = (enemy.patrolIndex + 1) % enemy.patrolPoints.length;
+                    } else {
+                        enemy.angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+                        const moveX = Math.cos(enemy.angle) * enemy.speed * 0.5;
+                        const moveY = Math.sin(enemy.angle) * enemy.speed * 0.5;
+                        
+                        const newX = enemy.x + moveX;
+                        const newY = enemy.y + moveY;
+                        
+                        if (!pointInWall(newX, enemy.y, enemy.width, enemy.height)) {
+                            enemy.x = newX;
+                        }
+                        if (!pointInWall(enemy.x, newY, enemy.width, enemy.height)) {
+                            enemy.y = newY;
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateBullets() {
+            // Player bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                
+                // Check wall collision
+                if (pointInWall(b.x, b.y, b.width, b.height)) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Check bounds
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Check enemy collision
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (rectCollision(b, enemies[j])) {
+                        bullets.splice(i, 1);
+                        enemies[j].health--;
+                        enemies[j].state = 'chase';
+                        enemies[j].alertTimer = 180;
+                        
+                        if (enemies[j].health <= 0) {
+                            // Drop ammo
+                            if (Math.random() < 0.6) {
+                                pickups.push({
+                                    x: enemies[j].x,
+                                    y: enemies[j].y,
+                                    width: 12,
+                                    height: 12,
+                                    type: 'ammo',
+                                    amount: 10
+                                });
+                            }
+                            enemies.splice(j, 1);
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Enemy bullets
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const b = enemyBullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                
+                // Check wall collision
+                if (pointInWall(b.x, b.y, b.width, b.height)) {
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Check bounds
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Check player collision
+                if (rectCollision(b, player)) {
+                    enemyBullets.splice(i, 1);
+                    player.health -= 15;
+                    damageFlash = 10;
+                    
+                    if (player.health <= 0) {
+                        player.health = 0;
+                        gameOver(false);
+                    }
+                }
+            }
+        }
+
+        function updatePickups() {
+            for (let i = pickups.length - 1; i >= 0; i--) {
+                if (rectCollision(player, pickups[i])) {
+                    if (pickups[i].type === 'ammo') {
+                        player.ammo += pickups[i].amount;
+                    }
+                    pickups.splice(i, 1);
+                }
+            }
+        }
+
+        function gameOver(won) {
+            gameRunning = false;
+            overlay.style.display = 'flex';
+            
+            if (won) {
+                overlayTitle.textContent = 'MISSION COMPLETE';
+                overlayTitle.className = 'win';
+                overlayText.textContent = 'All targets eliminated. Well done, Agent.';
+            } else {
+                overlayTitle.textContent = 'MISSION FAILED';
+                overlayTitle.className = 'lose';
+                overlayText.textContent = 'You have been eliminated.';
+            }
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+            ctx.rotate(player.angle);
+            
+            // Body
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            
+            // Suit lapels
+            ctx.fillStyle = '#0f0f1a';
+            ctx.fillRect(-player.width / 4, -player.height / 2, player.width / 2, player.height);
+            
+            // Gun arm
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(player.width / 2 - 2, -3, 10, 6);
+            
+            ctx.restore();
+        }
+
+        function drawEnemies() {
+            for (const enemy of enemies) {
+                ctx.save();
+                ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                
+                // Vision cone (when patrolling)
+                if (enemy.state === 'patrol') {
+                    ctx.save();
+                    ctx.rotate(enemy.angle);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.arc(0, 0, enemy.visionRange, -enemy.visionAngle / 2, enemy.visionAngle / 2);
+                    ctx.closePath();
+                    ctx.fillStyle = 'rgba(255, 255, 100, 0.1)';
+                    ctx.fill();
+                    ctx.restore();
+                }
+                
+                ctx.rotate(enemy.angle);
+                
+                // Body
+                ctx.fillStyle = enemy.state === 'chase' ? '#8b0000' : '#4a5568';
+                ctx.fillRect(-enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height);
+                
+                // Gun
+                ctx.fillStyle = '#2d3748';
+                ctx.fillRect(enemy.width / 2 - 2, -2, 8, 4);
+                
+                ctx.restore();
+                
+                // Health indicator
+                if (enemy.health < 3) {
+                    ctx.fillStyle = '#ff4444';
+                    const healthWidth = (enemy.health / 3) * enemy.width;
+                    ctx.fillRect(enemy.x, enemy.y - 6, healthWidth, 3);
+                }
+            }
+        }
+
+        function drawBullets() {
+            // Player bullets
+            ctx.fillStyle = '#ffdd44';
+            for (const b of bullets) {
+                ctx.fillRect(b.x - b.width / 2, b.y - b.height / 2, b.width, b.height);
+            }
+            
+            // Enemy bullets
+            ctx.fillStyle = '#ff4444';
+            for (const b of enemyBullets) {
+                ctx.fillRect(b.x - b.width / 2, b.y - b.height / 2, b.width, b.height);
+            }
+        }
+
+        function drawWalls() {
+            for (const wall of walls) {
+                // Wall shadow
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(wall.x + 3, wall.y + 3, wall.width, wall.height);
+                
+                // Wall
+                ctx.fillStyle = '#3d3d3d';
+                ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+                
+                // Wall highlight
+                ctx.fillStyle = '#4a4a4a';
+                ctx.fillRect(wall.x, wall.y, wall.width, 2);
+                ctx.fillRect(wall.x, wall.y, 2, wall.height);
+            }
+        }
+
+        function drawPickups() {
+            for (const pickup of pickups) {
+                ctx.fillStyle = '#44aa44';
+                ctx.fillRect(pickup.x, pickup.y, pickup.width, pickup.height);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '10px Courier New';
+                ctx.fillText('A', pickup.x + 3, pickup.y + 10);
+            }
+        }
+
+        function drawHUD() {
+            // Health bar background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(10, 10, 150, 20);
+            
+            // Health bar
+            const healthPercent = player.health / player.maxHealth;
+            ctx.fillStyle = healthPercent > 0.5 ? '#44aa44' : healthPercent > 0.25 ? '#aaaa44' : '#aa4444';
+            ctx.fillRect(12, 12, 146 * healthPercent, 16);
+            
+            // Health text
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Courier New';
+            ctx.fillText(`HP: ${player.health}`, 16, 25);
+            
+            // Ammo
+            ctx.fillStyle = '#333';
+            ctx.fillRect(canvas.width - 100, 10, 90, 20);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Courier New';
+            ctx.fillText(`AMMO: ${player.ammo}`, canvas.width - 95, 25);
+            
+            // Enemy count
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Courier New';
+            ctx.fillText(`Targets: ${enemies.length}`, canvas.width / 2 - 35, 25);
+        }
+
+        function drawDamageFlash() {
+            if (damageFlash > 0) {
+                ctx.fillStyle = `rgba(255, 0, 0, ${damageFlash / 20})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                damageFlash--;
+            }
+        }
+
+        function draw() {
+            // Clear canvas - floor color
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Floor pattern
+            ctx.fillStyle = '#1e1e1e';
+            for (let x = 0; x < canvas.width; x += 40) {
+                for (let y = 0; y < canvas.height; y += 40) {
+                    if ((x / 40 + y / 40) % 2 === 0) {
+                        ctx.fillRect(x, y, 40, 40);
+                    }
+                }
+            }
+            
+            drawWalls();
+            drawPickups();
+            drawEnemies();
+            drawPlayer();
+            drawBullets();
+            drawHUD();
+            drawDamageFlash();
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            
+            updatePlayer();
+            updateEnemies();
+            updateBullets();
+            updatePickups();
+            
+            // Check win condition
+            if (enemies.length === 0) {
+                gameOver(true);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        initEnemies();
+        gameLoop();
+    </script>
+</body>
+</html>

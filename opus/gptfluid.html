@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>2D Fluid Sim — Stable Fluids (single file)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0e0f14; color: #e6e8ef; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; grid-template-columns: 1fr 300px; }
+  #view {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    background: #000;
+    border: 1px solid #22283c;
+    border-radius: 8px;
+    image-rendering: pixelated;
+  }
+  .panel {
+    background: #151a28; border: 1px solid #22283c; border-radius: 8px; padding: 12px; position: sticky; top: 12px; height: fit-content;
+  }
+  .row { margin-bottom: 10px; }
+  .row label { display: block; font-size: 12px; color: #9aa0b5; margin-bottom: 6px; }
+  input[type="range"] { width: 100%; }
+  button { background:#1f2538; color:#e6e8ef; border:1px solid #2b3150; border-radius:8px; padding:8px 12px; cursor:pointer; }
+  button:hover { border-color:#5cc8ff; }
+  .muted { color:#9aa0b5; font-size:12px; }
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="view"></canvas>
+    <div class="panel">
+      <div style="font-weight:700;margin-bottom:6px;">2D Fluid (Navier–Stokes)</div>
+      <div class="row">
+        <label>Color</label>
+        <input id="color" type="color" value="#66ccff">
+      </div>
+      <div class="row">
+        <label>Brush size <span id="brushLbl" class="muted"></span></label>
+        <input id="brush" type="range" min="1" max="32" step="1" value="12">
+      </div>
+      <div class="row">
+        <label>Diffusion (density) <span id="diffLbl" class="muted"></span></label>
+        <input id="diff" type="range" min="0" max="0.003" step="0.0001" value="0.00025">
+      </div>
+      <div class="row">
+        <label>Viscosity (velocity diffusion) <span id="viscLbl" class="muted"></span></label>
+        <input id="visc" type="range" min="0" max="0.003" step="0.0001" value="0.00015">
+      </div>
+      <div class="row">
+        <label>Force scale <span id="forceLbl" class="muted"></span></label>
+        <input id="force" type="range" min="5" max="250" step="1" value="80">
+      </div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button id="clear">Clear</button>
+        <button id="pause">Pause</button>
+      </div>
+      <div class="muted">Left click + drag to inject dye and push the fluid. Hotkeys: C=Clear, P=Pause.</div>
+      <div id="stat" class="muted" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // Grid resolution (N x N), arrays sized (N+2)^2 for boundaries
+  const N = 128;
+  const SIZE = (N + 2) * (N + 2);
+  const IX = (x, y) => x + (N + 2) * y;
+
+  // Params
+  let diff = 0.00025;
+  let visc = 0.00015;
+  const iter = 20;          // Gauss–Seidel iterations
+  const fixedDt = 1/60;     // simulation step
+  let paused = false;
+
+  // Fields
+  const u = new Float32Array(SIZE);
+  const v = new Float32Array(SIZE);
+  const u0 = new Float32Array(SIZE);
+  const v0 = new Float32Array(SIZE);
+
+  const r = new Float32Array(SIZE);
+  const g = new Float32Array(SIZE);
+  const b = new Float32Array(SIZE);
+  const r0 = new Float32Array(SIZE);
+  const g0 = new Float32Array(SIZE);
+  const b0 = new Float32Array(SIZE);
+
+  // Core ops
+  const addSource = (x, s, dt) => { for (let i = 0; i < SIZE; i++) x[i] += dt * s[i]; };
+
+  function set_bnd(bn, x) {
+    for (let i = 1; i <= N; i++) {
+      x[IX(0, i)]     = bn === 1 ? -x[IX(1, i)]     : x[IX(1, i)];
+      x[IX(N+1, i)]   = bn === 1 ? -x[IX(N, i)]     : x[IX(N, i)];
+      x[IX(i, 0)]     = bn === 2 ? -x[IX(i, 1)]     : x[IX(i, 1)];
+      x[IX(i, N+1)]   = bn === 2 ? -x[IX(i, N)]     : x[IX(i, N)];
+    }
+    x[IX(0, 0)]         = 0.5*(x[IX(1,0)]     + x[IX(0,1)]);
+    x[IX(0, N+1)]       = 0.5*(x[IX(1,N+1)]   + x[IX(0,N)]);
+    x[IX(N+1, 0)]       = 0.5*(x[IX(N,0)]     + x[IX(N+1,1)]);
+    x[IX(N+1, N+1)]     = 0.5*(x[IX(N,N+1)]   + x[IX(N+1,N)]);
+  }
+
+  function lin_solve(bn, x, x0, a, c) {
+    const cR = 1 / c;
+    for (let k = 0; k < iter; k++) {
+      for (let y = 1; y <= N; y++) {
+        let idx = IX(1, y);
+        for (let xPos = 1; xPos <= N; xPos++, idx++) {
+          x[idx] = (x0[idx] + a * (x[idx-1] + x[idx+1] + x[idx-(N+2)] + x[idx+(N+2)])) * cR;
+        }
+      }
+      set_bnd(bn, x);
+    }
+  }
+
+  function diffuse(bn, x, x0, d, dt) {
+    const a = dt * d * N * N;
+    lin_solve(bn, x, x0, a, 1 + 4 * a);
+  }
+
+  function advect(bn, d, d0, u, v, dt) {
+    const dt0 = dt * N;
+    for (let i = 1; i <= N; i++) {
+      for (let j = 1; j <= N; j++) {
+        let x = i - dt0 * u[IX(i,j)];
+        let y = j - dt0 * v[IX(i,j)];
+        if (x < 0.5) x = 0.5; if (x > N + 0.5) x = N + 0.5;
+        if (y < 0.5) y = 0.5; if (y > N + 0.5) y = N + 0.5;
+        const i0 = Math.floor(x), i1 = i0 + 1;
+        const j0 = Math.floor(y), j1 = j0 + 1;
+        const s1 = x - i0, s0 = 1 - s1;
+        const t1 = y - j0, t0 = 1 - t1;
+        d[IX(i,j)] =
+          s0*(t0*d0[IX(i0,j0)] + t1*d0[IX(i0,j1)]) +
+          s1*(t0*d0[IX(i1,j0)] + t1*d0[IX(i1,j1)]);
+      }
+    }
+    set_bnd(bn, d);
+  }
+
+  function project(u, v, p, div) {
+    for (let i = 1; i <= N; i++) {
+      for (let j = 1; j <= N; j++) {
+        const idx = IX(i,j);
+        div[idx] = -0.5 * (u[IX(i+1,j)] - u[IX(i-1,j)] + v[IX(i,j+1)] - v[IX(i,j-1)]) / N;
+        p[idx] = 0;
+      }
+    }
+    set_bnd(0, div); set_bnd(0, p);
+    lin_solve(0, p, div, 1, 4);
+    for (let i = 1; i <= N; i++) {
+      for (let j = 1; j <= N; j++) {
+        const idx = IX(i,j);
+        u[idx] -= 0.5 * N * (p[IX(i+1,j)] - p[IX(i-1,j)]);
+        v[idx] -= 0.5 * N * (p[IX(i,j+1)] - p[IX(i,j-1)]);
+      }
+    }
+    set_bnd(1, u); set_bnd(2, v);
+  }
+
+  function vel_step(u, v, u0, v0, visc, dt) {
+    addSource(u, u0, dt); addSource(v, v0, dt);
+    [u0, u] = [u, u0]; diffuse(1, u, u0, visc, dt);
+    [v0, v] = [v, v0]; diffuse(2, v, v0, visc, dt);
+    project(u, v, u0, v0);
+    [u0, u] = [u, u0]; [v0, v] = [v, v0];
+    advect(1, u, u0, u0, v0, dt);
+    advect(2, v, v0, u0, v0, dt);
+    project(u, v, u0, v0);
+  }
+
+  function dens_step(d, d0, u, v, diff, dt) {
+    addSource(d, d0, dt);
+    [d0, d] = [d, d0]; diffuse(0, d, d0, diff, dt);
+    [d0, d] = [d, d0]; advect(0, d, d0, u, v, dt);
+  }
+
+  // Canvas/render setup
+  const canvas = document.getElementById('view');
+  const ctx = canvas.getContext('2d');
+  const off = document.createElement('canvas');
+  off.width = N; off.height = N;
+  const offCtx = off.getContext('2d', { willReadFrequently: true });
+  let img = offCtx.createImageData(N, N);
+
+  function resize() {
+    // keep it square based on its CSS pixel width
+    const cssW = canvas.clientWidth || 512;
+    const cssH = cssW; // aspect-ratio in CSS keeps it square visually
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    ctx.imageSmoothingEnabled = false;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function render() {
+    const data = img.data;
+    let p = 0;
+    for (let j = 1; j <= N; j++) {
+      for (let i = 1; i <= N; i++) {
+        const s = IX(i,j);
+        data[p++] = Math.max(0, Math.min(255, r[s] * 255));
+        data[p++] = Math.max(0, Math.min(255, g[s] * 255));
+        data[p++] = Math.max(0, Math.min(255, b[s] * 255));
+        data[p++] = 255;
+      }
+    }
+    offCtx.putImageData(img, 0, 0);
+    ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+  }
+
+  // Interaction
+  const colorEl = document.getElementById('color');
+  const brushEl = document.getElementById('brush');
+  const diffEl = document.getElementById('diff');
+  const viscEl = document.getElementById('visc');
+  const forceEl = document.getElementById('force');
+  const clearBtn = document.getElementById('clear');
+  const pauseBtn = document.getElementById('pause');
+  const statEl = document.getElementById('stat');
+  const brushLbl = document.getElementById('brushLbl');
+  const diffLbl = document.getElementById('diffLbl');
+  const viscLbl = document.getElementById('viscLbl');
+  const forceLbl = document.getElementById('forceLbl');
+
+  let brush = parseInt(brushEl.value, 10);
+  let forceScale = parseFloat(forceEl.value);
+  brushLbl.textContent = `(${brush})`;
+  diffLbl.textContent = `(${diff})`;
+  viscLbl.textContent = `(${visc})`;
+  forceLbl.textContent = `(${forceScale})`;
+
+  brushEl.addEventListener('input', () => { brush = +brushEl.value; brushLbl.textContent = `(${brush})`; });
+  diffEl.addEventListener('input', () => { diff = +diffEl.value; diffLbl.textContent = `(${diff})`; });
+  viscEl.addEventListener('input', () => { visc = +viscEl.value; viscLbl.textContent = `(${visc})`; });
+  forceEl.addEventListener('input', () => { forceScale = +forceEl.value; forceLbl.textContent = `(${forceScale})`; });
+
+  clearBtn.addEventListener('click', () => {
+    u.fill(0); v.fill(0); u0.fill(0); v0.fill(0);
+    r.fill(0); g.fill(0); b.fill(0); r0.fill(0); g0.fill(0); b0.fill(0);
+  });
+  pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+  });
+
+  function hexToRgb1(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return { r: ((n>>16)&255)/255, g: ((n>>8)&255)/255, b: (n&255)/255 };
+  }
+
+  function splatDensity(cx, cy, radius, R, G, B, strength = 30) {
+    const r2 = radius * radius;
+    for (let dy = -radius; dy <= radius; dy++) {
+      const yy = cy + dy; if (yy < 1 || yy > N) continue;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const xx = cx + dx; if (xx < 1 || xx > N) continue;
+        const d2 = dx*dx + dy*dy; if (d2 > r2) continue;
+        const w = 1 - Math.sqrt(d2) / radius;
+        const id = IX(xx, yy);
+        r0[id] += R * w * strength;
+        g0[id] += G * w * strength;
+        b0[id] += B * w * strength;
+      }
+    }
+  }
+
+  function splatVelocity(cx, cy, radius, fx, fy) {
+    const r2 = radius * radius;
+    for (let dy = -radius; dy <= radius; dy++) {
+      const yy = cy + dy; if (yy < 1 || yy > N) continue;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const xx = cx + dx; if (xx < 1 || xx > N) continue;
+        const d2 = dx*dx + dy*dy; if (d2 > r2) continue;
+        const w = 1 - Math.sqrt(d2) / radius;
+        const id = IX(xx, yy);
+        u0[id] += fx * w;
+        v0[id] += fy * w;
+      }
+    }
+  }
+
+  function toGrid(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    const gx = Math.max(1, Math.min(N, Math.floor(x * N) + 1));
+    const gy = Math.max(1, Math.min(N, Math.floor(y * N) + 1));
+    return { x: gx, y: gy };
+  }
+
+  let down = false, lastGX = 0, lastGY = 0;
+  function pointerDown(e) {
+    down = true;
+    const p = toGrid(e);
+    lastGX = p.x; lastGY = p.y;
+    const { r:R, g:G, b:B } = hexToRgb1(colorEl.value);
+    splatDensity(p.x, p.y, brush, R, G, B);
+  }
+  function pointerMove(e) {
+    if (!down) return;
+    const p = toGrid(e);
+    const dx = p.x - lastGX;
+    const dy = p.y - lastGY;
+    splatVelocity(p.x, p.y, brush, dx * forceScale, dy * forceScale);
+    const { r:R, g:G, b:B } = hexToRgb1(colorEl.value);
+    splatDensity(p.x, p.y, brush, R, G, B);
+    lastGX = p.x; lastGY = p.y;
+  }
+  function pointerUp() { down = false; }
+
+  canvas.addEventListener('mousedown', pointerDown);
+  window.addEventListener('mousemove', pointerMove);
+  window.addEventListener('mouseup', pointerUp);
+  // touch support
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); pointerDown(e.touches[0]); }, { passive:false });
+  window.addEventListener('touchmove', (e) => { e.preventDefault(); pointerMove(e.touches[0]); }, { passive:false });
+  window.addEventListener('touchend', pointerUp);
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'c') clearBtn.click();
+    if (e.key.toLowerCase() === 'p') pauseBtn.click();
+  });
+
+  // Sim loop
+  let last = performance.now(), acc = 0;
+  let fpsT = performance.now(), fpsCount = 0, fpsSum = 0;
+
+  function tick(now) {
+    requestAnimationFrame(tick);
+    const frame = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (!paused) {
+      acc += frame;
+      while (acc >= fixedDt) {
+        vel_step(u, v, u0, v0, visc, fixedDt);
+        dens_step(r, r0, u, v, diff, fixedDt);
+        dens_step(g, g0, u, v, diff, fixedDt);
+        dens_step(b, b0, u, v, diff, fixedDt);
+        u0.fill(0); v0.fill(0); r0.fill(0); g0.fill(0); b0.fill(0);
+        acc -= fixedDt;
+      }
+      render();
+    }
+
+    fpsSum += frame; fpsCount++;
+    if (now - fpsT > 500) {
+      const fps = (fpsCount / fpsSum).toFixed(0);
+      document.getElementById('stat').textContent = `Grid ${N}×${N} | FPS ${fps} | diff ${diff} | visc ${visc}`;
+      fpsSum = 0; fpsCount = 0; fpsT = now;
+    }
+  }
+  requestAnimationFrame(tick);
+
+  // Seed a bit so it’s not empty
+  (function seed() {
+    const { r:R, g:G, b:B } = hexToRgb1('#66ccff');
+    for (let k = 0; k < 10; k++) {
+      const x = Math.floor(1 + Math.random() * N);
+      const y = Math.floor(1 + Math.random() * N);
+      splatDensity(x, y, 8, R, G, B, 20);
+      splatVelocity(x, y, 10, (Math.random()-0.5)*120, (Math.random()-0.5)*120);
+    }
+  })();
+})();
+</script>
+</body>
+</html>

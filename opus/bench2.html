@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Evolving Rules CA - Emergence Engine</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      background: #0a0a0f; 
+      min-height: 100vh;
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      font-family: 'Courier New', monospace; 
+      color: #0ff; 
+      padding: 20px;
+    }
+    h1 { 
+      font-size: 18px; 
+      margin-bottom: 10px; 
+      text-shadow: 0 0 10px #0ff;
+    }
+    #container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+    canvas { 
+      border: 1px solid #333; 
+      background: #000;
+    }
+    #stats { 
+      background: #111; 
+      padding: 15px; 
+      border: 1px solid #333; 
+      font-size: 11px; 
+      line-height: 1.8;
+      min-width: 280px;
+    }
+    .metric { color: #0f0; }
+    .label { color: #888; }
+    .highlight { color: #ff0; }
+    #ruleViz { margin-top: 10px; }
+    button {
+      background: #222;
+      color: #0ff;
+      border: 1px solid #0ff;
+      padding: 8px 16px;
+      margin: 5px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:hover { background: #0ff; color: #000; }
+    #controls { margin: 15px 0; }
+  </style>
+</head>
+<body>
+  <h1>⚡ EVOLVING RULES CELLULAR AUTOMATON ⚡</h1>
+  <div id="controls">
+    <button onclick="reset()">RESET</button>
+    <button onclick="togglePause()">PAUSE/PLAY</button>
+    <button onclick="mutateNow()">FORCE MUTATION</button>
+  </div>
+  <div id="container">
+    <canvas id="ca"></canvas>
+    <div id="stats">
+      <div><span class="label">Generation:</span> <span class="metric" id="gen">0</span></div>
+      <div><span class="label">Rule Mutations:</span> <span class="metric" id="mutations">0</span></div>
+      <div><span class="label">Activity:</span> <span class="metric" id="activity">0%</span></div>
+      <div><span class="label">Entropy:</span> <span class="metric" id="entropy">0</span></div>
+      <div><span class="label">Cluster Diversity:</span> <span class="metric" id="clusters">0</span></div>
+      <div><span class="label">Edge Density:</span> <span class="metric" id="edges">0%</span></div>
+      <div><span class="label">Rule Stability:</span> <span class="metric" id="stability">0%</span></div>
+      <hr style="border-color:#333;margin:10px 0;">
+      <div class="highlight">Rule DNA Visualization:</div>
+      <canvas id="ruleViz" width="250" height="100"></canvas>
+      <hr style="border-color:#333;margin:10px 0;">
+      <div class="label" style="font-size:10px;">
+        Rules mutate when patterns are too static or too chaotic.<br>
+        Watch for emergent structures, gliders, oscillators...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const W = 200, H = 200, CELL = 3;
+    const canvas = document.getElementById('ca');
+    const ctx = canvas.getContext('2d');
+    canvas.width = W * CELL;
+    canvas.height = H * CELL;
+    
+    const ruleCanvas = document.getElementById('ruleViz');
+    const ruleCtx = ruleCanvas.getContext('2d');
+    
+    let grid, nextGrid, rules, ruleAge, generation, totalMutations, paused;
+    let history = [];
+    const HISTORY_LEN = 30;
+    
+    // Rule genome: maps 512 possible 3x3 neighborhoods to output state
+    // But we use a compressed representation with weights
+    class RuleGenome {
+      constructor() {
+        // Core rule weights - determines behavior
+        this.surviveWeights = new Float32Array(9).map(() => Math.random() * 2 - 1);
+        this.birthWeights = new Float32Array(9).map(() => Math.random() * 2 - 1);
+        this.surviveThreshold = Math.random() * 2 - 0.5;
+        this.birthThreshold = Math.random() * 2 - 0.5;
+        
+        // Meta-rules: how sensitive is this rule to local patterns
+        this.localInfluence = Math.random();
+        this.symmetryBias = Math.random();
+        this.temporalMemory = Math.random() * 0.3;
+        
+        // Mutation rate adapts based on outcomes
+        this.mutationRate = 0.1;
+        this.age = 0;
+      }
+      
+      evaluate(neighbors, wasAlive, localEntropy) {
+        let sum = 0;
+        const weights = wasAlive ? this.surviveWeights : this.birthWeights;
+        const threshold = wasAlive ? this.surviveThreshold : this.birthThreshold;
+        
+        for (let i = 0; i < 9; i++) {
+          sum += neighbors[i] * weights[i];
+        }
+        
+        // Local influence modulates threshold
+        const adjustedThreshold = threshold + (localEntropy - 0.5) * this.localInfluence;
+        
+        return sum > adjustedThreshold ? 1 : 0;
+      }
+      
+      mutate(intensity = 1) {
+        const rate = this.mutationRate * intensity;
+        
+        for (let i = 0; i < 9; i++) {
+          if (Math.random() < rate) {
+            this.surviveWeights[i] += (Math.random() - 0.5) * 0.5;
+            this.surviveWeights[i] = Math.max(-2, Math.min(2, this.surviveWeights[i]));
+          }
+          if (Math.random() < rate) {
+            this.birthWeights[i] += (Math.random() - 0.5) * 0.5;
+            this.birthWeights[i] = Math.max(-2, Math.min(2, this.birthWeights[i]));
+          }
+        }
+        
+        if (Math.random() < rate) this.surviveThreshold += (Math.random() - 0.5) * 0.3;
+        if (Math.random() < rate) this.birthThreshold += (Math.random() - 0.5) * 0.3;
+        if (Math.random() < rate * 0.5) this.localInfluence += (Math.random() - 0.5) * 0.2;
+        if (Math.random() < rate * 0.3) this.symmetryBias += (Math.random() - 0.5) * 0.1;
+        
+        this.localInfluence = Math.max(0, Math.min(1, this.localInfluence));
+        this.symmetryBias = Math.max(0, Math.min(1, this.symmetryBias));
+        
+        this.age = 0;
+        totalMutations++;
+      }
+      
+      clone() {
+        const c = new RuleGenome();
+        c.surviveWeights = new Float32Array(this.surviveWeights);
+        c.birthWeights = new Float32Array(this.birthWeights);
+        c.surviveThreshold = this.surviveThreshold;
+        c.birthThreshold = this.birthThreshold;
+        c.localInfluence = this.localInfluence;
+        c.symmetryBias = this.symmetryBias;
+        c.temporalMemory = this.temporalMemory;
+        c.mutationRate = this.mutationRate;
+        return c;
+      }
+    }
+    
+    // Multiple rule regions that can evolve independently
+    const RULE_REGIONS = 4;
+    let ruleSet = [];
+    
+    function init() {
+      grid = new Uint8Array(W * H);
+      nextGrid = new Uint8Array(W * H);
+      generation = 0;
+      totalMutations = 0;
+      history = [];
+      paused = false;
+      
+      // Initialize with random soup
+      for (let i = 0; i < W * H; i++) {
+        grid[i] = Math.random() < 0.4 ? 1 : 0;
+      }
+      
+      // Create rule regions
+      ruleSet = [];
+      for (let i = 0; i < RULE_REGIONS; i++) {
+        ruleSet.push(new RuleGenome());
+      }
+    }
+    
+    function getNeighbors(x, y) {
+      const n = new Float32Array(9);
+      let idx = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = (x + dx + W) % W;
+          const ny = (y + dy + H) % H;
+          n[idx++] = grid[ny * W + nx];
+        }
+      }
+      return n;
+    }
+    
+    function getLocalEntropy(x, y, radius = 3) {
+      let sum = 0, count = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = (x + dx + W) % W;
+          const ny = (y + dy + H) % H;
+          sum += grid[ny * W + nx];
+          count++;
+        }
+      }
+      const p = sum / count;
+      if (p === 0 || p === 1) return 0;
+      return -p * Math.log2(p) - (1-p) * Math.log2(1-p);
+    }
+    
+    function step() {
+      const metrics = { changes: 0, alive: 0, edges: 0 };
+      const regionMetrics = Array(RULE_REGIONS).fill(null).map(() => ({
+        changes: 0, cells: 0, localEntropies: []
+      }));
+      
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = y * W + x;
+          const neighbors = getNeighbors(x, y);
+          const wasAlive = grid[idx];
+          const localEntropy = getLocalEntropy(x, y);
+          
+          // Determine which rule region applies
+          const regionIdx = Math.floor(x / (W / 2)) + Math.floor(y / (H / 2)) * 2;
+          const rule = ruleSet[regionIdx % ruleSet.length];
+          
+          const newState = rule.evaluate(neighbors, wasAlive, localEntropy);
+          nextGrid[idx] = newState;
+          
+          if (newState !== wasAlive) metrics.changes++;
+          if (newState) metrics.alive++;
+          
+          // Track edges (cells next to different state)
+          const neighborSum = neighbors.reduce((a,b) => a+b, 0) - neighbors[4];
+          if (newState && neighborSum < 8 && neighborSum > 0) metrics.edges++;
+          
+          // Track per-region metrics
+          regionMetrics[regionIdx].cells++;
+          if (newState !== wasAlive) regionMetrics[regionIdx].changes++;
+          regionMetrics[regionIdx].localEntropies.push(localEntropy);
+        }
+      }
+      
+      // Swap grids
+      [grid, nextGrid] = [nextGrid, grid];
+      generation++;
+      
+      // Age rules
+      ruleSet.forEach(r => r.age++);
+      
+      // Store history for temporal analysis
+      history.push({
+        changes: metrics.changes,
+        alive: metrics.alive,
+        edges: metrics.edges
+      });
+      if (history.length > HISTORY_LEN) history.shift();
+      
+      // EVOLVE RULES based on emergent patterns
+      evolveRules(metrics, regionMetrics);
+      
+      return metrics;
+    }
+    
+    function evolveRules(metrics, regionMetrics) {
+      const totalCells = W * H;
+      const activity = metrics.changes / totalCells;
+      const density = metrics.alive / totalCells;
+      const edgeDensity = metrics.edges / Math.max(1, metrics.alive);
+      
+      // Analyze temporal patterns
+      let activityVariance = 0;
+      let activityTrend = 0;
+      if (history.length >= 10) {
+        const recent = history.slice(-10).map(h => h.changes / totalCells);
+        const mean = recent.reduce((a,b) => a+b, 0) / recent.length;
+        activityVariance = recent.reduce((a,b) => a + (b-mean)**2, 0) / recent.length;
+        activityTrend = recent[recent.length-1] - recent[0];
+      }
+      
+      // For each rule region, decide if mutation is needed
+      regionMetrics.forEach((rm, i) => {
+        const rule = ruleSet[i];
+        const regionActivity = rm.changes / rm.cells;
+        const avgEntropy = rm.localEntropies.reduce((a,b) => a+b, 0) / rm.localEntropies.length;
+        
+        let mutationIntensity = 0;
+        
+        // TOO STATIC: everything dead or frozen
+        if (regionActivity < 0.001) {
+          mutationIntensity = 2.0; // Strong mutation
+          rule.mutationRate = Math.min(0.5, rule.mutationRate * 1.2);
+        }
+        // TOO CHAOTIC: random noise, no structure
+        else if (regionActivity > 0.4 && avgEntropy > 0.95) {
+          mutationIntensity = 1.5;
+          rule.mutationRate = Math.min(0.5, rule.mutationRate * 1.1);
+        }
+        // DYING OUT
+        else if (density < 0.05) {
+          mutationIntensity = 1.0;
+          // Bias toward more permissive birth rules
+          rule.birthThreshold -= 0.1;
+        }
+        // OVERPOPULATED
+        else if (density > 0.8) {
+          mutationIntensity = 1.0;
+          rule.surviveThreshold += 0.1;
+        }
+        // EDGE OF CHAOS - interesting zone, small mutations to explore
+        else if (regionActivity > 0.01 && regionActivity < 0.2 && avgEntropy > 0.3 && avgEntropy < 0.9) {
+          mutationIntensity = 0.2; // Light exploration
+          rule.mutationRate = Math.max(0.02, rule.mutationRate * 0.95); // Stabilize good rules
+        }
+        // STUCK in limit cycle (detected by low variance)
+        else if (activityVariance < 0.0001 && rule.age > 50) {
+          mutationIntensity = 0.8;
+        }
+        
+        // Apply mutations
+        if (mutationIntensity > 0 && Math.random() < mutationIntensity * 0.3) {
+          rule.mutate(mutationIntensity);
+        }
+        
+        // Occasionally cross-pollinate between regions
+        if (Math.random() < 0.01 && ruleSet.length > 1) {
+          const other = ruleSet[Math.floor(Math.random() * ruleSet.length)];
+          if (other !== rule && other.age > rule.age) {
+            // Copy some weights from older, potentially more stable rule
+            const idx = Math.floor(Math.random() * 9);
+            rule.surviveWeights[idx] = other.surviveWeights[idx];
+            rule.birthWeights[idx] = other.birthWeights[idx];
+          }
+        }
+      });
+    }
+    
+    function render() {
+      const imageData = ctx.createImageData(W * CELL, H * CELL);
+      const data = imageData.data;
+      
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const alive = grid[y * W + x];
+          const regionIdx = Math.floor(x / (W / 2)) + Math.floor(y / (H / 2)) * 2;
+          
+          // Color based on region and state
+          const colors = [
+            [0, 255, 200],   // cyan
+            [200, 255, 0],   // yellow-green
+            [255, 100, 150], // pink
+            [100, 150, 255]  // blue
+          ];
+          
+          const [r, g, b] = colors[regionIdx];
+          
+          for (let py = 0; py < CELL; py++) {
+            for (let px = 0; px < CELL; px++) {
+              const idx = ((y * CELL + py) * W * CELL + (x * CELL + px)) * 4;
+              if (alive) {
+                data[idx] = r;
+                data[idx + 1] = g;
+                data[idx + 2] = b;
+                data[idx + 3] = 255;
+              } else {
+                data[idx] = r * 0.05;
+                data[idx + 1] = g * 0.05;
+                data[idx + 2] = b * 0.05;
+                data[idx + 3] = 255;
+              }
+            }
+          }
+        }
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+    }
+    
+    function renderRuleViz() {
+      ruleCtx.fillStyle = '#000';
+      ruleCtx.fillRect(0, 0, 250, 100);
+      
+      const barWidth = 250 / (ruleSet.length * 18 + ruleSet.length - 1);
+      let x = 0;
+      
+      ruleSet.forEach((rule, ri) => {
+        // Draw survive weights
+        for (let i = 0; i < 9; i++) {
+          const h = (rule.surviveWeights[i] + 2) / 4 * 40;
+          const color = rule.surviveWeights[i] > 0 ? '#0f0' : '#f00';
+          ruleCtx.fillStyle = color;
+          ruleCtx.fillRect(x, 50 - h, barWidth - 1, h);
+          x += barWidth;
+        }
+        // Draw birth weights
+        for (let i = 0; i < 9; i++) {
+          const h = (rule.birthWeights[i] + 2) / 4 * 40;
+          const color = rule.birthWeights[i] > 0 ? '#0ff' : '#f0f';
+          ruleCtx.fillStyle = color;
+          ruleCtx.fillRect(x, 50, barWidth - 1, h);
+          x += barWidth;
+        }
+        x += barWidth; // Gap between regions
+      });
+      
+      // Draw threshold lines
+      ruleCtx.strokeStyle = '#ff0';
+      ruleCtx.beginPath();
+      ruleSet.forEach((rule, ri) => {
+        const rx = ri * (18 * barWidth + barWidth) + 9 * barWidth;
+        const ty = 50 - (rule.surviveThreshold + 2) / 4 * 40;
+        ruleCtx.moveTo(rx - 20, ty);
+        ruleCtx.lineTo(rx + 20, ty);
+      });
+      ruleCtx.stroke();
+    }
+    
+    function updateStats(metrics) {
+      const totalCells = W * H;
+      document.getElementById('gen').textContent = generation;
+      document.getElementById('mutations').textContent = totalMutations;
+      document.getElementById('activity').textContent = (metrics.changes / totalCells * 100).toFixed(1) + '%';
+      
+      // Calculate overall entropy
+      const p = metrics.alive / totalCells;
+      const entropy = p > 0 && p < 1 ? (-p * Math.log2(p) - (1-p) * Math.log2(1-p)).toFixed(3) : '0';
+      document.getElementById('entropy').textContent = entropy;
+      
+      document.getElementById('edges').textContent = (metrics.edges / Math.max(1, metrics.alive) * 100).toFixed(1) + '%';
+      
+      // Calculate cluster diversity (simplified)
+      const avgRuleAge = ruleSet.reduce((a, r) => a + r.age, 0) / ruleSet.length;
+      document.getElementById('stability').textContent = Math.min(100, avgRuleAge).toFixed(0) + '%';
+      
+      // Cluster diversity approximation
+      const clusterScore = (metrics.edges / Math.max(1, metrics.alive)) * (1 - Math.abs(p - 0.5) * 2);
+      document.getElementById('clusters').textContent = (clusterScore * 100).toFixed(1) + '%';
+    }
+    
+    function loop() {
+      if (!paused) {
+        const metrics = step();
+        render();
+        renderRuleViz();
+        updateStats(metrics);
+      }
+      requestAnimationFrame(loop);
+    }
+    
+    function reset() {
+      init();
+      render();
+    }
+    
+    function togglePause() {
+      paused = !paused;
+    }
+    
+    function mutateNow() {
+      ruleSet.forEach(r => r.mutate(2.0));
+    }
+    
+    init();
+    loop();
+  </script>
+</body>
+</html>

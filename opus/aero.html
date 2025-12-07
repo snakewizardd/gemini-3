@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D City Scene</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        #timeControl {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #timeSlider { width: 200px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <strong>🏙️ 3D City Explorer</strong><br><br>
+        🖱️ Left Click + Drag: Rotate<br>
+        🖱️ Right Click + Drag: Pan<br>
+        🖱️ Scroll: Zoom<br><br>
+        <span id="timeDisplay">Time: 12:00 PM</span>
+    </div>
+    <div id="timeControl">
+        <label>Time of Day: <input type="range" id="timeSlider" min="0" max="24" step="0.1" value="12"></label>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // Scene Setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Camera Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2.1;
+        camera.position.set(50, 40, 50);
+        controls.update();
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+        sunLight.position.set(50, 100, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 500;
+        sunLight.shadow.camera.left = -100;
+        sunLight.shadow.camera.right = 100;
+        sunLight.shadow.camera.top = 100;
+        sunLight.shadow.camera.bottom = -100;
+        scene.add(sunLight);
+
+        // Sky sphere
+        const skyGeometry = new THREE.SphereGeometry(400, 32, 32);
+        const skyMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x87CEEB, 
+            side: THREE.BackSide 
+        });
+        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+        scene.add(sky);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Materials
+        const materials = {
+            road: new THREE.MeshLambertMaterial({ color: 0x333333 }),
+            sidewalk: new THREE.MeshLambertMaterial({ color: 0x999999 }),
+            crossing: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+            glass: new THREE.MeshPhongMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6 }),
+            concrete: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
+            brick: new THREE.MeshLambertMaterial({ color: 0x8B4513 }),
+            shop: new THREE.MeshLambertMaterial({ color: 0xDEB887 }),
+            car: [
+                new THREE.MeshLambertMaterial({ color: 0xff0000 }),
+                new THREE.MeshLambertMaterial({ color: 0x0000ff }),
+                new THREE.MeshLambertMaterial({ color: 0xffff00 }),
+                new THREE.MeshLambertMaterial({ color: 0x00ff00 }),
+                new THREE.MeshLambertMaterial({ color: 0xff00ff }),
+                new THREE.MeshLambertMaterial({ color: 0x000000 }),
+                new THREE.MeshLambertMaterial({ color: 0xffffff })
+            ],
+            tree: new THREE.MeshLambertMaterial({ color: 0x228B22 }),
+            trunk: new THREE.MeshLambertMaterial({ color: 0x8B4513 }),
+            lamp: new THREE.MeshLambertMaterial({ color: 0x444444 }),
+            bench: new THREE.MeshLambertMaterial({ color: 0x654321 }),
+            person: [
+                new THREE.MeshLambertMaterial({ color: 0xff6b6b }),
+                new THREE.MeshLambertMaterial({ color: 0x4ecdc4 }),
+                new THREE.MeshLambertMaterial({ color: 0xffe66d }),
+                new THREE.MeshLambertMaterial({ color: 0x95e1d3 }),
+                new THREE.MeshLambertMaterial({ color: 0xf38181 })
+            ],
+            skin: new THREE.MeshLambertMaterial({ color: 0xffdbac })
+        };
+
+        // Create Roads
+        function createRoads() {
+            const roadGroup = new THREE.Group();
+            
+            // Main horizontal roads
+            for (let z = -60; z <= 60; z += 40) {
+                const road = new THREE.Mesh(
+                    new THREE.BoxGeometry(200, 0.1, 12),
+                    materials.road
+                );
+                road.position.set(0, 0.05, z);
+                road.receiveShadow = true;
+                roadGroup.add(road);
+
+                // Road lines
+                for (let x = -90; x <= 90; x += 10) {
+                    const line = new THREE.Mesh(
+                        new THREE.BoxGeometry(4, 0.11, 0.3),
+                        materials.crossing
+                    );
+                    line.position.set(x, 0.06, z);
+                    roadGroup.add(line);
+                }
+            }
+
+            // Main vertical roads
+            for (let x = -60; x <= 60; x += 40) {
+                const road = new THREE.Mesh(
+                    new THREE.BoxGeometry(12, 0.1, 200),
+                    materials.road
+                );
+                road.position.set(x, 0.05, 0);
+                road.receiveShadow = true;
+                roadGroup.add(road);
+
+                // Road lines
+                for (let z = -90; z <= 90; z += 10) {
+                    const line = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.3, 0.11, 4),
+                        materials.crossing
+                    );
+                    line.position.set(x, 0.06, z);
+                    roadGroup.add(line);
+                }
+            }
+
+            // Sidewalks
+            const sidewalkPositions = [
+                { x: 0, z: -67, w: 200, d: 3 },
+                { x: 0, z: -53, w: 200, d: 3 },
+                { x: 0, z: -27, w: 200, d: 3 },
+                { x: 0, z: -13, w: 200, d: 3 },
+                { x: 0, z: 13, w: 200, d: 3 },
+                { x: 0, z: 27, w: 200, d: 3 },
+                { x: 0, z: 53, w: 200, d: 3 },
+                { x: 0, z: 67, w: 200, d: 3 },
+                { x: -67, z: 0, w: 3, d: 200 },
+                { x: -53, z: 0, w: 3, d: 200 },
+                { x: -27, z: 0, w: 3, d: 200 },
+                { x: -13, z: 0, w: 3, d: 200 },
+                { x: 13, z: 0, w: 3, d: 200 },
+                { x: 27, z: 0, w: 3, d: 200 },
+                { x: 53, z: 0, w: 3, d: 200 },
+                { x: 67, z: 0, w: 3, d: 200 }
+            ];
+
+            sidewalkPositions.forEach(pos => {
+                const sidewalk = new THREE.Mesh(
+                    new THREE.BoxGeometry(pos.w, 0.2, pos.d),
+                    materials.sidewalk
+                );
+                sidewalk.position.set(pos.x, 0.1, pos.z);
+                sidewalk.receiveShadow = true;
+                roadGroup.add(sidewalk);
+            });
+
+            // Pedestrian crossings
+            const crossings = [
+                { x: -60, z: -54, rot: 0 }, { x: -60, z: -66, rot: 0 },
+                { x: -20, z: -54, rot: 0 }, { x: -20, z: -66, rot: 0 },
+                { x: 20, z: -54, rot: 0 }, { x: 20, z: -66, rot: 0 },
+                { x: 60, z: -54, rot: 0 }, { x: 60, z: -66, rot: 0 },
+                { x: -60, z: -14, rot: 0 }, { x: -60, z: -26, rot: 0 },
+                { x: -20, z: -14, rot: 0 }, { x: -20, z: -26, rot: 0 },
+                { x: 20, z: -14, rot: 0 }, { x: 20, z: -26, rot: 0 },
+                { x: 60, z: -14, rot: 0 }, { x: 60, z: -26, rot: 0 },
+                { x: -60, z: 14, rot: 0 }, { x: -60, z: 26, rot: 0 },
+                { x: -20, z: 14, rot: 0 }, { x: -20, z: 26, rot: 0 },
+                { x: 20, z: 14, rot: 0 }, { x: 20, z: 26, rot: 0 },
+                { x: 60, z: 14, rot: 0 }, { x: 60, z: 26, rot: 0 },
+                { x: -54, z: -60, rot: Math.PI/2 }, { x: -66, z: -60, rot: Math.PI/2 },
+                { x: -54, z: -20, rot: Math.PI/2 }, { x: -66, z: -20, rot: Math.PI/2 },
+                { x: -54, z: 20, rot: Math.PI/2 }, { x: -66, z: 20, rot: Math.PI/2 },
+                { x: -54, z: 60, rot: Math.PI/2 }, { x: -66, z: 60, rot: Math.PI/2 },
+                { x: -14, z: -60, rot: Math.PI/2 }, { x: -26, z: -60, rot: Math.PI/2 },
+                { x: -14, z: -20, rot: Math.PI/2 }, { x: -26, z: -20, rot: Math.PI/2 },
+                { x: -14, z: 20, rot: Math.PI/2 }, { x: -26, z: 20, rot: Math.PI/2 },
+                { x: -14, z: 60, rot: Math.PI/2 }, { x: -26, z: 60, rot: Math.PI/2 },
+                { x: 14, z: -60, rot: Math.PI/2 }, { x: 26, z: -60, rot: Math.PI/2 },
+                { x: 14, z: -20, rot: Math.PI/2 }, { x: 26, z: -20, rot: Math.PI/2 },
+                { x: 14, z: 20, rot: Math.PI/2 }, { x: 26, z: 20, rot: Math.PI/2 },
+                { x: 14, z: 60, rot: Math.PI/2 }, { x: 26, z: 60, rot: Math.PI/2 },
+                { x: 54, z: -60, rot: Math.PI/2 }, { x: 66, z: -60, rot: Math.PI/2 },
+                { x: 54, z: -20, rot: Math.PI/2 }, { x: 66, z: -20, rot: Math.PI/2 },
+                { x: 54, z: 20, rot: Math.PI/2 }, { x: 66, z: 20, rot: Math.PI/2 },
+                { x: 54, z: 60, rot: Math.PI/2 }, { x: 66, z: 60, rot: Math.PI/2 }
+            ];
+
+            crossings.forEach(c => {
+                for (let i = -3; i <= 3; i++) {
+                    const stripe = new THREE.Mesh(
+                        new THREE.BoxGeometry(1, 0.12, 4),
+                        materials.crossing
+                    );
+                    stripe.position.set(c.x + (c.rot === 0 ? i * 1.5 : 0), 0.06, c.z + (c.rot !== 0 ? i * 1.5 : 0));
+                    stripe.rotation.y = c.rot;
+                    roadGroup.add(stripe);
+                }
+            });
+
+            scene.add(roadGroup);
+        }
+
+        // Create Buildings
+        function createBuilding(x, z, width, depth, height, type) {
+            const buildingGroup = new THREE.Group();
+            let material, windowMaterial = materials.glass;
+
+            switch(type) {
+                case 'skyscraper':
+                    material = new THREE.MeshLambertMaterial({ 
+                        color: new THREE.Color().setHSL(Math.random() * 0.1 + 0.55, 0.3, 0.5) 
+                    });
+                    break;
+                case 'apartment':
+                    material = materials.brick;
+                    break;
+                case 'shop':
+                    material = materials.shop;
+                    break;
+                default:
+                    material = materials.concrete;
+            }
+
+            // Main building
+            const building = new THREE.Mesh(
+                new THREE.BoxGeometry(width, height, depth),
+                material
+            );
+            building.position.set(x, height / 2, z);
+            building.castShadow = true;
+            building.receiveShadow = true;
+            buildingGroup.add(building);
+
+            // Windows
+            const windowRows = Math.floor(height / 3);
+            const windowCols = Math.floor(width / 3);
+            
+            for (let row = 0; row < windowRows; row++) {
+                for (let col = 0; col < windowCols; col++) {
+                    // Front windows
+                    const windowFront = new THREE.Mesh(
+                        new THREE.BoxGeometry(1.5, 2, 0.1),
+                        windowMaterial
+                    );
+                    windowFront.position.set(
+                        x - width/2 + 1.5 + col * 3,
+                        1.5 + row * 3,
+                        z + depth/2 + 0.05
+                    );
+                    buildingGroup.add(windowFront);
+
+                    // Back windows
+                    const windowBack = windowFront.clone();
+                    windowBack.position.z = z - depth/2 - 0.05;
+                    buildingGroup.add(windowBack);
+                }
+            }
+
+            // Side windows
+            const sideWindowCols = Math.floor(depth / 3);
+            for (let row = 0; row < windowRows; row++) {
+                for (let col = 0; col < sideWindowCols; col++) {
+                    const windowLeft = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.1, 2, 1.5),
+                        windowMaterial
+                    );
+                    windowLeft.position.set(
+                        x - width/2 - 0.05,
+                        1.5 + row * 3,
+                        z - depth/2 + 1.5 + col * 3
+                    );
+                    buildingGroup.add(windowLeft);
+
+                    const windowRight = windowLeft.clone();
+                    windowRight.position.x = x + width/2 + 0.05;
+                    buildingGroup.add(windowRight);
+                }
+            }
+
+            // Roof details for skyscrapers
+            if (type === 'skyscraper' && height > 30) {
+                const antenna = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.2, 0.2, 5),
+                    materials.lamp
+                );
+                antenna.position.set(x, height + 2.5, z);
+                buildingGroup.add(antenna);
+
+                const light = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5),
+                    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+                );
+                light.position.set(x, height + 5, z);
+                buildingGroup.add(light);
+            }
+
+            // Shop awning
+            if (type === 'shop') {
+                const awning = new THREE.Mesh(
+                    new THREE.BoxGeometry(width + 1, 0.3, 2),
+                    new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0xff0000 : 0x00aa00 })
+                );
+                awning.position.set(x, 3, z + depth/2 + 1);
+                buildingGroup.add(awning);
+            }
+
+            scene.add(buildingGroup);
+        }
+
+        function createAllBuildings() {
+            // City blocks - positioned between roads
+            const blocks = [
+                { x: -40, z: -40, size: 24 },
+                { x: 0, z: -40, size: 24 },
+                { x: 40, z: -40, size: 24 },
+                { x: -40, z: 0, size: 24 },
+                { x: 0, z: 0, size: 24 },
+                { x: 40, z: 0, size: 24 },
+                { x: -40, z: 40, size: 24 },
+                { x: 0, z: 40, size: 24 },
+                { x: 40, z: 40, size: 24 }
+            ];
+
+            blocks.forEach(block => {
+                // Skyscraper in center
+                createBuilding(block.x, block.z, 8, 8, 25 + Math.random() * 30, 'skyscraper');
+                
+                // Apartment buildings
+                createBuilding(block.x - 10, block.z - 8, 6, 6, 12 + Math.random() * 8, 'apartment');
+                createBuilding(block.x + 10, block.z + 8, 6, 6, 12 + Math.random() * 8, 'apartment');
+                
+                // Shops
+                createBuilding(block.x - 10, block.z + 10, 5, 4, 4, 'shop');
+                createBuilding(block.x + 10, block.z - 10, 5, 4, 4, 'shop');
+            });
+
+            // Extra tall landmark building in center
+            createBuilding(0, 0, 12, 12, 60, 'skyscraper');
+        }
+
+        // Traffic Lights
+        const trafficLights = [];
+        function createTrafficLight(x, z, rotation) {
+            const group = new THREE.Group();
+
+            // Pole
+            const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.15, 0.15, 6),
+                materials.lamp
+            );
+            pole.position.y = 3;
+            group.add(pole);
+
+            // Light box
+            const box = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 2.5, 0.8),
+                new THREE.MeshLambertMaterial({ color: 0x222222 })
+            );
+            box.position.y = 5.5;
+            group.add(box);
+
+            // Lights
+            const redLight = new THREE.Mesh(
+                new THREE.SphereGeometry(0.25),
+                new THREE.MeshBasicMaterial({ color: 0x330000 })
+            );
+            redLight.position.set(0, 6.3, 0.4);
+            group.add(redLight);
+
+            const yellowLight = new THREE.Mesh(
+                new THREE.SphereGeometry(0.25),
+                new THREE.MeshBasicMaterial({ color: 0x333300 })
+            );
+            yellowLight.position.set(0, 5.5, 0.4);
+            group.add(yellowLight);
+
+            const greenLight = new THREE.Mesh(
+                new THREE.SphereGeometry(0.25),
+                new THREE.MeshBasicMaterial({ color: 0x003300 })
+            );
+            greenLight.position.set(0, 4.7, 0.4);
+            group.add(greenLight);
+
+            group.position.set(x, 0, z);
+            group.rotation.y = rotation;
+            scene.add(group);
+
+            trafficLights.push({
+                group,
+                red: redLight,
+                yellow: yellowLight,
+                green: greenLight,
+                state: 0
+            });
+        }
+
+        function createAllTrafficLights() {
+            // At major intersections
+            const intersections = [
+                { x: -60, z: -60 }, { x: -60, z: -20 }, { x: -60, z: 20 }, { x: -60, z: 60 },
+                { x: -20, z: -60 }, { x: -20, z: -20 }, { x: -20, z: 20 }, { x: -20, z: 60 },
+                { x: 20, z: -60 }, { x: 20, z: -20 }, { x: 20, z: 20 }, { x: 20, z: 60 },
+                { x: 60, z: -60 }, { x: 60, z: -20 }, { x: 60, z: 20 }, { x: 60, z: 60 }
+            ];
+
+            intersections.forEach(int => {
+                createTrafficLight(int.x + 7, int.z + 7, Math.PI);
+                createTrafficLight(int.x - 7, int.z - 7, 0);
+            });
+        }
+
+        function updateTrafficLights(time) {
+            const cycle = Math.floor(time * 0.5) % 3;
+            
+            trafficLights.forEach((tl, index) => {
+                const offset = index % 2;
+                const state = (cycle + offset) % 3;
+
+                tl.red.material.color.setHex(state === 0 ? 0xff0000 : 0x330000);
+                tl.yellow.material.color.setHex(state === 1 ? 0xffff00 : 0x333300);
+                tl.green.material.color.setHex(state === 2 ? 0x00ff00 : 0x003300);
+            });
+        }
+
+        // Cars
+        const cars = [];
+        function createCar(x, z, direction) {
+            const carGroup = new THREE.Group();
+            const carColor = materials.car[Math.floor(Math.random() * materials.car.length)];
+
+            // Body
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 0.8, 4),
+                carColor
+            );
+            body.position.y = 0.6;
+            body.castShadow = true;
+            carGroup.add(body);
+
+            // Cabin
+            const cabin = new THREE.Mesh(
+                new THREE.BoxGeometry(1.8, 0.7, 2),
+                carColor
+            );
+            cabin.position.y = 1.3;
+            cabin.position.z = -0.3;
+            cabin.castShadow = true;
+            carGroup.add(cabin);
+
+            // Windows
+            const windshield = new THREE.Mesh(
+                new THREE.BoxGeometry(1.6, 0.5, 0.1),
+                materials.glass
+            );
+            windshield.position.set(0, 1.3, 0.7);
+            carGroup.add(windshield);
+
+            // Wheels
+            const wheelGeom = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
+            const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+            
+            const positions = [[-0.9, 0.3, 1.2], [0.9, 0.3, 1.2], [-0.9, 0.3, -1.2], [0.9, 0.3, -1.2]];
+            positions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeom, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(...pos);
+                carGroup.add(wheel);
+            });
+
+            // Headlights
+            const headlightGeom = new THREE.SphereGeometry(0.15);
+            const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+            const hl1 = new THREE.Mesh(headlightGeom, headlightMat);
+            hl1.position.set(-0.6, 0.5, 2);
+            carGroup.add(hl1);
+            const hl2 = new THREE.Mesh(headlightGeom, headlightMat);
+            hl2.position.set(0.6, 0.5, 2);
+            carGroup.add(hl2);
+
+            carGroup.position.set(x, 0, z);
+            carGroup.rotation.y = direction;
+            scene.add(carGroup);
+
+            cars.push({
+                mesh: carGroup,
+                speed: 0.1 + Math.random() * 0.15,
+                direction: direction,
+                lane: direction
+            });
+        }
+
+        function createAllCars() {
+            // Cars on horizontal roads
+            for (let z = -60; z <= 60; z += 40) {
+                for (let i = 0; i < 4; i++) {
+                    createCar(-80 + i * 40 + Math.random() * 20, z + 3, 0);
+                    createCar(80 - i * 40 - Math.random() * 20, z - 3, Math.PI);
+                }
+            }
+
+            // Cars on vertical roads
+            for (let x = -60; x <= 60; x += 40) {
+                for (let i = 0; i < 4; i++) {
+                    createCar(x + 3, -80 + i * 40 + Math.random() * 20, Math.PI / 2);
+                    createCar(x - 3, 80 - i * 40 - Math.random() * 20, -Math.PI / 2);
+                }
+            }
+        }
+
+        function updateCars() {
+            cars.forEach(car => {
+                const dir = car.direction;
+                const speed = car.speed;
+
+                if (Math.abs(dir) < 0.1) {
+                    car.mesh.position.z += speed;
+                    if (car.mesh.position.z > 95) car.mesh.position.z = -95;
+                } else if (Math.abs(dir - Math.PI) < 0.1) {
+                    car.mesh.position.z -= speed;
+                    if (car.mesh.position.z < -95) car.mesh.position.z = 95;
+                } else if (Math.abs(dir - Math.PI/2) < 0.1) {
+                    car.mesh.position.x += speed;
+                    if (car.mesh.position.x > 95) car.mesh.position.x = -95;
+                } else {
+                    car.mesh.position.x -= speed;
+                    if (car.mesh.position.x < -95) car.mesh.position.x = 95;
+                }
+            });
+        }
+
+        // Pedestrians
+        const pedestrians = [];
+        function createPedestrian(x, z, direction) {
+            const group = new THREE.Group();
+            const bodyColor = materials.person[Math.floor(Math.random() * materials.person.length)];
+
+            // Body
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.2, 0.25, 0.8),
+                bodyColor
+            );
+            body.position.y = 0.8;
+            group.add(body);
+
+            // Head
+            const head = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2),
+                materials.skin
+            );
+            head.position.y = 1.4;
+            group.add(head);
+
+            // Legs
+            const legGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.4);
+            const legMat = new THREE.MeshLambertMaterial({ color: 0x333366 });
+            const leftLeg = new THREE.Mesh(legGeom, legMat);
+            leftLeg.position.set(-0.1, 0.2, 0);
+            group.add(leftLeg);
+            const rightLeg = new THREE.Mesh(legGeom, legMat);
+            rightLeg.position.set(0.1, 0.2, 0);
+            group.add(rightLeg);
+
+            group.position.set(x, 0.1, z);
+            group.rotation.y = direction;
+            group.castShadow = true;
+            scene.add(group);
+
+            pedestrians.push({
+                mesh: group,
+                speed: 0.02 + Math.random() * 0.02,
+                direction: direction,
+                walkPhase: Math.random() * Math.PI * 2,
+                leftLeg: leftLeg,
+                rightLeg: rightLeg
+            });
+        }
+
+        function createAllPedestrians() {
+            // On sidewalks
+            for (let i = 0; i < 60; i++) {
+                const sidewalkZ = [-67, -53, -27, -13, 13, 27, 53, 67][Math.floor(Math.random() * 8)];
+                const x = (Math.random() - 0.5) * 180;
+                createPedestrian(x, sidewalkZ, Math.random() > 0.5 ? 0 : Math.PI);
+            }
+
+            for (let i = 0; i < 60; i++) {
+                const sidewalkX = [-67, -53, -27, -13, 13, 27, 53, 67][Math.floor(Math.random() * 8)];
+                const z = (Math.random() - 0.5) * 180;
+                createPedestrian(sidewalkX, z, Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+            }
+        }
+
+        function updatePedestrians(time) {
+            pedestrians.forEach(ped => {
+                ped.walkPhase += 0.15;
+                
+                // Walking animation
+                ped.leftLeg.rotation.x = Math.sin(ped.walkPhase) * 0.5;
+                ped.rightLeg.rotation.x = Math.sin(ped.walkPhase + Math.PI) * 0.5;
+
+                const dir = ped.direction;
+                const speed = ped.speed;
+
+                if (Math.abs(dir) < 0.1) {
+                    ped.mesh.position.z += speed;
+                    if (ped.mesh.position.z > 70) ped.mesh.position.z = -70;
+                } else if (Math.abs(dir - Math.PI) < 0.1) {
+                    ped.mesh.position.z -= speed;
+                    if (ped.mesh.position.z < -70) ped.mesh.position.z = 70;
+                } else if (Math.abs(dir - Math.PI/2) < 0.1) {
+                    ped.mesh.position.x += speed;
+                    if (ped.mesh.position.x > 70) ped.mesh.position.x = -70;
+                } else {
+                    ped.mesh.position.x -= speed;
+                    if (ped.mesh.position.x < -70) ped.mesh.position.x = 70;
+                }
+            });
+        }
+
+        // Trees
+        function createTree(x, z) {
+            const group = new THREE.Group();
+
+            // Trunk
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.4, 2),
+                materials.trunk
+            );
+            trunk.position.y = 1;
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            // Foliage
+            const foliage = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5, 8, 8),
+                materials.tree
+            );
+            foliage.position.y = 3;
+            foliage.castShadow = true;
+            group.add(foliage);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+        }
+
+        // Lampposts
+        const lampLights = [];
+        function createLamppost(x, z) {
+            const group = new THREE.Group();
+
+            // Pole
+            const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.1, 0.15, 5),
+                materials.lamp
+            );
+            pole.position.y = 2.5;
+            group.add(pole);
+
+            // Arm
+            const arm = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 0.1, 0.1),
+                materials.lamp
+            );
+            arm.position.set(0.75, 5, 0);
+            group.add(arm);
+
+            // Light fixture
+            const fixture = new THREE.Mesh(
+                new THREE.SphereGeometry(0.3),
+                new THREE.MeshBasicMaterial({ color: 0xffffaa })
+            );
+            fixture.position.set(1.5, 4.8, 0);
+            group.add(fixture);
+
+            // Point light
+            const light = new THREE.PointLight(0xffffaa, 0, 15);
+            light.position.set(x + 1.5, 4.8, z);
+            scene.add(light);
+            lampLights.push(light);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+        }
+
+        // Benches
+        function createBench(x, z, rotation) {
+            const group = new THREE.Group();
+
+            // Seat
+            const seat = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 0.1, 0.6),
+                materials.bench
+            );
+            seat.position.y = 0.5;
+            group.add(seat);
+
+            // Back
+            const back = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 0.6, 0.1),
+                materials.bench
+            );
+            back.position.set(0, 0.8, -0.25);
+            group.add(back);
+
+            // Legs
+            const legGeom = new THREE.BoxGeometry(0.1, 0.5, 0.6);
+            const leg1 = new THREE.Mesh(legGeom, materials.lamp);
+            leg1.position.set(-0.8, 0.25, 0);
+            group.add(leg1);
+            const leg2 = new THREE.Mesh(legGeom, materials.lamp);
+            leg2.position.set(0.8, 0.25, 0);
+            group.add(leg2);
+
+            group.position.set(x, 0, z);
+            group.rotation.y = rotation;
+            scene.add(group);
+        }
+
+        function createStreetFurniture() {
+            // Trees along sidewalks
+            for (let x = -80; x <= 80; x += 15) {
+                createTree(x, -68);
+                createTree(x, 68);
+            }
+            for (let z = -80; z <= 80; z += 15) {
+                createTree(-68, z);
+                createTree(68, z);
+            }
+
+            // Lampposts
+            for (let x = -70; x <= 70; x += 20) {
+                createLamppost(x, -55);
+                createLamppost(x, 55);
+            }
+            for (let z = -70; z <= 70; z += 20) {
+                createLamppost(-55, z);
+                createLamppost(55, z);
+            }
+
+            // Benches
+            const benchPositions = [
+                { x: -30, z: -54, rot: 0 },
+                { x: 30, z: -54, rot: 0 },
+                { x: -30, z: 54, rot: Math.PI },
+                { x: 30, z: 54, rot: Math.PI },
+                { x: -54, z: -30, rot: Math.PI/2 },
+                { x: -54, z: 30, rot: Math.PI/2 },
+                { x: 54, z: -30, rot: -Math.PI/2 },
+                { x: 54, z: 30, rot: -Math.PI/2 }
+            ];
+            benchPositions.forEach(b => createBench(b.x, b.z, b.rot));
+        }
+
+        // Day/Night Cycle
+        let timeOfDay = 12;
+        const timeSlider = document.getElementById('timeSlider');
+        const timeDisplay = document.getElementById('timeDisplay');
+
+        function updateDayNightCycle(time) {
+            timeOfDay = time;
+            
+            // Sun position
+            const sunAngle = (time - 6) / 12 * Math.PI;
+            sunLight.position.x = Math.cos(sunAngle) * 100;
+            sunLight.position.y = Math.sin(sunAngle) * 100;
+            sunLight.position.z = 50;
+
+            // Sky color
+            let skyColor, ambientIntensity, sunIntensity;
+            
+            if (time >= 6 && time < 8) {
+                // Sunrise
+                const t = (time - 6) / 2;
+                skyColor = new THREE.Color().lerpColors(
+                    new THREE.Color(0x1a1a2e),
+                    new THREE.Color(0xff7f50),
+                    t
+                );
+                ambientIntensity = 0.2 + t * 0.3;
+                sunIntensity = t * 0.8;
+            } else if (time >= 8 && time < 18) {
+                // Day
+                skyColor = new THREE.Color(0x87CEEB);
+                ambientIntensity = 0.5;
+                sunIntensity = 1;
+            } else if (time >= 18 && time < 20) {
+                // Sunset
+                const t = (time - 18) / 2;
+                skyColor = new THREE.Color().lerpColors(
+                    new THREE.Color(0xff7f50),
+                    new THREE.Color(0x1a1a2e),
+                    t
+                );
+                ambientIntensity = 0.5 - t * 0.3;
+                sunIntensity = 1 - t * 0.8;
+            } else {
+                // Night
+                skyColor = new THREE.Color(0x0a0a1a);
+                ambientIntensity = 0.15;
+                sunIntensity = 0;
+            }
+
+            sky.material.color = skyColor;
+            ambientLight.intensity = ambientIntensity;
+            sunLight.intensity = sunIntensity;
+
+            // Street lights
+            const lightsOn = time < 6 || time > 19;
+            lampLights.forEach(light => {
+                light.intensity = lightsOn ? 1 : 0;
+            });
+
+            // Update display
+            const hours = Math.floor(time);
+            const minutes = Math.floor((time % 1) * 60);
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours % 12 || 12;
+            timeDisplay.textContent = `Time: ${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+        }
+
+        timeSlider.addEventListener('input', (e) => {
+            updateDayNightCycle(parseFloat(e.target.value));
+        });
+
+        // Initialize everything
+        createRoads();
+        createAllBuildings();
+        createAllTrafficLights();
+        createAllCars();
+        createAllPedestrians();
+        createStreetFurniture();
+        updateDayNightCycle(12);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation loop
+        let clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const elapsed = clock.getElapsedTime();
+            
+            updateCars();
+            updatePedestrians(elapsed);
+            updateTrafficLights(elapsed);
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

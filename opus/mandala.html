@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entropic Mandala</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            border-radius: 50%;
+            box-shadow: 0 0 60px rgba(100, 50, 150, 0.3);
+        }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            color: rgba(255,255,255,0.5);
+            font-family: monospace;
+            font-size: 12px;
+            text-align: center;
+        }
+        #scars {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: rgba(255,100,100,0.7);
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="mandala"></canvas>
+    <div id="info">hover near center to corrupt • pull away to heal • scars remain forever</div>
+    <div id="scars">scars: 0</div>
+    
+    <script>
+        const canvas = document.getElementById('mandala');
+        const ctx = canvas.getContext('2d');
+        const size = Math.min(window.innerWidth, window.innerHeight) * 0.85;
+        canvas.width = size;
+        canvas.height = size;
+        
+        const center = size / 2;
+        const layers = 8;
+        const elementsPerLayer = 12;
+        
+        let mouseX = center;
+        let mouseY = center;
+        let entropy = 0;
+        let targetEntropy = 0;
+        let time = 0;
+        let scarCount = 0;
+        
+        // Each petal/shape has its own state
+        const petals = [];
+        const scars = []; // permanent damage memory
+        
+        // Initialize petals
+        for (let layer = 0; layer < layers; layer++) {
+            for (let i = 0; i < elementsPerLayer; i++) {
+                const angle = (i / elementsPerLayer) * Math.PI * 2;
+                const radius = 40 + layer * 45;
+                petals.push({
+                    layer,
+                    index: i,
+                    baseAngle: angle,
+                    baseRadius: radius,
+                    angle: angle,
+                    radius: radius,
+                    hue: (layer * 30 + i * 5) % 360,
+                    baseHue: (layer * 30 + i * 5) % 360,
+                    size: 20 + layer * 8,
+                    baseSize: 20 + layer * 8,
+                    corruption: 0,
+                    scar: 0, // permanent damage
+                    decay: { angle: 0, radius: 0, hue: 0, size: 0 }
+                });
+            }
+        }
+        
+        function addScar(petal, intensity) {
+            const scarIntensity = intensity * 0.15;
+            if (scarIntensity > 0.01) {
+                petal.scar = Math.min(1, petal.scar + scarIntensity);
+                scars.push({
+                    x: center + Math.cos(petal.angle) * petal.radius,
+                    y: center + Math.sin(petal.angle) * petal.radius,
+                    size: petal.size * scarIntensity,
+                    alpha: scarIntensity,
+                    hue: petal.hue
+                });
+                scarCount++;
+                document.getElementById('scars').textContent = `scars: ${scarCount}`;
+            }
+        }
+        
+        function updateEntropy() {
+            const dx = mouseX - center;
+            const dy = mouseY - center;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = size * 0.4;
+            
+            // Closer to center = more entropy
+            targetEntropy = Math.max(0, 1 - (dist / maxDist));
+            targetEntropy = Math.pow(targetEntropy, 1.5); // exponential near center
+            
+            // Smooth transition
+            const prevEntropy = entropy;
+            entropy += (targetEntropy - entropy) * 0.08;
+            
+            // Record scars when entropy is actively corrupting
+            if (entropy > 0.3 && targetEntropy > entropy * 0.9) {
+                petals.forEach(p => {
+                    if (p.corruption > 0.2 && Math.random() < 0.02) {
+                        addScar(p, p.corruption);
+                    }
+                });
+            }
+        }
+        
+        function updatePetals() {
+            petals.forEach(petal => {
+                const layerFactor = 1 - (petal.layer / layers) * 0.5;
+                const targetCorruption = entropy * layerFactor;
+                
+                // Corruption spreads faster than it heals
+                if (targetCorruption > petal.corruption) {
+                    petal.corruption += (targetCorruption - petal.corruption) * 0.15;
+                } else {
+                    petal.corruption += (targetCorruption - petal.corruption) * 0.03;
+                }
+                
+                const chaos = petal.corruption + petal.scar * 0.3;
+                const scarChaos = petal.scar * 0.5;
+                
+                // Generate decay values
+                petal.decay.angle = (Math.sin(time * 2 + petal.index) * 0.3 + 
+                                    Math.sin(time * 5.7 + petal.layer) * 0.2) * chaos;
+                petal.decay.radius = (Math.sin(time * 3 + petal.index * 2) * 30 + 
+                                     Math.cos(time * 4.3 + petal.layer) * 20) * chaos;
+                petal.decay.hue = (Math.sin(time * 4 + petal.index) * 60 + 
+                                  Math.cos(time * 6 + petal.layer) * 40) * chaos;
+                petal.decay.size = Math.sin(time * 5 + petal.index * 3) * 15 * chaos;
+                
+                // Apply permanent scar distortion
+                petal.decay.angle += Math.sin(petal.index * 7.3) * scarChaos * 0.2;
+                petal.decay.radius += Math.cos(petal.index * 4.7) * scarChaos * 15;
+                
+                // Update actual values
+                petal.angle = petal.baseAngle + petal.decay.angle;
+                petal.radius = petal.baseRadius + petal.decay.radius;
+                petal.hue = petal.baseHue + petal.decay.hue;
+                petal.size = petal.baseSize + petal.decay.size;
+            });
+        }
+        
+        function drawPetal(petal) {
+            const x = center + Math.cos(petal.angle) * petal.radius;
+            const y = center + Math.sin(petal.angle) * petal.radius;
+            const corruption = petal.corruption + petal.scar * 0.2;
+            
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(petal.angle + time * 0.5 + corruption * Math.sin(time * 3));
+            
+            // Color with corruption
+            const saturation = 70 - corruption * 30 + petal.scar * 10;
+            const lightness = 50 + Math.sin(time + petal.index) * 10 * corruption;
+            const alpha = 0.8 - corruption * 0.3;
+            
+            ctx.fillStyle = `hsla(${petal.hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+            ctx.strokeStyle = `hsla(${petal.hue + 30}, ${saturation + 20}%, ${lightness + 20}%, ${alpha * 0.5})`;
+            ctx.lineWidth = 1 + corruption * 2;
+            
+            // Draw shape - corrupts from ellipse to chaotic
+            ctx.beginPath();
+            const points = 6;
+            for (let i = 0; i <= points; i++) {
+                const a = (i / points) * Math.PI * 2;
+                const wobble = corruption * Math.sin(a * 3 + time * 5) * 10;
+                const scarWobble = petal.scar * Math.sin(a * 7 + petal.index) * 8;
+                const rx = petal.size * (0.6 + 0.4 * Math.cos(a * 2)) + wobble + scarWobble;
+                const ry = petal.size * (0.3 + 0.2 * Math.sin(a * 3)) + wobble * 0.5;
+                const px = Math.cos(a) * rx;
+                const py = Math.sin(a) * ry;
+                
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Inner glow
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, petal.size);
+            gradient.addColorStop(0, `hsla(${petal.hue + 60}, 100%, 80%, ${0.3 - corruption * 0.2})`);
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        function drawScars() {
+            scars.forEach((scar, i) => {
+                ctx.beginPath();
+                ctx.arc(scar.x, scar.y, scar.size * 2, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${scar.hue}, 30%, 20%, ${scar.alpha * 0.3})`;
+                ctx.fill();
+            });
+        }
+        
+        function drawCenter() {
+            // Central core
+            const pulseSize = 30 + Math.sin(time * 2) * 5 + entropy * 20;
+            const coreHue = 280 + entropy * 60;
+            
+            // Outer glow
+            const gradient = ctx.createRadialGradient(center, center, 0, center, center, pulseSize * 3);
+            gradient.addColorStop(0, `hsla(${coreHue}, 80%, 60%, ${0.8 - entropy * 0.3})`);
+            gradient.addColorStop(0.5, `hsla(${coreHue + 30}, 70%, 40%, 0.3)`);
+            gradient.addColorStop(1, 'transparent');
+            
+            ctx.beginPath();
+            ctx.arc(center, center, pulseSize * 3, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Core with corruption cracks
+            ctx.beginPath();
+            for (let i = 0; i <= 32; i++) {
+                const a = (i / 32) * Math.PI * 2;
+                const crack = entropy * Math.sin(a * 8 + time * 3) * 10;
+                const r = pulseSize + crack;
+                const x = center + Math.cos(a) * r;
+                const y = center + Math.sin(a) * r;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = `hsla(${coreHue}, 90%, ${50 - entropy * 20}%, 0.9)`;
+            ctx.fill();
+            
+            // Entropy indicator - dark void appearing
+            if (entropy > 0.1) {
+                ctx.beginPath();
+                ctx.arc(center, center, pulseSize * entropy * 0.8, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 0, 0, ${entropy * 0.7})`;
+                ctx.fill();
+            }
+        }
+        
+        function drawRings() {
+            for (let i = 0; i < layers; i++) {
+                const radius = 40 + i * 45;
+                const ringCorruption = entropy * (1 - i / layers);
+                
+                ctx.beginPath();
+                ctx.arc(center, center, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = `hsla(${200 + i * 20}, 50%, 30%, ${0.2 - ringCorruption * 0.15})`;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5 + ringCorruption * 10, 5 + ringCorruption * 15]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        function render() {
+            ctx.fillStyle = '#0a0a0f';
+            ctx.fillRect(0, 0, size, size);
+            
+            updateEntropy();
+            updatePetals();
+            
+            drawRings();
+            drawScars();
+            
+            // Draw petals back to front
+            [...petals].sort((a, b) => a.layer - b.layer).forEach(drawPetal);
+            
+            drawCenter();
+            
+            time += 0.016;
+            requestAnimationFrame(render);
+        }
+        
+        canvas.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = (e.clientX - rect.left) * (size / rect.width);
+            mouseY = (e.clientY - rect.top) * (size / rect.height);
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            mouseX = -1000;
+            mouseY = -1000;
+        });
+        
+        render();
+    </script>
+</body>
+</html>

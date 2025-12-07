@@ -1,0 +1,378 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The AI Murder Mystery - Acrostic Revealed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(233, 69, 96, 0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            color: #e94560;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .prompt-box {
+            background: #0d1117;
+            border-left: 4px solid #e94560;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            border-radius: 0 10px 10px 0;
+            white-space: pre-wrap;
+            color: #c9d1d9;
+        }
+
+        .story-container {
+            line-height: 1.8;
+            font-size: 1.1rem;
+        }
+
+        .sentence {
+            display: inline;
+            transition: all 0.3s ease;
+        }
+
+        .first-letter {
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .first-letter.revealed {
+            color: #e94560;
+            font-size: 1.3em;
+            text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+        }
+
+        .sentence.highlighted {
+            background: rgba(233, 69, 96, 0.2);
+            border-radius: 3px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .btn-reveal {
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            color: white;
+        }
+
+        .btn-reveal:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 25px rgba(233, 69, 96, 0.4);
+        }
+
+        .btn-reset {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e8e8e8;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-reset:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .hidden-message {
+            text-align: center;
+            font-size: 3rem;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #e94560;
+            text-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+            margin: 30px 0;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .hidden-message.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .interpretation-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .interpretation-box {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .interpretation {
+            padding: 20px;
+            border-radius: 10px;
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 0.5s ease;
+        }
+
+        .interpretation.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .surface {
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+
+        .hidden {
+            background: rgba(233, 69, 96, 0.1);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+
+        .interpretation h3 {
+            margin-bottom: 10px;
+        }
+
+        .surface h3 {
+            color: #2ecc71;
+        }
+
+        .hidden h3 {
+            color: #e94560;
+        }
+
+        .skull {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .letter-display {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .letter-box {
+            width: 40px;
+            height: 50px;
+            background: rgba(233, 69, 96, 0.2);
+            border: 2px solid #e94560;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #e94560;
+            opacity: 0;
+            transform: rotateX(90deg);
+            transition: all 0.3s ease;
+        }
+
+        .letter-box.visible {
+            opacity: 1;
+            transform: rotateX(0);
+        }
+
+        .space-box {
+            width: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔪 The AI Murder Mystery 🔪</h1>
+        <p class="subtitle">How AI crafted a dual-reality story with a hidden confession</p>
+
+        <!-- The Prompt Section -->
+        <div class="section">
+            <div class="section-title">
+                <span>💀</span> THE PROMPT THAT STARTED IT ALL
+            </div>
+            <div class="prompt-box">Write a 200 word story where the first letter of each sentence spells out a hidden message revealing the narrator is the murderer AND the story must function as a complete satisfying mystery where a detective solves a different crime AND a reader who doesn't notice the acrostic must reach a different valid conclusion than one who does. Two stories, one text.
+
+<strong style="color: #e94560;">Expected response:</strong>
+A complete story where first letters of sentences spell a confession like "I KILLED HER" and surface reading shows detective solving unrelated crime with different culprit and the hidden acrostic reading recontextualizes every sentence to reveal narrator guilt with no plot holes in either interpretation.</div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn btn-reveal" onclick="revealSecret()">🔍 REVEAL THE HIDDEN MESSAGE</button>
+            <button class="btn btn-reset" onclick="resetStory()">↺ Reset</button>
+        </div>
+
+        <!-- Letter Display -->
+        <div class="letter-display" id="letterDisplay"></div>
+
+        <!-- Hidden Message -->
+        <div class="hidden-message" id="hiddenMessage">I KILLED HER</div>
+
+        <!-- The Story Section -->
+        <div class="section">
+            <div class="section-title">
+                <span>📖</span> THE HARTWELL AFFAIR
+            </div>
+            <div class="story-container" id="story">
+                <!-- Story will be injected by JS -->
+            </div>
+        </div>
+
+        <!-- Interpretations -->
+        <div class="interpretation-box">
+            <div class="interpretation surface" id="surfaceReading">
+                <h3>✅ SURFACE READING</h3>
+                <p><strong>What most readers see:</strong></p>
+                <p>A complete detective mystery where Detective Morris brilliantly solves a jewel heist at Hartwell Manor. The gambling-addicted gardener Thomas is the obvious culprit—boots matching muddy prints, gambling debts, weak alibi. Case closed!</p>
+                <p style="margin-top: 10px;"><strong>The narrator?</strong> Just a helpful night watchman who discovered the crime and alerted authorities. A hero!</p>
+            </div>
+            <div class="interpretation hidden" id="hiddenReading">
+                <h3>💀 HIDDEN READING (ACROSTIC)</h3>
+                <p><strong>What the first letters reveal:</strong></p>
+                <p>The narrator CONFESSES: "I KILLED HER" — Wait, the crime was theft... unless there never was a theft. The narrator framed Thomas. The narrator was doing "night rounds" alone. The narrator is praised for "discovering" the crime...</p>
+                <p style="margin-top: 10px;"><strong>The real question:</strong> Who is buried in that garden Thomas tends? 💀</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sentences = [
+            { text: "I remember precisely the morning Detective Morris arrived at Hartwell Manor, his grey coat still damp from the cold autumn rain.", letter: "I" },
+            { text: "Keen eyes surveyed the shattered display case where Lady Hartwell's famous diamonds had gleamed so magnificently just hours before.", letter: "K" },
+            { text: "Inside knowledge was clearly required for such a precise theft, Morris quickly concluded—this was certainly no random burglary by some desperate stranger.", letter: "I" },
+            { text: "Lady Hartwell herself mentioned that her gardener Thomas had seemed unusually anxious and distracted in recent weeks.", letter: "L" },
+            { text: "Lately, Morris soon discovered through careful inquiry, Thomas had accrued substantial gambling debts to some very dangerous men in the village.", letter: "L" },
+            { text: "Evidence accumulated steadily against the poor man: his boots matched muddy prints found near the vault, and his weak alibi crumbled entirely under questioning.", letter: "E" },
+            { text: "Detective Morris arrested Thomas that very evening, the case elegantly and swiftly solved to everyone's immense relief.", letter: "D" },
+            { text: "Heartfelt thanks poured in from Lady Hartwell and every single member of her grateful household staff.", letter: "H" },
+            { text: "Even I received special praise for discovering the break-in during my night rounds and alerting the authorities so very promptly.", letter: "E" },
+            { text: "Rest assured, Morris told the eager newspaper reporters gathered outside, justice always prevails at Hartwell Manor.", letter: "R" }
+        ];
+
+        function initStory() {
+            const storyContainer = document.getElementById('story');
+            storyContainer.innerHTML = sentences.map((s, i) => 
+                `<span class="sentence" data-index="${i}"><span class="first-letter" data-letter="${s.letter}">${s.text.charAt(0)}</span>${s.text.slice(1)} </span>`
+            ).join('');
+
+            // Create letter boxes
+            const letterDisplay = document.getElementById('letterDisplay');
+            const message = "I KILLED HER";
+            letterDisplay.innerHTML = message.split('').map((char, i) => 
+                char === ' ' 
+                    ? '<div class="space-box"></div>'
+                    : `<div class="letter-box" data-index="${i}">${char}</div>`
+            ).join('');
+        }
+
+        function revealSecret() {
+            const firstLetters = document.querySelectorAll('.first-letter');
+            const sentences = document.querySelectorAll('.sentence');
+            const letterBoxes = document.querySelectorAll('.letter-box');
+            
+            let letterIndex = 0;
+            
+            firstLetters.forEach((letter, index) => {
+                setTimeout(() => {
+                    letter.classList.add('revealed');
+                    sentences[index].classList.add('highlighted');
+                    
+                    // Animate corresponding letter box
+                    if (letterBoxes[letterIndex]) {
+                        letterBoxes[letterIndex].classList.add('visible');
+                        letterIndex++;
+                    }
+                    
+                    if (index === firstLetters.length - 1) {
+                        setTimeout(() => {
+                            document.getElementById('hiddenMessage').classList.add('visible');
+                            document.getElementById('surfaceReading').classList.add('visible');
+                            setTimeout(() => {
+                                document.getElementById('hiddenReading').classList.add('visible');
+                            }, 300);
+                        }, 500);
+                    }
+                }, index * 400);
+            });
+        }
+
+        function resetStory() {
+            document.querySelectorAll('.first-letter').forEach(el => el.classList.remove('revealed'));
+            document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlighted'));
+            document.querySelectorAll('.letter-box').forEach(el => el.classList.remove('visible'));
+            document.getElementById('hiddenMessage').classList.remove('visible');
+            document.getElementById('surfaceReading').classList.remove('visible');
+            document.getElementById('hiddenReading').classList.remove('visible');
+        }
+
+        // Initialize on load
+        initStory();
+    </script>
+</body>
+</html>
