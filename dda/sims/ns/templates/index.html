@@ -1,0 +1,864 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDA North Star v1.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+            --green: #3fb950;
+            --green-dim: rgba(63, 185, 80, 0.2);
+            --red: #f85149;
+            --red-dim: rgba(248, 81, 73, 0.2);
+            --yellow: #d29922;
+            --yellow-dim: rgba(210, 153, 34, 0.2);
+            --blue: #58a6ff;
+            --cyan: #39c5cf;
+        }
+        
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            border-bottom: 2px solid var(--cyan);
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            color: var(--cyan);
+            text-shadow: 0 0 20px rgba(57, 197, 207, 0.5);
+        }
+        
+        header p {
+            color: var(--text-dim);
+            margin-top: 10px;
+        }
+        
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .search-bar input {
+            padding: 12px 20px;
+            font-size: 1.1rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text);
+            width: 200px;
+            text-transform: uppercase;
+        }
+        
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--cyan);
+        }
+        
+        .search-bar button {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-analyze {
+            background: var(--cyan);
+            color: var(--bg-dark);
+        }
+        
+        .btn-analyze:hover {
+            background: #5dd8e2;
+            transform: translateY(-2px);
+        }
+        
+        .btn-scan {
+            background: var(--border);
+            color: var(--text);
+        }
+        
+        .btn-scan:hover {
+            background: #444c56;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: var(--cyan);
+            font-size: 1.2rem;
+        }
+        
+        .loading::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .dashboard {
+            display: none;
+        }
+        
+        .dashboard.active {
+            display: block;
+        }
+        
+        /* Signal Box */
+        .signal-box {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        
+        .signal-box.buy-strong, .signal-box.buy {
+            border-color: var(--green);
+            background: var(--green-dim);
+        }
+        
+        .signal-box.sell-strong, .signal-box.sell {
+            border-color: var(--red);
+            background: var(--red-dim);
+        }
+        
+        .signal-box.hold-warm, .signal-box.hold-cool, .signal-box.neutral {
+            border-color: var(--yellow);
+            background: var(--yellow-dim);
+        }
+        
+        .signal-label {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+        
+        .signal-text {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .signal-text.buy-strong, .signal-text.buy { color: var(--green); }
+        .signal-text.sell-strong, .signal-text.sell { color: var(--red); }
+        .signal-text.hold-warm, .signal-text.hold-cool, .signal-text.neutral { color: var(--yellow); }
+        
+        .signal-explanation {
+            color: var(--text-dim);
+            margin-top: 15px;
+            font-size: 1.1rem;
+        }
+        
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .card h3 {
+            color: var(--cyan);
+            font-size: 1rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card h3::before {
+            font-size: 1.2rem;
+        }
+        
+        .price-info h3::before { content: '📍'; }
+        .key-levels h3::before { content: '🎯'; }
+        .trend-card h3::before { content: '📈'; }
+        .volatility-card h3::before { content: '🌡️'; }
+        .action-card h3::before { content: '🎮'; }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+        
+        .stat-label {
+            color: var(--text-dim);
+        }
+        
+        .stat-value {
+            font-weight: 600;
+        }
+        
+        .stat-value.positive { color: var(--green); }
+        .stat-value.negative { color: var(--red); }
+        .stat-value.neutral { color: var(--yellow); }
+        
+        /* Deviation Meter */
+        .meter-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        
+        .meter-container h3 {
+            color: var(--cyan);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .meter-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+        
+        .meter-track {
+            height: 20px;
+            background: linear-gradient(to right, var(--green) 0%, var(--green) 33%, var(--yellow) 33%, var(--yellow) 66%, var(--red) 66%, var(--red) 100%);
+            border-radius: 10px;
+            position: relative;
+            margin-bottom: 10px;
+        }
+        
+        .meter-pointer {
+            position: absolute;
+            top: -8px;
+            width: 4px;
+            height: 36px;
+            background: white;
+            border-radius: 2px;
+            transform: translateX(-50%);
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        .meter-value {
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .meter-ticks {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+        
+        /* Chart */
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .chart-container h3 {
+            color: var(--cyan);
+            margin-bottom: 15px;
+        }
+        
+        #priceChart {
+            max-height: 300px;
+        }
+        
+        /* Action Guidance */
+        .action-card {
+            grid-column: 1 / -1;
+        }
+        
+        .action-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .action-item {
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        
+        .action-item label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+        }
+        
+        .action-item span {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        /* Scanner Results */
+        .scanner {
+            display: none;
+        }
+        
+        .scanner.active {
+            display: block;
+        }
+        
+        .scanner-table {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .scanner-table th,
+        .scanner-table td {
+            padding: 15px;
+            text-align: left;
+        }
+        
+        .scanner-table th {
+            background: var(--border);
+            font-weight: 600;
+        }
+        
+        .scanner-table tr:not(:last-child) td {
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .scanner-table tr:hover td {
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .badge.buy-strong, .badge.buy {
+            background: var(--green-dim);
+            color: var(--green);
+        }
+        
+        .badge.sell-strong, .badge.sell {
+            background: var(--red-dim);
+            color: var(--red);
+        }
+        
+        .badge.hold-warm, .badge.hold-cool, .badge.neutral {
+            background: var(--yellow-dim);
+            color: var(--yellow);
+        }
+        
+        /* Disclaimer */
+        .disclaimer {
+            text-align: center;
+            padding: 20px;
+            color: var(--cyan);
+            font-size: 0.9rem;
+            border-top: 1px solid var(--border);
+            margin-top: 30px;
+        }
+        
+        /* Ticker header */
+        .ticker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .ticker-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .ticker-meta {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+        
+        /* Auto-refresh indicator */
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+        
+        .refresh-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            header h1 { font-size: 1.8rem; }
+            .signal-text { font-size: 1.8rem; }
+            .search-bar input { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⭐ DDA NORTH STAR v1.0</h1>
+            <p>Your intuitive trading compass. Run anytime for a clear signal: BUY / SELL / HOLD</p>
+        </header>
+        
+        <div class="search-bar">
+            <input type="text" id="tickerInput" placeholder="BTC-USD" value="BTC-USD">
+            <button class="btn-analyze" onclick="analyze()">🔍 Analyze</button>
+            <button class="btn-scan" onclick="scan()">📡 Scan All</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            📡 Fetching data
+        </div>
+        
+        <!-- Single Asset Dashboard -->
+        <div id="dashboard" class="dashboard">
+            <div class="ticker-header">
+                <div>
+                    <span class="ticker-name" id="tickerName">BTC-USD</span>
+                    <span class="ticker-meta" id="tickerMeta"></span>
+                </div>
+                <div class="refresh-indicator">
+                    <span class="refresh-dot"></span>
+                    <span>Auto-refresh: 30s</span>
+                </div>
+            </div>
+            
+            <!-- Signal Box -->
+            <div class="signal-box" id="signalBox">
+                <div class="signal-label">SIGNAL</div>
+                <div class="signal-text" id="signalText">LOADING...</div>
+                <div class="signal-explanation" id="signalExplanation"></div>
+            </div>
+            
+            <!-- Price & Levels Grid -->
+            <div class="grid">
+                <div class="card price-info">
+                    <h3>PRICE INFO</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Current Price</span>
+                        <span class="stat-value" id="currentPrice">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Fair Value (DDA)</span>
+                        <span class="stat-value" id="fairValue">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Deviation</span>
+                        <span class="stat-value" id="deviation">--</span>
+                    </div>
+                </div>
+                
+                <div class="card key-levels">
+                    <h3>KEY LEVELS</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Buy Zone (&lt;-5%)</span>
+                        <span class="stat-value positive" id="buyZone">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Fair Value</span>
+                        <span class="stat-value neutral" id="fairValueLevel">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Sell Zone (&gt;+6%)</span>
+                        <span class="stat-value negative" id="sellZone">--</span>
+                    </div>
+                </div>
+                
+                <div class="card trend-card">
+                    <h3>TREND (30d)</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Direction</span>
+                        <span class="stat-value" id="trendDirection">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Change</span>
+                        <span class="stat-value" id="trendChange">--</span>
+                    </div>
+                </div>
+                
+                <div class="card volatility-card">
+                    <h3>VOLATILITY</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Daily</span>
+                        <span class="stat-value" id="volatility">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Level</span>
+                        <span class="stat-value" id="volatilityLevel">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Deviation Meter -->
+            <div class="meter-container">
+                <h3>📊 DEVIATION METER</h3>
+                <div class="meter-labels">
+                    <span>OVERSOLD</span>
+                    <span>NEUTRAL</span>
+                    <span>OVERBOUGHT</span>
+                </div>
+                <div class="meter-track">
+                    <div class="meter-pointer" id="meterPointer" style="left: 50%;"></div>
+                </div>
+                <div class="meter-ticks">
+                    <span>-15%</span>
+                    <span>-5%</span>
+                    <span>0%</span>
+                    <span>+6%</span>
+                    <span>+15%</span>
+                </div>
+                <div class="meter-value" id="meterValue">0%</div>
+            </div>
+            
+            <!-- Price Chart -->
+            <div class="chart-container">
+                <h3>📈 Price History (60d)</h3>
+                <canvas id="priceChart"></canvas>
+            </div>
+            
+            <!-- Action Guidance -->
+            <div class="grid">
+                <div class="card action-card">
+                    <h3>SUGGESTED ACTION</h3>
+                    <div class="action-content" id="actionContent">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Scanner Results -->
+        <div id="scanner" class="scanner">
+            <h2 style="margin-bottom: 20px; color: var(--cyan);">📡 Market Scanner</h2>
+            <table class="scanner-table">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Price</th>
+                        <th>Fair Value</th>
+                        <th>Deviation</th>
+                        <th>Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="scannerBody">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="disclaimer">
+            ⚠️ REMEMBER: This is a GUIDE, not financial advice. YOU make the final decision. Manage your risk.
+        </div>
+    </div>
+    
+    <script>
+        let chart = null;
+        let refreshInterval = null;
+        let currentTicker = 'BTC-USD';
+        
+        function formatPrice(price) {
+            if (price >= 1000) {
+                return '$' + price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } else if (price >= 1) {
+                return '$' + price.toFixed(2);
+            } else {
+                return '$' + price.toFixed(6);
+            }
+        }
+        
+        async function analyze(ticker = null) {
+            ticker = ticker || document.getElementById('tickerInput').value.toUpperCase().trim();
+            if (!ticker) return;
+            
+            currentTicker = ticker;
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('dashboard').classList.remove('active');
+            document.getElementById('scanner').classList.remove('active');
+            
+            try {
+                const response = await fetch(`/api/analyze/${ticker}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+                
+                updateDashboard(data);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('dashboard').classList.add('active');
+                
+                // Setup auto-refresh
+                if (refreshInterval) clearInterval(refreshInterval);
+                refreshInterval = setInterval(() => analyze(currentTicker), 30000);
+                
+            } catch (error) {
+                alert('Failed to fetch data: ' + error.message);
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        function updateDashboard(data) {
+            // Header
+            document.getElementById('tickerName').textContent = data.ticker;
+            document.getElementById('tickerMeta').textContent = ` | ${data.timestamp} | ${data.candles} candles`;
+            
+            // Signal Box
+            const signalBox = document.getElementById('signalBox');
+            signalBox.className = 'signal-box ' + data.signal_class;
+            document.getElementById('signalText').textContent = data.signal;
+            document.getElementById('signalText').className = 'signal-text ' + data.signal_class;
+            document.getElementById('signalExplanation').textContent = data.explanation;
+            
+            // Price Info
+            document.getElementById('currentPrice').textContent = formatPrice(data.current_price);
+            document.getElementById('fairValue').textContent = formatPrice(data.fair_value);
+            
+            const devElement = document.getElementById('deviation');
+            devElement.textContent = data.deviation.toFixed(2) + '%';
+            devElement.className = 'stat-value ' + (data.deviation < -5 ? 'positive' : data.deviation > 6 ? 'negative' : 'neutral');
+            
+            // Key Levels
+            document.getElementById('buyZone').textContent = formatPrice(data.buy_zone);
+            document.getElementById('fairValueLevel').textContent = formatPrice(data.fair_value);
+            document.getElementById('sellZone').textContent = formatPrice(data.sell_zone);
+            
+            // Trend
+            const trendDir = document.getElementById('trendDirection');
+            trendDir.textContent = data.trend;
+            trendDir.className = 'stat-value ' + (data.trend.includes('UP') ? 'positive' : data.trend.includes('DOWN') ? 'negative' : 'neutral');
+            
+            const trendChg = document.getElementById('trendChange');
+            trendChg.textContent = (data.trend_change >= 0 ? '+' : '') + data.trend_change.toFixed(1) + '%';
+            trendChg.className = 'stat-value ' + (data.trend_change > 0 ? 'positive' : data.trend_change < 0 ? 'negative' : 'neutral');
+            
+            // Volatility
+            document.getElementById('volatility').textContent = data.volatility.toFixed(2) + '%';
+            const volLevel = document.getElementById('volatilityLevel');
+            volLevel.textContent = data.volatility_label;
+            volLevel.className = 'stat-value ' + (data.volatility_label === 'LOW' ? 'positive' : data.volatility_label === 'HIGH' ? 'negative' : 'neutral');
+            
+            // Deviation Meter
+            const meterPos = Math.max(0, Math.min(100, ((data.deviation + 15) / 30) * 100));
+            document.getElementById('meterPointer').style.left = meterPos + '%';
+            
+            const meterValue = document.getElementById('meterValue');
+            meterValue.textContent = (data.deviation >= 0 ? '+' : '') + data.deviation.toFixed(1) + '%';
+            meterValue.style.color = data.deviation < -5 ? 'var(--green)' : data.deviation > 6 ? 'var(--red)' : 'var(--yellow)';
+            
+            // Action Guidance
+            const actionContent = document.getElementById('actionContent');
+            const guidance = data.action_guidance;
+            let actionHTML = `
+                <div class="action-item">
+                    <label>Action</label>
+                    <span style="color: ${data.signal.includes('BUY') ? 'var(--green)' : data.signal.includes('SELL') ? 'var(--red)' : 'var(--yellow)'}">${guidance.action}</span>
+                </div>
+                <div class="action-item">
+                    <label>Reason</label>
+                    <span>${guidance.reason}</span>
+                </div>
+            `;
+            
+            if (guidance.entry) {
+                actionHTML += `<div class="action-item"><label>Entry</label><span>${guidance.entry}</span></div>`;
+            }
+            if (guidance.target) {
+                actionHTML += `<div class="action-item"><label>Target</label><span>${guidance.target}</span></div>`;
+            }
+            if (guidance.stop_loss) {
+                actionHTML += `<div class="action-item"><label>Stop Loss</label><span>${guidance.stop_loss}</span></div>`;
+            }
+            if (guidance.watch_buy) {
+                actionHTML += `<div class="action-item"><label>Watch for Buy</label><span style="color: var(--green)">${guidance.watch_buy}</span></div>`;
+            }
+            if (guidance.watch_sell) {
+                actionHTML += `<div class="action-item"><label>Watch for Sell</label><span style="color: var(--red)">${guidance.watch_sell}</span></div>`;
+            }
+            
+            actionContent.innerHTML = actionHTML;
+            
+            // Chart
+            updateChart(data);
+        }
+        
+        function updateChart(data) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+            
+            const labels = data.price_history.map(p => p.date);
+            const prices = data.price_history.map(p => p.price);
+            const fairValueLine = new Array(prices.length).fill(data.fair_value);
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Price',
+                            data: prices,
+                            borderColor: '#58a6ff',
+                            backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Fair Value',
+                            data: fairValueLine,
+                            borderColor: '#d29922',
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#c9d1d9' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#30363d' },
+                            ticks: { 
+                                color: '#8b949e',
+                                maxTicksLimit: 10
+                            }
+                        },
+                        y: {
+                            grid: { color: '#30363d' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function scan() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('dashboard').classList.remove('active');
+            document.getElementById('scanner').classList.remove('active');
+            
+            if (refreshInterval) clearInterval(refreshInterval);
+            
+            try {
+                const response = await fetch('/api/scan');
+                const data = await response.json();
+                
+                const tbody = document.getElementById('scannerBody');
+                tbody.innerHTML = '';
+                
+                data.results.forEach(asset => {
+                    const row = document.createElement('tr');
+                    row.style.cursor = 'pointer';
+                    row.onclick = () => {
+                        document.getElementById('tickerInput').value = asset.ticker;
+                        analyze(asset.ticker);
+                    };
+                    
+                    row.innerHTML = `
+                        <td><strong>${asset.ticker}</strong></td>
+                        <td>${formatPrice(asset.price)}</td>
+                        <td>${formatPrice(asset.fair_value)}</td>
+                        <td style="color: ${asset.deviation < -5 ? 'var(--green)' : asset.deviation > 6 ? 'var(--red)' : 'var(--yellow)'}">${asset.deviation >= 0 ? '+' : ''}${asset.deviation.toFixed(1)}%</td>
+                        <td><span class="badge ${asset.signal_class}">${asset.signal}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('scanner').classList.add('active');
+                
+            } catch (error) {
+                alert('Scan failed: ' + error.message);
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        // Handle enter key
+        document.getElementById('tickerInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') analyze();
+        });
+        
+        // Initial load
+        analyze('BTC-USD');
+    </script>
+</body>
+</html>

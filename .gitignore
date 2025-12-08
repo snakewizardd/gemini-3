@@ -105,3 +105,6 @@ config_local.json
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 dda/.claude/settings.local.json
+
+.vm/
+.vp/
