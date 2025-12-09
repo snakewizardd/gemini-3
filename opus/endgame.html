@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AVENGERS: ENDGAME - Experience</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --space-purple: #1a0a2e;
+            --deep-purple: #0d0221;
+            --quantum-blue: #00d4ff;
+            --quantum-orange: #ff6b35;
+            --thanos-gold: #d4af37;
+            --thanos-purple: #6b2d5c;
+            --iron-red: #c41e3a;
+            --iron-gold: #ffd700;
+            --stark-white: #f0f0f0;
+            --soul-orange: #ff8c00;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--deep-purple);
+            color: var(--stark-white);
+            font-family: 'Rajdhani', sans-serif;
+            overflow-x: hidden;
+            cursor: default;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--deep-purple);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, var(--quantum-blue), var(--thanos-purple));
+            border-radius: 4px;
+        }
+
+        /* Particle Canvas */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Section Base Styles */
+        section {
+            min-height: 100vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 4rem 2rem;
+            overflow: hidden;
+        }
+
+        .section-content {
+            position: relative;
+            z-index: 10;
+            max-width: 1200px;
+            width: 100%;
+            opacity: 0;
+            transform: translateY(60px);
+            transition: all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .section-content.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Hero Section - The Decimation */
+        #hero {
+            background: radial-gradient(ellipse at center, #1a0a2e 0%, #0d0221 70%, #000 100%);
+            min-height: 100vh;
+        }
+
+        .hero-logo {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .avengers-logo {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(4rem, 15vw, 12rem);
+            text-align: center;
+            letter-spacing: 0.3em;
+            background: linear-gradient(180deg, #888 0%, #333 50%, #666 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(100, 100, 100, 0.3));
+            animation: logoReveal 3s ease-out forwards;
+            position: relative;
+        }
+
+        .avengers-logo::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120%;
+            height: 120%;
+            background: radial-gradient(circle, transparent 30%, var(--deep-purple) 70%);
+            pointer-events: none;
+        }
+
+        @keyframes logoReveal {
+            0% {
+                opacity: 0;
+                letter-spacing: 1em;
+                filter: blur(20px) drop-shadow(0 0 30px rgba(100, 100, 100, 0.3));
+            }
+            50% {
+                opacity: 0.5;
+                filter: blur(5px) drop-shadow(0 0 30px rgba(100, 100, 100, 0.3));
+            }
+            100% {
+                opacity: 1;
+                letter-spacing: 0.3em;
+                filter: blur(0) drop-shadow(0 0 30px rgba(100, 100, 100, 0.3));
+            }
+        }
+
+        .subtitle {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.5rem, 4vw, 3rem);
+            text-align: center;
+            margin-top: 1rem;
+            letter-spacing: 0.5em;
+            color: var(--thanos-gold);
+            animation: subtitleFade 2s ease-out 1.5s forwards;
+            opacity: 0;
+        }
+
+        @keyframes subtitleFade {
+            to { opacity: 1; }
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 3rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            animation: bounce 2s infinite;
+            opacity: 0;
+            animation-delay: 3s;
+            animation-fill-mode: forwards;
+        }
+
+        .scroll-indicator span {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 0.2em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .scroll-arrow {
+            width: 30px;
+            height: 30px;
+            border-right: 2px solid rgba(255, 255, 255, 0.5);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+            transform: rotate(45deg);
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.7; }
+            40% { transform: translateX(-50%) translateY(-10px); opacity: 1; }
+            60% { transform: translateX(-50%) translateY(-5px); opacity: 0.9; }
+        }
+
+        /* Decimation Section */
+        #decimation {
+            background: linear-gradient(180deg, #0d0221 0%, #0a0015 50%, #050008 100%);
+        }
+
+        .decimation-content {
+            text-align: center;
+        }
+
+        .section-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2.5rem, 8vw, 6rem);
+            letter-spacing: 0.2em;
+            margin-bottom: 2rem;
+            position: relative;
+            display: inline-block;
+        }
+
+        #decimation .section-title {
+            color: #555;
+            text-shadow: 0 0 50px rgba(100, 100, 100, 0.3);
+        }
+
+        .quote {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            font-weight: 300;
+            font-style: italic;
+            max-width: 800px;
+            margin: 2rem auto;
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .thanos-quote {
+            color: var(--thanos-gold);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            text-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
+        }
+
+        .tony-quote {
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--quantum-blue);
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        /* Empty items visual */
+        .empty-items {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .empty-item {
+            width: 80px;
+            height: 80px;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            position: relative;
+            opacity: 0.5;
+            transition: all 0.5s ease;
+        }
+
+        .empty-item:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        .empty-item::after {
+            content: attr(data-label);
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.3);
+            white-space: nowrap;
+        }
+
+        /* Five Years Later */
+        #five-years {
+            background: linear-gradient(180deg, #050008 0%, #0a0a1a 50%, #0d1020 100%);
+        }
+
+        #five-years .section-title {
+            color: var(--stark-white);
+            opacity: 0.7;
+        }
+
+        .time-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(3rem, 10vw, 8rem);
+            font-weight: 900;
+            background: linear-gradient(90deg, #333 0%, #666 50%, #333 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 2rem 0;
+            animation: timeFlicker 4s infinite;
+        }
+
+        @keyframes timeFlicker {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .split-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            margin-top: 3rem;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        @media (max-width: 768px) {
+            .split-panels {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+        }
+
+        .panel {
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .panel-moved {
+            background: rgba(100, 100, 100, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-stayed {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 0, 0, 0.2);
+        }
+
+        .panel h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: 0.2em;
+            margin-bottom: 1rem;
+        }
+
+        .panel-moved h3 { color: rgba(255, 255, 255, 0.5); }
+        .panel-stayed h3 { color: var(--iron-red); }
+
+        .panel p {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Time Heist Section */
+        #time-heist {
+            background: 
+                radial-gradient(ellipse at 20% 50%, rgba(0, 212, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(255, 107, 53, 0.15) 0%, transparent 50%),
+                linear-gradient(180deg, #0d1020 0%, #0a0a2e 50%, #1a0a3e 100%);
+        }
+
+        #time-heist .section-title {
+            background: linear-gradient(90deg, var(--quantum-blue), var(--quantum-orange));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            filter: drop-shadow(0 0 30px rgba(0, 212, 255, 0.5));
+        }
+
+        .quantum-container {
+            position: relative;
+            padding: 3rem;
+            margin: 2rem 0;
+        }
+
+        .quantum-ring {
+            position: absolute;
+            border: 2px solid;
+            border-radius: 50%;
+            animation: quantumSpin 20s linear infinite;
+        }
+
+        .quantum-ring:nth-child(1) {
+            width: 300px;
+            height: 300px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        .quantum-ring:nth-child(2) {
+            width: 400px;
+            height: 400px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-color: rgba(255, 107, 53, 0.2);
+            animation-direction: reverse;
+            animation-duration: 25s;
+        }
+
+        .quantum-ring:nth-child(3) {
+            width: 500px;
+            height: 500px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-color: rgba(212, 175, 55, 0.15);
+            animation-duration: 30s;
+        }
+
+        @keyframes quantumSpin {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Infinity Stones */
+        .infinity-stones {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin: 3rem 0;
+            flex-wrap: wrap;
+        }
+
+        .stone {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            animation: stonePulse 2s ease-in-out infinite;
+        }
+
+        .stone:hover {
+            transform: scale(1.3);
+            z-index: 100;
+        }
+
+        .stone::before {
+            content: attr(data-name);
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            font-family: 'Share Tech Mono', monospace;
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+        }
+
+        .stone:hover::before {
+            opacity: 1;
+        }
+
+        @keyframes stonePulse {
+            0%, 100% { box-shadow: 0 0 20px currentColor; }
+            50% { box-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+        }
+
+        .stone-space { background: radial-gradient(circle, #4169e1, #000080); color: #4169e1; animation-delay: 0s; }
+        .stone-mind { background: radial-gradient(circle, #ffff00, #ffd700); color: #ffff00; animation-delay: 0.3s; }
+        .stone-reality { background: radial-gradient(circle, #dc143c, #8b0000); color: #dc143c; animation-delay: 0.6s; }
+        .stone-power { background: radial-gradient(circle, #9932cc, #4b0082); color: #9932cc; animation-delay: 0.9s; }
+        .stone-time { background: radial-gradient(circle, #32cd32, #006400); color: #32cd32; animation-delay: 1.2s; }
+        .stone-soul { background: radial-gradient(circle, #ff8c00, #ff4500); color: #ff8c00; animation-delay: 1.5s; }
+
+        /* Timeline */
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            margin: 3rem 0;
+            position: relative;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, var(--quantum-blue), var(--quantum-orange), var(--thanos-gold));
+            transform: translateX(-50%);
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            position: relative;
+        }
+
+        .timeline-item:nth-child(odd) {
+            flex-direction: row-reverse;
+            text-align: right;
+        }
+
+        .timeline-year {
+            flex: 1;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: var(--quantum-blue);
+        }
+
+        .timeline-dot {
+            width: 20px;
+            height: 20px;
+            background: var(--quantum-orange);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--quantum-orange);
+            z-index: 1;
+            flex-shrink: 0;
+        }
+
+        .timeline-content {
+            flex: 1;
+            padding: 1rem;
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+
+        .timeline-content h4 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 0.1em;
+            color: var(--quantum-orange);
+        }
+
+        /* Whatever It Takes */
+        #whatever-it-takes {
+            background: 
+                linear-gradient(180deg, #1a0a3e 0%, #1a1a3e 50%, #2a1a4e 100%);
+        }
+
+        #whatever-it-takes .section-title {
+            color: var(--stark-white);
+            text-shadow: 0 0 50px rgba(255, 255, 255, 0.3);
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+            max-width: 800px;
+        }
+
+        .team-member {
+            text-align: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .team-member:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .team-member .icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .team-member span {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Assemble Section */
+        #assemble {
+            background: 
+                radial-gradient(ellipse at center, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+                linear-gradient(180deg, #2a1a4e 0%, #1a1a4e 30%, #0a0a3e 100%);
+            overflow: hidden;
+        }
+
+        #assemble .section-title {
+            font-size: clamp(3rem, 10vw, 8rem);
+            background: linear-gradient(90deg, var(--iron-gold), var(--stark-white), var(--iron-gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            filter: drop-shadow(0 0 50px rgba(255, 215, 0, 0.5));
+            animation: assembleGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes assembleGlow {
+            from { filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.5)); }
+            to { filter: drop-shadow(0 0 80px rgba(255, 215, 0, 0.8)); }
+        }
+
+        .portals-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            margin: 2rem 0;
+        }
+
+        .portal {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(ellipse, transparent 30%, rgba(255, 166, 0, 0.3) 50%, rgba(255, 140, 0, 0.6) 70%, transparent 100%);
+            animation: portalSpin 3s linear infinite;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .portal.active {
+            opacity: 1;
+        }
+
+        .portal::before {
+            content: '';
+            position: absolute;
+            inset: 10%;
+            border-radius: 50%;
+            background: radial-gradient(ellipse, #000 0%, transparent 70%);
+        }
+
+        .portal-1 { width: 200px; height: 200px; top: 10%; left: 10%; animation-duration: 2.5s; }
+        .portal-2 { width: 150px; height: 150px; top: 60%; left: 25%; animation-duration: 3s; animation-direction: reverse; }
+        .portal-3 { width: 250px; height: 250px; top: 20%; right: 15%; animation-duration: 2.8s; }
+        .portal-4 { width: 180px; height: 180px; top: 50%; right: 30%; animation-duration: 3.2s; animation-direction: reverse; }
+        .portal-5 { width: 120px; height: 120px; bottom: 10%; left: 50%; animation-duration: 2.6s; }
+
+        @keyframes portalSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .assemble-quote {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(1.5rem, 5vw, 3rem);
+            letter-spacing: 0.3em;
+            text-align: center;
+            margin-top: 2rem;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 1s ease;
+        }
+
+        .assemble-quote.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .on-your-left {
+            color: var(--quantum-blue);
+            font-style: italic;
+        }
+
+        /* Watch Section */
+        #watch {
+            background: linear-gradient(180deg, #0a0a3e 0%, #050520 50%, #020210 100%);
+            padding: 6rem 2rem;
+        }
+
+        #watch .section-title {
+            background: linear-gradient(90deg, var(--iron-red), var(--iron-gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .video-container {
+            position: relative;
+            margin: 3rem auto;
+            max-width: 900px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 
+                0 0 50px rgba(0, 0, 0, 0.5),
+                0 0 100px rgba(196, 30, 58, 0.2),
+                0 0 150px rgba(255, 215, 0, 0.1);
+        }
+
+        .video-container::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            background: linear-gradient(45deg, var(--iron-red), var(--iron-gold), var(--quantum-blue), var(--thanos-purple));
+            z-index: -1;
+            border-radius: 14px;
+            animation: borderGlow 4s linear infinite;
+        }
+
+        @keyframes borderGlow {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        .video-container iframe {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16/9;
+            border: none;
+            background: #000;
+        }
+
+        /* I Am Iron Man */
+        #iron-man {
+            background: 
+                radial-gradient(ellipse at center, rgba(196, 30, 58, 0.2) 0%, transparent 50%),
+                linear-gradient(180deg, #020210 0%, #0a0005 50%, #100005 100%);
+        }
+
+        #iron-man .section-title {
+            font-size: clamp(2rem, 8vw, 5rem);
+        }
+
+        .snap-container {
+            position: relative;
+            margin: 3rem 0;
+            text-align: center;
+        }
+
+        .gauntlet-visual {
+            font-size: 6rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.5));
+        }
+
+        .gauntlet-visual:hover {
+            transform: scale(1.1);
+            filter: drop-shadow(0 0 50px rgba(255, 215, 0, 0.8));
+        }
+
+        .snap-button {
+            display: inline-block;
+            padding: 1rem 3rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: var(--deep-purple);
+            background: linear-gradient(135deg, var(--iron-gold), var(--thanos-gold));
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .snap-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.6);
+        }
+
+        .snap-button:active {
+            transform: scale(0.95);
+        }
+
+        .snap-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .snap-button:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .final-quote-container {
+            margin-top: 4rem;
+        }
+
+        .final-exchange {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .exchange-line {
+            padding: 1.5rem 2rem;
+            border-radius: 8px;
+            font-size: 1.3rem;
+            opacity: 0;
+            transform: translateX(-30px);
+            transition: all 0.8s ease;
+        }
+
+        .exchange-line.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .exchange-line.thanos {
+            background: rgba(107, 45, 92, 0.3);
+            border-left: 4px solid var(--thanos-gold);
+            color: var(--thanos-gold);
+        }
+
+        .exchange-line.tony {
+            background: rgba(0, 212, 255, 0.1);
+            border-left: 4px solid var(--quantum-blue);
+            color: var(--quantum-blue);
+            font-family: 'Share Tech Mono', monospace;
+            transform: translateX(30px);
+        }
+
+        .exchange-line.tony.visible {
+            transform: translateX(0);
+        }
+
+        /* Rest Section */
+        #rest {
+            background: linear-gradient(180deg, #100005 0%, #1a0a0a 30%, #2a1a10 60%, #3a2a15 100%);
+            position: relative;
+        }
+
+        #rest::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(180deg, transparent 0%, rgba(255, 140, 0, 0.05) 100%);
+            pointer-events: none;
+        }
+
+        #rest .section-title {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .memorial {
+            text-align: center;
+            margin: 3rem 0;
+        }
+
+        .love-3000 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: clamp(2rem, 6vw, 4rem);
+            font-weight: 300;
+            color: var(--iron-red);
+            text-shadow: 0 0 30px rgba(196, 30, 58, 0.5);
+            margin: 2rem 0;
+            animation: heartbeat 2s ease-in-out infinite;
+        }
+
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.05); }
+            35% { transform: scale(1); }
+            45% { transform: scale(1.03); }
+        }
+
+        .sunset-visual {
+            width: 100%;
+            max-width: 600px;
+            height: 200px;
+            margin: 2rem auto;
+            background: linear-gradient(180deg, 
+                #1a0505 0%, 
+                #3a1515 20%, 
+                #6a3020 40%, 
+                #8a5030 55%,
+                #aa7040 70%, 
+                #ca9050 85%, 
+                #eab060 100%
+            );
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sunset-visual::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40%;
+            background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.5));
+        }
+
+        .legacy-text {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.2rem;
+            line-height: 2;
+            color: rgba(255, 255, 255, 0.6);
+            max-width: 600px;
+            margin: 2rem auto;
+            text-align: center;
+        }
+
+        /* Easter Eggs - Mjolnir */
+        .mjolnir {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            font-size: 2rem;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 10px rgba(100, 149, 237, 0.5));
+        }
+
+        .mjolnir:hover {
+            transform: scale(1.2) rotate(-15deg);
+            filter: drop-shadow(0 0 30px rgba(100, 149, 237, 0.8));
+        }
+
+        .mjolnir.struck {
+            animation: lightning 0.5s ease;
+        }
+
+        @keyframes lightning {
+            0%, 100% { filter: drop-shadow(0 0 10px rgba(100, 149, 237, 0.5)); }
+            25% { filter: drop-shadow(0 0 100px rgba(200, 220, 255, 1)) brightness(2); }
+            50% { filter: drop-shadow(0 0 50px rgba(150, 200, 255, 0.8)); }
+        }
+
+        .lightning-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(200, 220, 255, 0);
+            pointer-events: none;
+            z-index: 999;
+            transition: background 0.1s;
+        }
+
+        .lightning-overlay.flash {
+            background: rgba(200, 220, 255, 0.3);
+        }
+
+        /* Dust Effect Classes */
+        .dusting {
+            animation: dustAway 2s forwards !important;
+        }
+
+        @keyframes dustAway {
+            0% { opacity: 1; filter: blur(0); transform: scale(1); }
+            50% { opacity: 0.5; filter: blur(2px); transform: scale(1.02); }
+            100% { opacity: 0; filter: blur(10px); transform: scale(1.05) translateY(-20px); }
+        }
+
+        .dusted {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        /* Audio Controls */
+        .audio-toggle {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .audio-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--deep-purple);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 1s ease, visibility 1s ease;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loading-stones {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .loading-stone {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            animation: loadingPulse 1.5s ease-in-out infinite;
+        }
+
+        .loading-stone:nth-child(1) { background: #4169e1; animation-delay: 0s; }
+        .loading-stone:nth-child(2) { background: #ffff00; animation-delay: 0.2s; }
+        .loading-stone:nth-child(3) { background: #dc143c; animation-delay: 0.4s; }
+        .loading-stone:nth-child(4) { background: #9932cc; animation-delay: 0.6s; }
+        .loading-stone:nth-child(5) { background: #32cd32; animation-delay: 0.8s; }
+        .loading-stone:nth-child(6) { background: #ff8c00; animation-delay: 1s; }
+
+        @keyframes loadingPulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+        }
+
+        .loading-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 0.3em;
+            margin-top: 2rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .infinity-stones {
+                gap: 1rem;
+            }
+            .stone {
+                width: 35px;
+                height: 35px;
+            }
+            .timeline::before {
+                left: 20px;
+            }
+            .timeline-item {
+                flex-direction: column !important;
+                text-align: left !important;
+                padding-left: 50px;
+            }
+            .timeline-dot {
+                position: absolute;
+                left: 10px;
+            }
+            .timeline-year {
+                font-size: 1rem;
+            }
+            .portal {
+                transform: scale(0.6);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loading">
+        <div class="loading-stones">
+            <div class="loading-stone"></div>
+            <div class="loading-stone"></div>
+            <div class="loading-stone"></div>
+            <div class="loading-stone"></div>
+            <div class="loading-stone"></div>
+            <div class="loading-stone"></div>
+        </div>
+        <div class="loading-text">ASSEMBLING...</div>
+    </div>
+
+    <!-- Particle Canvas -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Lightning Overlay -->
+    <div class="lightning-overlay" id="lightning"></div>
+
+    <!-- Audio Toggle -->
+    <button class="audio-toggle" id="audioToggle" title="Toggle ambient audio">🔇</button>
+
+    <!-- Mjolnir Easter Egg -->
+    <div class="mjolnir" id="mjolnir" title="Worthy?">🔨</div>
+
+    <!-- Hero Section -->
+    <section id="hero">
+        <div class="hero-logo">
+            <div class="avengers-logo">AVENGERS</div>
+            <div class="subtitle">ENDGAME</div>
+        </div>
+        <div class="scroll-indicator">
+            <span>SCROLL TO BEGIN</span>
+            <div class="scroll-arrow"></div>
+        </div>
+    </section>
+
+    <!-- The Decimation -->
+    <section id="decimation">
+        <div class="section-content">
+            <div class="decimation-content">
+                <h2 class="section-title">THE DECIMATION</h2>
+                <p class="quote thanos-quote">"You could not live with your own failure.<br>And where did that bring you? Back to me."</p>
+                <div class="empty-items">
+                    <div class="empty-item dustable" data-label="Peter's Suit"></div>
+                    <div class="empty-item dustable" data-label="Bucky's Arm"></div>
+                    <div class="empty-item dustable" data-label="Wakandan Spear"></div>
+                    <div class="empty-item dustable" data-label="Cloak of Levitation"></div>
+                    <div class="empty-item dustable" data-label="Groot's Branch"></div>
+                </div>
+                <p class="quote" style="margin-top: 3rem; color: rgba(255,255,255,0.4);">Half of all life... gone. In an instant.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Five Years Later -->
+    <section id="five-years">
+        <div class="section-content">
+            <h2 class="section-title">FIVE YEARS LATER</h2>
+            <div class="time-display">5 YEARS</div>
+            <div class="split-panels">
+                <div class="panel panel-moved dustable">
+                    <h3>THOSE WHO MOVED ON</h3>
+                    <p>Support groups. New lives built from ashes. The world adapted, as it always does. Some found a way to keep going.</p>
+                </div>
+                <div class="panel panel-stayed">
+                    <h3>THOSE WHO COULDN'T</h3>
+                    <p>Haunted by failure. Consumed by guilt. Unable to accept a world without those they lost. Waiting for a second chance.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- The Time Heist -->
+    <section id="time-heist">
+        <div class="section-content">
+            <h2 class="section-title">THE TIME HEIST</h2>
+            <p class="quote">"Back to the future? That's not how time travel works!"</p>
+            
+            <div class="quantum-container">
+                <div class="quantum-ring"></div>
+                <div class="quantum-ring"></div>
+                <div class="quantum-ring"></div>
+            </div>
+
+            <div class="infinity-stones">
+                <div class="stone stone-space dustable" data-name="SPACE" onclick="stoneClick(this, 'space')"></div>
+                <div class="stone stone-mind dustable" data-name="MIND" onclick="stoneClick(this, 'mind')"></div>
+                <div class="stone stone-reality dustable" data-name="REALITY" onclick="stoneClick(this, 'reality')"></div>
+                <div class="stone stone-power dustable" data-name="POWER" onclick="stoneClick(this, 'power')"></div>
+                <div class="stone stone-time dustable" data-name="TIME" onclick="stoneClick(this, 'time')"></div>
+                <div class="stone stone-soul dustable" data-name="SOUL" onclick="stoneClick(this, 'soul')"></div>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-item dustable">
+                    <div class="timeline-year">NEW YORK 2012</div>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>The Battle of New York</h4>
+                        <p>Space Stone • Mind Stone • Time Stone</p>
+                    </div>
+                </div>
+                <div class="timeline-item dustable">
+                    <div class="timeline-year">ASGARD 2013</div>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>The Dark World</h4>
+                        <p>Reality Stone</p>
+                    </div>
+                </div>
+                <div class="timeline-item dustable">
+                    <div class="timeline-year">MORAG 2014</div>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>Before Guardians</h4>
+                        <p>Power Stone • Soul Stone</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Whatever It Takes -->
+    <section id="whatever-it-takes">
+        <div class="section-content">
+            <h2 class="section-title">WHATEVER IT TAKES</h2>
+            <p class="quote" style="color: var(--stark-white); font-weight: 600;">"Whatever it takes."</p>
+            
+            <div class="team-grid">
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🦸</div>
+                    <span>TONY STARK</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🛡️</div>
+                    <span>STEVE ROGERS</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">⚡</div>
+                    <span>THOR</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">💚</div>
+                    <span>BRUCE BANNER</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🎯</div>
+                    <span>CLINT BARTON</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🕷️</div>
+                    <span>NATASHA ROMANOFF</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🦝</div>
+                    <span>ROCKET</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🔮</div>
+                    <span>NEBULA</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🐜</div>
+                    <span>SCOTT LANG</span>
+                </div>
+                <div class="team-member dustable" onclick="memberClick(this)">
+                    <div class="icon">🦅</div>
+                    <span>WAR MACHINE</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Avengers Assemble -->
+    <section id="assemble">
+        <div class="section-content">
+            <h2 class="section-title">AVENGERS...</h2>
+            
+            <div class="portals-container">
+                <div class="portal portal-1"></div>
+                <div class="portal portal-2"></div>
+                <div class="portal portal-3"></div>
+                <div class="portal portal-4"></div>
+                <div class="portal portal-5"></div>
+            </div>
+
+            <p class="quote on-your-left">"On your left."</p>
+            
+            <div class="assemble-quote" id="assembleQuote">
+                ...ASSEMBLE.
+            </div>
+        </div>
+    </section>
+
+    <!-- Watch the Movie -->
+    <section id="watch">
+        <div class="section-content">
+            <h2 class="section-title">EXPERIENCE THE EPIC</h2>
+            <p class="quote">Witness the culmination of 22 films and over a decade of storytelling.</p>
+            
+            <div class="video-container">
+                <iframe 
+                    src="https://vidsrc.to/embed/movie/tt4154796" 
+                    width="800" 
+                    height="450" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+        </div>
+    </section>
+
+    <!-- I Am Iron Man -->
+    <section id="iron-man">
+        <div class="section-content">
+            <h2 class="section-title tony-quote">I AM IRON MAN</h2>
+            
+            <div class="snap-container">
+                <div class="gauntlet-visual">🤌✨</div>
+                <br>
+                <button class="snap-button" id="snapButton">⚡ SNAP ⚡</button>
+            </div>
+
+            <div class="final-quote-container">
+                <div class="final-exchange">
+                    <div class="exchange-line thanos" id="thanosLine">
+                        "I am... inevitable."
+                    </div>
+                    <div class="exchange-line tony" id="tonyLine">
+                        "And I... am... Iron Man."
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Rest Now -->
+    <section id="rest">
+        <div class="section-content">
+            <h2 class="section-title">REST NOW</h2>
+            
+            <div class="memorial">
+                <div class="love-3000">"I love you 3000."</div>
+                
+                <div class="sunset-visual"></div>
+                
+                <p class="legacy-text">
+                    A hero. A genius. A friend.<br>
+                    Tony Stark gave everything so that others might live.<br>
+                    His sacrifice will never be forgotten.<br><br>
+                    <em>Part of the journey is the end.</em>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // ============================================
+        // PARTICLE SYSTEM
+        // ============================================
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let animationId;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor(x, y, type = 'dust') {
+                this.x = x || Math.random() * canvas.width;
+                this.y = y || Math.random() * canvas.height;
+                this.type = type;
+                this.size = Math.random() * 3 + 1;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = Math.random() * -1 - 0.5;
+                this.opacity = Math.random() * 0.5 + 0.2;
+                this.life = 1;
+                this.decay = Math.random() * 0.01 + 0.005;
+                
+                switch(type) {
+                    case 'quantum':
+                        this.color = Math.random() > 0.5 ? '#00d4ff' : '#ff6b35';
+                        this.speedX = (Math.random() - 0.5) * 2;
+                        this.speedY = (Math.random() - 0.5) * 2;
+                        break;
+                    case 'snap':
+                        this.color = '#d4af37';
+                        this.speedX = (Math.random() - 0.5) * 3;
+                        this.speedY = (Math.random() - 0.5) * 3 - 2;
+                        this.decay = 0.02;
+                        break;
+                    case 'portal':
+                        this.color = '#ff8c00';
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = Math.random() * 2 + 1;
+                        this.speedX = Math.cos(angle) * speed;
+                        this.speedY = Math.sin(angle) * speed;
+                        break;
+                    default:
+                        this.color = `rgba(150, 150, 150, ${this.opacity})`;
+                }
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= this.decay;
+                
+                if (this.type === 'dust') {
+                    this.speedX += (Math.random() - 0.5) * 0.1;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+                ctx.fillStyle = this.type === 'dust' 
+                    ? `rgba(150, 150, 150, ${this.opacity * this.life})`
+                    : this.color;
+                ctx.globalAlpha = this.life;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function createDustParticles(count = 50) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(null, null, 'dust'));
+            }
+        }
+
+        function createSnapParticles(x, y, count = 100) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, 'snap'));
+            }
+        }
+
+        function createQuantumParticles(count = 30) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(
+                    canvas.width / 2 + (Math.random() - 0.5) * 400,
+                    canvas.height / 2 + (Math.random() - 0.5) * 400,
+                    'quantum'
+                ));
+            }
+        }
+
+        function createPortalParticles(x, y, count = 50) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, 'portal'));
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particles = particles.filter(p => p.life > 0);
+            
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+
+            // Maintain base dust particles
+            if (particles.filter(p => p.type === 'dust').length < 30) {
+                createDustParticles(5);
+            }
+
+            animationId = requestAnimationFrame(animateParticles);
+        }
+
+        // ============================================
+        // SCROLL ANIMATIONS
+        // ============================================
+        const observerOptions = {
+            threshold: 0.2,
+            rootMargin: '0px'
+        };
+
+        const sectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    
+                    // Section-specific effects
+                    if (entry.target.closest('#time-heist')) {
+                        createQuantumParticles(50);
+                    }
+                    if (entry.target.closest('#assemble')) {
+                        activatePortals();
+                    }
+                    if (entry.target.closest('#iron-man')) {
+                        showExchange();
+                    }
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.section-content').forEach(section => {
+            sectionObserver.observe(section);
+        });
+
+        // ============================================
+        // PORTAL ACTIVATION
+        // ============================================
+        function activatePortals() {
+            const portals = document.querySelectorAll('.portal');
+            portals.forEach((portal, index) => {
+                setTimeout(() => {
+                    portal.classList.add('active');
+                    const rect = portal.getBoundingClientRect();
+                    createPortalParticles(rect.left + rect.width/2, rect.top + rect.height/2, 30);
+                }, index * 400);
+            });
+
+            // Show "ASSEMBLE" after portals
+            setTimeout(() => {
+                document.getElementById('assembleQuote').classList.add('visible');
+            }, portals.length * 400 + 500);
+        }
+
+        // ============================================
+        // EXCHANGE ANIMATION
+        // ============================================
+        function showExchange() {
+            setTimeout(() => {
+                document.getElementById('thanosLine').classList.add('visible');
+            }, 500);
+            setTimeout(() => {
+                document.getElementById('tonyLine').classList.add('visible');
+            }, 2000);
+        }
+
+        // ============================================
+        // SNAP EFFECT
+        // ============================================
+        let snapped = false;
+
+        document.getElementById('snapButton').addEventListener('click', function(e) {
+            const rect = this.getBoundingClientRect();
+            createSnapParticles(rect.left + rect.width/2, rect.top + rect.height/2, 200);
+            
+            // Flash effect
+            document.body.style.animation = 'none';
+            document.body.offsetHeight; // Trigger reflow
+            document.body.style.animation = 'snapFlash 0.5s ease';
+            
+            // Dust half the elements
+            const dustables = document.querySelectorAll('.dustable');
+            const shuffled = Array.from(dustables).sort(() => Math.random() - 0.5);
+            const toDust = shuffled.slice(0, Math.ceil(shuffled.length / 2));
+            
+            if (!snapped) {
+                toDust.forEach((el, i) => {
+                    setTimeout(() => {
+                        el.classList.add('dusting');
+                        setTimeout(() => {
+                            el.classList.add('dusted');
+                            el.classList.remove('dusting');
+                        }, 2000);
+                    }, i * 100);
+                });
+                this.textContent = '↩️ RESTORE';
+                snapped = true;
+            } else {
+                document.querySelectorAll('.dusted').forEach(el => {
+                    el.classList.remove('dusted');
+                });
+                this.textContent = '⚡ SNAP ⚡';
+                snapped = false;
+            }
+        });
+
+        // Add snap flash animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes snapFlash {
+                0% { filter: brightness(1); }
+                50% { filter: brightness(2) saturate(0); }
+                100% { filter: brightness(1); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // ============================================
+        // INFINITY STONE INTERACTIONS
+        // ============================================
+        function stoneClick(element, type) {
+            const rect = element.getBoundingClientRect();
+            const colors = {
+                space: '#4169e1',
+                mind: '#ffff00',
+                reality: '#dc143c',
+                power: '#9932cc',
+                time: '#32cd32',
+                soul: '#ff8c00'
+            };
+            
+            // Create burst effect
+            for (let i = 0; i < 20; i++) {
+                const particle = new Particle(
+                    rect.left + rect.width/2,
+                    rect.top + rect.height/2,
+                    'portal'
+                );
+                particle.color = colors[type];
+                particles.push(particle);
+            }
+
+            element.style.transform = 'scale(1.5)';
+            setTimeout(() => {
+                element.style.transform = '';
+            }, 300);
+        }
+
+        // ============================================
+        // TEAM MEMBER CLICK
+        // ============================================
+        function memberClick(element) {
+            element.style.boxShadow = '0 0 30px rgba(255, 215, 0, 0.8)';
+            setTimeout(() => {
+                element.style.boxShadow = '';
+            }, 500);
+        }
+
+        // ============================================
+        // MJOLNIR EASTER EGG
+        // ============================================
+        document.getElementById('mjolnir').addEventListener('click', function() {
+            this.classList.add('struck');
+            document.getElementById('lightning').classList.add('flash');
+            
+            // Thunder sound would go here with Web Audio API
+            
+            setTimeout(() => {
+                this.classList.remove('struck');
+                document.getElementById('lightning').classList.remove('flash');
+            }, 500);
+        });
+
+        // ============================================
+        // AUDIO TOGGLE (Placeholder)
+        // ============================================
+        let audioEnabled = false;
+        document.getElementById('audioToggle').addEventListener('click', function() {
+            audioEnabled = !audioEnabled;
+            this.textContent = audioEnabled ? '🔊' : '🔇';
+            // Audio implementation would go here
+        });
+
+        // ============================================
+        // LOADING SCREEN
+        // ============================================
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('loading').classList.add('hidden');
+            }, 2000);
+        });
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        createDustParticles(50);
+        animateParticles();
+
+        // Continuously add quantum particles when in time heist section
+        setInterval(() => {
+            const timeHeist = document.getElementById('time-heist');
+            const rect = timeHeist.getBoundingClientRect();
+            if (rect.top < window.innerHeight && rect.bottom > 0) {
+                createQuantumParticles(5);
+            }
+        }, 500);
+    </script>
+</body>
+</html>

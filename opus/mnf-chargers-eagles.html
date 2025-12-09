@@ -1,0 +1,2657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNF Week 14 | Chargers vs Eagles | December 8, 2025</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Bebas+Neue&family=Roboto+Condensed:wght@400;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Chargers Colors */
+            --chargers-blue: #0080C6;
+            --chargers-gold: #FFC20E;
+            --chargers-navy: #002A5E;
+            /* Eagles Colors */
+            --eagles-green: #004C54;
+            --eagles-silver: #A5ACAF;
+            --eagles-black: #000000;
+            /* UI Colors */
+            --bg-dark: #0a0a0f;
+            --bg-secondary: #12121a;
+            --card-bg: rgba(18, 18, 26, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent-glow: rgba(0, 128, 198, 0.5);
+            --espn-red: #d00;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Roboto Condensed', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Particle Canvas */
+        #particles-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Animated Background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(0, 128, 198, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(0, 76, 84, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(255, 194, 14, 0.05) 0%, transparent 60%);
+            z-index: 0;
+            animation: bgPulse 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            0% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        /* Grid Pattern Overlay */
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Main Container */
+        .main-container {
+            position: relative;
+            z-index: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Top Bar - ESPN Style */
+        .top-bar {
+            background: linear-gradient(90deg, var(--espn-red), #b00);
+            padding: 8px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .mnf-logo {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.8rem;
+            letter-spacing: 3px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .mnf-logo span {
+            color: var(--chargers-gold);
+        }
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.3);
+            padding: 6px 15px;
+            border-radius: 20px;
+        }
+
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            animation: livePulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px #00ff00; }
+            50% { opacity: 0.5; box-shadow: 0 0 5px #00ff00; }
+        }
+
+        /* News Ticker */
+        .ticker-wrap {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--chargers-gold);
+            overflow: hidden;
+            padding: 10px 0;
+        }
+
+        .ticker {
+            display: flex;
+            animation: ticker 60s linear infinite;
+            white-space: nowrap;
+        }
+
+        .ticker-item {
+            padding: 0 50px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .ticker-item::before {
+            content: '⚡';
+        }
+
+        .ticker-highlight {
+            color: var(--chargers-gold);
+        }
+
+        @keyframes ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 40px 0;
+            text-align: center;
+            position: relative;
+        }
+
+        .week-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--espn-red), #b00);
+            padding: 8px 25px;
+            border-radius: 5px;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+
+        .matchup-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin: 30px 0;
+        }
+
+        .team-hero {
+            flex: 1;
+            max-width: 400px;
+            min-width: 300px;
+            padding: 30px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .team-hero:hover {
+            transform: translateY(-5px);
+        }
+
+        .team-hero.chargers {
+            box-shadow: 0 10px 40px rgba(0, 128, 198, 0.3);
+        }
+
+        .team-hero.chargers:hover {
+            box-shadow: 0 20px 60px rgba(0, 128, 198, 0.4);
+        }
+
+        .team-hero.eagles {
+            box-shadow: 0 10px 40px rgba(0, 76, 84, 0.3);
+        }
+
+        .team-hero.eagles:hover {
+            box-shadow: 0 20px 60px rgba(0, 76, 84, 0.4);
+        }
+
+        .team-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .team-hero.chargers::before {
+            background: linear-gradient(90deg, var(--chargers-blue), var(--chargers-gold));
+        }
+
+        .team-hero.eagles::before {
+            background: linear-gradient(90deg, var(--eagles-green), var(--eagles-silver));
+        }
+
+        .team-logo-container {
+            width: 150px;
+            height: 150px;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+
+        .team-logo {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+            animation: logoFloat 3s ease-in-out infinite;
+        }
+
+        .chargers .team-logo {
+            filter: drop-shadow(0 0 30px var(--chargers-blue));
+        }
+
+        .eagles .team-logo {
+            filter: drop-shadow(0 0 30px var(--eagles-green));
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-10px) scale(1.05); }
+        }
+
+        .team-name {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 3px;
+            margin-bottom: 5px;
+        }
+
+        .chargers .team-name {
+            color: var(--chargers-blue);
+            text-shadow: 0 0 20px rgba(0, 128, 198, 0.5);
+        }
+
+        .eagles .team-name {
+            color: var(--eagles-green);
+            text-shadow: 0 0 20px rgba(0, 76, 84, 0.5);
+        }
+
+        .team-city {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .team-record {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 30px;
+            display: inline-block;
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .vs-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .vs-text {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 4rem;
+            background: linear-gradient(135deg, var(--chargers-gold), var(--eagles-silver));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: vsGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes vsGlow {
+            0% { filter: drop-shadow(0 0 10px rgba(255, 194, 14, 0.5)); }
+            100% { filter: drop-shadow(0 0 20px rgba(0, 76, 84, 0.5)); }
+        }
+
+        /* Score Widget Placeholder */
+        .score-widget {
+            background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(20,20,30,0.9));
+            border: 2px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 25px 40px;
+            margin: 30px auto;
+            max-width: 500px;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .score-widget::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--chargers-blue), var(--chargers-gold), var(--eagles-green));
+        }
+
+        .score-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .score-team {
+            text-align: center;
+        }
+
+        .score-team-abbr {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.8rem;
+            letter-spacing: 2px;
+        }
+
+        .score-team-abbr.lac { color: var(--chargers-blue); }
+        .score-team-abbr.phi { color: var(--eagles-green); }
+
+        .score-number {
+            font-family: 'Oswald', sans-serif;
+            font-size: 4rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .score-separator {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .game-clock {
+            text-align: center;
+            margin-top: 15px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: var(--chargers-gold);
+        }
+
+        /* Game Info Bar */
+        .game-info-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            flex-wrap: wrap;
+            margin: 30px 0;
+            padding: 20px;
+            background: var(--glass-bg);
+            border-radius: 15px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-icon {
+            font-size: 1.5rem;
+        }
+
+        .info-content {
+            text-align: left;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-value {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* Stream Section */
+        .stream-section {
+            margin: 50px 0;
+            padding: 40px 0;
+            position: relative;
+        }
+
+        .stream-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--chargers-gold), transparent);
+        }
+
+        .section-title {
+            text-align: center;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 5px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+        }
+
+        .section-title span {
+            background: linear-gradient(135deg, var(--chargers-blue), var(--eagles-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stream-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(20,20,30,0.95));
+            border-radius: 20px;
+            padding: 25px;
+            border: 2px solid var(--glass-border);
+            box-shadow: 
+                0 0 60px rgba(0, 128, 198, 0.2),
+                0 0 100px rgba(0, 76, 84, 0.1),
+                inset 0 0 60px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stream-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(
+                from 0deg,
+                transparent,
+                var(--chargers-blue),
+                transparent,
+                var(--eagles-green),
+                transparent
+            );
+            animation: streamBorderRotate 10s linear infinite;
+            opacity: 0.1;
+        }
+
+        @keyframes streamBorderRotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stream-inner {
+            position: relative;
+            z-index: 1;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .stream-container iframe {
+            display: block;
+            width: 100%;
+            height: 450px;
+            border: none;
+        }
+
+        .stream-label {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: var(--espn-red);
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Widgets Row */
+        .widgets-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+        }
+
+        .widget {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 25px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .widget:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .widget-title {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Betting Odds Widget */
+        .odds-widget {
+            border-top: 3px solid var(--chargers-gold);
+        }
+
+        .odds-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .odds-item {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .odds-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .odds-value {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .odds-value.spread { color: var(--eagles-green); }
+        .odds-value.ou { color: var(--chargers-gold); }
+
+        /* Weather Widget */
+        .weather-widget {
+            border-top: 3px solid var(--chargers-blue);
+        }
+
+        .weather-main {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+
+        .weather-icon {
+            font-size: 3.5rem;
+        }
+
+        .weather-temp {
+            font-family: 'Oswald', sans-serif;
+            font-size: 3rem;
+            font-weight: 700;
+        }
+
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .weather-detail {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .weather-detail-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .weather-detail-value {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        /* Broadcast Widget */
+        .broadcast-widget {
+            border-top: 3px solid var(--espn-red);
+        }
+
+        .broadcast-channels {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .channel-badge {
+            background: rgba(255,255,255,0.1);
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            font-size: 1.3rem;
+            letter-spacing: 2px;
+        }
+
+        .channel-badge.espn {
+            background: linear-gradient(135deg, var(--espn-red), #b00);
+        }
+
+        .broadcast-time {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2rem;
+            color: var(--chargers-gold);
+        }
+
+        /* Storylines Section */
+        .storylines-section {
+            margin: 60px 0;
+        }
+
+        .storylines-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .storyline-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .storyline-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--chargers-gold);
+        }
+
+        .storyline-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .storyline-card:nth-child(odd)::before {
+            background: linear-gradient(180deg, var(--chargers-blue), var(--chargers-gold));
+        }
+
+        .storyline-card:nth-child(even)::before {
+            background: linear-gradient(180deg, var(--eagles-green), var(--eagles-silver));
+        }
+
+        .storyline-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+
+        .storyline-title {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .storyline-text {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        /* Player Cards Section */
+        .players-section {
+            margin: 60px 0;
+        }
+
+        .team-players-container {
+            margin: 40px 0;
+        }
+
+        .team-header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--glass-border);
+        }
+
+        .team-header-logo {
+            font-size: 3rem;
+        }
+
+        .team-header-name {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 3px;
+        }
+
+        .team-header-name.chargers-text {
+            color: var(--chargers-blue);
+        }
+
+        .team-header-name.eagles-text {
+            color: var(--eagles-green);
+        }
+
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .player-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .player-card:hover {
+            transform: translateY(-5px) scale(1.02);
+        }
+
+        .player-card.chargers-card:hover {
+            box-shadow: 0 15px 40px rgba(0, 128, 198, 0.3);
+            border-color: var(--chargers-blue);
+        }
+
+        .player-card.eagles-card:hover {
+            box-shadow: 0 15px 40px rgba(0, 76, 84, 0.3);
+            border-color: var(--eagles-green);
+        }
+
+        .player-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        .chargers-card::before {
+            background: linear-gradient(90deg, var(--chargers-blue), var(--chargers-gold));
+        }
+
+        .eagles-card::before {
+            background: linear-gradient(90deg, var(--eagles-green), var(--eagles-silver));
+        }
+
+        .player-number {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            opacity: 0.2;
+        }
+
+        .chargers-card .player-number { color: var(--chargers-blue); }
+        .eagles-card .player-number { color: var(--eagles-green); }
+
+        .player-position {
+            display: inline-block;
+            padding: 4px 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .chargers-card .player-position { color: var(--chargers-gold); }
+        .eagles-card .player-position { color: var(--eagles-green); }
+
+        .player-name {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .player-info {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .player-stats {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .stat-value {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+        }
+
+        /* Featured Player Card */
+        .featured-player {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 30px;
+            align-items: center;
+            flex-wrap: wrap;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .featured-player::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .featured-player.chargers-featured::before {
+            background: linear-gradient(90deg, var(--chargers-blue), var(--chargers-gold), var(--chargers-blue));
+        }
+
+        .featured-player.eagles-featured::before {
+            background: linear-gradient(90deg, var(--eagles-green), var(--eagles-silver), var(--eagles-green));
+        }
+
+        .featured-badge {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: var(--espn-red);
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+
+        .featured-photo {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            position: relative;
+        }
+
+        .chargers-featured .featured-photo {
+            background: linear-gradient(135deg, var(--chargers-blue), var(--chargers-navy));
+            box-shadow: 0 0 40px rgba(0, 128, 198, 0.4);
+        }
+
+        .eagles-featured .featured-photo {
+            background: linear-gradient(135deg, var(--eagles-green), var(--eagles-black));
+            box-shadow: 0 0 40px rgba(0, 76, 84, 0.4);
+        }
+
+        .featured-info {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .featured-name {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        .featured-details {
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .featured-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+        }
+
+        .featured-stat {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .featured-stat-value {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .chargers-featured .featured-stat-value { color: var(--chargers-gold); }
+        .eagles-featured .featured-stat-value { color: var(--eagles-green); }
+
+        .featured-stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Formation Section */
+        .formation-section {
+            margin: 60px 0;
+        }
+
+        .formation-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .formation-tab {
+            padding: 12px 30px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .formation-tab:hover,
+        .formation-tab.active {
+            background: var(--chargers-blue);
+            border-color: var(--chargers-blue);
+            transform: translateY(-2px);
+        }
+
+        .formation-tab.eagles-tab:hover,
+        .formation-tab.eagles-tab.active {
+            background: var(--eagles-green);
+            border-color: var(--eagles-green);
+        }
+
+        .formation-display {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .field-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 49px,
+                    rgba(255,255,255,0.05) 49px,
+                    rgba(255,255,255,0.05) 50px
+                ),
+                linear-gradient(180deg, rgba(34, 139, 34, 0.1), rgba(0, 100, 0, 0.15));
+            border-radius: 20px;
+        }
+
+        .formation-grid {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            gap: 20px;
+            min-height: 400px;
+        }
+
+        .formation-row {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .formation-player {
+            background: rgba(0,0,0,0.7);
+            border: 2px solid var(--chargers-blue);
+            border-radius: 12px;
+            padding: 12px 16px;
+            text-align: center;
+            min-width: 80px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .formation-player:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 128, 198, 0.5);
+        }
+
+        .formation-player.eagles-player {
+            border-color: var(--eagles-green);
+        }
+
+        .formation-player.eagles-player:hover {
+            box-shadow: 0 0 20px rgba(0, 76, 84, 0.5);
+        }
+
+        .formation-player-number {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5rem;
+        }
+
+        .formation-player-name {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80px;
+        }
+
+        .formation-player-pos {
+            font-size: 0.65rem;
+            color: var(--chargers-gold);
+            margin-top: 3px;
+        }
+
+        .eagles-player .formation-player-pos {
+            color: var(--eagles-silver);
+        }
+
+        /* Stats Comparison Section */
+        .stats-section {
+            margin: 60px 0;
+        }
+
+        .stats-comparison {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            overflow: hidden;
+        }
+
+        .stat-comparison-row {
+            display: flex;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .stat-comparison-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-team-value {
+            flex: 1;
+            text-align: center;
+        }
+
+        .stat-team-value.left { text-align: right; padding-right: 30px; }
+        .stat-team-value.right { text-align: left; padding-left: 30px; }
+
+        .stat-big-number {
+            font-family: 'Oswald', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .chargers-stat { color: var(--chargers-blue); }
+        .eagles-stat { color: var(--eagles-green); }
+
+        .stat-comparison-label {
+            width: 200px;
+            text-align: center;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .stat-bar-container {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .stat-bar-left {
+            height: 100%;
+            background: linear-gradient(90deg, var(--chargers-blue), var(--chargers-gold));
+            transition: width 1s ease;
+        }
+
+        .stat-bar-right {
+            height: 100%;
+            background: linear-gradient(90deg, var(--eagles-silver), var(--eagles-green));
+            transition: width 1s ease;
+        }
+
+        /* Defense Rankings */
+        .defense-rankings {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+        }
+
+        .ranking-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ranking-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        .ranking-card.chargers-ranking::before {
+            background: var(--chargers-blue);
+        }
+
+        .ranking-card.eagles-ranking::before {
+            background: var(--eagles-green);
+        }
+
+        .ranking-number {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 4rem;
+            line-height: 1;
+        }
+
+        .chargers-ranking .ranking-number { color: var(--chargers-gold); }
+        .eagles-ranking .ranking-number { color: var(--eagles-silver); }
+
+        .ranking-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            margin: 10px 0;
+        }
+
+        .ranking-stat {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 60px;
+            padding: 40px 0;
+            border-top: 1px solid var(--glass-border);
+            text-align: center;
+        }
+
+        .footer-logo {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            letter-spacing: 5px;
+            margin-bottom: 15px;
+        }
+
+        .footer-text {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .footer-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+
+        .footer-link:hover {
+            color: var(--chargers-gold);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.6s ease forwards;
+            opacity: 0;
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        .delay-5 { animation-delay: 0.5s; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .matchup-container {
+                flex-direction: column;
+            }
+
+            .team-hero {
+                max-width: 100%;
+            }
+
+            .vs-container {
+                padding: 10px;
+            }
+
+            .vs-text {
+                font-size: 2.5rem;
+            }
+
+            .section-title {
+                font-size: 1.8rem;
+            }
+
+            .stream-container iframe {
+                height: 300px;
+            }
+
+            .featured-player {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .stat-comparison-label {
+                width: 100px;
+                font-size: 0.75rem;
+            }
+
+            .stat-big-number {
+                font-size: 1.5rem;
+            }
+
+            .game-info-bar {
+                gap: 20px;
+            }
+
+            .formation-display {
+                padding: 20px;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, var(--chargers-blue), var(--eagles-green));
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--chargers-gold);
+        }
+
+        /* Glow Effects */
+        .glow-blue {
+            box-shadow: 0 0 30px rgba(0, 128, 198, 0.3);
+        }
+
+        .glow-green {
+            box-shadow: 0 0 30px rgba(0, 76, 84, 0.3);
+        }
+
+        .glow-gold {
+            box-shadow: 0 0 30px rgba(255, 194, 14, 0.3);
+        }
+
+        /* Pulse animation for live elements */
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Particle Canvas -->
+    <canvas id="particles-canvas"></canvas>
+    
+    <!-- Background Effects -->
+    <div class="bg-gradient"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- Top Bar -->
+    <header class="top-bar">
+        <div class="mnf-logo">MONDAY NIGHT <span>FOOTBALL</span></div>
+        <div class="live-badge">
+            <div class="live-dot"></div>
+            <span>WEEK 14</span>
+        </div>
+    </header>
+
+    <!-- News Ticker -->
+    <div class="ticker-wrap">
+        <div class="ticker" id="ticker">
+            <div class="ticker-item">
+                <span class="ticker-highlight">EAGLES</span> are defending Super Bowl champions but have lost two straight games
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">CHARGERS</span> defense ranks 3rd in NFL with 275.3 total yards allowed per game
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">PLAYOFF IMPLICATIONS:</span> Chargers win jumps them to AFC No. 5 seed; loss drops them out entirely
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">A.J. BROWN</span> has 7+ catches in 3 straight and 3 TDs in last 2 games
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">JALEN HURTS:</span> 2,514 passing yards, 19 TDs, 2 INTs this season
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">SAQUON BARKLEY:</span> 740 rushing yards, 4 TDs, 3.7 YPC
+            </div>
+            <!-- Duplicate for seamless loop -->
+            <div class="ticker-item">
+                <span class="ticker-highlight">EAGLES</span> are defending Super Bowl champions but have lost two straight games
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">CHARGERS</span> defense ranks 3rd in NFL with 275.3 total yards allowed per game
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">PLAYOFF IMPLICATIONS:</span> Chargers win jumps them to AFC No. 5 seed; loss drops them out entirely
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-highlight">A.J. BROWN</span> has 7+ catches in 3 straight and 3 TDs in last 2 games
+            </div>
+        </div>
+    </div>
+
+    <main class="main-container">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="week-badge animate-in">NFL Week 14 • December 8, 2025</div>
+            
+            <div class="matchup-container">
+                <div class="team-hero chargers animate-in delay-1">
+                    <div class="team-logo-container">
+                        <div class="team-logo">⚡</div>
+                    </div>
+                    <div class="team-city">Los Angeles</div>
+                    <div class="team-name">CHARGERS</div>
+                    <div class="team-record">8-4</div>
+                </div>
+
+                <div class="vs-container animate-in delay-2">
+                    <div class="vs-text">VS</div>
+                </div>
+
+                <div class="team-hero eagles animate-in delay-3">
+                    <div class="team-logo-container">
+                        <div class="team-logo">🦅</div>
+                    </div>
+                    <div class="team-city">Philadelphia</div>
+                    <div class="team-name">EAGLES</div>
+                    <div class="team-record">8-4</div>
+                </div>
+            </div>
+
+            <!-- Score Widget -->
+            <div class="score-widget animate-in delay-4">
+                <div class="score-display">
+                    <div class="score-team">
+                        <div class="score-team-abbr lac">LAC</div>
+                        <div class="score-number" id="chargers-score">--</div>
+                    </div>
+                    <div class="score-separator">:</div>
+                    <div class="score-team">
+                        <div class="score-team-abbr phi">PHI</div>
+                        <div class="score-number" id="eagles-score">--</div>
+                    </div>
+                </div>
+                <div class="game-clock" id="game-clock">KICKOFF 8:15 PM ET</div>
+            </div>
+
+            <!-- Game Info Bar -->
+            <div class="game-info-bar animate-in delay-5">
+                <div class="info-item">
+                    <div class="info-icon">🏟️</div>
+                    <div class="info-content">
+                        <div class="info-label">Venue</div>
+                        <div class="info-value">SoFi Stadium</div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon">📍</div>
+                    <div class="info-content">
+                        <div class="info-label">Location</div>
+                        <div class="info-value">Inglewood, CA</div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon">📺</div>
+                    <div class="info-content">
+                        <div class="info-label">Broadcast</div>
+                        <div class="info-value">ESPN / ABC</div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-icon">🎰</div>
+                    <div class="info-content">
+                        <div class="info-label">Line</div>
+                        <div class="info-value">PHI -2.5</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stream Section -->
+        <section class="stream-section" id="watch">
+            <h2 class="section-title"><span>WATCH</span> LIVE</h2>
+            <div class="stream-container">
+                <div class="stream-label">
+                    <div class="live-dot"></div>
+                    LIVE STREAM
+                </div>
+                <div class="stream-inner">
+                    <iframe src="https://ntvstream.cx/embed?t=RnBicEVST3ZWdWxIOTdKVHE4MlUydFlKR00weWtLd1orQ21LeUtTNTVuQTZXNG1ZN3Z3V1JNUDhWa2kzUDczUGJZQ0hIU1FBalY4RTdrWDJXN1V2S2M4ZEZPZnFwQjc2cGY4UGhzd29Lem8zOC84MnJkMnNNYThxaUdzbG5LcmM~" width="800" height="450" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                </div>
+            </div>
+        </section>
+
+        <!-- Widgets Row -->
+        <section class="widgets-row">
+            <!-- Betting Odds Widget -->
+            <div class="widget odds-widget">
+                <div class="widget-title">
+                    <span>🎲</span> Betting Odds
+                </div>
+                <div class="odds-grid">
+                    <div class="odds-item">
+                        <div class="odds-label">Spread</div>
+                        <div class="odds-value spread">PHI -2.5</div>
+                    </div>
+                    <div class="odds-item">
+                        <div class="odds-label">Over/Under</div>
+                        <div class="odds-value ou">41.5</div>
+                    </div>
+                    <div class="odds-item">
+                        <div class="odds-label">LAC ML</div>
+                        <div class="odds-value" style="color: var(--chargers-blue);">+115</div>
+                    </div>
+                    <div class="odds-item">
+                        <div class="odds-label">PHI ML</div>
+                        <div class="odds-value" style="color: var(--eagles-green);">-135</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weather Widget -->
+            <div class="widget weather-widget">
+                <div class="widget-title">
+                    <span>🌡️</span> Game Day Weather
+                </div>
+                <div class="weather-main">
+                    <div class="weather-icon">🏟️</div>
+                    <div>
+                        <div class="weather-temp">72°F</div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem;">Indoor Stadium</div>
+                    </div>
+                </div>
+                <div class="weather-details">
+                    <div class="weather-detail">
+                        <div class="weather-detail-label">Roof</div>
+                        <div class="weather-detail-value">Closed</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="weather-detail-label">Surface</div>
+                        <div class="weather-detail-value">SoFi Turf</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="weather-detail-label">Capacity</div>
+                        <div class="weather-detail-value">70,240</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="weather-detail-label">Outside</div>
+                        <div class="weather-detail-value">65°F Clear</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Broadcast Widget -->
+            <div class="widget broadcast-widget">
+                <div class="widget-title">
+                    <span>📺</span> Broadcast Info
+                </div>
+                <div class="broadcast-channels">
+                    <div class="channel-badge espn">ESPN</div>
+                    <div class="channel-badge">ABC</div>
+                </div>
+                <div class="broadcast-time">8:15 PM ET / 5:15 PM PT</div>
+                <div style="margin-top: 15px; color: var(--text-secondary); font-size: 0.9rem;">
+                    Monday Night Football • Week 14
+                </div>
+            </div>
+        </section>
+
+        <!-- Storylines Section -->
+        <section class="storylines-section">
+            <h2 class="section-title"><span>KEY</span> STORYLINES</h2>
+            <div class="storylines-grid">
+                <div class="storyline-card">
+                    <div class="storyline-icon">🏆</div>
+                    <div class="storyline-title">Defending Champs Struggling</div>
+                    <div class="storyline-text">The Eagles are the defending Super Bowl champions but have lost two straight games, putting pressure on Jalen Hurts and the offense to turn things around on Monday night.</div>
+                </div>
+                <div class="storyline-card">
+                    <div class="storyline-icon">🎯</div>
+                    <div class="storyline-title">Hurts & Brown Connection</div>
+                    <div class="storyline-text">Jalen Hurts and A.J. Brown "haven't been on the same page for most of the season," but Brown has found his rhythm with at least seven catches in three straight games and three touchdowns in his last two.</div>
+                </div>
+                <div class="storyline-card">
+                    <div class="storyline-icon">📊</div>
+                    <div class="storyline-title">Playoff Implications - Chargers</div>
+                    <div class="storyline-text">The Chargers are in sixth place in the AFC. A win jumps them ahead of Buffalo for the No. 5 seed. A loss drops them completely out of the playoff picture. High stakes in Inglewood.</div>
+                </div>
+                <div class="storyline-card">
+                    <div class="storyline-icon">🦅</div>
+                    <div class="storyline-title">Eagles NFC East Control</div>
+                    <div class="storyline-text">Philadelphia currently holds the No. 3 seed in the NFC with control of the NFC East division. They're looking to maintain their position despite recent struggles.</div>
+                </div>
+                <div class="storyline-card">
+                    <div class="storyline-icon">🛡️</div>
+                    <div class="storyline-title">Elite Chargers Defense</div>
+                    <div class="storyline-text">The Chargers defense ranks 3rd-best in the NFL, allowing just 275.3 total yards per game. Can they contain Hurts, Barkley, and the Eagles playmakers?</div>
+                </div>
+                <div class="storyline-card">
+                    <div class="storyline-icon">⚠️</div>
+                    <div class="storyline-title">Eagles Statistical Concerns</div>
+                    <div class="storyline-text">Despite their record, the Eagles rank 24th in total offense (304.8 YPG) and 23rd in total defense (347.2 yards allowed). Something has to give against a top Chargers D.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Featured Players -->
+        <section class="players-section" id="players">
+            <h2 class="section-title"><span>FEATURED</span> PLAYERS</h2>
+
+            <!-- Herbert Featured -->
+            <div class="featured-player chargers-featured">
+                <div class="featured-badge">FRANCHISE QB</div>
+                <div class="featured-photo">🎯</div>
+                <div class="featured-info">
+                    <div class="featured-name">JUSTIN HERBERT #10</div>
+                    <div class="featured-details">QB • 6-6, 236 lbs • 6th Year • Oregon</div>
+                    <div class="featured-stats-grid">
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">6th</div>
+                            <div class="featured-stat-label">Year</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">6'6"</div>
+                            <div class="featured-stat-label">Height</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">236</div>
+                            <div class="featured-stat-label">LBS</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">PRO</div>
+                            <div class="featured-stat-label">Bowler</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hurts Featured -->
+            <div class="featured-player eagles-featured">
+                <div class="featured-badge">MVP CANDIDATE</div>
+                <div class="featured-photo">🦅</div>
+                <div class="featured-info">
+                    <div class="featured-name">JALEN HURTS #1</div>
+                    <div class="featured-details">QB • 6-1, 223 lbs • 6th Year • Oklahoma</div>
+                    <div class="featured-stats-grid">
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">2,514</div>
+                            <div class="featured-stat-label">Pass Yds</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">19</div>
+                            <div class="featured-stat-label">TDs</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">2</div>
+                            <div class="featured-stat-label">INTs</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">66.1%</div>
+                            <div class="featured-stat-label">Comp %</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barkley Featured -->
+            <div class="featured-player eagles-featured">
+                <div class="featured-badge">RUSHING THREAT</div>
+                <div class="featured-photo">💨</div>
+                <div class="featured-info">
+                    <div class="featured-name">SAQUON BARKLEY #26</div>
+                    <div class="featured-details">RB • 6-0, 233 lbs • 8th Year • Penn State</div>
+                    <div class="featured-stats-grid">
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">740</div>
+                            <div class="featured-stat-label">Rush Yds</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">4</div>
+                            <div class="featured-stat-label">TDs</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">3.7</div>
+                            <div class="featured-stat-label">YPC</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">8th</div>
+                            <div class="featured-stat-label">Year</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- A.J. Brown Featured -->
+            <div class="featured-player eagles-featured">
+                <div class="featured-badge">HOT STREAK</div>
+                <div class="featured-photo">🔥</div>
+                <div class="featured-info">
+                    <div class="featured-name">A.J. BROWN #11</div>
+                    <div class="featured-details">WR • 7+ catches in 3 straight • 3 TDs last 2 games</div>
+                    <div class="featured-stats-grid">
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">56</div>
+                            <div class="featured-stat-label">Catches</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">699</div>
+                            <div class="featured-stat-label">Yards</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">6</div>
+                            <div class="featured-stat-label">TDs</div>
+                        </div>
+                        <div class="featured-stat">
+                            <div class="featured-stat-value">87</div>
+                            <div class="featured-stat-label">Targets</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Team Rosters -->
+        <section class="players-section">
+            <!-- Chargers Roster -->
+            <div class="team-players-container">
+                <div class="team-header">
+                    <div class="team-header-logo">⚡</div>
+                    <div class="team-header-name chargers-text">LOS ANGELES CHARGERS LINEUP</div>
+                </div>
+                <div class="players-grid">
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#10</div>
+                        <div class="player-position">QB</div>
+                        <div class="player-name">Justin Herbert</div>
+                        <div class="player-info">6-6, 236 lbs • 6th Year<br>Oregon</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#15</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">Ladd McConkey</div>
+                        <div class="player-info">Wide Receiver</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#1</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">Quentin Johnston</div>
+                        <div class="player-info">Wide Receiver</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#13</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">Keenan Allen</div>
+                        <div class="player-info">Wide Receiver</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#9</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">Tre' Harris</div>
+                        <div class="player-info">Wide Receiver</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#30</div>
+                        <div class="player-position">RB</div>
+                        <div class="player-name">Kimani Vidal</div>
+                        <div class="player-info">Running Back</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#77</div>
+                        <div class="player-position">G</div>
+                        <div class="player-name">Zion Johnson</div>
+                        <div class="player-info">Guard</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#75</div>
+                        <div class="player-position">C</div>
+                        <div class="player-name">Bradley Bozeman</div>
+                        <div class="player-info">Center</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#79</div>
+                        <div class="player-position">T</div>
+                        <div class="player-name">Trey Pipkins III</div>
+                        <div class="player-info">Tackle</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#52</div>
+                        <div class="player-position">OLB</div>
+                        <div class="player-name">Khalil Mack</div>
+                        <div class="player-info">Outside Linebacker</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#98</div>
+                        <div class="player-position">OLB</div>
+                        <div class="player-name">Odafe Oweh</div>
+                        <div class="player-info">Outside Linebacker</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#3</div>
+                        <div class="player-position">S</div>
+                        <div class="player-name">Derwin James Jr.</div>
+                        <div class="player-info">Safety</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#26</div>
+                        <div class="player-position">CB</div>
+                        <div class="player-name">Donte Jackson</div>
+                        <div class="player-info">Cornerback</div>
+                    </div>
+                    <div class="player-card chargers-card">
+                        <div class="player-number">#11</div>
+                        <div class="player-position">K</div>
+                        <div class="player-name">Cameron Dicker</div>
+                        <div class="player-info">Kicker</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Eagles Roster -->
+            <div class="team-players-container">
+                <div class="team-header">
+                    <div class="team-header-logo">🦅</div>
+                    <div class="team-header-name eagles-text">PHILADELPHIA EAGLES LINEUP</div>
+                </div>
+                <div class="players-grid">
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#1</div>
+                        <div class="player-position">QB</div>
+                        <div class="player-name">Jalen Hurts</div>
+                        <div class="player-info">6-1, 223 lbs • 6th Year<br>Oklahoma</div>
+                        <div class="player-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">Pass Yds</span>
+                                <span class="stat-value">2,514</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">TDs/INTs</span>
+                                <span class="stat-value">19/2</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#26</div>
+                        <div class="player-position">RB</div>
+                        <div class="player-name">Saquon Barkley</div>
+                        <div class="player-info">6-0, 233 lbs • 8th Year<br>Penn State</div>
+                        <div class="player-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">Rush Yds</span>
+                                <span class="stat-value">740</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">TDs</span>
+                                <span class="stat-value">4</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#11</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">A.J. Brown</div>
+                        <div class="player-info">Wide Receiver</div>
+                        <div class="player-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">Rec/Yds</span>
+                                <span class="stat-value">56/699</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">TDs</span>
+                                <span class="stat-value">6</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#6</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">DeVonta Smith</div>
+                        <div class="player-info">Wide Receiver</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#2</div>
+                        <div class="player-position">WR</div>
+                        <div class="player-name">Jahan Dotson</div>
+                        <div class="player-info">Wide Receiver</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#88</div>
+                        <div class="player-position">TE</div>
+                        <div class="player-name">Dallas Goedert</div>
+                        <div class="player-info">Tight End</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#65</div>
+                        <div class="player-position">T</div>
+                        <div class="player-name">Lane Johnson</div>
+                        <div class="player-info">Tackle</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#68</div>
+                        <div class="player-position">T</div>
+                        <div class="player-name">Jordan Mailata</div>
+                        <div class="player-info">Tackle</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#69</div>
+                        <div class="player-position">G</div>
+                        <div class="player-name">Landon Dickerson</div>
+                        <div class="player-info">Guard</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#51</div>
+                        <div class="player-position">C</div>
+                        <div class="player-name">Cam Jurgens</div>
+                        <div class="player-info">Center</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#98</div>
+                        <div class="player-position">DT</div>
+                        <div class="player-name">Jalen Carter</div>
+                        <div class="player-info">Defensive Tackle</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#90</div>
+                        <div class="player-position">DT</div>
+                        <div class="player-name">Jordan Davis</div>
+                        <div class="player-info">Defensive Tackle</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#53</div>
+                        <div class="player-position">LB</div>
+                        <div class="player-name">Zack Baun</div>
+                        <div class="player-info">Linebacker</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#17</div>
+                        <div class="player-position">LB</div>
+                        <div class="player-name">Nakobe Dean</div>
+                        <div class="player-info">Linebacker</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#30</div>
+                        <div class="player-position">LB</div>
+                        <div class="player-name">Jihaad Campbell</div>
+                        <div class="player-info">Linebacker</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#27</div>
+                        <div class="player-position">CB</div>
+                        <div class="player-name">Quinyon Mitchell</div>
+                        <div class="player-info">Cornerback</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#33</div>
+                        <div class="player-position">CB</div>
+                        <div class="player-name">Cooper DeJean</div>
+                        <div class="player-info">Cornerback</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#32</div>
+                        <div class="player-position">S</div>
+                        <div class="player-name">Reed Blankenship</div>
+                        <div class="player-info">Safety</div>
+                    </div>
+                    <div class="player-card eagles-card">
+                        <div class="player-number">#4</div>
+                        <div class="player-position">K</div>
+                        <div class="player-name">Jake Elliott</div>
+                        <div class="player-info">Kicker</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Formation Section -->
+        <section class="formation-section" id="formations">
+            <h2 class="section-title"><span>STARTING</span> FORMATIONS</h2>
+            
+            <div class="formation-tabs">
+                <button class="formation-tab active" onclick="showFormation('chargers-offense')">LAC Offense</button>
+                <button class="formation-tab" onclick="showFormation('chargers-defense')">LAC Defense</button>
+                <button class="formation-tab eagles-tab" onclick="showFormation('eagles-offense')">PHI Offense</button>
+                <button class="formation-tab eagles-tab" onclick="showFormation('eagles-defense')">PHI Defense</button>
+            </div>
+
+            <div class="formation-display">
+                <div class="field-bg"></div>
+                
+                <!-- Chargers Offense -->
+                <div class="formation-grid" id="chargers-offense">
+                    <div class="formation-row">
+                        <div class="formation-player">
+                            <div class="formation-player-number">#15</div>
+                            <div class="formation-player-name">McConkey</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player">
+                            <div class="formation-player-number">#79</div>
+                            <div class="formation-player-name">Pipkins III</div>
+                            <div class="formation-player-pos">LT</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#77</div>
+                            <div class="formation-player-name">Johnson</div>
+                            <div class="formation-player-pos">LG</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#75</div>
+                            <div class="formation-player-name">Bozeman</div>
+                            <div class="formation-player-pos">C</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#77</div>
+                            <div class="formation-player-name">RG</div>
+                            <div class="formation-player-pos">RG</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#79</div>
+                            <div class="formation-player-name">RT</div>
+                            <div class="formation-player-pos">RT</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player">
+                            <div class="formation-player-number">#9</div>
+                            <div class="formation-player-name">Harris</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                        <div class="formation-player" style="background: linear-gradient(135deg, var(--chargers-blue), var(--chargers-navy));">
+                            <div class="formation-player-number">#10</div>
+                            <div class="formation-player-name">Herbert</div>
+                            <div class="formation-player-pos">QB</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#1</div>
+                            <div class="formation-player-name">Johnston</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player">
+                            <div class="formation-player-number">#30</div>
+                            <div class="formation-player-name">Vidal</div>
+                            <div class="formation-player-pos">RB</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#13</div>
+                            <div class="formation-player-name">Allen</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chargers Defense (hidden by default) -->
+                <div class="formation-grid" id="chargers-defense" style="display: none;">
+                    <div class="formation-row">
+                        <div class="formation-player">
+                            <div class="formation-player-number">#26</div>
+                            <div class="formation-player-name">Jackson</div>
+                            <div class="formation-player-pos">CB</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">#3</div>
+                            <div class="formation-player-name">James Jr.</div>
+                            <div class="formation-player-pos">S</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">FS</div>
+                            <div class="formation-player-name">FS</div>
+                            <div class="formation-player-pos">S</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">CB</div>
+                            <div class="formation-player-name">CB2</div>
+                            <div class="formation-player-pos">CB</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player" style="background: linear-gradient(135deg, var(--chargers-blue), var(--chargers-navy));">
+                            <div class="formation-player-number">#52</div>
+                            <div class="formation-player-name">Mack</div>
+                            <div class="formation-player-pos">OLB</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">MLB</div>
+                            <div class="formation-player-name">MLB</div>
+                            <div class="formation-player-pos">LB</div>
+                        </div>
+                        <div class="formation-player" style="background: linear-gradient(135deg, var(--chargers-blue), var(--chargers-navy));">
+                            <div class="formation-player-number">#98</div>
+                            <div class="formation-player-name">Oweh</div>
+                            <div class="formation-player-pos">OLB</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player">
+                            <div class="formation-player-number">DE</div>
+                            <div class="formation-player-name">DE</div>
+                            <div class="formation-player-pos">DE</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">DT</div>
+                            <div class="formation-player-name">DT</div>
+                            <div class="formation-player-pos">DT</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">DT</div>
+                            <div class="formation-player-name">DT</div>
+                            <div class="formation-player-pos">DT</div>
+                        </div>
+                        <div class="formation-player">
+                            <div class="formation-player-number">DE</div>
+                            <div class="formation-player-name">DE</div>
+                            <div class="formation-player-pos">DE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Eagles Offense (hidden by default) -->
+                <div class="formation-grid" id="eagles-offense" style="display: none;">
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#11</div>
+                            <div class="formation-player-name">A.J. Brown</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#6</div>
+                            <div class="formation-player-name">Smith</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#68</div>
+                            <div class="formation-player-name">Mailata</div>
+                            <div class="formation-player-pos">LT</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#69</div>
+                            <div class="formation-player-name">Dickerson</div>
+                            <div class="formation-player-pos">LG</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#51</div>
+                            <div class="formation-player-name">Jurgens</div>
+                            <div class="formation-player-pos">C</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">RG</div>
+                            <div class="formation-player-name">RG</div>
+                            <div class="formation-player-pos">RG</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#65</div>
+                            <div class="formation-player-name">Johnson</div>
+                            <div class="formation-player-pos">RT</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#88</div>
+                            <div class="formation-player-name">Goedert</div>
+                            <div class="formation-player-pos">TE</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player" style="background: linear-gradient(135deg, var(--eagles-green), var(--eagles-black));">
+                            <div class="formation-player-number">#1</div>
+                            <div class="formation-player-name">Hurts</div>
+                            <div class="formation-player-pos">QB</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#2</div>
+                            <div class="formation-player-name">Dotson</div>
+                            <div class="formation-player-pos">WR</div>
+                        </div>
+                        <div class="formation-player eagles-player" style="background: linear-gradient(135deg, var(--eagles-green), var(--eagles-black));">
+                            <div class="formation-player-number">#26</div>
+                            <div class="formation-player-name">Barkley</div>
+                            <div class="formation-player-pos">RB</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Eagles Defense (hidden by default) -->
+                <div class="formation-grid" id="eagles-defense" style="display: none;">
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#27</div>
+                            <div class="formation-player-name">Mitchell</div>
+                            <div class="formation-player-pos">CB</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#32</div>
+                            <div class="formation-player-name">Blankenship</div>
+                            <div class="formation-player-pos">S</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">FS</div>
+                            <div class="formation-player-name">FS</div>
+                            <div class="formation-player-pos">S</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#33</div>
+                            <div class="formation-player-name">DeJean</div>
+                            <div class="formation-player-pos">CB</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#53</div>
+                            <div class="formation-player-name">Baun</div>
+                            <div class="formation-player-pos">LB</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#17</div>
+                            <div class="formation-player-name">Dean</div>
+                            <div class="formation-player-pos">LB</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">#30</div>
+                            <div class="formation-player-name">Campbell</div>
+                            <div class="formation-player-pos">LB</div>
+                        </div>
+                    </div>
+                    <div class="formation-row">
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">DE</div>
+                            <div class="formation-player-name">DE</div>
+                            <div class="formation-player-pos">DE</div>
+                        </div>
+                        <div class="formation-player eagles-player" style="background: linear-gradient(135deg, var(--eagles-green), var(--eagles-black));">
+                            <div class="formation-player-number">#98</div>
+                            <div class="formation-player-name">Carter</div>
+                            <div class="formation-player-pos">DT</div>
+                        </div>
+                        <div class="formation-player eagles-player" style="background: linear-gradient(135deg, var(--eagles-green), var(--eagles-black));">
+                            <div class="formation-player-number">#90</div>
+                            <div class="formation-player-name">Davis</div>
+                            <div class="formation-player-pos">DT</div>
+                        </div>
+                        <div class="formation-player eagles-player">
+                            <div class="formation-player-number">DE</div>
+                            <div class="formation-player-name">DE</div>
+                            <div class="formation-player-pos">DE</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Section -->
+        <section class="stats-section" id="stats">
+            <h2 class="section-title"><span>TEAM</span> COMPARISON</h2>
+            
+            <div class="stats-comparison">
+                <div class="stat-comparison-row">
+                    <div class="stat-team-value left">
+                        <div class="stat-big-number chargers-stat">8-4</div>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-left" style="width: 67%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-comparison-label">RECORD</div>
+                    <div class="stat-team-value right">
+                        <div class="stat-big-number eagles-stat">8-4</div>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-right" style="width: 67%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-comparison-row">
+                    <div class="stat-team-value left">
+                        <div class="stat-big-number chargers-stat">275.3</div>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-left" style="width: 85%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-comparison-label">YARDS ALLOWED/GAME</div>
+                    <div class="stat-team-value right">
+                        <div class="stat-big-number eagles-stat">347.2</div>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-right" style="width: 65%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-comparison-row">
+                    <div class="stat-team-value left">
+                        <div class="stat-big-number chargers-stat">#3</div>
+                    </div>
+                    <div class="stat-comparison-label">DEFENSE RANK</div>
+                    <div class="stat-team-value right">
+                        <div class="stat-big-number eagles-stat">#23</div>
+                    </div>
+                </div>
+
+                <div class="stat-comparison-row">
+                    <div class="stat-team-value left">
+                        <div class="stat-big-number chargers-stat">---</div>
+                    </div>
+                    <div class="stat-comparison-label">TOTAL OFFENSE (YPG)</div>
+                    <div class="stat-team-value right">
+                        <div class="stat-big-number eagles-stat">304.8</div>
+                    </div>
+                </div>
+
+                <div class="stat-comparison-row">
+                    <div class="stat-team-value left">
+                        <div class="stat-big-number chargers-stat">---</div>
+                    </div>
+                    <div class="stat-comparison-label">OFFENSE RANK</div>
+                    <div class="stat-team-value right">
+                        <div class="stat-big-number eagles-stat">#24</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Defense Rankings Cards -->
+            <div class="defense-rankings">
+                <div class="ranking-card chargers-ranking">
+                    <div class="ranking-number">#3</div>
+                    <div class="ranking-label">NFL TOTAL DEFENSE</div>
+                    <div class="ranking-stat">275.3 yards allowed per game</div>
+                    <div style="margin-top: 15px; color: var(--text-secondary); font-size: 0.85rem;">
+                        Elite unit led by Khalil Mack, Odafe Oweh, and Derwin James Jr. A true strength of this Chargers team.
+                    </div>
+                </div>
+                <div class="ranking-card eagles-ranking">
+                    <div class="ranking-number">#23</div>
+                    <div class="ranking-label">NFL TOTAL DEFENSE</div>
+                    <div class="ranking-stat">347.2 yards allowed per game</div>
+                    <div style="margin-top: 15px; color: var(--text-secondary); font-size: 0.85rem;">
+                        Despite talent on the roster, the defending champs have struggled defensively this season.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-logo">MNF WEEK 14</div>
+            <div class="footer-text">
+                Los Angeles Chargers vs Philadelphia Eagles<br>
+                December 8, 2025 • SoFi Stadium, Inglewood, CA
+            </div>
+            <div class="footer-links">
+                <a href="#watch" class="footer-link">Watch Live</a>
+                <a href="#players" class="footer-link">Players</a>
+                <a href="#formations" class="footer-link">Formations</a>
+                <a href="#stats" class="footer-link">Stats</a>
+            </div>
+            <div style="margin-top: 30px; color: var(--text-secondary); font-size: 0.75rem;">
+                © 2025 Monday Night Football Coverage
+            </div>
+        </footer>
+    </main>
+
+    <script>
+        // Particle System
+        const canvas = document.getElementById('particles-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                
+                // Random color between Chargers blue, gold, and Eagles green
+                const colors = [
+                    'rgba(0, 128, 198, ',    // Chargers blue
+                    'rgba(255, 194, 14, ',   // Chargers gold
+                    'rgba(0, 76, 84, ',      // Eagles green
+                    'rgba(165, 172, 175, '   // Eagles silver
+                ];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color + this.opacity + ')';
+                ctx.fill();
+            }
+        }
+
+        const particles = [];
+        const particleCount = 100;
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+
+            // Draw connections
+            particles.forEach((particle, i) => {
+                particles.slice(i + 1).forEach(otherParticle => {
+                    const dx = particle.x - otherParticle.x;
+                    const dy = particle.y - otherParticle.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 100) {
+                        ctx.beginPath();
+                        ctx.moveTo(particle.x, particle.y);
+                        ctx.lineTo(otherParticle.x, otherParticle.y);
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 * (1 - distance / 100)})`;
+                        ctx.stroke();
+                    }
+                });
+            });
+
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+
+        // Formation Tab Switching
+        function showFormation(formationId) {
+            // Hide all formations
+            document.querySelectorAll('.formation-grid').forEach(grid => {
+                grid.style.display = 'none';
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.formation-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected formation
+            document.getElementById(formationId).style.display = 'grid';
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        // Intersection Observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe all cards for animation
+        document.querySelectorAll('.player-card, .widget, .storyline-card, .ranking-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+
+        // Simulated live score update (placeholder)
+        function updateScore() {
+            // This would connect to a real API in production
+            // For demo, we keep showing the kickoff time
+        }
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add hover effects to player cards
+        document.querySelectorAll('.player-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.zIndex = '10';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.zIndex = '1';
+            });
+        });
+
+        // Dynamic clock update
+        function updateClock() {
+            const now = new Date();
+            const gameTime = new Date('2025-12-08T20:15:00-05:00');
+            
+            if (now < gameTime) {
+                const diff = gameTime - now;
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                
+                if (hours > 0) {
+                    document.getElementById('game-clock').textContent = 
+                        `KICKOFF IN ${hours}h ${minutes}m ${seconds}s`;
+                } else if (minutes > 0) {
+                    document.getElementById('game-clock').textContent = 
+                        `KICKOFF IN ${minutes}m ${seconds}s`;
+                } else {
+                    document.getElementById('game-clock').textContent = 
+                        `KICKOFF IN ${seconds}s`;
+                }
+            } else {
+                document.getElementById('game-clock').textContent = 'GAME IN PROGRESS';
+            }
+        }
+
+        // Update clock every second
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Console Easter Egg
+        console.log('%c⚡ CHARGERS vs EAGLES 🦅', 'font-size: 24px; font-weight: bold; color: #0080C6; text-shadow: 2px 2px #004C54;');
+        console.log('%cMonday Night Football - Week 14', 'font-size: 14px; color: #FFC20E;');
+    </script>
+</body>
+</html>
