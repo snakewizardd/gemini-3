@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE LAWNMOWER MAN (1992) - Neural Interface</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --cyan: #00ffff;
+      --magenta: #ff00ff;
+      --gold: #ffcc00;
+      --dark: #000000;
+      --cyan-dim: rgba(0, 255, 255, 0.3);
+      --scanline-opacity: 0.03;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--dark);
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--cyan);
+    }
+
+    /* CRT Scanline Overlay - Global */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15) 0px,
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      pointer-events: none;
+      z-index: 10000;
+    }
+
+    /* Film grain overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.04;
+      pointer-events: none;
+      z-index: 10001;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      animation: grain 0.5s steps(10) infinite;
+    }
+
+    @keyframes grain {
+      0%, 100% { transform: translate(0, 0); }
+      10% { transform: translate(-1%, -1%); }
+      20% { transform: translate(1%, 1%); }
+      30% { transform: translate(-1%, 1%); }
+      40% { transform: translate(1%, -1%); }
+      50% { transform: translate(-1%, 0%); }
+      60% { transform: translate(1%, 0%); }
+      70% { transform: translate(0%, -1%); }
+      80% { transform: translate(0%, 1%); }
+      90% { transform: translate(-1%, -1%); }
+    }
+
+    /* ==================== ACT 1: INITIATION ==================== */
+    #act1 {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--dark);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      transition: opacity 0.1s ease;
+    }
+
+    #act1.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .terminal {
+      max-width: 600px;
+      padding: 40px;
+      text-align: left;
+    }
+
+    .terminal-line {
+      opacity: 0;
+      margin-bottom: 8px;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 10px var(--cyan);
+    }
+
+    .terminal-line.visible {
+      opacity: 1;
+    }
+
+    .terminal-line.typing::after {
+      content: '█';
+      animation: blink 0.7s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    .enter-button {
+      opacity: 0;
+      margin-top: 40px;
+      padding: 16px 48px;
+      background: transparent;
+      border: 2px solid var(--cyan);
+      color: var(--cyan);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-shadow: 0 0 10px var(--cyan);
+      box-shadow: 
+        0 0 20px rgba(0, 255, 255, 0.3),
+        inset 0 0 20px rgba(0, 255, 255, 0.1);
+    }
+
+    .enter-button.visible {
+      opacity: 1;
+      animation: pulse-button 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-button {
+      0%, 100% { 
+        box-shadow: 
+          0 0 20px rgba(0, 255, 255, 0.3),
+          inset 0 0 20px rgba(0, 255, 255, 0.1);
+      }
+      50% { 
+        box-shadow: 
+          0 0 40px rgba(0, 255, 255, 0.6),
+          inset 0 0 30px rgba(0, 255, 255, 0.2);
+      }
+    }
+
+    .enter-button:hover {
+      background: rgba(0, 255, 255, 0.1);
+      box-shadow: 
+        0 0 60px rgba(0, 255, 255, 0.8),
+        inset 0 0 40px rgba(0, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    /* ==================== ACT 2: CYBERSPACE JOURNEY ==================== */
+    #act2 {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.1s ease;
+    }
+
+    #act2.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #three-canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .journey-text {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(18px, 4vw, 32px);
+      text-align: center;
+      color: var(--cyan);
+      text-shadow: 
+        0 0 20px var(--cyan),
+        0 0 40px var(--cyan),
+        0 0 60px rgba(0, 255, 255, 0.5);
+      opacity: 0;
+      z-index: 60;
+      pointer-events: none;
+      letter-spacing: 0.1em;
+      max-width: 80%;
+      line-height: 1.6;
+    }
+
+    .journey-text.god-text {
+      font-size: clamp(32px, 8vw, 72px);
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      text-shadow: 
+        0 0 30px var(--gold),
+        0 0 60px var(--gold),
+        0 0 90px rgba(255, 204, 0, 0.5);
+    }
+
+    /* ==================== ACT 3: SCREENING ROOM ==================== */
+    #act3 {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    #act3.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #act3-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+    }
+
+    .screening-room {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      transform: scale(0);
+      transition: transform 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .screening-room.revealed {
+      transform: scale(1);
+    }
+
+    .movie-container {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 16/9;
+      border: 2px solid var(--cyan);
+      box-shadow: 
+        0 0 30px rgba(0, 255, 255, 0.5),
+        0 0 60px rgba(0, 255, 255, 0.3),
+        0 0 90px rgba(0, 255, 255, 0.15),
+        inset 0 0 60px rgba(0, 255, 255, 0.1);
+      animation: pulse-glow 4s ease-in-out infinite;
+      background: #000;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% {
+        box-shadow: 
+          0 0 30px rgba(0, 255, 255, 0.5),
+          0 0 60px rgba(0, 255, 255, 0.3),
+          0 0 90px rgba(0, 255, 255, 0.15),
+          inset 0 0 60px rgba(0, 255, 255, 0.1);
+      }
+      50% {
+        box-shadow: 
+          0 0 40px rgba(0, 255, 255, 0.6),
+          0 0 80px rgba(0, 255, 255, 0.4),
+          0 0 120px rgba(0, 255, 255, 0.2),
+          inset 0 0 80px rgba(0, 255, 255, 0.15);
+      }
+    }
+
+    .movie-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .movie-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(24px, 5vw, 48px);
+      font-weight: 900;
+      color: var(--cyan);
+      text-shadow: 
+        0 0 20px var(--cyan),
+        0 0 40px rgba(0, 255, 255, 0.5);
+      letter-spacing: 0.3em;
+      text-align: center;
+    }
+
+    .movie-year {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 18px;
+      color: var(--magenta);
+      text-shadow: 0 0 15px var(--magenta);
+      letter-spacing: 0.5em;
+    }
+
+    .movie-quote {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: clamp(12px, 2vw, 16px);
+      color: rgba(0, 255, 255, 0.7);
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+      letter-spacing: 0.1em;
+      text-align: center;
+      max-width: 600px;
+      line-height: 1.6;
+      font-style: italic;
+    }
+
+    /* Flash effect */
+    .flash-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .flash-overlay.flash {
+      animation: flash-anim 0.5s ease-out;
+    }
+
+    @keyframes flash-anim {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* Audio toggle */
+    .audio-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 10002;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .audio-toggle.visible {
+      opacity: 1;
+    }
+
+    .audio-toggle:hover {
+      background: rgba(0, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <!-- Flash overlay for transitions -->
+  <div class="flash-overlay" id="flash"></div>
+
+  <!-- ACT 1: INITIATION -->
+  <div id="act1">
+    <div class="terminal">
+      <div class="terminal-line" data-delay="0">&gt; VIRTUAL SYSTEMS INTERNATIONAL</div>
+      <div class="terminal-line" data-delay="800">&gt; PROJECT: CYBERCHRIST</div>
+      <div class="terminal-line" data-delay="1600">&gt; YEAR: 1992</div>
+      <div class="terminal-line" data-delay="2800">&gt;</div>
+      <div class="terminal-line" data-delay="3200">&gt; NEURAL INTERFACE DETECTED...</div>
+      <div class="terminal-line" data-delay="4400">&gt; PREPARE FOR UPLOAD...</div>
+    </div>
+    <button class="enter-button" id="enterBtn">[ ENTER CYBERSPACE ]</button>
+  </div>
+
+  <!-- ACT 2: CYBERSPACE JOURNEY -->
+  <div id="act2">
+    <canvas id="three-canvas"></canvas>
+    <div class="journey-text" id="journeyText1">The human race lost that knowledge...</div>
+    <div class="journey-text" id="journeyText2">...now I'm reclaiming it through virtual reality.</div>
+    <div class="journey-text" id="journeyText3">This universe is mine.</div>
+    <div class="journey-text god-text" id="journeyText4">I AM GOD HERE</div>
+  </div>
+
+  <!-- ACT 3: SCREENING ROOM -->
+  <div id="act3">
+    <canvas id="act3-canvas"></canvas>
+    <div class="screening-room" id="screeningRoom">
+      <div class="movie-container">
+        <iframe 
+          src="https://vidsrc.to/embed/movie/tt0104692" 
+          allowfullscreen
+          allow="autoplay; fullscreen">
+        </iframe>
+      </div>
+      <h1 class="movie-title">THE LAWNMOWER MAN</h1>
+      <p class="movie-year">1 9 9 2</p>
+      <p class="movie-quote">"My birth cry will be the sound of every phone on this planet ringing in unison."</p>
+    </div>
+  </div>
+
+  <!-- Audio toggle -->
+  <button class="audio-toggle" id="audioToggle">🔊 AUDIO: ON</button>
+
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    // ==================== STATE MANAGEMENT ====================
+    const state = {
+      currentAct: 1,
+      audioEnabled: true,
+      audioContext: null,
+      masterGain: null,
+      oscillators: [],
+      journeyStartTime: 0,
+      journeyDuration: 75000, // 75 seconds
+    };
+
+    // ==================== DOM ELEMENTS ====================
+    const act1 = document.getElementById('act1');
+    const act2 = document.getElementById('act2');
+    const act3 = document.getElementById('act3');
+    const enterBtn = document.getElementById('enterBtn');
+    const flash = document.getElementById('flash');
+    const audioToggle = document.getElementById('audioToggle');
+    const screeningRoom = document.getElementById('screeningRoom');
+    const terminalLines = document.querySelectorAll('.terminal-line');
+
+    // ==================== AUDIO SYSTEM ====================
+    function initAudio() {
+      if (state.audioContext) return;
+      
+      state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Master gain
+      state.masterGain = state.audioContext.createGain();
+      state.masterGain.gain.value = 0;
+      state.masterGain.connect(state.audioContext.destination);
+    }
+
+    function createDroneSystem() {
+      const ctx = state.audioContext;
+      
+      // Detuned saw oscillators for warmth
+      const osc1 = ctx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc1.frequency.value = 55; // A1
+
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'sawtooth';
+      osc2.frequency.value = 55.3; // Slight detune
+
+      // Sub bass
+      const subOsc = ctx.createOscillator();
+      subOsc.type = 'sine';
+      subOsc.frequency.value = 27.5; // A0
+
+      // Lowpass filter with LFO modulation
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 200;
+      filter.Q.value = 2;
+
+      // LFO for filter sweep (breathing effect)
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.15;
+      
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 150;
+      
+      lfo.connect(lfoGain);
+      lfoGain.connect(filter.frequency);
+
+      // Gain nodes
+      const droneGain = ctx.createGain();
+      droneGain.gain.value = 0.15;
+
+      const subGain = ctx.createGain();
+      subGain.gain.value = 0.2;
+
+      // Connect drone chain
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(droneGain);
+      droneGain.connect(state.masterGain);
+
+      // Connect sub
+      subOsc.connect(subGain);
+      subGain.connect(state.masterGain);
+
+      // Start oscillators
+      osc1.start();
+      osc2.start();
+      subOsc.start();
+      lfo.start();
+
+      state.oscillators.push({ osc: osc1, filter, lfo, droneGain, subOsc, subGain });
+
+      return { filter, droneGain };
+    }
+
+    function createArpeggiator() {
+      const ctx = state.audioContext;
+      const notes = [130.81, 196.00, 233.08, 174.61]; // C3, G3, Bb3, F3
+      let noteIndex = 0;
+      let tempo = 400; // ms per note
+
+      const arpOsc = ctx.createOscillator();
+      arpOsc.type = 'sine';
+      arpOsc.frequency.value = notes[0];
+
+      const arpGain = ctx.createGain();
+      arpGain.gain.value = 0;
+
+      const arpFilter = ctx.createBiquadFilter();
+      arpFilter.type = 'lowpass';
+      arpFilter.frequency.value = 800;
+
+      arpOsc.connect(arpFilter);
+      arpFilter.connect(arpGain);
+      arpGain.connect(state.masterGain);
+
+      arpOsc.start();
+
+      // Arpeggiator loop
+      function playNote() {
+        if (!state.audioEnabled || state.currentAct !== 2) return;
+        
+        const now = ctx.currentTime;
+        arpGain.gain.cancelScheduledValues(now);
+        arpGain.gain.setValueAtTime(0.08, now);
+        arpGain.gain.exponentialDecayTo ? 
+          arpGain.gain.exponentialDecayTo(0.01, now + tempo/1000 * 0.8) :
+          arpGain.gain.setTargetAtTime(0.01, now, tempo/1000 * 0.3);
+        
+        arpOsc.frequency.setValueAtTime(notes[noteIndex], now);
+        noteIndex = (noteIndex + 1) % notes.length;
+        
+        // Accelerate tempo based on journey progress
+        const progress = (Date.now() - state.journeyStartTime) / state.journeyDuration;
+        tempo = Math.max(150, 400 - progress * 250);
+        
+        setTimeout(playNote, tempo);
+      }
+
+      state.oscillators.push({ arpOsc, arpGain, arpFilter });
+      
+      return { start: () => setTimeout(playNote, 500), arpGain, arpFilter };
+    }
+
+    function createHarmonicPad() {
+      const ctx = state.audioContext;
+      const fundamentals = [110, 220, 330, 440]; // Harmonic series from A2
+      const padGain = ctx.createGain();
+      padGain.gain.value = 0.03;
+
+      fundamentals.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+
+        // Individual vibrato LFO
+        const vibLfo = ctx.createOscillator();
+        vibLfo.type = 'sine';
+        vibLfo.frequency.value = 0.1 + i * 0.02;
+        
+        const vibGain = ctx.createGain();
+        vibGain.gain.value = freq * 0.002; // ±2 cents
+        
+        vibLfo.connect(vibGain);
+        vibGain.connect(osc.frequency);
+
+        osc.connect(padGain);
+        osc.start();
+        vibLfo.start();
+
+        state.oscillators.push({ osc, vibLfo });
+      });
+
+      padGain.connect(state.masterGain);
+      return padGain;
+    }
+
+    function startJourneyAudio() {
+      initAudio();
+      if (state.audioContext.state === 'suspended') {
+        state.audioContext.resume();
+      }
+
+      const drone = createDroneSystem();
+      const arp = createArpeggiator();
+      const pad = createHarmonicPad();
+
+      // Fade in
+      state.masterGain.gain.setValueAtTime(0, state.audioContext.currentTime);
+      state.masterGain.gain.linearRampToValueAtTime(0.7, state.audioContext.currentTime + 2);
+
+      arp.start();
+
+      // Store references for intensity modulation
+      state.audioRefs = { drone, arp, pad };
+    }
+
+    function modulateAudioIntensity(progress) {
+      if (!state.audioRefs || !state.audioEnabled) return;
+      
+      const ctx = state.audioContext;
+      const { drone, arp } = state.audioRefs;
+      
+      // Open filter as journey progresses
+      const filterFreq = 200 + progress * 1800;
+      drone.filter.frequency.setTargetAtTime(filterFreq, ctx.currentTime, 0.5);
+      
+      // Increase arp filter brightness
+      arp.arpFilter.frequency.setTargetAtTime(800 + progress * 2000, ctx.currentTime, 0.5);
+    }
+
+    function climaxAudio() {
+      if (!state.audioContext || !state.audioEnabled) return;
+      
+      const ctx = state.audioContext;
+      
+      // Rising glissando
+      state.oscillators.forEach(o => {
+        if (o.osc && o.osc.frequency) {
+          const currentFreq = o.osc.frequency.value;
+          o.osc.frequency.linearRampToValueAtTime(currentFreq * 2, ctx.currentTime + 2);
+        }
+      });
+      
+      // Volume swell then cut
+      state.masterGain.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.5);
+      state.masterGain.gain.setValueAtTime(0, ctx.currentTime + 2);
+    }
+
+    function startAmbientAudio() {
+      if (!state.audioContext) return;
+      
+      // Quieter ambient drone for Act 3
+      const ctx = state.audioContext;
+      
+      const ambientOsc = ctx.createOscillator();
+      ambientOsc.type = 'sine';
+      ambientOsc.frequency.value = 55;
+      
+      const ambientGain = ctx.createGain();
+      ambientGain.gain.value = 0;
+      
+      const ambientFilter = ctx.createBiquadFilter();
+      ambientFilter.type = 'lowpass';
+      ambientFilter.frequency.value = 100;
+      
+      ambientOsc.connect(ambientFilter);
+      ambientFilter.connect(ambientGain);
+      ambientGain.connect(state.audioContext.destination);
+      
+      ambientOsc.start();
+      ambientGain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 2);
+      
+      state.ambientOsc = { osc: ambientOsc, gain: ambientGain };
+    }
+
+    function toggleAudio() {
+      state.audioEnabled = !state.audioEnabled;
+      audioToggle.textContent = state.audioEnabled ? '🔊 AUDIO: ON' : '🔇 AUDIO: OFF';
+      
+      if (state.masterGain) {
+        state.masterGain.gain.value = state.audioEnabled ? 0.7 : 0;
+      }
+      if (state.ambientOsc) {
+        state.ambientOsc.gain.gain.value = state.audioEnabled ? 0.1 : 0;
+      }
+    }
+
+    // ==================== ACT 1: TERMINAL ANIMATION ====================
+    function animateTerminal() {
+      terminalLines.forEach((line, index) => {
+        const delay = parseInt(line.dataset.delay);
+        
+        setTimeout(() => {
+          line.classList.add('visible', 'typing');
+          
+          // Play keystroke sound
+          if (state.audioContext && state.audioEnabled) {
+            playKeystroke();
+          }
+          
+          setTimeout(() => {
+            line.classList.remove('typing');
+          }, 600);
+        }, delay);
+      });
+
+      // Show enter button after terminal completes
+      setTimeout(() => {
+        enterBtn.classList.add('visible');
+      }, 5500);
+    }
+
+    function playKeystroke() {
+      if (!state.audioContext) {
+        initAudio();
+      }
+      const ctx = state.audioContext;
+      
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = 800 + Math.random() * 400;
+      
+      const gain = ctx.createGain();
+      gain.gain.value = 0.05;
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.05);
+    }
+
+    // ==================== THREE.JS: ACT 2 CYBERSPACE ====================
+    let scene2, camera2, renderer2;
+    let geometries2 = [];
+    let journeyAnimationId;
+
+    function initAct2Scene() {
+      const canvas = document.getElementById('three-canvas');
+      
+      scene2 = new THREE.Scene();
+      scene2.fog = new THREE.Fog(0x000000, 1, 200);
+      
+      camera2 = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera2.position.z = 50;
+      
+      renderer2 = new THREE.WebGLRenderer({ 
+        canvas, 
+        antialias: true,
+        alpha: true 
+      });
+      renderer2.setSize(window.innerWidth, window.innerHeight);
+      renderer2.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      // Create wireframe materials
+      const cyanMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+      const magentaMat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+      const goldMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true });
+      const materials = [cyanMat, magentaMat, goldMat];
+
+      // Generate geometry field
+      for (let i = 0; i < 150; i++) {
+        let geom;
+        const type = Math.random();
+        
+        if (type < 0.3) {
+          geom = new THREE.IcosahedronGeometry(Math.random() * 3 + 1, 0);
+        } else if (type < 0.6) {
+          geom = new THREE.TorusGeometry(Math.random() * 2 + 1, 0.3, 8, 16);
+        } else if (type < 0.8) {
+          geom = new THREE.OctahedronGeometry(Math.random() * 2 + 1, 0);
+        } else {
+          geom = new THREE.BoxGeometry(
+            Math.random() * 4 + 1,
+            Math.random() * 4 + 1,
+            Math.random() * 4 + 1
+          );
+        }
+
+        const mesh = new THREE.Mesh(geom, materials[Math.floor(Math.random() * 3)]);
+        
+        // Distribute along the path
+        mesh.position.x = (Math.random() - 0.5) * 100;
+        mesh.position.y = (Math.random() - 0.5) * 100;
+        mesh.position.z = -Math.random() * 800 - 50;
+        
+        mesh.rotation.x = Math.random() * Math.PI;
+        mesh.rotation.y = Math.random() * Math.PI;
+        
+        mesh.userData = {
+          rotSpeed: {
+            x: (Math.random() - 0.5) * 0.02,
+            y: (Math.random() - 0.5) * 0.02,
+          }
+        };
+
+        scene2.add(mesh);
+        geometries2.push(mesh);
+      }
+
+      // Create grid planes
+      for (let i = 0; i < 8; i++) {
+        const gridHelper = new THREE.GridHelper(100, 20, 0x00ffff, 0x004444);
+        gridHelper.position.z = -i * 100 - 100;
+        gridHelper.position.y = -30;
+        scene2.add(gridHelper);
+        geometries2.push(gridHelper);
+      }
+
+      // Central light destination (distant sphere)
+      const lightGeom = new THREE.SphereGeometry(20, 32, 32);
+      const lightMat = new THREE.MeshBasicMaterial({ 
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8
+      });
+      const lightSphere = new THREE.Mesh(lightGeom, lightMat);
+      lightSphere.position.z = -700;
+      scene2.add(lightSphere);
+      state.lightSphere = lightSphere;
+    }
+
+    function animateAct2() {
+      if (state.currentAct !== 2) {
+        cancelAnimationFrame(journeyAnimationId);
+        return;
+      }
+      
+      journeyAnimationId = requestAnimationFrame(animateAct2);
+
+      const elapsed = Date.now() - state.journeyStartTime;
+      const progress = Math.min(elapsed / state.journeyDuration, 1);
+      
+      // Camera movement - accelerating
+      const speed = 0.5 + progress * 4;
+      camera2.position.z -= speed;
+      
+      // Slight camera sway
+      camera2.position.x = Math.sin(elapsed * 0.001) * 2;
+      camera2.position.y = Math.cos(elapsed * 0.0007) * 1.5;
+      
+      // Rotate geometries
+      geometries2.forEach(mesh => {
+        if (mesh.userData && mesh.userData.rotSpeed) {
+          mesh.rotation.x += mesh.userData.rotSpeed.x;
+          mesh.rotation.y += mesh.userData.rotSpeed.y;
+        }
+      });
+
+      // Light sphere grows and intensifies
+      if (state.lightSphere) {
+        const scale = 1 + progress * 5;
+        state.lightSphere.scale.set(scale, scale, scale);
+        state.lightSphere.material.opacity = 0.3 + progress * 0.7;
+      }
+
+      // Modulate audio intensity
+      modulateAudioIntensity(progress);
+
+      // Show journey texts at specific times
+      showJourneyTexts(elapsed);
+
+      renderer2.render(scene2, camera2);
+
+      // Transition to Act 3
+      if (progress >= 1) {
+        transitionToAct3();
+      }
+    }
+
+    function showJourneyTexts(elapsed) {
+      const texts = [
+        { el: document.getElementById('journeyText1'), start: 8000, end: 16000 },
+        { el: document.getElementById('journeyText2'), start: 20000, end: 32000 },
+        { el: document.getElementById('journeyText3'), start: 40000, end: 52000 },
+        { el: document.getElementById('journeyText4'), start: 58000, end: 72000 },
+      ];
+
+      texts.forEach(({ el, start, end }) => {
+        if (elapsed >= start && elapsed < end) {
+          const fadeProgress = Math.min((elapsed - start) / 1000, 1);
+          el.style.opacity = fadeProgress;
+        } else if (elapsed >= end) {
+          el.style.opacity = Math.max(0, 1 - (elapsed - end) / 500);
+        }
+      });
+    }
+
+    // ==================== THREE.JS: ACT 3 AMBIENT ====================
+    let scene3, camera3, renderer3;
+    let particles3;
+
+    function initAct3Scene() {
+      const canvas = document.getElementById('act3-canvas');
+      
+      scene3 = new THREE.Scene();
+      
+      camera3 = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera3.position.z = 50;
+      
+      renderer3 = new THREE.WebGLRenderer({ 
+        canvas, 
+        antialias: true,
+        alpha: true 
+      });
+      renderer3.setSize(window.innerWidth, window.innerHeight);
+      renderer3.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer3.setClearColor(0x000000, 1);
+
+      // Distant floating geometry
+      const cyanMat = new THREE.MeshBasicMaterial({ 
+        color: 0x00ffff, 
+        wireframe: true,
+        transparent: true,
+        opacity: 0.08
+      });
+
+      for (let i = 0; i < 15; i++) {
+        const geom = new THREE.IcosahedronGeometry(Math.random() * 8 + 4, 1);
+        const mesh = new THREE.Mesh(geom, cyanMat);
+        
+        mesh.position.x = (Math.random() - 0.5) * 200;
+        mesh.position.y = (Math.random() - 0.5) * 150;
+        mesh.position.z = -100 - Math.random() * 100;
+        
+        mesh.userData = {
+          rotSpeed: {
+            x: (Math.random() - 0.5) * 0.002,
+            y: (Math.random() - 0.5) * 0.002,
+          }
+        };
+
+        scene3.add(mesh);
+      }
+
+      // Particle field
+      const particleCount = 500;
+      const positions = new Float32Array(particleCount * 3);
+      
+      for (let i = 0; i < particleCount * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 200;
+        positions[i + 1] = (Math.random() - 0.5) * 150;
+        positions[i + 2] = (Math.random() - 0.5) * 100 - 50;
+      }
+
+      const particleGeom = new THREE.BufferGeometry();
+      particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      
+      const particleMat = new THREE.PointsMaterial({
+        color: 0x00ffff,
+        size: 0.5,
+        transparent: true,
+        opacity: 0.4
+      });
+
+      particles3 = new THREE.Points(particleGeom, particleMat);
+      scene3.add(particles3);
+
+      animateAct3();
+    }
+
+    function animateAct3() {
+      requestAnimationFrame(animateAct3);
+
+      if (state.currentAct !== 3) return;
+
+      // Slow rotation of distant geometry
+      scene3.children.forEach(child => {
+        if (child.userData && child.userData.rotSpeed) {
+          child.rotation.x += child.userData.rotSpeed.x;
+          child.rotation.y += child.userData.rotSpeed.y;
+        }
+      });
+
+      // Gentle particle drift
+      if (particles3) {
+        particles3.rotation.y += 0.0002;
+        particles3.rotation.x += 0.0001;
+      }
+
+      renderer3.render(scene3, camera3);
+    }
+
+    // ==================== TRANSITIONS ====================
+    function transitionToAct2() {
+      initAudio();
+      if (state.audioContext.state === 'suspended') {
+        state.audioContext.resume();
+      }
+
+      // Flash
+      flash.classList.add('flash');
+      setTimeout(() => flash.classList.remove('flash'), 500);
+
+      // Hide Act 1
+      act1.classList.add('hidden');
+      
+      // Show Act 2
+      setTimeout(() => {
+        act2.classList.add('active');
+        state.currentAct = 2;
+        state.journeyStartTime = Date.now();
+        
+        initAct2Scene();
+        animateAct2();
+        startJourneyAudio();
+        
+        audioToggle.classList.add('visible');
+      }, 100);
+    }
+
+    function transitionToAct3() {
+      // Climax audio
+      climaxAudio();
+      
+      // Flash
+      setTimeout(() => {
+        flash.classList.add('flash');
+        setTimeout(() => flash.classList.remove('flash'), 500);
+      }, 2000);
+
+      // Hide Act 2, show Act 3
+      setTimeout(() => {
+        act2.classList.remove('active');
+        act3.classList.add('active');
+        state.currentAct = 3;
+        
+        initAct3Scene();
+        
+        // Reveal screening room with animation
+        setTimeout(() => {
+          screeningRoom.classList.add('revealed');
+          startAmbientAudio();
+        }, 500);
+      }, 2500);
+    }
+
+    // ==================== EVENT LISTENERS ====================
+    enterBtn.addEventListener('click', transitionToAct2);
+    audioToggle.addEventListener('click', toggleAudio);
+
+    window.addEventListener('resize', () => {
+      if (renderer2 && state.currentAct === 2) {
+        camera2.aspect = window.innerWidth / window.innerHeight;
+        camera2.updateProjectionMatrix();
+        renderer2.setSize(window.innerWidth, window.innerHeight);
+      }
+      if (renderer3 && state.currentAct === 3) {
+        camera3.aspect = window.innerWidth / window.innerHeight;
+        camera3.updateProjectionMatrix();
+        renderer3.setSize(window.innerWidth, window.innerHeight);
+      }
+    });
+
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      animateTerminal();
+    });
+  </script>
+</body>
+</html>
