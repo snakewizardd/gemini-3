@@ -606,7 +606,7 @@
         const S = 0.25;  // 16th note
         const E = 0.5;   // 8th note
         const Q = 1.0;   // Quarter
-        const H = 2.0;   // Half
+        const HN = 2.0;  // Half note
 
         // Helper functions
         function addEvent(beat, type, data = {}) {
@@ -730,7 +730,7 @@
             }
 
             // Minimal bass - just anchors
-            addEvent(offset + 0, 'bass', { note: 'Eb2', duration: H, velocity: 0.8 });
+            addEvent(offset + 0, 'bass', { note: 'Eb2', duration: HN, velocity: 0.8 });
 
             // Rising clav
             if (bar === 2) {
