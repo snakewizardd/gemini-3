@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Without Me - String Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3a 50%, #2d1b4e 100%);
+            overflow: hidden;
+            color: #fff;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        #canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(15, 15, 35, 0.95);
+            z-index: 10;
+            transition: opacity 0.6s ease-out;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 4em;
+            margin-bottom: 10px;
+            letter-spacing: 0.15em;
+            background: linear-gradient(135deg, #ff6b9d, #c44dff, #6b9dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(196, 77, 255, 0.5);
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            color: #8a8aaa;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .artist {
+            font-size: 1.8em;
+            color: #c44dff;
+            margin-bottom: 30px;
+        }
+
+        .key-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 40px;
+        }
+
+        .start-hint {
+            margin-top: 50px;
+            color: #555;
+            font-size: 1em;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            display: flex;
+            gap: 15px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #controls.visible {
+            opacity: 1;
+        }
+
+        .control-btn {
+            background: rgba(196, 77, 255, 0.2);
+            border: 1px solid rgba(196, 77, 255, 0.5);
+            color: #c44dff;
+            padding: 10px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            background: rgba(196, 77, 255, 0.4);
+            transform: scale(1.05);
+        }
+
+        #section-display {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 1.2em;
+            color: #c44dff;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 5;
+        }
+
+        #section-display.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="overlay">
+        <div class="subtitle">String Engine Presents</div>
+        <h1>WITHOUT ME</h1>
+        <div class="artist">Halsey</div>
+        <div class="key-info">Key: Bm | BPM 100 | Standard Tuning</div>
+        <p class="start-hint">[ Click anywhere to begin ]</p>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+        <button class="control-btn" onclick="togglePlay()">⏸ Pause</button>
+        <button class="control-btn" onclick="restart()">↺ Restart</button>
+    </div>
+    <div id="section-display">Intro</div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        // CONFIG - "Without Me" - Halsey
+        // Standard tuning, Key of Bm, 100 BPM (Pop ballad feel)
+        // ═══════════════════════════════════════════════════════════════
+        const CONFIG = {
+            BPM: 100,
+            BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+            STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // AUDIO ENGINE - Clean acoustic/pop tone with shimmer
+        // ═══════════════════════════════════════════════════════════════
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            reverb: null,
+            reverbGain: null,
+            delay: null,
+            delayGain: null,
+            isPlaying: false,
+
+            init: async () => {
+                AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Master output
+                AudioEngine.master = AudioEngine.ctx.createGain();
+                AudioEngine.master.gain.value = 0.55;
+
+                // Hall Reverb for ambient pop feel
+                AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+                AudioEngine.reverb.buffer = await AudioEngine.createImpulse(2.5, 2.2);
+
+                AudioEngine.reverbGain = AudioEngine.ctx.createGain();
+                AudioEngine.reverbGain.gain.value = 0.30;
+
+                // Subtle delay for depth
+                AudioEngine.delay = AudioEngine.ctx.createDelay(1.0);
+                AudioEngine.delay.delayTime.value = 0.35;
+
+                AudioEngine.delayGain = AudioEngine.ctx.createGain();
+                AudioEngine.delayGain.gain.value = 0.15;
+
+                // Routing
+                AudioEngine.master.connect(AudioEngine.ctx.destination);
+                AudioEngine.master.connect(AudioEngine.reverb);
+                AudioEngine.reverb.connect(AudioEngine.reverbGain);
+                AudioEngine.reverbGain.connect(AudioEngine.ctx.destination);
+
+                AudioEngine.master.connect(AudioEngine.delay);
+                AudioEngine.delay.connect(AudioEngine.delayGain);
+                AudioEngine.delayGain.connect(AudioEngine.ctx.destination);
+            },
+
+            createImpulse: async (duration, decay) => {
+                const rate = AudioEngine.ctx.sampleRate;
+                const length = rate * duration;
+                const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+                const L = impulse.getChannelData(0);
+                const R = impulse.getChannelData(1);
+
+                for (let i = 0; i < length; i++) {
+                    L[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+                    R[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+                }
+                return impulse;
+            },
+
+            // Clean Pop/Acoustic Guitar Tone
+            playString: (stringIdx, fret, time, duration = 1.8) => {
+                if (!AudioEngine.ctx) return;
+                const ctx = AudioEngine.ctx;
+                const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+
+                // Triangle body + sine harmonics for warm clean sound
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                const osc3 = ctx.createOscillator();
+
+                osc1.type = 'triangle';
+                osc2.type = 'sine';
+                osc3.type = 'sine';
+
+                osc1.frequency.value = freq;
+                osc2.frequency.value = freq * 2;
+                osc3.frequency.value = freq * 3;
+
+                // Mix ratios - warm and full
+                const g1 = ctx.createGain(); g1.gain.value = 0.45;
+                const g2 = ctx.createGain(); g2.gain.value = 0.30;
+                const g3 = ctx.createGain(); g3.gain.value = 0.15;
+
+                // Lowpass filter with smooth decay
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(3500, time);
+                filter.frequency.exponentialRampToValueAtTime(900, time + 0.25);
+                filter.Q.value = 0.8;
+
+                // Pop envelope - balanced attack and sustain
+                const amp = ctx.createGain();
+                amp.gain.setValueAtTime(0, time);
+                amp.gain.linearRampToValueAtTime(0.38, time + 0.012);
+                amp.gain.exponentialRampToValueAtTime(0.18, time + 0.18);
+                amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                // Connect
+                osc1.connect(g1); g1.connect(filter);
+                osc2.connect(g2); g2.connect(filter);
+                osc3.connect(g3); g3.connect(filter);
+                filter.connect(amp);
+                amp.connect(AudioEngine.master);
+
+                osc1.start(time); osc1.stop(time + duration);
+                osc2.start(time); osc2.stop(time + duration);
+                osc3.start(time); osc3.stop(time + duration);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // TAB DATA & COMPOSITION - "Without Me"
+        // ═══════════════════════════════════════════════════════════════
+        const TAB = [];
+        let currentSection = 'Intro';
+        const sections = [];
+
+        function addNote(beat, string, fret, section = currentSection) {
+            TAB.push({ beat, string, fret, section });
+        }
+
+        function setSection(name, beat) {
+            currentSection = name;
+            sections.push({ name, beat });
+        }
+
+        const S = 0.25, E = 0.5, Q = 1.0, H = 2.0, W = 4.0;
+
+        // Strum helper (low to high, guitar strum timing)
+        function strum(beat, chord, speed = 0.015) {
+            chord.forEach((note, i) => {
+                addNote(beat + i * speed, note[0], note[1]);
+            });
+        }
+
+        // Arpeggio helper (ascending)
+        function arpeggio(beat, notes, speed = 0.125) {
+            notes.forEach((note, i) => {
+                addNote(beat + i * speed, note[0], note[1]);
+            });
+        }
+
+        let b = 0;
+
+        // ═══════════════════════════════════════════════════════════════
+        // CHORD DEFINITIONS (from tablature)
+        // ═══════════════════════════════════════════════════════════════
+        // Bm7:  x24232 (partial: bass on A, emphasis on D-G-B-e pattern)
+        // Dsus2: xx0230
+        // A: x02220
+        // G: 320003
+        // Em7: 022030 or 020000
+
+        // ═══════════════════════════════════════════════════════════════
+        // INTRO - Fingerpicked Pattern
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Intro', b);
+
+        // Measure 1: Bm7 to Dsus2 arpeggio
+        // e|--------2---0---|
+        // B|------3---------|
+        // G|----2-----------|
+        // D|--4-------------|
+        // A|2---------------|
+        addNote(b, 4, 2);           // A string, fret 2
+        addNote(b + E, 3, 4);       // D string, fret 4
+        addNote(b + Q, 2, 2);       // G string, fret 2
+        addNote(b + Q + E, 1, 3);   // B string, fret 3
+        addNote(b + H, 0, 2);       // e string, fret 2
+        addNote(b + H + E, 0, 0);   // e string, open (Dsus2 transition)
+        b += W;
+
+        // Measure 2: Rest/sustain
+        b += W;
+
+        // Measure 3: A to G
+        // e|--------0-------|
+        // B|------2-----3---|
+        // G|----2-----------|
+        // D|--2-------------|
+        // A|0---------------|
+        addNote(b, 4, 0);           // A string, open
+        addNote(b + E, 3, 2);       // D string, fret 2
+        addNote(b + Q, 2, 2);       // G string, fret 2
+        addNote(b + Q + E, 1, 2);   // B string, fret 2
+        addNote(b + H, 0, 0);       // e string, open
+        addNote(b + H + Q, 1, 3);   // B string, fret 3 (G chord)
+        b += W;
+
+        // Measure 4: Rest
+        b += W;
+
+        // Second intro phrase
+        // Measure 5: Bm7 to Dsus2
+        addNote(b, 4, 2);
+        addNote(b + E, 3, 4);
+        addNote(b + Q, 2, 2);
+        addNote(b + Q + E, 1, 3);
+        addNote(b + H, 0, 2);
+        addNote(b + H + E, 0, 0);
+        b += W;
+
+        // Measure 6: Dsus2 melodic fill
+        // B|--------3-3-2---|
+        addNote(b + H, 1, 3);
+        addNote(b + H + E, 1, 3);
+        addNote(b + H + Q, 1, 2);
+        b += W;
+
+        // Measure 7: A to Em7
+        addNote(b, 4, 0);
+        addNote(b + E, 3, 2);
+        addNote(b + Q, 2, 2);
+        addNote(b + Q + E, 1, 2);
+        addNote(b + H, 0, 0);
+        addNote(b + H + Q, 1, 3);
+        b += W;
+
+        // Measure 8: Em7 fill
+        // B|--------2-0-----|
+        // G|------------2---|
+        addNote(b + H, 1, 2);
+        addNote(b + H + E, 1, 0);
+        addNote(b + H + Q + E, 2, 2);
+        b += W;
+
+        // ═══════════════════════════════════════════════════════════════
+        // VERSE 1 - "Found you when your heart was broke..."
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Verse', b);
+
+        // Pattern: fingerpicked arpeggios following the chord progression
+        // Bm7 - Dsus2 - A - G pattern repeated
+
+        for (let rep = 0; rep < 2; rep++) {
+            // Bm7 arpeggio
+            addNote(b, 4, 2);
+            addNote(b + E, 3, 4);
+            addNote(b + Q, 2, 2);
+            addNote(b + Q + E, 1, 3);
+            addNote(b + H, 0, 2);
+            addNote(b + H + E, 1, 3);
+            addNote(b + H + Q, 2, 2);
+            addNote(b + H + Q + E, 0, 0);
+            b += W;
+
+            // Dsus2
+            addNote(b, 3, 0);
+            addNote(b + E, 2, 2);
+            addNote(b + Q, 1, 3);
+            addNote(b + Q + E, 0, 0);
+            addNote(b + H, 1, 3);
+            addNote(b + H + E, 2, 2);
+            addNote(b + H + Q, 0, 0);
+            b += W;
+
+            // A major
+            addNote(b, 4, 0);
+            addNote(b + E, 3, 2);
+            addNote(b + Q, 2, 2);
+            addNote(b + Q + E, 1, 2);
+            addNote(b + H, 0, 0);
+            addNote(b + H + E, 1, 2);
+            addNote(b + H + Q, 2, 2);
+            addNote(b + H + Q + E, 0, 0);
+            b += W;
+
+            // G or Em7 (alternates)
+            if (rep === 0) {
+                // G
+                addNote(b, 5, 3);
+                addNote(b + E, 4, 2);
+                addNote(b + Q, 2, 0);
+                addNote(b + Q + E, 1, 0);
+                addNote(b + H, 0, 3);
+                addNote(b + H + E, 1, 0);
+                addNote(b + H + Q, 2, 0);
+                b += W;
+            } else {
+                // Em7
+                addNote(b, 5, 0);
+                addNote(b + E, 4, 2);
+                addNote(b + Q, 2, 0);
+                addNote(b + Q + E, 1, 3);
+                addNote(b + H, 0, 0);
+                addNote(b + H + E, 1, 0);
+                addNote(b + H + Q, 2, 0);
+                b += W;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PRE-CHORUS - "I said I'd catch you if you fall..."
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Pre-Chorus', b);
+
+        // More rhythmic strumming pattern
+        for (let rep = 0; rep < 2; rep++) {
+            // Bm7 - strummed
+            const Bm7 = [[4, 2], [3, 4], [2, 2], [1, 3], [0, 2]];
+            strum(b, Bm7);
+            b += Q;
+            strum(b, Bm7);
+            b += Q;
+            addNote(b, 4, 2);
+            addNote(b + E, 0, 2);
+            b += H;
+
+            // Dsus2
+            const Dsus2 = [[3, 0], [2, 2], [1, 3], [0, 0]];
+            strum(b, Dsus2);
+            b += Q;
+            strum(b, Dsus2);
+            b += Q;
+            addNote(b, 3, 0);
+            addNote(b + E, 0, 0);
+            b += H;
+
+            // A
+            const A = [[4, 0], [3, 2], [2, 2], [1, 2], [0, 0]];
+            strum(b, A);
+            b += Q;
+            strum(b, A);
+            b += Q;
+            addNote(b, 4, 0);
+            addNote(b + E, 0, 0);
+            b += H;
+
+            // G or Em7
+            if (rep === 0) {
+                const G = [[5, 3], [4, 2], [2, 0], [1, 0], [0, 3]];
+                strum(b, G);
+                b += Q;
+                strum(b, G);
+                b += H + Q;
+            } else {
+                const Em7 = [[5, 0], [4, 2], [2, 0], [1, 3], [0, 0]];
+                strum(b, Em7);
+                b += Q;
+                strum(b, Em7);
+                b += H + Q;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CHORUS - "Tell me, how's it feel sittin' up there?"
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Chorus', b);
+
+        // Full strumming with emphasis
+        for (let rep = 0; rep < 4; rep++) {
+            // Bm7
+            const Bm7 = [[4, 2], [3, 4], [2, 2], [1, 3], [0, 2]];
+            strum(b, Bm7);
+            b += E;
+            strum(b, Bm7);
+            b += E;
+            strum(b, Bm7);
+            b += Q;
+            strum(b, Bm7);
+            b += H;
+
+            // Dsus2
+            const Dsus2 = [[3, 0], [2, 2], [1, 3], [0, 0]];
+            strum(b, Dsus2);
+            b += E;
+            strum(b, Dsus2);
+            b += E;
+            strum(b, Dsus2);
+            b += Q;
+            strum(b, Dsus2);
+            b += H;
+
+            // A
+            const A = [[4, 0], [3, 2], [2, 2], [1, 2], [0, 0]];
+            strum(b, A);
+            b += E;
+            strum(b, A);
+            b += E;
+            strum(b, A);
+            b += Q;
+            strum(b, A);
+            b += H;
+
+            // G or Em7 (alternating)
+            if (rep % 2 === 0) {
+                const G = [[5, 3], [4, 2], [2, 0], [1, 0], [0, 3]];
+                strum(b, G);
+                b += E;
+                strum(b, G);
+                b += E;
+                strum(b, G);
+                b += Q;
+                strum(b, G);
+                b += H;
+            } else {
+                const Em7 = [[5, 0], [4, 2], [2, 0], [1, 3], [0, 0]];
+                strum(b, Em7);
+                b += E;
+                strum(b, Em7);
+                b += E;
+                strum(b, Em7);
+                b += Q;
+                strum(b, Em7);
+                b += H;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // VERSE 2 - "Gave love 'bout a hundred tries..."
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Verse 2', b);
+
+        // Same pattern as Verse 1
+        for (let rep = 0; rep < 2; rep++) {
+            addNote(b, 4, 2);
+            addNote(b + E, 3, 4);
+            addNote(b + Q, 2, 2);
+            addNote(b + Q + E, 1, 3);
+            addNote(b + H, 0, 2);
+            addNote(b + H + E, 1, 3);
+            addNote(b + H + Q, 2, 2);
+            addNote(b + H + Q + E, 0, 0);
+            b += W;
+
+            addNote(b, 3, 0);
+            addNote(b + E, 2, 2);
+            addNote(b + Q, 1, 3);
+            addNote(b + Q + E, 0, 0);
+            addNote(b + H, 1, 3);
+            addNote(b + H + E, 2, 2);
+            addNote(b + H + Q, 0, 0);
+            b += W;
+
+            addNote(b, 4, 0);
+            addNote(b + E, 3, 2);
+            addNote(b + Q, 2, 2);
+            addNote(b + Q + E, 1, 2);
+            addNote(b + H, 0, 0);
+            addNote(b + H + E, 1, 2);
+            addNote(b + H + Q, 2, 2);
+            addNote(b + H + Q + E, 0, 0);
+            b += W;
+
+            if (rep === 0) {
+                addNote(b, 5, 3);
+                addNote(b + E, 4, 2);
+                addNote(b + Q, 2, 0);
+                addNote(b + Q + E, 1, 0);
+                addNote(b + H, 0, 3);
+                addNote(b + H + E, 1, 0);
+                addNote(b + H + Q, 2, 0);
+                b += W;
+            } else {
+                addNote(b, 5, 0);
+                addNote(b + E, 4, 2);
+                addNote(b + Q, 2, 0);
+                addNote(b + Q + E, 1, 3);
+                addNote(b + H, 0, 0);
+                addNote(b + H + E, 1, 0);
+                addNote(b + H + Q, 2, 0);
+                b += W;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // BRIDGE - "You don't have to say just what you did..."
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Bridge', b);
+
+        // Emotional, sustained chords
+        const Bm7_br = [[4, 2], [3, 4], [2, 2], [1, 3], [0, 2]];
+        strum(b, Bm7_br, 0.025);
+        b += W;
+
+        const Dsus2_br = [[3, 0], [2, 2], [1, 3], [0, 0]];
+        strum(b, Dsus2_br, 0.025);
+        b += W;
+
+        const A_br = [[4, 0], [3, 2], [2, 2], [1, 2], [0, 0]];
+        strum(b, A_br, 0.025);
+        b += W;
+
+        const G_br = [[5, 3], [4, 2], [2, 0], [1, 0], [0, 3]];
+        strum(b, G_br, 0.025);
+        b += W;
+
+        // Repeat bridge pattern
+        strum(b, Bm7_br, 0.025);
+        b += H;
+        strum(b, Bm7_br.slice(0, 3));
+        b += H;
+
+        strum(b, Dsus2_br, 0.025);
+        b += W;
+
+        strum(b, A_br, 0.025);
+        b += H;
+        addNote(b, 0, 0);
+        b += H;
+
+        const Em7_br = [[5, 0], [4, 2], [2, 0], [1, 3], [0, 0]];
+        strum(b, Em7_br, 0.025);
+        b += W;
+
+        // ═══════════════════════════════════════════════════════════════
+        // FINAL CHORUS - Bigger, more intense
+        // ═══════════════════════════════════════════════════════════════
+        setSection('Final Chorus', b);
+
+        for (let rep = 0; rep < 3; rep++) {
+            const Bm7 = [[4, 2], [3, 4], [2, 2], [1, 3], [0, 2]];
+            strum(b, Bm7);
+            b += E;
+            strum(b, Bm7);
+            b += E;
+            strum(b, Bm7);
+            b += Q;
+            strum(b, Bm7);
+            b += H;
+
+            const Dsus2 = [[3, 0], [2, 2], [1, 3], [0, 0]];
+            strum(b, Dsus2);
+            b += E;
+            strum(b, Dsus2);
+            b += E;
+            strum(b, Dsus2);
+            b += Q;
+            strum(b, Dsus2);
+            b += H;
+
+            const A = [[4, 0], [3, 2], [2, 2], [1, 2], [0, 0]];
+            strum(b, A);
+            b += E;
+            strum(b, A);
+            b += E;
+            strum(b, A);
+            b += Q;
+            strum(b, A);
+            b += H;
+
+            if (rep % 2 === 0) {
+                const G = [[5, 3], [4, 2], [2, 0], [1, 0], [0, 3]];
+                strum(b, G);
+                b += E;
+                strum(b, G);
+                b += E;
+                strum(b, G);
+                b += Q;
+                strum(b, G);
+                b += H;
+            } else {
+                const Em7 = [[5, 0], [4, 2], [2, 0], [1, 3], [0, 0]];
+                strum(b, Em7);
+                b += E;
+                strum(b, Em7);
+                b += E;
+                strum(b, Em7);
+                b += Q;
+                strum(b, Em7);
+                b += H;
+            }
+        }
+
+        // Outro - fade with arpeggios
+        setSection('Outro', b);
+        addNote(b, 4, 2);
+        addNote(b + E, 3, 4);
+        addNote(b + Q, 2, 2);
+        addNote(b + Q + E, 1, 3);
+        addNote(b + H, 0, 2);
+        b += W;
+
+        addNote(b, 3, 0);
+        addNote(b + Q, 2, 2);
+        addNote(b + H, 1, 3);
+        addNote(b + H + Q, 0, 0);
+        b += W;
+
+        // Final sustain
+        strum(b, [[4, 2], [3, 4], [2, 2], [1, 3], [0, 2]], 0.03);
+        b += W * 2;
+
+        const LOOP_LENGTH = b;
+
+        // ═══════════════════════════════════════════════════════════════
+        // SEQUENCER
+        // ═══════════════════════════════════════════════════════════════
+        let currentBeat = 0, startTime = 0, nextNoteIdx = 0;
+
+        function scheduler() {
+            if (!AudioEngine.isPlaying) return;
+            const currentTime = AudioEngine.ctx.currentTime;
+            currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+
+            // Update section display
+            for (let i = sections.length - 1; i >= 0; i--) {
+                if (currentBeat >= sections[i].beat) {
+                    document.getElementById('section-display').textContent = sections[i].name;
+                    break;
+                }
+            }
+
+            if (currentBeat >= LOOP_LENGTH) {
+                startTime = currentTime;
+                currentBeat = 0;
+                nextNoteIdx = 0;
+            }
+
+            while (nextNoteIdx < TAB.length && TAB[nextNoteIdx].beat <= currentBeat + 0.1) {
+                const note = TAB[nextNoteIdx];
+                const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+                AudioEngine.playString(note.string, note.fret, playTime, 1.8);
+                triggerVisual(note);
+                nextNoteIdx++;
+            }
+
+            requestAnimationFrame(scheduler);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // VISUAL ENGINE - Modern Pop aesthetic with gradient vibes
+        // ═══════════════════════════════════════════════════════════════
+        const cvs = document.getElementById('canvas');
+        const ctx = cvs.getContext('2d');
+        let w, h;
+        const activeNotes = [];
+        const particles = [];
+
+        function resize() {
+            w = cvs.width = innerWidth;
+            h = cvs.height = innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function triggerVisual(note) {
+            activeNotes.push({ ...note, life: 1.0 });
+            // Spawn particles
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: w * 0.18,
+                    y: h / 2 + (note.string - 2.5) * 35,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3,
+                    life: 1.0,
+                    color: `hsl(${280 + note.string * 20}, 70%, 60%)`
+                });
+            }
+        }
+
+        function draw() {
+            // Gradient fade with subtle motion
+            const gradient = ctx.createLinearGradient(0, 0, w, h);
+            gradient.addColorStop(0, 'rgba(15, 15, 35, 0.15)');
+            gradient.addColorStop(1, 'rgba(45, 27, 78, 0.15)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, w, h);
+
+            const STAFF_Y = h / 2, SPACING = 35, HIT_X = w * 0.18;
+
+            // Strings with gradient glow
+            ctx.lineWidth = 1;
+            CONFIG.STRING_NAMES.forEach((name, i) => {
+                const y = STAFF_Y + (i - 2.5) * SPACING;
+                const alpha = 0.4 - i * 0.04;
+
+                // Glow effect
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = `rgba(196, 77, 255, ${alpha * 0.5})`;
+                ctx.strokeStyle = `rgba(196, 77, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // String label
+                ctx.fillStyle = '#6644aa';
+                ctx.font = '14px "Segoe UI", sans-serif';
+                ctx.fillText(name, 10, y + 5);
+            });
+
+            // Hit line with glow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = 'rgba(196, 77, 255, 0.8)';
+            ctx.strokeStyle = '#c44dff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(HIT_X, STAFF_Y - 120);
+            ctx.lineTo(HIT_X, STAFF_Y + 120);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Notes scrolling
+            const pixelsPerBeat = 130;
+            ctx.font = '12px "Segoe UI", sans-serif';
+            TAB.forEach(note => {
+                let dist = note.beat - currentBeat;
+                if (dist < -3) return; // Skip far-past notes
+                if (dist > (w - HIT_X) / pixelsPerBeat) return; // Skip far-future
+
+                const x = HIT_X + dist * pixelsPerBeat;
+                const y = STAFF_Y + (note.string - 2.5) * SPACING;
+
+                // Note bubble
+                const isNear = Math.abs(dist) < 0.5;
+                ctx.beginPath();
+                ctx.arc(x, y, isNear ? 14 : 12, 0, Math.PI * 2);
+                ctx.fillStyle = isNear ? 'rgba(196, 77, 255, 0.3)' : 'rgba(30, 20, 50, 0.8)';
+                ctx.fill();
+                ctx.strokeStyle = isNear ? '#ff6b9d' : '#8855cc';
+                ctx.lineWidth = isNear ? 2 : 1.5;
+                ctx.stroke();
+
+                // Fret number
+                ctx.fillStyle = '#fff';
+                ctx.fillText(note.fret, x - (note.fret >= 10 ? 7 : 4), y + 4);
+            });
+
+            // Hit animations - expanding rings with gradient
+            for (let i = activeNotes.length - 1; i >= 0; i--) {
+                const n = activeNotes[i];
+                const y = STAFF_Y + (n.string - 2.5) * SPACING;
+                const radius = 16 + (1 - n.life) * 50;
+
+                const grad = ctx.createRadialGradient(HIT_X, y, 0, HIT_X, y, radius);
+                grad.addColorStop(0, `rgba(255, 107, 157, ${n.life * 0.6})`);
+                grad.addColorStop(1, `rgba(196, 77, 255, 0)`);
+
+                ctx.beginPath();
+                ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255, 107, 157, ${n.life * 0.8})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                n.life -= 0.025;
+                if (n.life <= 0) activeNotes.splice(i, 1);
+            }
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+                ctx.fillStyle = p.color.replace('60%)', `${60 * p.life}%)`);
+                ctx.fill();
+
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CONTROLS
+        // ═══════════════════════════════════════════════════════════════
+        document.addEventListener('click', () => {
+            if (!AudioEngine.ctx) {
+                AudioEngine.init().then(() => togglePlay());
+            } else {
+                togglePlay();
+            }
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlay();
+            }
+        });
+
+        function togglePlay() {
+            if (!AudioEngine.ctx) return;
+            if (AudioEngine.isPlaying) {
+                AudioEngine.isPlaying = false;
+                document.getElementById('overlay').classList.remove('hidden');
+                document.getElementById('controls').classList.remove('visible');
+                document.getElementById('section-display').classList.remove('visible');
+            } else {
+                AudioEngine.isPlaying = true;
+                document.getElementById('overlay').classList.add('hidden');
+                document.getElementById('controls').classList.add('visible');
+                document.getElementById('section-display').classList.add('visible');
+                startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+                scheduler();
+            }
+        }
+
+        function restart() {
+            currentBeat = 0;
+            nextNoteIdx = 0;
+            startTime = AudioEngine.ctx.currentTime;
+        }
+
+        draw();
+    </script>
+</body>
+
+</html>
