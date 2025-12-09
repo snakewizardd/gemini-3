@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOODOO ENDLESS // INFINITE SHRED ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Share+Tech+Mono&display=swap');
+
+    :root {
+        --bg: #0a0a12;
+        --fire: #ff3300;
+        --gold: #ffaa00;
+        --purple: #9933ff;
+        --smoke: #222233;
+    }
+
+    body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        font-family: 'Share Tech Mono', monospace;
+        color: #fff;
+        user-select: none;
+    }
+
+    #canvas {
+        display: block;
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+
+    #overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, rgba(10,10,18,0.98), rgba(40,10,30,0.95));
+        z-index: 10;
+        transition: opacity 0.5s;
+    }
+
+    h1 {
+        font-family: 'Permanent Marker', cursive;
+        font-size: 5rem;
+        margin: 0;
+        background: linear-gradient(135deg, var(--fire), var(--gold), var(--purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-shadow: 0 0 30px rgba(255,100,0,0.5);
+        letter-spacing: 3px;
+        animation: fireGlow 2s ease-in-out infinite;
+    }
+
+    @keyframes fireGlow {
+        0%, 100% { filter: brightness(1); }
+        50% { filter: brightness(1.3); }
+    }
+
+    p {
+        font-weight: bold;
+        margin-top: 20px;
+        font-size: 1.2rem;
+        color: var(--gold);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+
+    .sub {
+        font-size: 0.9rem;
+        color: #666;
+        margin-top: 1rem;
+    }
+
+    .hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        font-size: 13px;
+        pointer-events: none;
+        z-index: 5;
+        color: var(--gold);
+        text-shadow: 0 0 5px var(--fire);
+        line-height: 1.6;
+    }
+
+    #phase {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-family: 'Permanent Marker', cursive;
+        font-size: 1.4rem;
+        color: var(--purple);
+        z-index: 5;
+        text-shadow: 0 0 10px var(--purple);
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>VOODOO ENDLESS</h1>
+    <p>[ CLICK TO SHRED FOREVER ]</p>
+    <p class="sub">Hendrix × Clapton × GNR</p>
+    <p class="sub">SPACE = PAUSE</p>
+</div>
+
+<div id="hud">
+    TONE: FUZZ + WAH<br>
+    BPM: 138 (SHRED)<br>
+    MODE: INFINITE
+</div>
+
+<div id="phase">INTRO</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+/**
+ * VOODOO ENDLESS // INFINITE SHRED ENGINE (FAST VERSION)
+ * Generative Hendrix/Clapton/GNR style endless guitar
+ * TURBO MODE: 138 BPM, tighter phrases, less dead air
+ */
+
+// === CONFIGURATION ===
+const CONFIG = {
+    BPM: 138,  // PUMPED UP from 95
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRING_NAMES: ['e', 'B', 'G', 'D', 'A', 'E']
+};
+
+// === SCALES & PATTERNS ===
+const BLUES_MINOR = [0, 3, 5, 6, 7, 10, 12, 15, 17, 19];
+const PENTATONIC_MINOR = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
+
+// Tightened lick durations
+const HENDRIX_LICKS = [
+    [[1, 8, 0.25, 'bend'], [1, 10, 0.125], [1, 8, 0.125], [2, 9, 0.25]],
+    [[0, 12, 0.25, 'bend'], [0, 15, 0.125], [0, 12, 0.125], [1, 12, 0.25]],
+    [[1, 10, 0.125], [1, 8, 0.125], [2, 9, 0.125], [2, 7, 0.125], [3, 9, 0.25]],
+    [[2, 12, 0.25, 'vib'], [2, 9, 0.125], [2, 10, 0.125], [2, 12, 0.25]],
+    [[0, 15, 0.125], [0, 12, 0.125], [1, 12, 0.125], [1, 10, 0.125], [2, 9, 0.25]],
+];
+
+const CLAPTON_RUNS = [
+    [[3, 9, 0.125], [3, 11, 0.125], [3, 12, 0.125], [2, 12, 0.4, 'vib']],
+    [[4, 10, 0.2, 'slide', 12], [3, 9, 0.15], [2, 9, 0.4, 'vib']],
+    [[2, 11, 0.1], [2, 12, 0.1], [2, 11, 0.1], [2, 9, 0.2]],
+];
+
+const GNR_BENDS = [
+    [[1, 13, 0.4, 'bend'], [1, 13, 0.2], [1, 12, 0.2]],
+    [[1, 10, 0.25, 'bend'], [1, 10, 0.15, 'release'], [2, 9, 0.3]],
+    [[0, 15, 0.3, 'bend'], [0, 17, 0.2], [1, 15, 0.25]],
+];
+
+// Fast shred patterns
+const SPEED_LICKS = [
+    [[0, 12], [0, 15], [0, 12], [1, 12], [1, 15], [1, 12], [2, 12], [2, 14]],
+    [[1, 10], [1, 12], [2, 9], [2, 12], [3, 9], [3, 11], [2, 12], [2, 9]],
+    [[0, 15], [0, 17], [0, 15], [0, 12], [1, 15], [1, 12], [2, 14], [2, 12]],
+];
+
+const CHORDS = {
+    E7s9: [[5,0], [4,7], [3,6], [2,7], [1,8]],
+    Am: [[4,0], [3,2], [2,2], [1,1], [0,0]],
+    Dm: [[3,0], [2,2], [1,3], [0,1]],
+    G: [[5,3], [4,2], [3,0], [2,0], [1,3]],
+    C: [[4,3], [3,2], [2,0], [1,1], [0,0]],
+    E: [[5,0], [4,2], [3,2], [2,1], [1,0], [0,0]],
+};
+
+const PHASES = ['INTRO', 'GROOVE', 'SOAR', 'FIRE', 'SOUL', 'THUNDER', 'ASCEND'];
+let currentPhase = 0;
+let phaseProgress = 0;
+const PHASE_LENGTH = 16; // FASTER phase transitions (was 32)
+
+// === AUDIO ENGINE ===
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    drive: null,
+    driveGain: null,
+    reverb: null,
+    delay: null,
+    isPlaying: false,
+    activeOscCount: 0,
+    MAX_OSCS: 40, // Increased for faster notes
+
+    init: async () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        AudioEngine.ctx = new AC();
+        
+        AudioEngine.master = AudioEngine.ctx.createGain();
+        AudioEngine.master.gain.value = 0.35;
+
+        AudioEngine.drive = AudioEngine.ctx.createWaveShaper();
+        AudioEngine.drive.curve = AudioEngine.makeDistortionCurve(300);
+        AudioEngine.drive.oversample = '2x';
+        
+        AudioEngine.driveGain = AudioEngine.ctx.createGain();
+        AudioEngine.driveGain.gain.value = 0.5;
+
+        AudioEngine.delay = AudioEngine.ctx.createDelay(1.0);
+        AudioEngine.delay.delayTime.value = 0.12; // Tighter delay
+        const delayGain = AudioEngine.ctx.createGain();
+        delayGain.gain.value = 0.12;
+
+        AudioEngine.reverb = AudioEngine.ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createImpulse(1.5, 2.5);
+        const verbMix = AudioEngine.ctx.createGain();
+        verbMix.gain.value = 0.2;
+
+        AudioEngine.driveGain.connect(AudioEngine.drive);
+        AudioEngine.drive.connect(AudioEngine.master);
+        
+        AudioEngine.master.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(delayGain);
+        delayGain.connect(AudioEngine.ctx.destination);
+        AudioEngine.master.connect(verbMix);
+        verbMix.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.ctx.destination);
+    },
+
+    makeDistortionCurve: (amount) => {
+        const k = amount;
+        const n = 22050;
+        const curve = new Float32Array(n);
+        for (let i = 0; i < n; ++i) {
+            let x = i * 2 / n - 1;
+            curve[i] = Math.tanh(k * x * 0.1);
+        }
+        return curve;
+    },
+
+    createImpulse: async (duration, decay) => {
+        const rate = AudioEngine.ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = AudioEngine.ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        for (let i = 0; i < length; i++) {
+            const env = Math.pow(1 - i / length, decay);
+            L[i] = (Math.random() * 2 - 1) * env;
+            R[i] = (Math.random() * 2 - 1) * env;
+        }
+        return impulse;
+    },
+
+    playString: (stringIdx, fret, time, duration = 0.5, technique = null, slideTo = null) => {
+        if (!AudioEngine.ctx || AudioEngine.activeOscCount >= AudioEngine.MAX_OSCS) return;
+        
+        const t = time;
+        const baseFreq = CONFIG.BASE_FREQS[stringIdx];
+        const freq = baseFreq * Math.pow(2, fret / 12);
+        
+        AudioEngine.activeOscCount++;
+        
+        const osc = AudioEngine.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        
+        if (slideTo !== null) {
+            const targetFreq = baseFreq * Math.pow(2, slideTo / 12);
+            osc.frequency.setValueAtTime(freq, t);
+            osc.frequency.linearRampToValueAtTime(targetFreq, t + 0.08);
+        } else if (technique === 'bend') {
+            const targetFreq = freq * Math.pow(2, 2/12);
+            osc.frequency.setValueAtTime(freq, t);
+            osc.frequency.linearRampToValueAtTime(targetFreq, t + 0.12);
+        } else if (technique === 'release') {
+            const startFreq = freq * Math.pow(2, 2/12);
+            osc.frequency.setValueAtTime(startFreq, t);
+            osc.frequency.linearRampToValueAtTime(freq, t + 0.08);
+        } else if (technique === 'vib') {
+            osc.frequency.value = freq;
+            const vib = AudioEngine.ctx.createOscillator();
+            vib.frequency.value = 6.5; // Faster vibrato
+            const vibGain = AudioEngine.ctx.createGain();
+            vibGain.gain.value = freq * 0.018;
+            vib.connect(vibGain);
+            vibGain.connect(osc.frequency);
+            vib.start(t);
+            vib.stop(t + duration);
+        } else {
+            osc.frequency.value = freq;
+        }
+
+        const filter = AudioEngine.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 2.5;
+        filter.frequency.setValueAtTime(700, t);
+        filter.frequency.linearRampToValueAtTime(2500, t + 0.05);
+        filter.frequency.exponentialRampToValueAtTime(900, t + duration * 0.4);
+
+        const amp = AudioEngine.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(0.55, t + 0.008);
+        amp.gain.exponentialRampToValueAtTime(0.3, t + 0.08);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+        osc.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.driveGain);
+
+        osc.start(t);
+        osc.stop(t + duration);
+        
+        osc.onended = () => AudioEngine.activeOscCount--;
+    },
+
+    playChord: (chord, time, duration = 0.4) => {
+        chord.forEach((note, i) => {
+            AudioEngine.playString(note[0], note[1], time + i * 0.008, duration);
+        });
+    }
+};
+
+// === GENERATIVE COMPOSITION ENGINE ===
+let generatedNotes = [];
+let generationBeat = 0;
+const GENERATION_AHEAD = 16;
+
+function generatePhrase(startBeat) {
+    const phase = PHASES[currentPhase];
+    let b = startBeat;
+    
+    switch(phase) {
+        case 'INTRO':
+            b = generateSoulfulBends(b);
+            break;
+        case 'GROOVE':
+            b = generateHendrixGroove(b);
+            break;
+        case 'SOAR':
+            b = generateSoaringLead(b);
+            break;
+        case 'FIRE':
+            b = generateFireShred(b);
+            break;
+        case 'SOUL':
+            b = generateClaptonSoul(b);
+            break;
+        case 'THUNDER':
+            b = generateThunder(b);
+            break;
+        case 'ASCEND':
+            b = generateAscension(b);
+            break;
+    }
+    
+    return b;
+}
+
+function generateSoulfulBends(b) {
+    const notes = [[1, 8], [1, 10], [2, 9], [2, 12], [0, 12], [0, 15]];
+    const note = notes[Math.floor(Math.random() * notes.length)];
+    
+    generatedNotes.push({ beat: b, string: note[0], fret: note[1], technique: 'bend', duration: 0.6 });
+    b += 0.75;
+    
+    // Quick fill
+    const fill = [[1, 10], [1, 8], [2, 9]];
+    fill.forEach(n => {
+        generatedNotes.push({ beat: b, string: n[0], fret: n[1], duration: 0.15 });
+        b += 0.15;
+    });
+    
+    generatedNotes.push({ beat: b, string: 2, fret: 9, technique: 'vib', duration: 0.8 });
+    b += 1.0;
+    
+    // Bass note
+    if (Math.random() > 0.3) {
+        generatedNotes.push({ beat: b, string: 5, fret: 0, duration: 0.5 });
+        b += 0.5;
+    }
+    
+    return b;
+}
+
+function generateHendrixGroove(b) {
+    const chord = CHORDS.E7s9;
+    
+    // Syncopated stabs
+    const rhythm = [0.25, 0.25, 0.5, 0.25, 0.25];
+    rhythm.forEach(dur => {
+        chord.forEach((n, j) => {
+            generatedNotes.push({ beat: b + j * 0.008, string: n[0], fret: n[1], duration: dur * 0.8 });
+        });
+        b += dur;
+    });
+    
+    // Quick lick
+    const lick = HENDRIX_LICKS[Math.floor(Math.random() * HENDRIX_LICKS.length)];
+    lick.forEach(n => {
+        generatedNotes.push({ beat: b, string: n[0], fret: n[1], duration: n[2], technique: n[3] });
+        b += n[2];
+    });
+    
+    return b;
+}
+
+function generateSoaringLead(b) {
+    const scale = PENTATONIC_MINOR;
+    const startFret = 12 + Math.floor(Math.random() * 5);
+    
+    // Fast ascending run
+    for (let i = 0; i < 8; i++) {
+        const fret = startFret + scale[i % scale.length] % 7;
+        const string = i < 4 ? 1 : 0;
+        const dur = 0.125;
+        generatedNotes.push({ beat: b, string, fret, duration: dur });
+        b += dur;
+    }
+    
+    // Soaring bend
+    generatedNotes.push({ beat: b, string: 0, fret: 15, technique: 'bend', duration: 0.6 });
+    b += 0.7;
+    
+    // Quick descending
+    for (let i = 0; i < 4; i++) {
+        generatedNotes.push({ beat: b, string: 0, fret: 15 - i * 2, duration: 0.125 });
+        b += 0.125;
+    }
+    
+    return b;
+}
+
+function generateFireShred(b) {
+    // 32nd note madness
+    const pattern = SPEED_LICKS[Math.floor(Math.random() * SPEED_LICKS.length)];
+    
+    pattern.forEach(note => {
+        generatedNotes.push({ beat: b, string: note[0], fret: note[1], duration: 0.1 });
+        b += 0.1;
+    });
+    
+    // Repeat with variation
+    pattern.reverse().forEach(note => {
+        generatedNotes.push({ beat: b, string: note[0], fret: note[1] + (Math.random() > 0.5 ? 2 : 0), duration: 0.1 });
+        b += 0.1;
+    });
+    
+    // Trill
+    for (let i = 0; i < 6; i++) {
+        generatedNotes.push({ beat: b, string: 1, fret: 10 + (i % 2) * 2, duration: 0.08 });
+        b += 0.08;
+    }
+    
+    // Screaming bend
+    generatedNotes.push({ beat: b, string: 1, fret: 10, technique: 'bend', duration: 0.5 });
+    b += 0.6;
+    
+    return b;
+}
+
+function generateClaptonSoul(b) {
+    const run = CLAPTON_RUNS[Math.floor(Math.random() * CLAPTON_RUNS.length)];
+    run.forEach(n => {
+        generatedNotes.push({ 
+            beat: b, 
+            string: n[0], 
+            fret: n[1], 
+            duration: n[2], 
+            technique: n[3],
+            slideTo: n[3] === 'slide' ? n[4] : null
+        });
+        b += n[2];
+    });
+    
+    // Brief breath
+    b += 0.4;
+    
+    // Second phrase
+    const run2 = CLAPTON_RUNS[Math.floor(Math.random() * CLAPTON_RUNS.length)];
+    run2.forEach(n => {
+        generatedNotes.push({ 
+            beat: b, 
+            string: n[0], 
+            fret: n[1], 
+            duration: n[2], 
+            technique: n[3]
+        });
+        b += n[2];
+    });
+    
+    // End lick
+    [[2, 12], [2, 9], [3, 11], [3, 9]].forEach(n => {
+        generatedNotes.push({ beat: b, string: n[0], fret: n[1], duration: 0.15 });
+        b += 0.15;
+    });
+    
+    return b;
+}
+
+function generateThunder(b) {
+    // Power chord gallop
+    const roots = [0, 0, 3, 5, 3, 0];
+    roots.forEach((root, i) => {
+        generatedNotes.push({ beat: b, string: 5, fret: root, duration: 0.2 });
+        generatedNotes.push({ beat: b + 0.01, string: 4, fret: root + 2, duration: 0.2 });
+        b += (i % 2 === 0) ? 0.25 : 0.2;
+    });
+    
+    // Lead stab
+    const gnr = GNR_BENDS[Math.floor(Math.random() * GNR_BENDS.length)];
+    gnr.forEach(n => {
+        generatedNotes.push({ beat: b, string: n[0], fret: n[1], duration: n[2], technique: n[3] });
+        b += n[2];
+    });
+    
+    return b;
+}
+
+function generateAscension(b) {
+    const intensity = (phaseProgress / PHASE_LENGTH);
+    
+    if (intensity < 0.25) {
+        return generateSoulfulBends(b);
+    } else if (intensity < 0.5) {
+        return generateHendrixGroove(b);
+    } else if (intensity < 0.75) {
+        return generateThunder(b);
+    } else {
+        return generateFireShred(b);
+    }
+}
+
+// === SEQUENCER ===
+let currentBeat = -2.0;
+let startTime = 0;
+let nextNoteIdx = 0;
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+
+    const currentTime = AudioEngine.ctx.currentTime;
+    const elapsed = currentTime - startTime;
+    currentBeat = elapsed * (CONFIG.BPM / 60);
+
+    while (generationBeat < currentBeat + GENERATION_AHEAD) {
+        generationBeat = generatePhrase(generationBeat);
+        phaseProgress++;
+        
+        if (phaseProgress >= PHASE_LENGTH) {
+            phaseProgress = 0;
+            currentPhase = (currentPhase + 1) % PHASES.length;
+            document.getElementById('phase').textContent = PHASES[currentPhase];
+        }
+    }
+
+    while (nextNoteIdx < generatedNotes.length) {
+        const note = generatedNotes[nextNoteIdx];
+        if (note.beat <= currentBeat + 0.1) {
+            const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+            AudioEngine.playString(
+                note.string, 
+                note.fret, 
+                playTime, 
+                note.duration || 0.5, 
+                note.technique,
+                note.slideTo
+            );
+            triggerVisual(note);
+            nextNoteIdx++;
+        } else {
+            break;
+        }
+    }
+
+    if (nextNoteIdx > 100) {
+        generatedNotes = generatedNotes.slice(nextNoteIdx);
+        nextNoteIdx = 0;
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// === VISUAL ENGINE ===
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+const MAX_ACTIVE_VISUALS = 25;
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(note) {
+    if (activeNotes.length >= MAX_ACTIVE_VISUALS) activeNotes.shift();
+    activeNotes.push({
+        ...note,
+        life: 1.0,
+        x: w * 0.15
+    });
+}
+
+function draw() {
+    ctx.fillStyle = 'rgba(10, 10, 18, 0.2)';
+    ctx.fillRect(0, 0, w, h);
+
+    const STAFF_Y = h / 2;
+    const SPACING = 28;
+    const HIT_X = w * 0.15;
+
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#333';
+    ctx.font = "14px 'Share Tech Mono'";
+    ctx.fillStyle = '#ff6600';
+    
+    CONFIG.STRING_NAMES.forEach((name, i) => {
+        const y = STAFF_Y + (i * SPACING) - (2.5 * SPACING);
+        ctx.beginPath();
+        ctx.moveTo(50, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.fillText(name, 20, y + 4);
+    });
+
+    ctx.beginPath();
+    ctx.moveTo(HIT_X, STAFF_Y - 90);
+    ctx.lineTo(HIT_X, STAFF_Y + 90);
+    ctx.strokeStyle = '#ff3300';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const pixelsPerBeat = 120; // Faster scroll
+    const visibleNotes = generatedNotes.slice(Math.max(0, nextNoteIdx - 5), nextNoteIdx + 40);
+    
+    ctx.font = "14px 'Share Tech Mono'";
+    visibleNotes.forEach(note => {
+        const dist = note.beat - currentBeat;
+        if (dist < -1 || dist > 12) return;
+        
+        const x = HIT_X + (dist * pixelsPerBeat);
+        const y = STAFF_Y + (note.string * SPACING) - (2.5 * SPACING);
+        
+        const glow = Math.max(0, 1 - Math.abs(dist) * 0.15);
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(10, 10, 18, 0.9)`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255, ${100 + glow * 155}, 0, ${0.5 + glow * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        let txt = String(note.fret);
+        if (note.technique === 'bend') txt += 'b';
+        if (note.technique === 'vib') txt += '~';
+        ctx.fillStyle = `rgba(255, ${150 + glow * 105}, 0, ${0.7 + glow * 0.3})`;
+        ctx.fillText(txt, x - 5, y + 4);
+    });
+
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        const y = STAFF_Y + (n.string * SPACING) - (2.5 * SPACING);
+        
+        const radius = 12 + (1 - n.life) * 35;
+        const hue = n.technique === 'bend' ? '#9933ff' : '#ff3300';
+        
+        ctx.beginPath();
+        ctx.arc(HIT_X, y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = hue;
+        ctx.globalAlpha = n.life * 0.8;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        n.life -= 0.06; // Faster decay
+        if (n.life <= 0) activeNotes.splice(i, 1);
+    }
+
+    const phaseGlow = Math.sin(Date.now() / 400) * 0.3 + 0.7;
+    const phaseEl = document.getElementById('phase');
+    phaseEl.style.textShadow = `0 0 ${10 + phaseGlow * 10}px #9933ff`;
+
+    requestAnimationFrame(draw);
+}
+
+// === INPUT HANDLING ===
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) {
+        AudioEngine.init();
+        togglePlay();
+    }
+});
+
+function togglePlay() {
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+draw();
+
+</script>
+</body>
+</html>

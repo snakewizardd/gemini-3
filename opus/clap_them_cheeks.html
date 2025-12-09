@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CLAP THEM CHEEKS - Funky Bass Experience</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a0a2e, #2d1b4e, #1a0a2e);
+            overflow: hidden;
+            font-family: 'Trebuchet MS', sans-serif;
+            color: #fff;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 10, 46, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.8s ease-out;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #overlay h1 {
+            font-size: 5em;
+            background: linear-gradient(135deg, #ff6b9d, #c44569, #ff9a56);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            letter-spacing: 0.1em;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        #overlay h2 {
+            font-size: 1.5em;
+            color: #ff9a56;
+            margin-top: 20px;
+            font-weight: 400;
+            letter-spacing: 0.5em;
+            opacity: 0.8;
+        }
+
+        .subtitle {
+            margin-top: 30px;
+            font-size: 1em;
+            color: #c44569;
+            font-style: italic;
+        }
+
+        .click-prompt {
+            margin-top: 50px;
+            font-size: 1.3em;
+            color: #ff6b9d;
+            letter-spacing: 0.3em;
+            animation: bounce 0.6s infinite;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        #controls button {
+            background: linear-gradient(135deg, #ff6b9d, #c44569);
+            border: none;
+            color: #fff;
+            padding: 18px 50px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 50px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            box-shadow: 0 10px 30px rgba(255, 107, 157, 0.4);
+        }
+
+        #controls button:hover {
+            transform: scale(1.1) translateY(-5px);
+            box-shadow: 0 20px 50px rgba(255, 107, 157, 0.6);
+        }
+
+        #time-display {
+            color: #ff9a56;
+            font-size: 16px;
+            font-family: monospace;
+            text-shadow: 0 0 10px #ff9a56;
+        }
+
+        #section-display {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 28px;
+            font-weight: bold;
+            color: #ff6b9d;
+            z-index: 50;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            text-shadow: 0 0 30px rgba(255, 107, 157, 0.8);
+        }
+
+        #bpm-display {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            font-size: 20px;
+            color: #ff9a56;
+            z-index: 50;
+            font-family: monospace;
+        }
+
+        #progress {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff6b9d, #c44569, #ff9a56, #ff6b9d);
+            z-index: 50;
+            box-shadow: 0 0 20px #ff6b9d;
+        }
+
+        #cheek-meter {
+            position: fixed;
+            left: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 250px;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 50;
+            border-radius: 12px;
+            border: 2px solid #ff6b9d;
+            overflow: hidden;
+        }
+
+        #cheek-fill {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, #ff6b9d, #c44569, #ff9a56);
+            border-radius: 10px;
+            transition: height 0.1s;
+        }
+
+        #cheek-label {
+            position: fixed;
+            left: 60px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            color: #ff6b9d;
+            font-size: 12px;
+            letter-spacing: 0.3em;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="overlay">
+        <h1>👏 CLAP THEM CHEEKS 👏</h1>
+        <h2>FUNKY BASS EXPERIENCE</h2>
+        <p class="subtitle">"MichMach — 12:26 PM"</p>
+        <p class="click-prompt">[ CLICK TO GET FUNKY ]</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="section-display">GET READY</div>
+    <div id="bpm-display">108 BPM</div>
+
+    <div id="cheek-meter">
+        <div id="cheek-fill"></div>
+    </div>
+    <div id="cheek-label">THICCNESS</div>
+
+    <div id="controls">
+        <button id="playBtn">👏 CLAP 👏</button>
+        <div id="time-display">0:00 / 2:00</div>
+    </div>
+
+    <div id="progress"></div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  CONFIG - FUNKY CLAP GROOVE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const CONFIG = {
+            BPM: 108,  // Funky tempo - not too fast, not too slow
+            KEY: 'Eb',
+            LOOP_LENGTH: 64  // 16 bars = 64 beats
+        };
+
+        const NOTES = {
+            'Eb1': 38.89, 'F1': 43.65, 'G1': 49.00, 'Ab1': 51.91, 'Bb1': 58.27,
+            'Eb2': 77.78, 'F2': 87.31, 'G2': 98.00, 'Ab2': 103.83, 'Bb2': 116.54,
+            'C2': 65.41, 'D2': 73.42,
+            'Eb3': 155.56, 'F3': 174.61, 'G3': 196.00, 'Ab3': 207.65, 'Bb3': 233.08,
+            'C3': 130.81, 'D3': 146.83,
+            'Eb4': 311.13, 'F4': 349.23, 'G4': 392.00, 'Ab4': 415.30, 'Bb4': 466.16,
+            'C4': 261.63, 'D4': 293.66
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  AUDIO ENGINE - THICC FUNKY
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            compressor: null,
+            analyser: null,
+            isPlaying: false,
+            thiccness: 0,  // The "cheek clap" intensity meter
+
+            init: async () => {
+                AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = AudioEngine.ctx;
+
+                // Analyser for visuals
+                AudioEngine.analyser = ctx.createAnalyser();
+                AudioEngine.analyser.fftSize = 256;
+
+                // Compression for punch
+                AudioEngine.compressor = ctx.createDynamicsCompressor();
+                AudioEngine.compressor.threshold.value = -6;
+                AudioEngine.compressor.knee.value = 3;
+                AudioEngine.compressor.ratio.value = 8;
+                AudioEngine.compressor.attack.value = 0.003;
+                AudioEngine.compressor.release.value = 0.1;
+
+                // Master volume
+                AudioEngine.master = ctx.createGain();
+                AudioEngine.master.gain.value = 0.75;
+
+                // Bass presence
+                AudioEngine.bassBoost = ctx.createBiquadFilter();
+                AudioEngine.bassBoost.type = 'lowshelf';
+                AudioEngine.bassBoost.frequency.value = 120;
+                AudioEngine.bassBoost.gain.value = 8;
+
+                // Mid scoop for that funky "slap"
+                AudioEngine.midScoop = ctx.createBiquadFilter();
+                AudioEngine.midScoop.type = 'peaking';
+                AudioEngine.midScoop.frequency.value = 800;
+                AudioEngine.midScoop.gain.value = -4;
+                AudioEngine.midScoop.Q.value = 1.5;
+
+                // High presence for snap
+                AudioEngine.highBoost = ctx.createBiquadFilter();
+                AudioEngine.highBoost.type = 'highshelf';
+                AudioEngine.highBoost.frequency.value = 4000;
+                AudioEngine.highBoost.gain.value = 4;
+
+                // Chain it up
+                AudioEngine.bassBoost.connect(AudioEngine.midScoop);
+                AudioEngine.midScoop.connect(AudioEngine.highBoost);
+                AudioEngine.highBoost.connect(AudioEngine.compressor);
+                AudioEngine.compressor.connect(AudioEngine.master);
+                AudioEngine.master.connect(AudioEngine.analyser);
+                AudioEngine.analyser.connect(ctx.destination);
+            },
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // THE CLAP - The star of the show
+            // ═══════════════════════════════════════════════════════════════════════════
+            playClap: (time, velocity = 1.0, type = 'normal') => {
+                const ctx = AudioEngine.ctx;
+
+                // Multiple layered claps for that THICC sound
+                const layers = type === 'big' ? 5 : 3;
+
+                for (let i = 0; i < layers; i++) {
+                    const offset = i * 0.008;  // Slight timing spread
+
+                    // Noise burst
+                    const bufferSize = ctx.sampleRate * (type === 'big' ? 0.15 : 0.08);
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let j = 0; j < bufferSize; j++) {
+                        data[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / bufferSize, 2);
+                    }
+
+                    const noise = ctx.createBufferSource();
+                    noise.buffer = buffer;
+
+                    // Bandpass for that "meat" sound
+                    const bp = ctx.createBiquadFilter();
+                    bp.type = 'bandpass';
+                    bp.frequency.value = 1200 + i * 300;  // Spread frequencies
+                    bp.Q.value = 2;
+
+                    // Body resonance - the "cheek" part
+                    const resonance = ctx.createBiquadFilter();
+                    resonance.type = 'peaking';
+                    resonance.frequency.value = 400;
+                    resonance.gain.value = 6;
+                    resonance.Q.value = 3;
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(velocity * 0.6, time + offset);
+                    env.gain.exponentialRampToValueAtTime(0.001, time + offset + (type === 'big' ? 0.12 : 0.06));
+
+                    noise.connect(bp);
+                    bp.connect(resonance);
+                    resonance.connect(env);
+                    env.connect(AudioEngine.bassBoost);
+
+                    noise.start(time + offset);
+                }
+
+                // Low-end thump for the "clap"
+                const thump = ctx.createOscillator();
+                thump.type = 'sine';
+                thump.frequency.setValueAtTime(180, time);
+                thump.frequency.exponentialRampToValueAtTime(60, time + 0.04);
+
+                const thumpEnv = ctx.createGain();
+                thumpEnv.gain.setValueAtTime(velocity * 0.5, time);
+                thumpEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+                thump.connect(thumpEnv);
+                thumpEnv.connect(AudioEngine.bassBoost);
+                thump.start(time);
+                thump.stop(time + 0.1);
+
+                AudioEngine.thiccness = Math.min(1, AudioEngine.thiccness + 0.4);
+                triggerVisual('clap', velocity, type);
+            },
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // SLAP BASS - Funky as hell
+            // ═══════════════════════════════════════════════════════════════════════════
+            playSlapBass: (note, time, duration, velocity = 1.0) => {
+                const ctx = AudioEngine.ctx;
+                const freq = NOTES[note] || 55;
+
+                // Fundamental - super clean sub
+                const sub = ctx.createOscillator();
+                sub.type = 'sine';
+                sub.frequency.value = freq;
+
+                // Harmonic content - the "slap" attack
+                const slap = ctx.createOscillator();
+                slap.type = 'sawtooth';
+                slap.frequency.value = freq * 2;
+
+                // Pop harmonic
+                const pop = ctx.createOscillator();
+                pop.type = 'triangle';
+                pop.frequency.value = freq * 4;
+
+                // Attack transient - the finger hit
+                const attackBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.02, ctx.sampleRate);
+                const attackData = attackBuffer.getChannelData(0);
+                for (let i = 0; i < attackData.length; i++) {
+                    attackData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / attackData.length, 4);
+                }
+                const attack = ctx.createBufferSource();
+                attack.buffer = attackBuffer;
+
+                const attackFilter = ctx.createBiquadFilter();
+                attackFilter.type = 'bandpass';
+                attackFilter.frequency.value = 2500;
+                attackFilter.Q.value = 3;
+
+                const attackEnv = ctx.createGain();
+                attackEnv.gain.setValueAtTime(velocity * 0.8, time);
+                attackEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.015);
+
+                // Filter sweep for "wah" effect
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(3500, time);
+                filter.frequency.exponentialRampToValueAtTime(200, time + 0.15);
+                filter.Q.value = 4;
+
+                // Envelopes
+                const subEnv = ctx.createGain();
+                subEnv.gain.setValueAtTime(0, time);
+                subEnv.gain.linearRampToValueAtTime(velocity * 0.9, time + 0.005);
+                subEnv.gain.setValueAtTime(velocity * 0.7, time + 0.02);
+                subEnv.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                const slapEnv = ctx.createGain();
+                slapEnv.gain.setValueAtTime(0, time);
+                slapEnv.gain.linearRampToValueAtTime(velocity * 0.6, time + 0.003);
+                slapEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+                const popEnv = ctx.createGain();
+                popEnv.gain.setValueAtTime(0, time);
+                popEnv.gain.linearRampToValueAtTime(velocity * 0.3, time + 0.002);
+                popEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+
+                // Routing
+                sub.connect(subEnv);
+                slap.connect(filter);
+                pop.connect(popEnv);
+                filter.connect(slapEnv);
+                attack.connect(attackFilter);
+                attackFilter.connect(attackEnv);
+
+                subEnv.connect(AudioEngine.bassBoost);
+                slapEnv.connect(AudioEngine.bassBoost);
+                popEnv.connect(AudioEngine.bassBoost);
+                attackEnv.connect(AudioEngine.bassBoost);
+
+                sub.start(time); sub.stop(time + duration + 0.1);
+                slap.start(time); slap.stop(time + 0.1);
+                pop.start(time); pop.stop(time + 0.05);
+                attack.start(time);
+
+                AudioEngine.thiccness = Math.min(1, AudioEngine.thiccness + 0.15);
+                triggerVisual('bass', velocity);
+            },
+
+            // Ghost notes - the funk between the funk
+            playGhost: (note, time, velocity = 0.3) => {
+                const ctx = AudioEngine.ctx;
+                const freq = NOTES[note] || 55;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 800;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(velocity * 0.3, time + 0.005);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+                osc.connect(filter);
+                filter.connect(env);
+                env.connect(AudioEngine.bassBoost);
+
+                osc.start(time);
+                osc.stop(time + 0.1);
+            },
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // DRUMS
+            // ═══════════════════════════════════════════════════════════════════════════
+            playKick: (time, velocity = 1.0) => {
+                const ctx = AudioEngine.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(160, time);
+                osc.frequency.exponentialRampToValueAtTime(40, time + 0.08);
+
+                // Click
+                const click = ctx.createOscillator();
+                click.type = 'triangle';
+                click.frequency.setValueAtTime(1200, time);
+                click.frequency.exponentialRampToValueAtTime(200, time + 0.01);
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(velocity * 0.9, time);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+
+                const clickEnv = ctx.createGain();
+                clickEnv.gain.setValueAtTime(velocity * 0.4, time);
+                clickEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
+
+                osc.connect(env);
+                click.connect(clickEnv);
+                env.connect(AudioEngine.bassBoost);
+                clickEnv.connect(AudioEngine.bassBoost);
+
+                osc.start(time); osc.stop(time + 0.3);
+                click.start(time); click.stop(time + 0.03);
+
+                triggerVisual('kick', velocity);
+            },
+
+            playHat: (time, open = false, velocity = 0.4) => {
+                const ctx = AudioEngine.ctx;
+
+                const duration = open ? 0.15 : 0.03;
+                const bufferSize = ctx.sampleRate * duration;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const hpf = ctx.createBiquadFilter();
+                hpf.type = 'highpass';
+                hpf.frequency.value = 8000;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(velocity, time);
+                env.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                noise.connect(hpf);
+                hpf.connect(env);
+                env.connect(AudioEngine.bassBoost);
+                noise.start(time);
+            },
+
+            // Funky clavinet stab
+            playClav: (notes, time, velocity = 0.6) => {
+                const ctx = AudioEngine.ctx;
+
+                notes.forEach((note, i) => {
+                    const freq = NOTES[note];
+                    if (!freq) return;
+
+                    const osc = ctx.createOscillator();
+                    osc.type = 'square';
+                    osc.frequency.value = freq;
+
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(4000, time);
+                    filter.frequency.exponentialRampToValueAtTime(800, time + 0.1);
+                    filter.Q.value = 3;
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0, time + i * 0.01);
+                    env.gain.linearRampToValueAtTime(velocity * 0.25, time + i * 0.01 + 0.005);
+                    env.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+
+                    osc.connect(filter);
+                    filter.connect(env);
+                    env.connect(AudioEngine.bassBoost);
+
+                    osc.start(time + i * 0.01);
+                    osc.stop(time + 0.2);
+                });
+
+                triggerVisual('clav', velocity);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  COMPOSITION - THE FUNK
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const SEQUENCE = [];
+        let b = 0;  // Beat counter
+
+        const S = 0.25;  // 16th note
+        const E = 0.5;   // 8th note
+        const Q = 1.0;   // Quarter
+        const H = 2.0;   // Half
+
+        // Helper functions
+        function addEvent(beat, type, data = {}) {
+            SEQUENCE.push({ beat, type, ...data });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  BARS 1-4: INTRO - Building the groove
+        // ═══════════════════════════════════════════════════════════════════════════════
+        for (let bar = 0; bar < 4; bar++) {
+            const offset = bar * 4;
+
+            // Kick pattern - 4 on the floor with ghost
+            addEvent(offset + 0, 'kick');
+            addEvent(offset + 1, 'kick');
+            addEvent(offset + 2, 'kick');
+            addEvent(offset + 3, 'kick');
+
+            // Claps on 2 and 4
+            addEvent(offset + 1, 'clap', { velocity: 0.8 });
+            addEvent(offset + 3, 'clap', { velocity: 0.9 });
+
+            // Hats - 16th note groove
+            for (let i = 0; i < 16; i++) {
+                if (i % 4 !== 0) {  // Skip downbeats
+                    addEvent(offset + i * S, 'hat', { velocity: 0.3 + (i % 2) * 0.1 });
+                }
+            }
+
+            // Bass intro - simple groove
+            if (bar >= 2) {
+                addEvent(offset + 0, 'bass', { note: 'Eb2', duration: E });
+                addEvent(offset + 0.75, 'ghost', { note: 'Eb2' });
+                addEvent(offset + 1.5, 'bass', { note: 'G2', duration: S });
+                addEvent(offset + 2, 'bass', { note: 'Ab2', duration: E });
+                addEvent(offset + 3, 'bass', { note: 'Bb2', duration: S });
+                addEvent(offset + 3.5, 'bass', { note: 'Eb2', duration: S });
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  BARS 5-12: MAIN GROOVE - CLAP THEM CHEEKS
+        // ═══════════════════════════════════════════════════════════════════════════════
+        for (let bar = 0; bar < 8; bar++) {
+            const offset = 16 + bar * 4;
+
+            // Kick - syncopated funk
+            addEvent(offset + 0, 'kick');
+            addEvent(offset + 0.75, 'kick', { velocity: 0.6 });
+            addEvent(offset + 1.5, 'kick', { velocity: 0.8 });
+            addEvent(offset + 2.5, 'kick');
+            addEvent(offset + 3, 'kick', { velocity: 0.7 });
+
+            // THE CLAPS - Big on every beat 1.5 and 3.5 for that "cheek clap" rhythm
+            addEvent(offset + 1, 'clap', { velocity: 0.9, type: 'normal' });
+            addEvent(offset + 1.5, 'clap', { velocity: 1.0, type: 'big' });  // CLAP
+            addEvent(offset + 3, 'clap', { velocity: 0.9, type: 'normal' });
+            addEvent(offset + 3.5, 'clap', { velocity: 1.0, type: 'big' });  // THEM CHEEKS
+
+            // Extra clap flams for emphasis
+            if (bar % 2 === 1) {
+                addEvent(offset + 3.75, 'clap', { velocity: 0.6, type: 'normal' });
+            }
+
+            // Hats - funky 16ths with accents
+            for (let i = 0; i < 16; i++) {
+                const accent = (i === 2 || i === 6 || i === 10 || i === 14) ? 0.5 : 0.25;
+                addEvent(offset + i * S, 'hat', { velocity: accent, open: i === 14 });
+            }
+
+            // SLAP BASS - The funk
+            // Eb minor groove
+            addEvent(offset + 0, 'bass', { note: 'Eb2', duration: E, velocity: 1.0 });
+            addEvent(offset + 0.5, 'ghost', { note: 'Eb2' });
+            addEvent(offset + 0.75, 'bass', { note: 'Eb2', duration: S, velocity: 0.7 });
+            addEvent(offset + 1.25, 'bass', { note: 'G2', duration: S, velocity: 0.9 });
+            addEvent(offset + 1.75, 'bass', { note: 'Ab2', duration: S, velocity: 0.8 });
+            addEvent(offset + 2, 'bass', { note: 'Bb2', duration: E, velocity: 1.0 });
+            addEvent(offset + 2.5, 'ghost', { note: 'Bb2' });
+            addEvent(offset + 2.75, 'bass', { note: 'Ab2', duration: S, velocity: 0.7 });
+            addEvent(offset + 3.25, 'bass', { note: 'G2', duration: S, velocity: 0.8 });
+            addEvent(offset + 3.75, 'bass', { note: 'Eb2', duration: S, velocity: 0.9 });
+
+            // Clav stabs on upbeats
+            if (bar % 2 === 0) {
+                addEvent(offset + 0.5, 'clav', { notes: ['Eb4', 'G4', 'Bb4'] });
+                addEvent(offset + 2.5, 'clav', { notes: ['Ab4', 'C4', 'Eb4'] });
+            } else {
+                addEvent(offset + 1.5, 'clav', { notes: ['Bb3', 'D4', 'F4'] });
+                addEvent(offset + 3.5, 'clav', { notes: ['Eb4', 'G4', 'Bb4'] });
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  BARS 13-16: BREAKDOWN - Double time claps
+        // ═══════════════════════════════════════════════════════════════════════════════
+        for (let bar = 0; bar < 4; bar++) {
+            const offset = 48 + bar * 4;
+
+            // Sparse kick
+            addEvent(offset + 0, 'kick');
+            addEvent(offset + 2, 'kick');
+
+            // RAPID CLAPS - Building to finale
+            if (bar < 3) {
+                // 8th note claps
+                for (let i = 0; i < 8; i++) {
+                    addEvent(offset + i * E, 'clap', {
+                        velocity: 0.5 + (i / 16),
+                        type: i % 2 === 0 ? 'normal' : 'big'
+                    });
+                }
+            } else {
+                // Final bar - 16th note clap roll
+                for (let i = 0; i < 16; i++) {
+                    addEvent(offset + i * S, 'clap', {
+                        velocity: 0.4 + (i / 20),
+                        type: i > 12 ? 'big' : 'normal'
+                    });
+                }
+            }
+
+            // Minimal bass - just anchors
+            addEvent(offset + 0, 'bass', { note: 'Eb2', duration: H, velocity: 0.8 });
+
+            // Rising clav
+            if (bar === 2) {
+                addEvent(offset + 2, 'clav', { notes: ['Eb4', 'G4', 'Bb4', 'D4'] });
+                addEvent(offset + 3, 'clav', { notes: ['F4', 'Ab4', 'C4', 'Eb4'] });
+            }
+            if (bar === 3) {
+                addEvent(offset + 3.75, 'clap', { velocity: 1.0, type: 'big' });
+            }
+        }
+
+        // Sort by beat
+        SEQUENCE.sort((a, b) => a.beat - b.beat);
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  VISUAL ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const canvas = document.getElementById('canvas');
+        const c = canvas.getContext('2d');
+        let W, H;
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // Visual state
+        const ripples = [];
+        const particles = [];
+        let flashAlpha = 0;
+        let flashColor = '#ff6b9d';
+        let bassWave = 0;
+        let cheekBounce = 0;
+
+        // Peach emoji bouncing
+        const peaches = [];
+        for (let i = 0; i < 8; i++) {
+            peaches.push({
+                x: W * 0.1 + (W * 0.8 * i / 8),
+                y: H * 0.7,
+                phase: i * 0.5,
+                size: 40 + Math.random() * 20
+            });
+        }
+
+        function triggerVisual(type, velocity, subtype = 'normal') {
+            if (type === 'clap') {
+                flashAlpha = subtype === 'big' ? 0.8 : 0.4;
+                flashColor = subtype === 'big' ? '#ff9a56' : '#ff6b9d';
+                cheekBounce = subtype === 'big' ? 1.5 : 1.0;
+
+                // Ripples from center
+                ripples.push({
+                    x: W / 2,
+                    y: H / 2,
+                    radius: 20,
+                    maxRadius: subtype === 'big' ? 600 : 400,
+                    alpha: 1,
+                    color: flashColor
+                });
+
+                // Particles explosion
+                const count = subtype === 'big' ? 30 : 15;
+                for (let i = 0; i < count; i++) {
+                    const angle = (i / count) * Math.PI * 2;
+                    particles.push({
+                        x: W / 2,
+                        y: H / 2,
+                        vx: Math.cos(angle) * (5 + Math.random() * 10) * velocity,
+                        vy: Math.sin(angle) * (5 + Math.random() * 10) * velocity,
+                        life: 1,
+                        size: 8 + Math.random() * 12,
+                        color: i % 2 === 0 ? '#ff6b9d' : '#ff9a56'
+                    });
+                }
+            } else if (type === 'bass') {
+                bassWave = velocity;
+                ripples.push({
+                    x: W / 2,
+                    y: H * 0.85,
+                    radius: 10,
+                    maxRadius: 300,
+                    alpha: 0.6,
+                    color: '#c44569'
+                });
+            } else if (type === 'kick') {
+                flashAlpha = Math.max(flashAlpha, 0.2);
+                flashColor = '#1a0a2e';
+            } else if (type === 'clav') {
+                // Sparkle effect
+                for (let i = 0; i < 5; i++) {
+                    particles.push({
+                        x: W * 0.3 + Math.random() * W * 0.4,
+                        y: H * 0.3 + Math.random() * H * 0.2,
+                        vx: (Math.random() - 0.5) * 3,
+                        vy: -Math.random() * 3,
+                        life: 1,
+                        size: 4,
+                        color: '#fff'
+                    });
+                }
+            }
+        }
+
+        function draw() {
+            // Clear with trail
+            c.fillStyle = 'rgba(26, 10, 46, 0.15)';
+            c.fillRect(0, 0, W, H);
+
+            // Flash
+            if (flashAlpha > 0) {
+                c.fillStyle = flashColor + Math.floor(flashAlpha * 50).toString(16).padStart(2, '0');
+                c.fillRect(0, 0, W, H);
+                flashAlpha *= 0.85;
+            }
+
+            // Bass wave at bottom
+            if (bassWave > 0.01) {
+                c.save();
+                c.strokeStyle = `rgba(196, 69, 105, ${bassWave * 0.5})`;
+                c.lineWidth = 4;
+                c.beginPath();
+                for (let x = 0; x < W; x += 10) {
+                    const y = H * 0.85 + Math.sin(x * 0.02 + Date.now() * 0.003) * 30 * bassWave;
+                    if (x === 0) c.moveTo(x, y);
+                    else c.lineTo(x, y);
+                }
+                c.stroke();
+                c.restore();
+                bassWave *= 0.92;
+            }
+
+            // Ripples
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const r = ripples[i];
+                r.radius += (r.maxRadius - r.radius) * 0.08;
+                r.alpha *= 0.95;
+
+                c.beginPath();
+                c.strokeStyle = r.color + Math.floor(r.alpha * 200).toString(16).padStart(2, '0');
+                c.lineWidth = 3;
+                c.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+                c.stroke();
+
+                if (r.alpha < 0.01) ripples.splice(i, 1);
+            }
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;  // Gravity
+                p.life -= 0.02;
+
+                c.beginPath();
+                c.fillStyle = p.color + Math.floor(p.life * 255).toString(16).padStart(2, '0');
+                c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                c.fill();
+
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Bouncing peaches 🍑
+            const t = Date.now() * 0.004;
+            peaches.forEach((p, i) => {
+                const bounce = Math.abs(Math.sin(t + p.phase)) * 40 * (1 + cheekBounce * 0.5);
+                const squeeze = 1 + Math.sin(t * 2 + p.phase) * 0.1 * cheekBounce;
+
+                c.save();
+                c.translate(p.x, p.y - bounce);
+                c.scale(1 / squeeze, squeeze);
+                c.font = `${p.size}px serif`;
+                c.textAlign = 'center';
+                c.fillText('🍑', 0, 0);
+                c.restore();
+            });
+            cheekBounce *= 0.9;
+
+            // Audio waveform
+            if (AudioEngine.analyser && AudioEngine.isPlaying) {
+                const bufferLength = AudioEngine.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                AudioEngine.analyser.getByteFrequencyData(dataArray);
+
+                c.beginPath();
+                c.strokeStyle = 'rgba(255, 107, 157, 0.3)';
+                c.lineWidth = 2;
+
+                const barWidth = W / bufferLength;
+                dataArray.forEach((value, i) => {
+                    const x = i * barWidth;
+                    const height = (value / 255) * H * 0.3;
+                    if (i === 0) c.moveTo(x, H - height);
+                    else c.lineTo(x, H - height);
+                });
+                c.stroke();
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SEQUENCER
+        // ═══════════════════════════════════════════════════════════════════════════════
+        let currentBeat = -1;
+        let startTime = 0;
+        let nextEventIdx = 0;
+
+        const sections = [
+            { beat: 0, name: 'GET READY' },
+            { beat: 16, name: '👏 CLAP THEM CHEEKS 👏' },
+            { beat: 48, name: 'BREAKDOWN' },
+            { beat: 60, name: 'FINALE' }
+        ];
+
+        function scheduler() {
+            if (!AudioEngine.isPlaying) return;
+
+            const now = AudioEngine.ctx.currentTime;
+            const elapsed = now - startTime;
+            currentBeat = elapsed * (CONFIG.BPM / 60);
+
+            // Loop
+            if (currentBeat >= CONFIG.LOOP_LENGTH) {
+                startTime = now;
+                currentBeat = 0;
+                nextEventIdx = 0;
+            }
+
+            // Lookahead scheduling
+            while (nextEventIdx < SEQUENCE.length && SEQUENCE[nextEventIdx].beat <= currentBeat + 0.1) {
+                const event = SEQUENCE[nextEventIdx];
+                const playTime = startTime + (event.beat * (60 / CONFIG.BPM));
+
+                switch (event.type) {
+                    case 'kick':
+                        AudioEngine.playKick(playTime, event.velocity || 1.0);
+                        break;
+                    case 'clap':
+                        AudioEngine.playClap(playTime, event.velocity || 1.0, event.type2 || 'normal');
+                        break;
+                    case 'hat':
+                        AudioEngine.playHat(playTime, event.open || false, event.velocity || 0.3);
+                        break;
+                    case 'bass':
+                        AudioEngine.playSlapBass(event.note, playTime, event.duration || 0.5, event.velocity || 1.0);
+                        break;
+                    case 'ghost':
+                        AudioEngine.playGhost(event.note, playTime, event.velocity || 0.3);
+                        break;
+                    case 'clav':
+                        AudioEngine.playClav(event.notes, playTime, event.velocity || 0.6);
+                        break;
+                }
+
+                nextEventIdx++;
+            }
+
+            // Update section display
+            let currentSection = 'GET READY';
+            for (const sec of sections) {
+                if (currentBeat >= sec.beat) currentSection = sec.name;
+            }
+            document.getElementById('section-display').textContent = currentSection;
+
+            // Update time display
+            const totalSeconds = CONFIG.LOOP_LENGTH * 60 / CONFIG.BPM;
+            const currentSeconds = currentBeat * 60 / CONFIG.BPM;
+            const formatTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+            document.getElementById('time-display').textContent = `${formatTime(currentSeconds)} / ${formatTime(totalSeconds)}`;
+
+            // Progress bar
+            document.getElementById('progress').style.width = `${(currentBeat / CONFIG.LOOP_LENGTH) * 100}%`;
+
+            // Thiccness meter
+            AudioEngine.thiccness *= 0.95;
+            document.getElementById('cheek-fill').style.height = `${AudioEngine.thiccness * 100}%`;
+
+            requestAnimationFrame(scheduler);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  CONTROLS
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const overlay = document.getElementById('overlay');
+        const playBtn = document.getElementById('playBtn');
+
+        async function start() {
+            await AudioEngine.init();
+            overlay.classList.add('hidden');
+            AudioEngine.isPlaying = true;
+            startTime = AudioEngine.ctx.currentTime;
+            scheduler();
+        }
+
+        overlay.addEventListener('click', start);
+
+        playBtn.addEventListener('click', async () => {
+            if (!AudioEngine.ctx) {
+                await AudioEngine.init();
+            }
+
+            if (AudioEngine.isPlaying) {
+                AudioEngine.isPlaying = false;
+                playBtn.textContent = '👏 CLAP 👏';
+            } else {
+                AudioEngine.isPlaying = true;
+                startTime = AudioEngine.ctx.currentTime - (currentBeat * 60 / CONFIG.BPM);
+                scheduler();
+                playBtn.textContent = '⏸ PAUSE';
+            }
+        });
+
+        // Start visual loop
+        draw();
+    </script>
+</body>
+
+</html>
