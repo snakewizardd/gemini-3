@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE LAMENT OF ORPHEUS — An Eternal Solo</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0806;
+            overflow: hidden;
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            color: #d4a847;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            background: radial-gradient(ellipse at center, rgba(10, 8, 6, 0.7) 0%, #0a0806 70%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 2s ease;
+            cursor: pointer;
+        }
+
+        #overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 400;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: #d4a847;
+            text-shadow: 0 0 60px rgba(212, 168, 71, 0.5);
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.3rem;
+            font-style: italic;
+            color: #8b6914;
+            letter-spacing: 0.3em;
+            margin-bottom: 3rem;
+        }
+
+        .start-hint {
+            font-size: 0.9rem;
+            color: #4a3d1c;
+            letter-spacing: 0.2em;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        #hud {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        #hud.visible {
+            opacity: 1;
+        }
+
+        .mood-display {
+            font-size: 0.8rem;
+            letter-spacing: 0.4em;
+            color: #c47f17;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .timer {
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            color: #4a3d1c;
+        }
+
+        #pause-hint {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            font-size: 0.7rem;
+            color: #3a2d1c;
+            letter-spacing: 0.15em;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        #pause-hint.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="overlay">
+        <h1>The Lament of Orpheus</h1>
+        <div class="subtitle">An Eternal Solo</div>
+        <div class="start-hint">[ Click anywhere to begin ]</div>
+    </div>
+
+    <div id="hud">
+        <div class="mood-display" id="mood">Awakening</div>
+        <div class="timer" id="timer">0:00</div>
+    </div>
+
+    <div id="pause-hint">ESC to pause</div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════════
+        // THE LAMENT OF ORPHEUS — Infinite Generative Spanish Guitar Solo
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let W, H;
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // MUSICAL CONSTANTS
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        // Standard guitar tuning frequencies (high e to low E)
+        const STRING_FREQS = [329.63, 246.94, 196.00, 146.83, 110.00, 82.41];
+
+        // Phrygian Dominant scale intervals from E
+        const SCALE = [0, 1, 4, 5, 7, 8, 10]; // E F G# A B C D
+
+        // Chord voicings [string, fret] - string 0 = high e
+        const CHORDS = {
+            E:   [[0,0], [1,0], [2,1], [3,2], [4,2], [5,0]],
+            F:   [[0,1], [1,1], [2,2], [3,3], [4,3], [5,1]],
+            Am:  [[0,0], [1,1], [2,2], [3,2], [4,0]],
+            G:   [[0,3], [1,0], [2,0], [3,0], [4,2], [5,3]],
+            Dm:  [[0,1], [1,3], [2,2], [3,0]],
+            B7:  [[0,2], [1,0], [2,2], [3,1], [4,2]],
+        };
+
+        // Andalusian cadence progression
+        const PROGRESSION = ['Am', 'G', 'F', 'E'];
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AUDIO ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        const Audio = {
+            ctx: null,
+            master: null,
+            reverb: null,
+            compressor: null,
+            isPlaying: false,
+            activeVoices: 0,
+            MAX_VOICES: 24,
+
+            async init() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Compressor
+                this.compressor = this.ctx.createDynamicsCompressor();
+                this.compressor.threshold.value = -18;
+                this.compressor.knee.value = 20;
+                this.compressor.ratio.value = 4;
+                this.compressor.attack.value = 0.005;
+                this.compressor.release.value = 0.2;
+
+                // Master volume
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.5;
+
+                // Reverb
+                this.reverb = this.ctx.createConvolver();
+                this.reverb.buffer = await this.createReverb(2.8, 2.0);
+
+                const reverbGain = this.ctx.createGain();
+                reverbGain.gain.value = 0.35;
+
+                // Routing
+                this.master.connect(this.compressor);
+                this.compressor.connect(this.ctx.destination);
+
+                this.master.connect(this.reverb);
+                this.reverb.connect(reverbGain);
+                reverbGain.connect(this.ctx.destination);
+            },
+
+            async createReverb(duration, decay) {
+                const rate = this.ctx.sampleRate;
+                const length = rate * duration;
+                const buffer = this.ctx.createBuffer(2, length, rate);
+                const L = buffer.getChannelData(0);
+                const R = buffer.getChannelData(1);
+
+                for (let i = 0; i < length; i++) {
+                    const env = Math.pow(1 - i / length, decay);
+                    L[i] = (Math.random() * 2 - 1) * env;
+                    R[i] = (Math.random() * 2 - 1) * env;
+                }
+                return buffer;
+            },
+
+            // Play a single guitar note
+            playNote(string, fret, startTime, duration = 1.5, velocity = 0.4) {
+                if (!this.ctx || this.activeVoices >= this.MAX_VOICES) return;
+                if (string < 0 || string > 5) return;
+
+                this.activeVoices++;
+                const freq = STRING_FREQS[string] * Math.pow(2, fret / 12);
+                const isBass = string >= 3;
+                const now = Math.max(this.ctx.currentTime, startTime);
+
+                // Humanize
+                const timeJitter = (Math.random() - 0.5) * 0.012;
+                const velJitter = (Math.random() - 0.5) * 0.08;
+                const t = now + timeJitter;
+                const vel = Math.max(0.1, Math.min(0.7, velocity + velJitter));
+
+                // Oscillators for nylon tone
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const osc3 = this.ctx.createOscillator();
+
+                osc1.type = 'triangle';
+                osc2.type = 'sine';
+                osc3.type = 'sine';
+
+                osc1.frequency.value = freq;
+                osc2.frequency.value = freq * 2;
+                osc3.frequency.value = freq * 3;
+
+                const g1 = this.ctx.createGain();
+                const g2 = this.ctx.createGain();
+                const g3 = this.ctx.createGain();
+
+                g1.gain.value = 0.55;
+                g2.gain.value = isBass ? 0.2 : 0.28;
+                g3.gain.value = isBass ? 0.08 : 0.12;
+
+                // Filter for string damping
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.Q.value = 1;
+                filter.frequency.setValueAtTime(isBass ? 1600 : 2400, t);
+                filter.frequency.exponentialRampToValueAtTime(isBass ? 250 : 350, t + duration * 0.5);
+
+                // Amplitude envelope
+                const amp = this.ctx.createGain();
+                const attack = isBass ? 0.01 : 0.006;
+                amp.gain.setValueAtTime(0, t);
+                amp.gain.linearRampToValueAtTime(vel, t + attack);
+                amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+                // Mix
+                const mix = this.ctx.createGain();
+                mix.gain.value = 1;
+
+                osc1.connect(g1); g1.connect(mix);
+                osc2.connect(g2); g2.connect(mix);
+                osc3.connect(g3); g3.connect(mix);
+                mix.connect(filter);
+                filter.connect(amp);
+                amp.connect(this.master);
+
+                const stopTime = t + duration + 0.05;
+
+                // Cleanup
+                const self = this;
+                osc1.onended = () => {
+                    self.activeVoices = Math.max(0, self.activeVoices - 1);
+                    try {
+                        osc1.disconnect(); osc2.disconnect(); osc3.disconnect();
+                        g1.disconnect(); g2.disconnect(); g3.disconnect();
+                        mix.disconnect(); filter.disconnect(); amp.disconnect();
+                    } catch(e) {}
+                };
+
+                osc1.start(t); osc1.stop(stopTime);
+                osc2.start(t); osc2.stop(stopTime);
+                osc3.start(t); osc3.stop(stopTime);
+
+                // Trigger visual
+                Visuals.pluckString(string, vel);
+
+                return t;
+            },
+
+            // Play harmonic (bell tone)
+            playHarmonic(string, fret, startTime, duration = 3.0, velocity = 0.25) {
+                if (!this.ctx || this.activeVoices >= this.MAX_VOICES) return;
+                this.activeVoices++;
+
+                let ratio = 2;
+                if (fret === 7) ratio = 3;
+                if (fret === 5) ratio = 4;
+
+                const freq = STRING_FREQS[string] * ratio;
+                const t = Math.max(this.ctx.currentTime, startTime);
+
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+
+                const amp = this.ctx.createGain();
+                amp.gain.setValueAtTime(0, t);
+                amp.gain.linearRampToValueAtTime(velocity * 0.35, t + 0.02);
+                amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+                osc.connect(amp);
+                amp.connect(this.master);
+
+                const self = this;
+                osc.onended = () => {
+                    self.activeVoices = Math.max(0, self.activeVoices - 1);
+                    try { osc.disconnect(); amp.disconnect(); } catch(e) {}
+                };
+
+                osc.start(t);
+                osc.stop(t + duration + 0.05);
+
+                Visuals.pluckString(string, velocity, true);
+            },
+
+            // Percussive golpe
+            playGolpe(startTime, velocity = 0.4) {
+                if (!this.ctx || this.activeVoices >= this.MAX_VOICES) return;
+                this.activeVoices++;
+
+                const t = Math.max(this.ctx.currentTime, startTime);
+                const len = this.ctx.sampleRate * 0.06;
+                const buffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+
+                for (let i = 0; i < len; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 6);
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 700;
+                filter.Q.value = 1.5;
+
+                const amp = this.ctx.createGain();
+                amp.gain.setValueAtTime(velocity * 0.25, t);
+                amp.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+                noise.connect(filter);
+                filter.connect(amp);
+                amp.connect(this.master);
+
+                const self = this;
+                noise.onended = () => {
+                    self.activeVoices = Math.max(0, self.activeVoices - 1);
+                    try { noise.disconnect(); filter.disconnect(); amp.disconnect(); } catch(e) {}
+                };
+
+                noise.start(t);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // COMPOSER - Phrase Generation
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        const Composer = {
+            bpm: 68,
+            beatDuration: 60 / 68,
+            scheduledUntil: 0,
+            chordIndex: 0,
+            phraseCount: 0,
+            mood: 'LONGING',
+            intensity: 0.35,
+            schedulerId: null,
+
+            // Convert beat offset to absolute time
+            beatTime(beatOffset) {
+                return this.scheduledUntil + beatOffset * this.beatDuration;
+            },
+
+            // Get current chord from progression
+            currentChord() {
+                return CHORDS[PROGRESSION[this.chordIndex]];
+            },
+
+            advanceChord() {
+                this.chordIndex = (this.chordIndex + 1) % PROGRESSION.length;
+            },
+
+            // ─────────────────────────────────────────────────────────────────────
+            // PHRASE GENERATORS
+            // ─────────────────────────────────────────────────────────────────────
+
+            // Slow contemplative arpeggio
+            playArpeggio() {
+                const chord = this.currentChord();
+                const ascending = Math.random() > 0.4;
+                const notes = ascending ? [...chord] : [...chord].reverse();
+                const spacing = 0.22 + Math.random() * 0.08;
+
+                notes.forEach((note, i) => {
+                    Audio.playNote(note[0], note[1], this.beatTime(i * spacing), 2.2, 0.28);
+                });
+
+                this.advanceChord();
+                return notes.length * spacing + 0.8;
+            },
+
+            // Bold rasgueado chord flourish
+            playRasgueado() {
+                const chord = this.currentChord();
+
+                // Quick strum across strings
+                chord.forEach((note, i) => {
+                    Audio.playNote(note[0], note[1], this.beatTime(i * 0.025), 1.8, 0.5);
+                });
+
+                // Golpe accent
+                Audio.playGolpe(this.beatTime(0.3), 0.45);
+
+                this.advanceChord();
+                return 1.6;
+            },
+
+            // Melodic falseta run
+            playFalseta() {
+                const startFret = Math.floor(Math.random() * 5);
+                const length = 5 + Math.floor(Math.random() * 3);
+                const ascending = Math.random() > 0.35;
+                const spacing = 0.1 + Math.random() * 0.04;
+
+                for (let i = 0; i < length; i++) {
+                    const idx = ascending ? i : (length - 1 - i);
+                    const scaleDegree = (startFret + idx) % SCALE.length;
+                    const fret = SCALE[scaleDegree];
+                    const string = fret > 7 ? 0 : 1;
+                    const actualFret = fret > 12 ? fret - 12 : fret;
+
+                    Audio.playNote(string, actualFret, this.beatTime(i * spacing), 0.6, 0.32);
+                }
+
+                return length * spacing + 0.6;
+            },
+
+            // Tremolo - sustained melody with bass
+            playTremolo() {
+                const bassFret = [0, 0, 1, 0][this.chordIndex];
+                const bassString = this.chordIndex < 2 ? 4 : 5;
+                const melodyFret = [0, 1, 3, 5][Math.floor(Math.random() * 4)];
+                const duration = 1.8 + Math.random() * 0.6;
+
+                // Bass note
+                Audio.playNote(bassString, bassFret, this.beatTime(0), duration + 0.5, 0.32);
+
+                // Tremolo notes - gentle, not frantic
+                const spacing = 0.14;
+                const count = Math.floor(duration / spacing);
+
+                for (let i = 0; i < count; i++) {
+                    const vel = 0.22 + Math.sin(i * 0.4) * 0.04;
+                    Audio.playNote(0, melodyFret, this.beatTime(0.15 + i * spacing), 0.18, vel);
+                }
+
+                return duration + 0.7;
+            },
+
+            // Soft response phrase
+            playRespuesta() {
+                const chord = this.currentChord();
+                const notes = [...chord].reverse().slice(0, 4);
+
+                notes.forEach((note, i) => {
+                    Audio.playNote(note[0], note[1], this.beatTime(i * 0.28), 2.5, 0.22);
+                });
+
+                // Melodic sigh - descending semitone
+                Audio.playNote(1, 1, this.beatTime(1.4), 1.2, 0.26);
+                Audio.playNote(1, 0, this.beatTime(1.9), 2.0, 0.22);
+
+                return 2.8;
+            },
+
+            // Harmonic bell tones
+            playHarmonics() {
+                const frets = [12, 7, 12, 5];
+                const strings = [0, 1, 2, 0];
+
+                frets.forEach((fret, i) => {
+                    Audio.playHarmonic(strings[i], fret, this.beatTime(i * 0.5), 3.5, 0.22);
+                });
+
+                return 2.5;
+            },
+
+            // Silence - breathing space
+            playSilence() {
+                // Maybe one fading note
+                if (Math.random() > 0.4) {
+                    Audio.playNote(1, 0, this.beatTime(0), 3.5, 0.18);
+                }
+                return 2.0 + Math.random() * 1.5;
+            },
+
+            // ─────────────────────────────────────────────────────────────────────
+            // PHRASE SELECTION
+            // ─────────────────────────────────────────────────────────────────────
+
+            selectPhrase() {
+                const r = Math.random();
+
+                // Weight based on intensity
+                if (this.intensity > 0.6) {
+                    // High energy
+                    if (r < 0.25) return 'RASGUEADO';
+                    if (r < 0.55) return 'FALSETA';
+                    if (r < 0.75) return 'TREMOLO';
+                    return 'ARPEGGIO';
+                } else if (this.intensity < 0.3) {
+                    // Contemplative
+                    if (r < 0.35) return 'ARPEGGIO';
+                    if (r < 0.55) return 'RESPUESTA';
+                    if (r < 0.75) return 'HARMONICS';
+                    return 'SILENCE';
+                } else {
+                    // Balanced
+                    if (r < 0.2) return 'RASGUEADO';
+                    if (r < 0.4) return 'FALSETA';
+                    if (r < 0.55) return 'TREMOLO';
+                    if (r < 0.75) return 'ARPEGGIO';
+                    if (r < 0.9) return 'RESPUESTA';
+                    return 'SILENCE';
+                }
+            },
+
+            generatePhrase() {
+                const phraseType = this.selectPhrase();
+                let duration;
+
+                switch (phraseType) {
+                    case 'ARPEGGIO': duration = this.playArpeggio(); break;
+                    case 'RASGUEADO': duration = this.playRasgueado(); break;
+                    case 'FALSETA': duration = this.playFalseta(); break;
+                    case 'TREMOLO': duration = this.playTremolo(); break;
+                    case 'RESPUESTA': duration = this.playRespuesta(); break;
+                    case 'HARMONICS': duration = this.playHarmonics(); break;
+                    case 'SILENCE': duration = this.playSilence(); break;
+                    default: duration = this.playArpeggio();
+                }
+
+                return duration;
+            },
+
+            // ─────────────────────────────────────────────────────────────────────
+            // MAIN SCHEDULER
+            // ─────────────────────────────────────────────────────────────────────
+
+            schedule() {
+                if (!Audio.isPlaying) return;
+
+                const now = Audio.ctx.currentTime;
+                const lookAhead = 1.0; // Schedule 1 second ahead
+
+                // Only schedule if we need to
+                if (this.scheduledUntil < now + lookAhead) {
+                    // If we've fallen behind, catch up
+                    if (this.scheduledUntil < now) {
+                        this.scheduledUntil = now + 0.1;
+                    }
+
+                    // Generate one phrase
+                    const phraseDuration = this.generatePhrase();
+                    this.scheduledUntil += phraseDuration * this.beatDuration;
+                    this.phraseCount++;
+
+                    // Evolve intensity in waves
+                    const wave = Math.sin(this.phraseCount * 0.12) * 0.3;
+                    this.intensity = 0.4 + wave;
+                    this.intensity = Math.max(0.15, Math.min(0.85, this.intensity));
+
+                    // Update mood every 6 phrases
+                    if (this.phraseCount % 6 === 0) {
+                        this.updateMood();
+                    }
+
+                    // Rubato - tempo breathing
+                    const rubato = Math.sin(this.phraseCount * 0.2) * 6;
+                    this.bpm = 68 + rubato + (this.intensity * 10);
+                    this.beatDuration = 60 / this.bpm;
+                }
+
+                this.schedulerId = setTimeout(() => this.schedule(), 100);
+            },
+
+            updateMood() {
+                if (this.intensity > 0.65) {
+                    this.mood = 'FIRE';
+                } else if (this.intensity > 0.45) {
+                    this.mood = Math.random() > 0.5 ? 'TRANSCENDENCE' : 'LONGING';
+                } else if (this.intensity < 0.25) {
+                    this.mood = 'PEACE';
+                } else {
+                    this.mood = 'LONGING';
+                }
+                document.getElementById('mood').textContent = 
+                    this.mood.charAt(0) + this.mood.slice(1).toLowerCase();
+            },
+
+            start() {
+                this.scheduledUntil = Audio.ctx.currentTime + 0.3;
+                this.schedule();
+            },
+
+            stop() {
+                if (this.schedulerId) {
+                    clearTimeout(this.schedulerId);
+                    this.schedulerId = null;
+                }
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // VISUALS
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        const Visuals = {
+            strings: [],
+            particles: [],
+            MAX_PARTICLES: 60,
+            animFrameId: null,
+
+            init() {
+                this.strings = [];
+                const centerY = H * 0.5;
+                const spacing = H * 0.055;
+
+                for (let i = 0; i < 6; i++) {
+                    this.strings.push({
+                        y: centerY + (i - 2.5) * spacing,
+                        amplitude: 0,
+                        velocity: 0,
+                        brightness: 0,
+                        tension: 0.07 + i * 0.008
+                    });
+                }
+
+                // Pre-allocate particles
+                this.particles = [];
+                for (let i = 0; i < this.MAX_PARTICLES; i++) {
+                    this.particles.push({ active: false });
+                }
+            },
+
+            pluckString(stringIdx, force, isHarmonic = false) {
+                if (!this.strings[stringIdx]) return;
+
+                const s = this.strings[stringIdx];
+                s.amplitude = force * 18;
+                s.velocity = 0;
+                s.brightness = isHarmonic ? 1.3 : 1.0;
+
+                // Spawn particles
+                const count = isHarmonic ? 6 : 4;
+                for (let i = 0; i < count; i++) {
+                    this.spawnParticle(
+                        W * 0.12 + Math.random() * W * 0.15,
+                        s.y,
+                        force,
+                        isHarmonic
+                    );
+                }
+            },
+
+            spawnParticle(x, y, force, silver = false) {
+                // Find inactive particle
+                let p = this.particles.find(p => !p.active);
+                if (!p) p = this.particles[0]; // Reuse oldest
+
+                p.active = true;
+                p.x = x;
+                p.y = y;
+                p.vx = (Math.random() - 0.5) * 1.5;
+                p.vy = -(Math.random() * 1.5 + 0.8) * force;
+                p.life = 1.0;
+                p.size = Math.max(0.5, 1 + Math.random() * 1.5 * force);
+                p.silver = silver;
+            },
+
+            render() {
+                if (!Audio.isPlaying) return;
+
+                // Fade trail
+                ctx.fillStyle = 'rgba(10, 8, 6, 0.12)';
+                ctx.fillRect(0, 0, W, H);
+
+                // Warm glow based on intensity
+                const glow = 0.02 + Composer.intensity * 0.04;
+                const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W * 0.6);
+                grad.addColorStop(0, `rgba(212, 168, 71, ${glow})`);
+                grad.addColorStop(0.6, `rgba(139, 94, 20, ${glow * 0.25})`);
+                grad.addColorStop(1, 'transparent');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+
+                // Draw strings
+                this.strings.forEach(s => {
+                    // Physics
+                    const force = -s.tension * s.amplitude;
+                    s.velocity += force;
+                    s.velocity *= 0.95;
+                    s.amplitude += s.velocity;
+                    s.brightness *= 0.96;
+
+                    // Ambient sway
+                    s.amplitude += Math.sin(Date.now() * 0.0015 + s.y * 0.01) * 0.15;
+
+                    // Draw
+                    const alpha = 0.12 + s.brightness * 0.55;
+                    const hue = 42 + s.brightness * 8;
+                    const lightness = 48 + s.brightness * 22;
+
+                    ctx.strokeStyle = `hsla(${hue}, 75%, ${lightness}%, ${alpha})`;
+                    ctx.lineWidth = 1 + s.brightness * 1.5;
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, s.y);
+
+                    for (let x = 0; x <= W; x += 25) {
+                        const env = Math.sin((x / W) * Math.PI);
+                        const vib = Math.sin(Date.now() * 0.018 + x * 0.04) * s.amplitude * env;
+                        ctx.lineTo(x, s.y + vib);
+                    }
+                    ctx.stroke();
+
+                    // Glow when bright
+                    if (s.brightness > 0.25) {
+                        ctx.shadowBlur = 12 * s.brightness;
+                        ctx.shadowColor = '#d4a847';
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+                });
+
+                // Draw particles
+                this.particles.forEach(p => {
+                    if (!p.active) return;
+
+                    p.x += p.vx + Math.sin(Date.now() * 0.002 + p.y * 0.008) * 0.2;
+                    p.y += p.vy;
+                    p.vy += 0.015;
+                    p.life -= 0.012;
+
+                    if (p.life <= 0) {
+                        p.active = false;
+                        return;
+                    }
+
+                    const color = p.silver
+                        ? `rgba(192, 192, 192, ${p.life * 0.7})`
+                        : `hsla(42, 75%, 60%, ${p.life * 0.6})`;
+
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    const size = Math.max(0.1, p.size * p.life);
+                    ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                this.animFrameId = requestAnimationFrame(() => this.render());
+            },
+
+            start() {
+                this.init();
+                this.render();
+            },
+
+            stop() {
+                if (this.animFrameId) {
+                    cancelAnimationFrame(this.animFrameId);
+                    this.animFrameId = null;
+                }
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // UI CONTROLS
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        let startTimestamp = 0;
+        let timerFrameId = null;
+
+        function updateTimer() {
+            if (!Audio.isPlaying) return;
+
+            const elapsed = Math.floor((Date.now() - startTimestamp) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            document.getElementById('timer').textContent = 
+                `${mins}:${secs.toString().padStart(2, '0')}`;
+
+            timerFrameId = requestAnimationFrame(updateTimer);
+        }
+
+        async function start() {
+            document.getElementById('overlay').classList.add('hidden');
+
+            await Audio.init();
+            if (Audio.ctx.state === 'suspended') {
+                await Audio.ctx.resume();
+            }
+
+            Audio.isPlaying = true;
+            startTimestamp = Date.now();
+
+            Visuals.start();
+            Composer.start();
+            updateTimer();
+
+            document.getElementById('hud').classList.add('visible');
+            document.getElementById('pause-hint').classList.add('visible');
+        }
+
+        function togglePause() {
+            if (!Audio.ctx) return;
+
+            if (Audio.isPlaying) {
+                Audio.isPlaying = false;
+                Audio.ctx.suspend();
+                Composer.stop();
+                Visuals.stop();
+                if (timerFrameId) cancelAnimationFrame(timerFrameId);
+
+                document.getElementById('overlay').classList.remove('hidden');
+                document.querySelector('.start-hint').textContent = '[ Click to resume ]';
+            } else {
+                Audio.isPlaying = true;
+                Audio.ctx.resume();
+                Composer.start();
+                Visuals.start();
+                updateTimer();
+
+                document.getElementById('overlay').classList.add('hidden');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('overlay').addEventListener('click', () => {
+            if (!Audio.ctx) {
+                start();
+            } else {
+                togglePause();
+            }
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') togglePause();
+        });
+
+        window.addEventListener('resize', () => {
+            resize();
+            Visuals.init();
+        });
+
+        // Initial visual setup
+        Visuals.init();
+
+    </script>
+</body>
+
+</html>
