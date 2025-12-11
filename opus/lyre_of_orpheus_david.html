@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE LYRE OF ORPHEUS & DAVID — Eternal Strings of Heaven</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+        background: linear-gradient(180deg, #0a0612 0%, #1a0a1f 50%, #0d0815 100%);
+        min-height: 100vh;
+        overflow: hidden;
+        font-family: 'Cormorant Garamond', Georgia, serif;
+        color: #e8d5b7;
+    }
+    
+    canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+    
+    #overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 100;
+        background: radial-gradient(ellipse at center, rgba(26, 10, 31, 0.85) 0%, rgba(10, 6, 18, 0.98) 70%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: opacity 2.5s ease;
+    }
+    
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+    
+    h1 {
+        font-size: clamp(2rem, 5vw, 3.8rem);
+        font-weight: 300;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+        background: linear-gradient(135deg, #ffd700 0%, #e8d5b7 30%, #ffd700 50%, #c9a227 70%, #ffd700 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 0.3rem;
+        animation: shimmer 4s ease-in-out infinite;
+    }
+    
+    @keyframes shimmer {
+        0%, 100% { filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.3)); }
+        50% { filter: drop-shadow(0 0 40px rgba(255, 215, 0, 0.6)); }
+    }
+    
+    .subtitle {
+        font-size: clamp(1rem, 2vw, 1.4rem);
+        font-style: italic;
+        color: #8b7355;
+        letter-spacing: 0.4em;
+        margin-bottom: 2rem;
+    }
+    
+    .verse {
+        max-width: 600px;
+        text-align: center;
+        font-size: 1.1rem;
+        line-height: 1.8;
+        color: #a08060;
+        font-style: italic;
+        margin-bottom: 2.5rem;
+        padding: 0 20px;
+    }
+    
+    .start-hint {
+        font-size: 0.85rem;
+        color: #5a4a3a;
+        letter-spacing: 0.25em;
+        animation: breathe 3s ease-in-out infinite;
+    }
+    
+    @keyframes breathe {
+        0%, 100% { opacity: 0.4; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.02); }
+    }
+    
+    #hud {
+        position: fixed;
+        bottom: 25px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        text-align: center;
+        opacity: 0;
+        transition: opacity 1.5s ease;
+    }
+    
+    #hud.visible { opacity: 1; }
+    
+    .mood-display {
+        font-size: 0.75rem;
+        letter-spacing: 0.5em;
+        color: #c9a227;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+    
+    .timer {
+        font-size: 0.65rem;
+        letter-spacing: 0.2em;
+        color: #5a4a3a;
+    }
+    
+    #string-display {
+        position: fixed;
+        top: 25px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1.8rem;
+        font-weight: 300;
+        color: #ffd700;
+        letter-spacing: 0.15em;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        text-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+    }
+    
+    #pause-hint {
+        position: fixed;
+        top: 20px;
+        right: 25px;
+        font-size: 0.65rem;
+        color: #3a2a1a;
+        letter-spacing: 0.15em;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 1s ease;
+    }
+    
+    #pause-hint.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="overlay">
+    <h1>The Lyre of Orpheus & David</h1>
+    <div class="subtitle">Eternal Strings of Heaven</div>
+    <div class="verse">
+        "And David took a harp, and played with his hand..."<br>
+        "...so Orpheus led Eurydice from the depths,<br>
+        his lyre weeping notes that moved the very stones."
+    </div>
+    <div class="start-hint">[ Touch to Awaken the Strings ]</div>
+</div>
+
+<div id="string-display"></div>
+
+<div id="hud">
+    <div class="mood-display" id="mood">Awakening</div>
+    <div class="timer" id="timer">∞</div>
+</div>
+
+<div id="pause-hint">SPACE to pause</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LYRE OF ORPHEUS & DAVID — Infinite Generative Harp/Lyre
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MUSICAL CONSTANTS — Ancient Modes & Scales
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const LYRE_STRINGS = [
+    196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 349.23,
+    392.00, 440.00, 493.88, 523.25, 587.33, 659.26
+];
+
+const MODES = {
+    DORIAN: [0, 2, 3, 5, 7, 9, 10],
+    PHRYGIAN: [0, 1, 3, 5, 7, 8, 10],
+    LYDIAN: [0, 2, 4, 6, 7, 9, 11],
+    MIXOLYDIAN: [0, 2, 4, 5, 7, 9, 10],
+    AEOLIAN: [0, 2, 3, 5, 7, 8, 10],
+};
+
+const CHORD_PATTERNS = {
+    'Am': [0, 2, 4, 7, 9],
+    'Em': [1, 4, 6, 8, 11],
+    'C':  [3, 5, 7, 10, 12],
+    'G':  [0, 2, 4, 7, 11],
+    'Dm': [2, 5, 7, 9, 12],
+    'F':  [3, 5, 8, 10, 12],
+};
+
+const PROGRESSIONS = [
+    ['Am', 'Em', 'G', 'C'],
+    ['Am', 'F', 'C', 'G'],
+    ['Em', 'Am', 'Dm', 'G'],
+    ['C', 'Am', 'F', 'G'],
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE — Ethereal Harp/Lyre Synthesis
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const Audio = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    isPlaying: false,
+    activeVoices: 0,
+    MAX_VOICES: 32,
+    
+    async init() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -20;
+        this.compressor.knee.value = 25;
+        this.compressor.ratio.value = 4;
+        this.compressor.attack.value = 0.003;
+        this.compressor.release.value = 0.25;
+        
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.6;
+        
+        this.reverb = this.ctx.createConvolver();
+        this.reverb.buffer = await this.createHallReverb(4.0, 2.5);
+        
+        const reverbGain = this.ctx.createGain();
+        reverbGain.gain.value = 0.45;
+        
+        this.delay = this.ctx.createDelay(2.0);
+        this.delay.delayTime.value = 0.375;
+        
+        const delayFeedback = this.ctx.createGain();
+        delayFeedback.gain.value = 0.35;
+        
+        const delayGain = this.ctx.createGain();
+        delayGain.gain.value = 0.25;
+        
+        const delayFilter = this.ctx.createBiquadFilter();
+        delayFilter.type = 'highpass';
+        delayFilter.frequency.value = 400;
+        
+        this.master.connect(this.compressor);
+        this.compressor.connect(this.ctx.destination);
+        
+        this.master.connect(this.reverb);
+        this.reverb.connect(reverbGain);
+        reverbGain.connect(this.ctx.destination);
+        
+        this.master.connect(delayFilter);
+        delayFilter.connect(this.delay);
+        this.delay.connect(delayFeedback);
+        delayFeedback.connect(this.delay);
+        this.delay.connect(delayGain);
+        delayGain.connect(this.ctx.destination);
+    },
+    
+    async createHallReverb(duration, decay) {
+        const rate = this.ctx.sampleRate;
+        const length = rate * duration;
+        const buffer = this.ctx.createBuffer(2, length, rate);
+        const L = buffer.getChannelData(0);
+        const R = buffer.getChannelData(1);
+        
+        for (let i = 0; i < length; i++) {
+            const t = i / length;
+            const earlyReflections = i < rate * 0.08 ? 1.2 : 1.0;
+            const env = Math.pow(1 - t, decay) * earlyReflections;
+            L[i] = (Math.random() * 2 - 1) * env;
+            R[i] = (Math.random() * 2 - 1) * env * 0.95;
+        }
+        return buffer;
+    },
+    
+    playString(stringIdx, startTime, duration = 3.5, velocity = 0.4, isHarmonic = false) {
+        if (!this.ctx || this.activeVoices >= this.MAX_VOICES) return;
+        if (stringIdx < 0 || stringIdx >= LYRE_STRINGS.length) return;
+        
+        this.activeVoices++;
+        const freq = LYRE_STRINGS[stringIdx];
+        const now = Math.max(this.ctx.currentTime, startTime);
+        
+        const timeJitter = (Math.random() - 0.5) * 0.008;
+        const velJitter = (Math.random() - 0.5) * 0.06;
+        const t = now + timeJitter;
+        const vel = Math.max(0.08, Math.min(0.6, velocity + velJitter));
+        
+        if (isHarmonic) {
+            this.playHarmonic(freq, t, duration, vel);
+            return;
+        }
+        
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const osc3 = this.ctx.createOscillator();
+        const osc4 = this.ctx.createOscillator();
+        
+        osc1.type = 'triangle';
+        osc2.type = 'sine';
+        osc3.type = 'sine';
+        osc4.type = 'sine';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq * 2;
+        osc3.frequency.value = freq * 3;
+        osc4.frequency.value = freq * 4;
+        
+        osc2.detune.value = 2;
+        osc3.detune.value = -3;
+        
+        const g1 = this.ctx.createGain();
+        const g2 = this.ctx.createGain();
+        const g3 = this.ctx.createGain();
+        const g4 = this.ctx.createGain();
+        
+        g1.gain.value = 0.5;
+        g2.gain.value = 0.25;
+        g3.gain.value = 0.12;
+        g4.gain.value = 0.06;
+        
+        const body = this.ctx.createBiquadFilter();
+        body.type = 'peaking';
+        body.frequency.value = freq * 1.5;
+        body.Q.value = 2;
+        body.gain.value = 3;
+        
+        const damping = this.ctx.createBiquadFilter();
+        damping.type = 'lowpass';
+        damping.Q.value = 0.7;
+        damping.frequency.setValueAtTime(freq > 400 ? 3500 : 4500, t);
+        damping.frequency.exponentialRampToValueAtTime(freq > 400 ? 400 : 600, t + duration * 0.7);
+        
+        const amp = this.ctx.createGain();
+        amp.gain.setValueAtTime(0, t);
+        amp.gain.linearRampToValueAtTime(vel, t + 0.003);
+        amp.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        
+        const mix = this.ctx.createGain();
+        mix.gain.value = 1;
+        
+        osc1.connect(g1); g1.connect(mix);
+        osc2.connect(g2); g2.connect(mix);
+        osc3.connect(g3); g3.connect(mix);
+        osc4.connect(g4); g4.connect(mix);
+        
+        mix.connect(body);
+        body.connect(damping);
+        damping.connect(amp);
+        amp.connect(this.master);
+        
+        this.createPluckNoise(t, vel * 0.15);
+        
+        const stopTime = t + duration + 0.1;
+        
+        const self = this;
+        osc1.onended = () => {
+            self.activeVoices = Math.max(0, self.activeVoices - 1);
+            try {
+                osc1.disconnect(); osc2.disconnect(); osc3.disconnect(); osc4.disconnect();
+                g1.disconnect(); g2.disconnect(); g3.disconnect(); g4.disconnect();
+                mix.disconnect(); body.disconnect(); damping.disconnect(); amp.disconnect();
+            } catch(e) {}
+        };
+        
+        osc1.start(t); osc1.stop(stopTime);
+        osc2.start(t); osc2.stop(stopTime);
+        osc3.start(t); osc3.stop(stopTime);
+        osc4.start(t); osc4.stop(stopTime);
+        
+        Visuals.pluckString(stringIdx, vel, false);
+        return t;
+    },
+    
+    createPluckNoise(time, velocity) {
+        const ctx = this.ctx;
+        const len = ctx.sampleRate * 0.025;
+        const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        
+        for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 8);
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 2500;
+        filter.Q.value = 1.5;
+        
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(velocity, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 0.025);
+        
+        noise.connect(filter);
+        filter.connect(env);
+        env.connect(this.master);
+        
+        noise.start(time);
+    },
+    
+    playHarmonic(freq, time, duration = 5.0, velocity = 0.25) {
+        if (this.activeVoices >= this.MAX_VOICES) return;
+        this.activeVoices++;
+        
+        const ctx = this.ctx;
+        const harmonicFreq = freq * 2;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = harmonicFreq;
+        
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 4;
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 2;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(velocity * 0.4, time + 0.05);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(amp);
+        amp.connect(this.master);
+        
+        const self = this;
+        osc.onended = () => {
+            self.activeVoices = Math.max(0, self.activeVoices - 1);
+            try { osc.disconnect(); amp.disconnect(); lfo.stop(); lfo.disconnect(); lfoGain.disconnect(); } catch(e) {}
+        };
+        
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+        lfo.start(time);
+        lfo.stop(time + duration + 0.1);
+        
+        Visuals.pluckString(Math.floor(Math.random() * LYRE_STRINGS.length), velocity, true);
+    },
+    
+    playGlissando(startString, endString, startTime, totalDuration, velocity = 0.35) {
+        const strings = [];
+        const step = startString < endString ? 1 : -1;
+        for (let s = startString; step > 0 ? s <= endString : s >= endString; s += step) {
+            strings.push(s);
+        }
+        
+        const spacing = totalDuration / strings.length;
+        strings.forEach((s, i) => {
+            const vel = velocity * (0.8 + Math.sin(i / strings.length * Math.PI) * 0.2);
+            this.playString(s, startTime + i * spacing, 2.5, vel);
+        });
+        
+        return totalDuration;
+    },
+    
+    playArpeggio(chordName, startTime, direction = 'up', velocity = 0.38) {
+        const pattern = CHORD_PATTERNS[chordName] || CHORD_PATTERNS['Am'];
+        const strings = direction === 'up' ? [...pattern] : [...pattern].reverse();
+        const spacing = 0.08 + Math.random() * 0.04;
+        
+        strings.forEach((s, i) => {
+            if (s < LYRE_STRINGS.length) {
+                const vel = velocity * (0.85 + i * 0.03);
+                this.playString(s, startTime + i * spacing, 3.0, vel);
+            }
+        });
+        
+        return strings.length * spacing + 0.5;
+    },
+    
+    playTremolo(stringIdx, startTime, duration, velocity = 0.3) {
+        const spacing = 0.12;
+        const count = Math.floor(duration / spacing);
+        
+        for (let i = 0; i < count; i++) {
+            const vel = velocity * (0.7 + Math.sin(i * 0.5) * 0.3);
+            this.playString(stringIdx, startTime + i * spacing, 0.25, vel);
+        }
+        
+        return duration;
+    },
+    
+    playPad(strings, startTime, duration, velocity = 0.25) {
+        strings.forEach((s, i) => {
+            if (s < LYRE_STRINGS.length) {
+                this.playString(s, startTime + i * 0.15, duration, velocity);
+            }
+        });
+    }
+};
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSER — Infinite Generative Phrases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const Composer = {
+    bpm: 52,
+    beatDuration: 60 / 52,
+    scheduledUntil: 0,
+    chordIndex: 0,
+    progressionIndex: 0,
+    phraseCount: 0,
+    mood: 'AWAKENING',
+    intensity: 0.3,
+    currentMode: 'AEOLIAN',
+    schedulerId: null,
+    
+    beatTime(beatOffset) {
+        return this.scheduledUntil + beatOffset * this.beatDuration;
+    },
+    
+    currentChord() {
+        return PROGRESSIONS[this.progressionIndex][this.chordIndex];
+    },
+    
+    advanceChord() {
+        const prog = PROGRESSIONS[this.progressionIndex];
+        this.chordIndex = (this.chordIndex + 1) % prog.length;
+        if (this.chordIndex === 0 && Math.random() > 0.7) {
+            this.progressionIndex = Math.floor(Math.random() * PROGRESSIONS.length);
+        }
+    },
+    
+    playAscendingArpeggio() {
+        Audio.playArpeggio(this.currentChord(), this.beatTime(0), 'up', 0.32 + this.intensity * 0.1);
+        this.advanceChord();
+        return 1.8;
+    },
+    
+    playDescendingCascade() {
+        Audio.playArpeggio(this.currentChord(), this.beatTime(0), 'down', 0.35 + this.intensity * 0.08);
+        this.advanceChord();
+        return 1.6;
+    },
+    
+    playGlissando() {
+        const ascending = Math.random() > 0.4;
+        const start = ascending ? 0 : LYRE_STRINGS.length - 1;
+        const end = ascending ? LYRE_STRINGS.length - 1 : 0;
+        Audio.playGlissando(start, end, this.beatTime(0), 1.2, 0.28 + this.intensity * 0.1);
+        return 2.0;
+    },
+    
+    playMelody() {
+        const mode = MODES[this.currentMode];
+        const baseString = Math.floor(Math.random() * 4) + 2;
+        const length = 4 + Math.floor(Math.random() * 3);
+        const spacing = 0.25 + Math.random() * 0.1;
+        
+        for (let i = 0; i < length; i++) {
+            const scaleIdx = Math.floor(Math.random() * mode.length);
+            const stringIdx = Math.min(LYRE_STRINGS.length - 1, baseString + Math.floor(mode[scaleIdx] / 2));
+            const vel = 0.28 + Math.sin(i / length * Math.PI) * 0.12;
+            Audio.playString(stringIdx, this.beatTime(i * spacing), 2.0, vel);
+        }
+        return length * spacing + 0.8;
+    },
+    
+    playTremolo() {
+        const stringIdx = 4 + Math.floor(Math.random() * 5);
+        Audio.playTremolo(stringIdx, this.beatTime(0), 1.5, 0.25);
+        Audio.playString(0, this.beatTime(0), 3.0, 0.3);
+        return 2.2;
+    },
+    
+    playHarmonics() {
+        [3, 5, 7, 9].forEach((s, i) => {
+            Audio.playString(s, this.beatTime(i * 0.4), 4.0, 0.22, true);
+        });
+        return 2.5;
+    },
+    
+    playCallResponse() {
+        Audio.playArpeggio(this.currentChord(), this.beatTime(0), 'up', 0.35);
+        this.advanceChord();
+        Audio.playArpeggio(this.currentChord(), this.beatTime(1.2), 'down', 0.3);
+        return 2.8;
+    },
+    
+    playPadWithMelody() {
+        Audio.playPad([0, 2, 4], this.beatTime(0), 4.0, 0.2);
+        [7, 9, 8, 10, 9, 7].forEach((s, i) => {
+            Audio.playString(s, this.beatTime(0.5 + i * 0.35), 1.5, 0.32);
+        });
+        return 3.5;
+    },
+    
+    playSilence() {
+        if (Math.random() > 0.5) {
+            Audio.playString(6, this.beatTime(0), 5.0, 0.15, true);
+        }
+        return 2.5 + Math.random() * 1.5;
+    },
+    
+    playPsalm() {
+        ['Am', 'G', 'C'].forEach((chord, i) => {
+            Audio.playArpeggio(chord, this.beatTime(i * 1.5), i % 2 === 0 ? 'up' : 'down', 0.38);
+        });
+        return 5.0;
+    },
+    
+    playLament() {
+        [10, 9, 8, 7, 6, 5, 4, 3].forEach((s, i) => {
+            Audio.playString(s, this.beatTime(i * 0.3), 2.5, 0.35 - i * 0.02);
+        });
+        Audio.playString(0, this.beatTime(2.8), 4.0, 0.4);
+        return 4.0;
+    },
+    
+    selectPhrase() {
+        const r = Math.random();
+        if (this.intensity > 0.6) {
+            if (r < 0.2) return 'GLISSANDO';
+            if (r < 0.4) return 'PSALM';
+            if (r < 0.55) return 'CALL_RESPONSE';
+            if (r < 0.7) return 'ASCENDING';
+            if (r < 0.85) return 'MELODY';
+            return 'TREMOLO';
+        } else if (this.intensity < 0.3) {
+            if (r < 0.25) return 'HARMONICS';
+            if (r < 0.45) return 'ASCENDING';
+            if (r < 0.6) return 'PAD_MELODY';
+            if (r < 0.75) return 'SILENCE';
+            if (r < 0.9) return 'LAMENT';
+            return 'DESCENDING';
+        } else {
+            if (r < 0.15) return 'GLISSANDO';
+            if (r < 0.3) return 'ASCENDING';
+            if (r < 0.45) return 'DESCENDING';
+            if (r < 0.55) return 'MELODY';
+            if (r < 0.65) return 'CALL_RESPONSE';
+            if (r < 0.75) return 'HARMONICS';
+            if (r < 0.85) return 'PAD_MELODY';
+            if (r < 0.92) return 'TREMOLO';
+            return 'SILENCE';
+        }
+    },
+    
+    generatePhrase() {
+        const phraseType = this.selectPhrase();
+        switch (phraseType) {
+            case 'ASCENDING': return this.playAscendingArpeggio();
+            case 'DESCENDING': return this.playDescendingCascade();
+            case 'GLISSANDO': return this.playGlissando();
+            case 'MELODY': return this.playMelody();
+            case 'TREMOLO': return this.playTremolo();
+            case 'HARMONICS': return this.playHarmonics();
+            case 'CALL_RESPONSE': return this.playCallResponse();
+            case 'PAD_MELODY': return this.playPadWithMelody();
+            case 'SILENCE': return this.playSilence();
+            case 'PSALM': return this.playPsalm();
+            case 'LAMENT': return this.playLament();
+            default: return this.playAscendingArpeggio();
+        }
+    },
+    
+    schedule() {
+        if (!Audio.isPlaying) return;
+        
+        const now = Audio.ctx.currentTime;
+        if (this.scheduledUntil < now + 1.5) {
+            if (this.scheduledUntil < now) this.scheduledUntil = now + 0.2;
+            
+            const phraseDuration = this.generatePhrase();
+            this.scheduledUntil += phraseDuration * this.beatDuration;
+            this.phraseCount++;
+            
+            const wave = Math.sin(this.phraseCount * 0.08) * 0.25;
+            const drift = Math.sin(this.phraseCount * 0.02) * 0.15;
+            this.intensity = Math.max(0.15, Math.min(0.75, 0.4 + wave + drift));
+            
+            if (this.phraseCount % 8 === 0) this.updateMood();
+            
+            const rubato = Math.sin(this.phraseCount * 0.15) * 4;
+            this.bpm = 52 + rubato + (this.intensity * 6);
+            this.beatDuration = 60 / this.bpm;
+            
+            if (this.phraseCount % 12 === 0 && Math.random() > 0.6) {
+                const modes = Object.keys(MODES);
+                this.currentMode = modes[Math.floor(Math.random() * modes.length)];
+            }
+        }
+        
+        this.schedulerId = setTimeout(() => this.schedule(), 150);
+    },
+    
+    updateMood() {
+        const moods = {
+            high: ['TRANSCENDENCE', 'GLORY', 'RAPTURE'],
+            mid: ['LONGING', 'DEVOTION', 'WONDER'],
+            low: ['PEACE', 'STILLNESS', 'REVERIE']
+        };
+        
+        let pool = this.intensity > 0.55 ? moods.high : this.intensity < 0.3 ? moods.low : moods.mid;
+        this.mood = pool[Math.floor(Math.random() * pool.length)];
+        document.getElementById('mood').textContent = this.mood;
+    },
+    
+    start() {
+        this.scheduledUntil = Audio.ctx.currentTime + 0.5;
+        this.schedule();
+    },
+    
+    stop() {
+        if (this.schedulerId) {
+            clearTimeout(this.schedulerId);
+            this.schedulerId = null;
+        }
+    }
+};
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VISUALS — Ethereal String Visualization (CPU-friendly)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const Visuals = {
+    strings: [],
+    particles: [],
+    MAX_PARTICLES: 40,
+    glowPoints: [],
+    MAX_GLOW: 12,
+    animFrameId: null,
+    lastFrame: 0,
+    frameInterval: 1000 / 30,
+    noteTimeout: null,
+    
+    init() {
+        this.strings = [];
+        const centerX = W * 0.5;
+        const lyreWidth = Math.min(W * 0.6, 500);
+        const lyreTop = H * 0.25;
+        const lyreBottom = H * 0.75;
+        
+        for (let i = 0; i < LYRE_STRINGS.length; i++) {
+            const t = i / (LYRE_STRINGS.length - 1);
+            const x = centerX - lyreWidth / 2 + t * lyreWidth;
+            const curve = Math.sin(t * Math.PI) * 30;
+            
+            this.strings.push({
+                x: x,
+                topY: lyreTop - curve,
+                bottomY: lyreBottom + curve * 0.5,
+                amplitude: 0,
+                velocity: 0,
+                brightness: 0,
+                tension: 0.06 + i * 0.004,
+                hue: 38 + i * 2
+            });
+        }
+        
+        this.particles = [];
+        for (let i = 0; i < this.MAX_PARTICLES; i++) {
+            this.particles.push({ active: false });
+        }
+        
+        this.glowPoints = [];
+        for (let i = 0; i < this.MAX_GLOW; i++) {
+            this.glowPoints.push({ active: false });
+        }
+    },
+    
+    pluckString(stringIdx, force, isHarmonic = false) {
+        if (!this.strings[stringIdx]) return;
+        
+        const s = this.strings[stringIdx];
+        s.amplitude = force * 25;
+        s.velocity = 0;
+        s.brightness = isHarmonic ? 1.5 : 1.0;
+        
+        const count = isHarmonic ? 4 : 3;
+        for (let i = 0; i < count; i++) {
+            this.spawnParticle(
+                s.x + (Math.random() - 0.5) * 20,
+                s.topY + Math.random() * (s.bottomY - s.topY),
+                force,
+                isHarmonic
+            );
+        }
+        
+        this.spawnGlow(s.x, (s.topY + s.bottomY) / 2, force, isHarmonic);
+        this.showNote(stringIdx);
+    },
+    
+    spawnParticle(x, y, force, silver = false) {
+        let p = this.particles.find(p => !p.active);
+        if (!p) p = this.particles[0];
+        
+        p.active = true;
+        p.x = x;
+        p.y = y;
+        p.vx = (Math.random() - 0.5) * 2;
+        p.vy = -(Math.random() * 2 + 1) * force;
+        p.life = 1.0;
+        p.size = Math.max(1, 2 + Math.random() * 2 * force);
+        p.silver = silver;
+    },
+    
+    spawnGlow(x, y, force, silver = false) {
+        let g = this.glowPoints.find(g => !g.active);
+        if (!g) g = this.glowPoints[0];
+        
+        g.active = true;
+        g.x = x;
+        g.y = y;
+        g.radius = 20;
+        g.maxRadius = 80 + force * 40;
+        g.alpha = 0.6;
+        g.silver = silver;
+    },
+    
+    showNote(stringIdx) {
+        const notes = ['G', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'A', 'B', 'C', 'D', 'E'];
+        const display = document.getElementById('string-display');
+        display.textContent = notes[stringIdx] || '';
+        display.style.opacity = '1';
+        
+        clearTimeout(this.noteTimeout);
+        this.noteTimeout = setTimeout(() => {
+            display.style.opacity = '0';
+        }, 800);
+    },
+    
+    render(timestamp) {
+        if (!Audio.isPlaying) return;
+        
+        if (timestamp - this.lastFrame < this.frameInterval) {
+            this.animFrameId = requestAnimationFrame((t) => this.render(t));
+            return;
+        }
+        this.lastFrame = timestamp;
+        
+        ctx.fillStyle = 'rgba(10, 6, 18, 0.08)';
+        ctx.fillRect(0, 0, W, H);
+        
+        const glowIntensity = 0.015 + Composer.intensity * 0.025;
+        const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W * 0.5);
+        grad.addColorStop(0, `rgba(255, 215, 0, ${glowIntensity})`);
+        grad.addColorStop(0.5, `rgba(200, 160, 60, ${glowIntensity * 0.4})`);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+        
+        this.drawLyreFrame();
+        
+        this.strings.forEach((s, idx) => {
+            const force = -s.tension * s.amplitude;
+            s.velocity += force;
+            s.velocity *= 0.94;
+            s.amplitude += s.velocity;
+            s.brightness *= 0.97;
+            
+            s.amplitude += Math.sin(Date.now() * 0.001 + idx * 0.5) * 0.2;
+            
+            const alpha = 0.15 + s.brightness * 0.6;
+            const lightness = 55 + s.brightness * 25;
+            
+            ctx.strokeStyle = `hsla(${s.hue}, 70%, ${lightness}%, ${alpha})`;
+            ctx.lineWidth = 1 + s.brightness * 1.2;
+            
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.topY);
+            
+            const segments = 20;
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                const y = s.topY + t * (s.bottomY - s.topY);
+                const env = Math.sin(t * Math.PI);
+                const vib = Math.sin(Date.now() * 0.015 + t * 8) * s.amplitude * env;
+                ctx.lineTo(s.x + vib, y);
+            }
+            ctx.stroke();
+            
+            if (s.brightness > 0.3) {
+                ctx.shadowBlur = 15 * s.brightness;
+                ctx.shadowColor = `hsl(${s.hue}, 80%, 60%)`;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        });
+        
+        this.glowPoints.forEach(g => {
+            if (!g.active) return;
+            
+            g.radius += (g.maxRadius - g.radius) * 0.06;
+            g.alpha *= 0.94;
+            
+            const color = g.silver 
+                ? `rgba(220, 220, 255, ${g.alpha * 0.4})`
+                : `rgba(255, 215, 100, ${g.alpha * 0.3})`;
+            
+            const grd = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.radius);
+            grd.addColorStop(0, color);
+            grd.addColorStop(1, 'transparent');
+            ctx.fillStyle = grd;
+            ctx.fillRect(g.x - g.radius, g.y - g.radius, g.radius * 2, g.radius * 2);
+            
+            if (g.alpha < 0.02) g.active = false;
+        });
+        
+        this.particles.forEach(p => {
+            if (!p.active) return;
+            
+            p.x += p.vx + Math.sin(Date.now() * 0.002 + p.y * 0.01) * 0.3;
+            p.y += p.vy;
+            p.vy += 0.02;
+            p.life -= 0.015;
+            
+            if (p.life <= 0) {
+                p.active = false;
+                return;
+            }
+            
+            const color = p.silver
+                ? `rgba(200, 200, 255, ${p.life * 0.7})`
+                : `hsla(42, 80%, 65%, ${p.life * 0.6})`;
+            
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            const size = Math.max(0.5, p.size * p.life);
+            ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        
+        this.animFrameId = requestAnimationFrame((t) => this.render(t));
+    },
+    
+    drawLyreFrame() {
+        if (this.strings.length < 2) return;
+        
+        const first = this.strings[0];
+        const last = this.strings[this.strings.length - 1];
+        const centerX = W / 2;
+        
+        ctx.strokeStyle = 'rgba(139, 115, 85, 0.15)';
+        ctx.lineWidth = 3;
+        
+        ctx.beginPath();
+        ctx.moveTo(first.x - 30, first.topY + 20);
+        ctx.quadraticCurveTo(centerX, first.topY - 60, last.x + 30, last.topY + 20);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(first.x - 20, first.bottomY - 10);
+        ctx.quadraticCurveTo(centerX, first.bottomY + 40, last.x + 20, last.bottomY - 10);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(first.x - 30, first.topY + 20);
+        ctx.lineTo(first.x - 20, first.bottomY - 10);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(last.x + 30, last.topY + 20);
+        ctx.lineTo(last.x + 20, last.bottomY - 10);
+        ctx.stroke();
+    },
+    
+    start() {
+        this.init();
+        this.animFrameId = requestAnimationFrame((t) => this.render(t));
+    },
+    
+    stop() {
+        if (this.animFrameId) {
+            cancelAnimationFrame(this.animFrameId);
+            this.animFrameId = null;
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MAIN CONTROLLER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let startTime = 0;
+let elapsedTime = 0;
+let timerInterval = null;
+
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function updateTimer() {
+    if (Audio.isPlaying) {
+        elapsedTime = Audio.ctx.currentTime - startTime;
+        document.getElementById('timer').textContent = formatTime(elapsedTime) + ' ∞';
+    }
+}
+
+async function start() {
+    await Audio.init();
+    Audio.isPlaying = true;
+    startTime = Audio.ctx.currentTime;
+    
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('hud').classList.add('visible');
+    document.getElementById('pause-hint').classList.add('visible');
+    
+    Visuals.start();
+    Composer.start();
+    
+    timerInterval = setInterval(updateTimer, 1000);
+}
+
+function pause() {
+    if (Audio.isPlaying) {
+        Audio.isPlaying = false;
+        Composer.stop();
+        Visuals.stop();
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById('mood').textContent = 'PAUSED';
+    } else if (Audio.ctx) {
+        Audio.isPlaying = true;
+        Visuals.start();
+        Composer.start();
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+}
+
+document.getElementById('overlay').addEventListener('click', start);
+
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'Escape') {
+        e.preventDefault();
+        if (Audio.ctx) pause();
+    }
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && Audio.isPlaying) pause();
+});
+
+ctx.fillStyle = '#0a0612';
+ctx.fillRect(0, 0, W, H);
+</script>
+
+</body>
+</html>
