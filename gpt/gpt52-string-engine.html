@@ -87,7 +87,7 @@
   <div id="overlayCard">
     <h1>STRING ENGINE — Start Audio</h1>
     <p>This demo synthesizes everything in-browser (no samples). Click <b>Start</b> to create an <code>AudioContext</code> and schedule the composition.</p>
-    <p>Techniques included: legato overlaps, staccato, arpeggiated chords, slides (frequency ramps), vibrato LFO, guitar-ish pluck + noise, plus percussion noise.</p>
+    <p>Includes: legato overlaps, staccato, arpeggios, slides (frequency ramps), vibrato LFO, guitar-ish pluck + noise, plus noise percussion.</p>
     <div class="row">
       <button id="startBtn">Start</button>
       <span class="pill">Tip: headphones recommended</span>
@@ -120,10 +120,9 @@
   }
 
   function noteToHz(name){
-    if (name === "R" || name === "REST") return 0; // rest convenience
+    if (name === "R" || name === "REST") return 0;
     const { semi, oct } = parseNoteName(name);
-    // MIDI note number where A4=69
-    // C4 = 60; formula: midi = (oct+1)*12 + semi
+    // MIDI note number where A4=69; C4=60 => midi=(oct+1)*12+semi
     const midi = (oct + 1) * 12 + semi;
     return A4 * Math.pow(2, (midi - 69) / 12);
   }
@@ -142,7 +141,6 @@
       }
     }
   }
-  // expose for debugging if needed
   window.NOTES = NOTES;
 
   /***********************
@@ -156,8 +154,7 @@
   class StringEngine {
     constructor({ bpm = 120 } = {}){
       this.bpm = bpm;
-      this.lookAhead = 0.12;     // seconds to schedule ahead
-      this.scheduleInterval = 0; // handled by rAF
+      this.lookAhead = 0.12; // seconds
       this.events = [];
       this.sections = [];
       this.isPlaying = false;
@@ -167,18 +164,20 @@
       this.masterGain = null;
       this.analyser = null;
 
-      this.fx = null; // { comp, convolver, delay, chorus }
+      this.fx = null;
+
       this._startTime = 0;
       this._pausedAt = 0;
       this._lastBeat = 0;
       this._nextEventIndex = 0;
 
-      this.onAudioEvent = (e) => {}; // hook for visuals
+      this.totalBeats = 0;
+
+      this.onAudioEvent = (e) => {};
     }
 
     beatsToSec(beats){ return (60 / this.bpm) * beats; }
     secToBeats(sec){ return sec / (60 / this.bpm); }
-
     setBpm(bpm){ this.bpm = bpm; }
 
     ensureContext(){
@@ -204,7 +203,7 @@
       const convolver = ctx.createConvolver();
       convolver.buffer = this._makeImpulseResponse(2.2, 2.5);
 
-      // Reverb mix
+      // Reverb send/return
       const revSend = ctx.createGain();
       const revReturn = ctx.createGain();
       revSend.gain.value = 0.35;
@@ -212,65 +211,56 @@
 
       // Delay with feedback
       const delay = ctx.createDelay(2.0);
-      delay.delayTime.value = 0.28; // musical-ish default
+      delay.delayTime.value = 0.28;
       const fb = ctx.createGain();
       fb.gain.value = 0.32;
 
-      // Delay mix
       const dSend = ctx.createGain();
       const dReturn = ctx.createGain();
       dSend.gain.value = 0.28;
       dReturn.gain.value = 0.85;
 
-      // Chorus = modulated short delay
+      // Chorus = modulated delay
       const chorusDelay = ctx.createDelay(0.05);
       chorusDelay.delayTime.value = 0.018;
       const chorusLFO = ctx.createOscillator();
       chorusLFO.type = "sine";
       chorusLFO.frequency.value = 0.8;
       const chorusDepth = ctx.createGain();
-      chorusDepth.gain.value = 0.006; // modulation depth seconds
+      chorusDepth.gain.value = 0.006;
 
       const chorusMix = ctx.createGain();
       chorusMix.gain.value = 0.35;
 
-      // Routing:
-      // voices -> comp -> (dry->chorus->master) + (rev send->convolver->rev return->chorus->master) + (delay send->delay->fb->delay + return->chorus->master)
+      // Routing
       const input = comp;
       const dry = ctx.createGain(); dry.gain.value = 1.0;
-
       input.connect(dry);
 
-      // Reverb send/return
       input.connect(revSend);
       revSend.connect(convolver);
       convolver.connect(revReturn);
 
-      // Delay send/return + feedback
       input.connect(dSend);
       dSend.connect(delay);
       delay.connect(fb);
       fb.connect(delay);
       delay.connect(dReturn);
 
-      // Chorus: sum dry+rev+delay into chorus input (simple)
       const chorusSum = ctx.createGain();
       dry.connect(chorusSum);
       revReturn.connect(chorusSum);
       dReturn.connect(chorusSum);
 
-      // chorus parallel: dry + modDelay blend
-      chorusSum.connect(this.masterGain); // dry path to master
-      chorusSum.connect(chorusDelay);
+      chorusSum.connect(this.masterGain);     // dry to master
+      chorusSum.connect(chorusDelay);         // wet chorus
       chorusDelay.connect(chorusMix);
       chorusMix.connect(this.masterGain);
 
-      // LFO to modulate chorus delayTime
       chorusLFO.connect(chorusDepth);
       chorusDepth.connect(chorusDelay.delayTime);
       chorusLFO.start();
 
-      // Master -> analyser -> destination
       this.masterGain.connect(this.analyser);
       this.analyser.connect(ctx.destination);
 
@@ -287,7 +277,6 @@
         const data = buf.getChannelData(ch);
         for (let i=0; i<len; i++){
           const t = i / len;
-          // decaying noise with slight early reflections bump
           const env = Math.pow(1 - t, decay);
           const early = (i < rate * 0.06) ? (1.0 + 0.8*Math.sin(i/30)) : 1.0;
           data[i] = (Math.random()*2-1) * env * early * 0.55;
@@ -296,17 +285,12 @@
       return buf;
     }
 
-    /***********************
-     * 4) VOICE BUILDERS
-     ***********************/
     _adsr(g, t0, a, d, s, r, peak=1.0){
-      // g is AudioParam
       g.cancelScheduledValues(t0);
       g.setValueAtTime(0.0001, t0);
       g.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + Math.max(0.0001, a));
       const sustain = Math.max(0.0002, peak * s);
       g.exponentialRampToValueAtTime(sustain, t0 + a + Math.max(0.0001, d));
-      // release is scheduled by caller at noteOff
       return sustain;
     }
 
@@ -326,7 +310,6 @@
       return { lfo, depth };
     }
 
-    // Generic synth voice (for pad/lead/bass)
     _playSynth({ time, freq, dur, vel, type="triangle", detune=0, filterType="lowpass", cutoff=1400, q=0.9, adsr={a:0.01,d:0.12,s:0.5,r:0.15}, filterSweep=null, vibrato=null, pan=0 }){
       const ctx = this.ctx;
       if (!freq || freq<=0) return;
@@ -354,7 +337,6 @@
       const p = ctx.createStereoPanner();
       p.pan.setValueAtTime(pan, time);
 
-      // optional vibrato
       let vib = null;
       if (vibrato){
         vib = this._makeVibrato(ctx, vibrato.freq ?? 5.2, vibrato.depthHz ?? 5);
@@ -375,7 +357,6 @@
       this._scheduleRelease(g.gain, tOff, adsr.r);
       osc.stop(tOff + adsr.r + 0.05);
 
-      // cleanup
       osc.onended = () => {
         try{ osc.disconnect(); f.disconnect(); g.disconnect(); p.disconnect(); }catch(e){}
         if (vib){
@@ -384,14 +365,12 @@
       };
     }
 
-    // Guitar-ish synth: fundamental + harmonics, pluck envelope, body resonance, noise layer, optional palm mute
     _playGuitar({ time, freq, dur, vel, palmMute=false, vibrato=null, pan=0 }){
       const ctx = this.ctx;
       if (!freq || freq<=0) return;
 
       const out = ctx.createGain();
 
-      // Body resonance / tone shaping
       const body = ctx.createBiquadFilter();
       body.type = "bandpass";
       body.frequency.setValueAtTime(Math.min(1200, Math.max(180, freq*2.1)), time);
@@ -402,12 +381,10 @@
       tone.frequency.setValueAtTime(palmMute ? 900 : 4200, time);
       tone.Q.setValueAtTime(0.7, time);
 
-      // Amp envelope (pluck)
       const amp = ctx.createGain();
       const a = 0.002, d = palmMute ? 0.08 : 0.18, s = palmMute ? 0.06 : 0.14, r = palmMute ? 0.06 : 0.12;
       this._adsr(amp.gain, time, a, d, s, r, Math.max(0.0002, vel));
 
-      // Oscillator stack
       const oscillators = [];
       const makeOsc = (mult, type, det) => {
         const o = ctx.createOscillator();
@@ -418,12 +395,12 @@
         return o;
       };
 
-      const o1 = makeOsc(1.0, "sawtooth", -6);
-      const o2 = makeOsc(1.0, "triangle", +4);
-      const o3 = makeOsc(2.0, "sine", +1);
-      const o4 = makeOsc(3.0, "sine", -2);
+      makeOsc(1.0, "sawtooth", -6);
+      makeOsc(1.0, "triangle", +4);
+      makeOsc(2.0, "sine", +1);
+      makeOsc(3.0, "sine", -2);
 
-      // Slight pick transient (noise burst)
+      // string noise burst
       const noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.12), ctx.sampleRate);
       const nd = noiseBuf.getChannelData(0);
       for (let i=0; i<nd.length; i++){
@@ -441,26 +418,21 @@
       noiseGain.gain.setValueAtTime(vel * (palmMute ? 0.10 : 0.18), time);
       noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
 
-      // Pan
       const p = ctx.createStereoPanner();
       p.pan.setValueAtTime(pan, time);
 
-      // Vibrato
       if (vibrato){
         const vib = this._makeVibrato(ctx, vibrato.freq ?? 5.3, vibrato.depthHz ?? 4.5);
         const vibGate = ctx.createGain();
         vibGate.gain.setValueAtTime(0, time);
         vibGate.gain.linearRampToValueAtTime(1, time + (vibrato.delay ?? 0.08));
         vib.depth.connect(vibGate);
-        // vibrato into base osc freq for all oscs
         for (const o of oscillators) vibGate.connect(o.frequency);
-        // stop on end
         setTimeout(() => {
           try{ vib.lfo.stop(); vib.lfo.disconnect(); vib.depth.disconnect(); vibGate.disconnect(); }catch(e){}
         }, Math.max(0, (time - ctx.currentTime + dur + 0.4)) * 1000);
       }
 
-      // route
       for (const o of oscillators) o.connect(body);
       noise.connect(noiseHP);
       noiseHP.connect(noiseGain);
@@ -472,7 +444,6 @@
       out.connect(p);
       p.connect(this.master);
 
-      // start/stop
       for (const o of oscillators) o.start(time);
       noise.start(time);
 
@@ -482,14 +453,12 @@
       for (const o of oscillators) o.stop(tOff + r + 0.05);
       noise.stop(time + 0.14);
 
-      // fire event hook for visuals
       this.onAudioEvent({ time, kind:"guitar", freq, vel });
 
-      // cleanup
-      const cleanup = () => {
-        try{ out.disconnect(); body.disconnect(); tone.disconnect(); amp.disconnect(); p.disconnect(); noise.disconnect(); noiseHP.disconnect(); noiseGain.disconnect(); }catch(e){}
+      oscillators[0].onended = () => {
+        try{ out.disconnect(); body.disconnect(); tone.disconnect(); amp.disconnect(); p.disconnect(); }catch(e){}
+        try{ noise.disconnect(); noiseHP.disconnect(); noiseGain.disconnect(); }catch(e){}
       };
-      oscillators[0].onended = cleanup;
     }
 
     _playKick({ time, vel }){
@@ -516,7 +485,6 @@
 
     _playSnare({ time, vel }){
       const ctx = this.ctx;
-      // noise
       const len = Math.floor(ctx.sampleRate * 0.18);
       const buf = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = buf.getChannelData(0);
@@ -537,7 +505,6 @@
       g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vel*0.9), time + 0.005);
       g.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
 
-      // tone
       const osc = ctx.createOscillator();
       osc.type = "triangle";
       osc.frequency.setValueAtTime(190, time);
@@ -580,9 +547,6 @@
       this.onAudioEvent({ time, kind: open ? "hatOpen":"hat", freq:7000, vel });
     }
 
-    /***********************
-     * 5) COMPOSITION API
-     ***********************/
     addSection(name, startBeat, endBeat){
       this.sections.push({ name, startBeat, endBeat });
     }
@@ -597,7 +561,6 @@
     }
 
     addChord(beat, notes, duration, velocity, spread=0){
-      // spread in beats (arpeggiation)
       notes.forEach((n,i)=>{
         const b = beat + (spread ? (i*spread) : 0);
         this.addNote(b, n, duration - (spread ? i*spread : 0), velocity, false, 0);
@@ -635,9 +598,6 @@
       return this;
     }
 
-    /***********************
-     * 6) SCHEDULER (rAF)
-     ***********************/
     play(){
       this.ensureContext();
       if (this.ctx.state === "suspended") this.ctx.resume();
@@ -646,7 +606,6 @@
       this.isPlaying = true;
       const now = this.ctx.currentTime;
 
-      // If resuming, offset startTime so currentBeat continues
       if (this._pausedAt > 0){
         this._startTime = now - this._pausedAt;
       } else {
@@ -668,7 +627,6 @@
           this._scheduleEvent(e);
         }
 
-        // stop when done
         if (curBeat >= this.totalBeats + 0.25){
           this.stop();
           return;
@@ -692,7 +650,6 @@
       this._startTime = 0;
       this._lastBeat = 0;
       this._nextEventIndex = 0;
-      // Let tails ring; we don't hard-stop nodes.
     }
 
     _scheduleEvent(e){
@@ -710,7 +667,6 @@
       }
 
       if (e.kind === "bass"){
-        // bass: sine+triangle, lowpass sweep, tighter ADSR
         this._playSynth({
           time:t, freq:e.data.freq, dur:durSec, vel:e.data.velocity,
           type:"sine", detune:-2,
@@ -734,18 +690,18 @@
         const { notes, velocity } = e.data;
         const pans = [-0.35, -0.1, 0.15, 0.35];
         notes.forEach((n,i)=>{
-          const f = (typeof n === "number") ? n : noteToHz(n);
+          const f0 = (typeof n === "number") ? n : noteToHz(n);
           this._playSynth({
-            time:t, freq:f, dur:durSec, vel:velocity * 0.55,
+            time:t, freq:f0, dur:durSec, vel:velocity * 0.55,
             type:"sawtooth", detune:-8 + i*2,
             filterType:"lowpass", cutoff:1400, q:0.6,
             adsr:{a:0.35,d:0.5,s:0.7,r:0.6},
             filterSweep:{ from: 520, to: 2200, t: Math.min(1.0, durSec*0.8) },
             pan: pans[i % pans.length],
-            vibrato: { freq:0.22, depthHz:2.0, delay:0.0 } // slow drift
+            vibrato: { freq:0.22, depthHz:2.0, delay:0.0 }
           });
           this._playSynth({
-            time:t, freq:f*2, dur:durSec, vel:velocity * 0.18,
+            time:t, freq:f0*2, dur:durSec, vel:velocity * 0.18,
             type:"sine", detune: 0,
             filterType:"highpass", cutoff:220, q:0.7,
             adsr:{a:0.45,d:0.6,s:0.55,r:0.8},
@@ -757,7 +713,6 @@
       }
 
       if (e.kind === "slide"){
-        // slide lead: triangle with freq ramp + vibrato
         const ctx = this.ctx;
         const osc = ctx.createOscillator();
         osc.type = "triangle";
@@ -772,7 +727,6 @@
         const g = ctx.createGain();
         this._adsr(g.gain, t, 0.01, 0.14, 0.35, 0.18, Math.max(0.0002, e.data.velocity));
 
-        // vibrato
         const vib = this._makeVibrato(ctx, 5.4, 6.0);
         const vibGate = ctx.createGain();
         vibGate.gain.setValueAtTime(0, t);
@@ -796,7 +750,6 @@
       }
 
       if (e.kind === "note"){
-        // guitar lead default (staccato/legato can be encoded by duration choices)
         this._playGuitar({
           time:t,
           freq:e.data.freq,
@@ -810,9 +763,7 @@
       }
     }
 
-    getCurrentBeat(){
-      return this._lastBeat || 0;
-    }
+    getCurrentBeat(){ return this._lastBeat || 0; }
 
     getSectionAtBeat(beat){
       for (const s of this.sections){
@@ -823,29 +774,27 @@
   }
 
   /***********************
-   * 7) BUILD A COMPOSITION
+   * 4) BUILD A COMPOSITION (FIXED: no chord symbols like "Em3")
    ***********************/
   const engine = new StringEngine({ bpm: 120 });
 
-  // Define sections by beat ranges (UI)
   engine.addSection("Intro", 0, 16);
   engine.addSection("Theme", 16, 48);
   engine.addSection("Bridge", 48, 64);
   engine.addSection("Finale", 64, 96);
 
-  // Build composition by incrementing beat counter
   let b = 0;
 
-  // Intro: pads + sparse guitar harmonics (high notes), light hats
-  engine.addPad(b, ["Em3","B3","G3"], DUR.W*2, 0.45); // 8 beats
+  // Intro: pads + sparse guitar, light hats
+  engine.addPad(b, ["E3","G3","B3"], DUR.W*2, 0.45); // 8 beats
   for (let i=0;i<16;i++){
-    engine.addPercussion(b + i*DUR.E, (i%2===0) ? "hat" : "hat", 0.55);
+    engine.addPercussion(b + i*DUR.E, "hat", 0.55);
   }
-  engine.addChord(b+2, ["E4","B4","G5"], DUR.H, 0.36, 0.08); // arpeggiated
+  engine.addChord(b+2, ["E4","B4","G5"], DUR.H, 0.36, 0.08);
   engine.addChord(b+6, ["D4","A4","F#5"], DUR.H, 0.34, 0.08);
   b += 8;
 
-  engine.addPad(b, ["C3","G3","E3"], DUR.W*2, 0.42);
+  engine.addPad(b, ["C3","E3","G3"], DUR.W*2, 0.42);
   for (let i=0;i<16;i++){
     engine.addPercussion(b + i*DUR.E, (i%4===2) ? "openhat" : "hat", (i%4===2)?0.62:0.48);
   }
@@ -853,35 +802,31 @@
   engine.addChord(b+6, ["B3","F#4","D5"], DUR.H, 0.32, 0.08);
   b += 8;
 
-  // Theme: kick/snare groove, bass, guitar melody with slides/vibrato, pad bed
-  const themeStart = b; // 16
-  engine.addPad(b, ["Em3","B3","G3"], DUR.W*4, 0.38); // 16 beats bed
+  // Theme
+  engine.addPad(b, ["E3","G3","B3"], DUR.W*4, 0.38);
   for (let bar=0; bar<8; bar++){
     const base = b + bar*4;
-    // drum pattern
     engine.addPercussion(base + 0, "kick", 0.95);
     engine.addPercussion(base + 1, "hat", 0.55);
     engine.addPercussion(base + 2, "snare", 0.85);
     engine.addPercussion(base + 3, "hat", 0.55);
     engine.addPercussion(base + 3.5, "hat", 0.45);
 
-    // bass
     engine.addBass(base + 0, "E2", DUR.H, 0.62);
     engine.addBass(base + 2, "G2", DUR.H, 0.60);
 
-    // guitar riff + legato overlaps (duration slightly > spacing)
     engine.addNote(base + 0.00, "E4", DUR.E*1.10, 0.48, true, 0.10);
     engine.addNote(base + 0.50, "G4", DUR.E*1.10, 0.46, false, 0);
     engine.addNote(base + 1.00, "B4", DUR.E*1.15, 0.44, false, 0);
-    engine.addSlide(base + 1.50, "B4", "C5", DUR.E, 0.42);     // bend/slide feel
+    engine.addSlide(base + 1.50, "B4", "C5", DUR.E, 0.42);
     engine.addNote(base + 2.00, "B4", DUR.E*1.05, 0.44, true, 0.08);
     engine.addNote(base + 2.50, "G4", DUR.E*1.05, 0.44, false, 0);
-    engine.addNote(base + 3.00, "E4", DUR.E*0.85, 0.40, false, 0); // staccato
+    engine.addNote(base + 3.00, "E4", DUR.E*0.85, 0.40, false, 0);
   }
-  b += 32; // theme length 32 beats -> up to 48
+  b += 32; // to 48
 
-  // Bridge: chord swells + tom-like snare variants + descending slide
-  engine.addPad(b, ["Am3","E3","C3"], DUR.W*2, 0.42);
+  // Bridge
+  engine.addPad(b, ["A3","C4","E4"], DUR.W*2, 0.42);
   for (let i=0;i<8;i++){
     const t = b + i*1;
     engine.addPercussion(t, "kick", 0.70);
@@ -893,8 +838,8 @@
   engine.addSlide(b+6, "E5", "B4", DUR.H, 0.36);
   b += 16; // to 64
 
-  // Finale: denser arpeggios, stronger drums, bass movement
-  engine.addPad(b, ["Em3","B3","G3"], DUR.W*4, 0.40);
+  // Finale
+  engine.addPad(b, ["E3","G3","B3"], DUR.W*4, 0.40);
   for (let bar=0; bar<8; bar++){
     const base = b + bar*4;
     engine.addPercussion(base + 0, "kick", 0.98);
@@ -904,29 +849,26 @@
     engine.addPercussion(base + 0.5, "hat", 0.45);
     engine.addPercussion(base + 2.5, "openhat", 0.55);
 
-    // walking bass
     const bassNotes = ["E2","G2","A2","B2"];
     engine.addBass(base + 0.0, bassNotes[bar%4], DUR.Q, 0.62);
     engine.addBass(base + 1.0, bassNotes[(bar+1)%4], DUR.Q, 0.60);
     engine.addBass(base + 2.0, bassNotes[(bar+2)%4], DUR.Q, 0.60);
     engine.addBass(base + 3.0, bassNotes[(bar+3)%4], DUR.Q, 0.60);
 
-    // arpeggiated chord (spread)
     const chord = (bar%2===0) ? ["E4","B4","G5","E5"] : ["D4","A4","F#5","D5"];
     engine.addChord(base + 0.0, chord, DUR.H, 0.38, 0.08);
 
-    // quick run (rapid sequential notes)
     engine.addNote(base + 2.0, "E5", DUR.S*0.95, 0.34, false, 0);
     engine.addNote(base + 2.25, "F#5", DUR.S*0.95, 0.34, false, 0);
     engine.addNote(base + 2.50, "G5", DUR.S*0.95, 0.34, true, 0.06);
     engine.addNote(base + 2.75, "B5", DUR.S*1.05, 0.33, true, 0.06);
   }
-  b += 32; // to 96 total
+  b += 32; // to 96
 
   engine.sortEvents();
 
   /***********************
-   * 8) VISUALS (Canvas reactive)
+   * 5) VISUALS
    ***********************/
   const canvas = document.getElementById("canvas");
   const ctx2d = canvas.getContext("2d", { alpha: false });
@@ -955,7 +897,6 @@
       r, hue, kind, vel
     });
   }
-
   engine.onAudioEvent = (e) => spawnParticle(e);
 
   function draw(){
@@ -963,21 +904,19 @@
     ctx2d.fillStyle = "#070912";
     ctx2d.fillRect(0,0,w,h);
 
-    // subtle gradient
     const g = ctx2d.createRadialGradient(w*0.5,h*0.5,50,w*0.5,h*0.5,Math.max(w,h)*0.65);
     g.addColorStop(0, "rgba(120,110,255,0.10)");
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx2d.fillStyle = g;
     ctx2d.fillRect(0,0,w,h);
 
-    // waveform (if context exists)
     if (engine.analyser){
       engine.analyser.getByteTimeDomainData(waveform);
       ctx2d.lineWidth = 2;
       ctx2d.strokeStyle = "rgba(200,210,255,0.22)";
       ctx2d.beginPath();
       for (let i=0;i<waveform.length;i++){
-        const v = (waveform[i] - 128) / 128; // -1..1
+        const v = (waveform[i] - 128) / 128;
         const x = (i/(waveform.length-1)) * w;
         const y = h*0.55 + v*(h*0.14);
         if (i===0) ctx2d.moveTo(x,y); else ctx2d.lineTo(x,y);
@@ -985,7 +924,6 @@
       ctx2d.stroke();
     }
 
-    // particles
     const dt = 1/60;
     for (let i=particles.length-1;i>=0;i--){
       const p = particles[i];
@@ -1010,7 +948,7 @@
   }
 
   /***********************
-   * 9) UI
+   * 6) UI
    ***********************/
   const overlay = document.getElementById("overlay");
   const startBtn = document.getElementById("startBtn");
@@ -1028,9 +966,7 @@
   bpmPill.textContent = `BPM: ${engine.bpm}`;
   lenPill.textContent = `Length: ${engine.totalBeats.toFixed(2)} beats`;
 
-  function setStatus(text){
-    statusPill.textContent = text;
-  }
+  function setStatus(text){ statusPill.textContent = text; }
 
   function uiTick(){
     const beat = engine.getCurrentBeat();
@@ -1040,7 +976,6 @@
 
     const pct = engine.totalBeats ? Math.max(0, Math.min(1, beat / engine.totalBeats)) : 0;
     progressBar.style.width = `${(pct*100).toFixed(2)}%`;
-
     requestAnimationFrame(uiTick);
   }
 
