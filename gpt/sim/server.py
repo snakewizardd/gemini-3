@@ -4,244 +4,319 @@
 import asyncio
 import json
 import math
-import random
 import time
-
 import numpy as np
 import websockets
 
 # -----------------------------
-# DDA SIM CONFIG
+# World config (2D continuous plane)
 # -----------------------------
-DT = 1.0
-D = 8                       # latent dimension
-J = 10                      # number of actions
-FPS = 30                    # stream rate
-SEND_EVERY = 1              # send every N sim steps
+W, H = 100.0, 100.0
 
-# Identity attractor
-x_star = np.array([1.2, 0.2, -0.7, 0.4, 0.9, -0.3, 0.1, -0.5], dtype=float)
+HOME = np.array([20.0, 20.0])
+FOOD = np.array([82.0, 78.0])
+THREAT = np.array([55.0, 55.0])
+THREAT_R = 16.0
 
-# Dynamics parameters
-gamma = 0.55                # identity stiffness
-k_base = 0.22               # baseline openness step
-rho = 0.10                  # rigidity in [0,1]
+FOOD_RADIUS = 4.0
+FOOD_RESPAWN_SEC = 6.0
 
-# Rigidity adaptation (centered sigmoid)
-alpha = 0.06                # rigidity learning rate
-eps0 = 0.55                 # "threat threshold" for surprise
-s_sig = 0.25                # sensitivity scale
-rho_decay = 0.004           # slow recovery per step (optional but nice)
+# Movement actions (N,S,E,W,Stay)
+ACTIONS = [
+    ("N", np.array([0.0, -1.0])),
+    ("S", np.array([0.0,  1.0])),
+    ("E", np.array([1.0,  0.0])),
+    ("W", np.array([-1.0, 0.0])),
+    ("STAY", np.array([0.0, 0.0])),
+]
 
-# Pressure / gain
-m_base = 0.55               # baseline external pressure
-m_pulse = 0.65              # pulse amplitude (to show regime changes)
-pulse_period = 9.0          # seconds
+STEP_SIZE = 1.2            # intended movement magnitude
+SLIP_PROB = 0.18           # sometimes your action doesn't do what you expect
+SLIP_NOISE = 1.4           # how big the slip is
 
-# Truth / reflection weights inside reflection score
+# Threat "shock" = unpredictable push when inside zone
+THREAT_SHOCK = 2.0
+
+# Stream config
+FPS = 30
+SIM_STEPS_PER_SEND = 1
+
+rng = np.random.default_rng(3)
+
+# -----------------------------
+# DDA config
+# -----------------------------
+# We'll treat state x_t as 2D position for this sim: x_t = p_t
+gamma = 0.10               # identity pull strength (to HOME)
+k_base = 0.80              # baseline openness (step scaling)
+rho = 0.10                 # rigidity in [0,1]
+alpha = 0.10               # rigidity learning rate
+eps0 = 0.85                # surprise threshold
+s_sig = 0.35               # sigmoid sensitivity
+rho_decay = 0.010          # recovery
+
+# Reflection personality weights
 w_obj = 1.0
-w_subj = 0.9
-tau = 2.0                   # softmax sharpness
+w_subj = 1.1
+tau = 2.3
 
-# Noise levels (simulate imperfect world + observation)
-truth_noise = 0.10
-outcome_noise = 0.18
+# Need system
+hunger = 0.20              # [0,1]
+hunger_rate = 0.0028       # per step
+hunger_relief = 0.65       # when eating
+reward = 0                 # food count
+food_available = True
+food_cooldown = 0.0
 
-# Projection to 2D (fixed random orthonormal projection)
-rng = np.random.default_rng(7)
-P = rng.normal(size=(2, D))
-# Orthonormalize rows
-u, _, vh = np.linalg.svd(P, full_matrices=False)
-P = (u @ vh).astype(float)
-
-# -----------------------------
-# Helpers
-# -----------------------------
+def clamp01(x): return float(np.clip(x, 0.0, 1.0))
 def unit(v, eps=1e-9):
-    n = np.linalg.norm(v)
+    n = float(np.linalg.norm(v))
     return v / (n + eps)
-
-def cos_sim(a, b, eps=1e-9):
-    return float(np.dot(a, b) / ((np.linalg.norm(a) + eps) * (np.linalg.norm(b) + eps)))
 
 def sigmoid(z):
     return 1.0 / (1.0 + math.exp(-z))
 
 def softmax(scores):
-    scores = np.array(scores, dtype=float)
-    scores = scores - np.max(scores)
-    ex = np.exp(tau * scores)
+    s = np.array(scores, dtype=float)
+    s -= np.max(s)
+    ex = np.exp(tau * s)
     return ex / (np.sum(ex) + 1e-12)
 
-def m_t(now_s: float) -> float:
-    # smooth pressure changes so you can watch behavior shift
-    pulse = 0.5 * (1.0 + math.sin(2 * math.pi * now_s / pulse_period))
-    return m_base + m_pulse * pulse
+def dist(a, b): return float(np.linalg.norm(a - b))
 
-# -----------------------------
-# DDA Components
-# -----------------------------
-# action directions (fixed)
-action_dirs = rng.normal(size=(J, D))
-action_dirs = np.array([unit(v) for v in action_dirs], dtype=float)
+def threat_proximity(p):
+    # 1.0 at center, 0.0 outside radius (with a smooth falloff)
+    d = dist(p, THREAT)
+    if d >= THREAT_R: return 0.0
+    return float(1.0 - (d / THREAT_R))
 
-def T_truth_target(x, now_s):
+def pressure_m(p, hunger):
     """
-    Truth target: a drifting target + some noise.
-    In real usage: parse external world into state space.
+    Pressure increases with hunger (need) and also with threat proximity (stress).
     """
-    drift = np.array([
-        0.6 * math.sin(0.35 * now_s),
-        0.6 * math.cos(0.28 * now_s),
-        0.3 * math.sin(0.15 * now_s + 1.0),
-        -0.4 * math.cos(0.22 * now_s),
-        0.2 * math.sin(0.40 * now_s),
-        0.3 * math.cos(0.31 * now_s),
-        -0.2 * math.sin(0.19 * now_s),
-        0.15 * math.cos(0.17 * now_s),
-    ], dtype=float)
-
-    noise = rng.normal(scale=truth_noise, size=D)
-    return 0.8 * x_star + drift + noise
-
-def reflection_target(x, now_s, Q_vals, S_vals):
-    """
-    Reflection returns an internal target state formed from a preference over actions.
-    """
-    scores = [w_obj * Q_vals[j] + w_subj * S_vals[j] for j in range(J)]
-    pi = softmax(scores)  # distribution over actions
-    direction = (pi[:, None] * action_dirs).sum(axis=0)
-    direction = unit(direction)
-    # Small step in preferred direction from current x
-    return x + 0.9 * direction
-
-def compute_Q_S(x, xT):
-    """
-    Produce objective and subjective scores for each action.
-    Q: moves toward truth target (objective).
-    S: moves toward identity (subjective / alignment).
-    """
-    # desired directions
-    to_truth = unit(xT - x)
-    to_id = unit(x_star - x)
-
-    Q = []
-    S = []
-    for j in range(J):
-        d = action_dirs[j]
-        # objective: align with truth direction, penalize moving away from identity hard
-        q = cos_sim(d, to_truth) - 0.15 * max(0.0, -cos_sim(d, to_id))
-        # subjective: align with identity direction + some idiosyncratic preference bump
-        s = cos_sim(d, to_id) + 0.10 * math.sin(3.0 * j)
-        Q.append(q)
-        S.append(s)
-    return np.array(Q, dtype=float), np.array(S, dtype=float)
-
-def choose_action(delta_x):
-    """
-    Cosine alignment with the instantaneous desired movement delta_x.
-    """
-    if np.linalg.norm(delta_x) < 1e-9:
-        return 0
-    scores = [cos_sim(delta_x, action_dirs[j]) for j in range(J)]
-    return int(np.argmax(scores))
+    prox = threat_proximity(p)
+    # hunger pushes exploration, threat pushes defensive pressure too
+    m = 0.25 + 1.20*hunger + 0.90*prox
+    return float(np.clip(m, 0.0, 3.0))
 
 def mcrit(k_eff):
+    # Same sufficient boundary used earlier: m < (1/k_eff) - gamma/2
+    return float((1.0 / max(k_eff, 1e-9)) - (gamma / 2.0))
+
+def truth_target(p, hunger):
     """
-    From contraction sufficient condition:
-    0 < k_eff (gamma + 2 m) < 2  =>  m < (1/k_eff) - gamma/2
+    Truth is 'what the world says matters': move toward food if hungry,
+    and move away from threat.
+    Returns x_T target position.
     """
-    return (1.0 / max(k_eff, 1e-9)) - (gamma / 2.0)
+    # attract to food if available and hungry
+    toward_food = np.zeros(2)
+    if food_available:
+        toward_food = unit(FOOD - p)
+
+    away_threat = unit(p - THREAT)
+
+    prox = threat_proximity(p)
+    # weight food-seeking by hunger; threat-avoidance by proximity
+    v = (1.4*hunger)*toward_food + (2.0*prox)*away_threat
+    if np.linalg.norm(v) < 1e-9:
+        v = np.zeros(2)
+
+    # target is a point a few steps in that direction
+    return p + 6.0 * v
+
+def reflection_target(p, hunger):
+    """
+    Reflection = identity + subjective preferences:
+    - prefer to hang near home
+    - avoid threat even if not currently in it
+    - but if hunger high, 'allow' moving outward a bit
+    """
+    to_home = unit(HOME - p)
+    away_threat = unit(p - THREAT)
+
+    # "courage" grows with hunger (need can override comfort)
+    courage = 0.30 + 0.80*hunger
+
+    v = (1.6*(1.0-courage))*to_home + (1.0)*away_threat + (0.6*courage)*unit(FOOD - p)
+    return p + 5.0 * v
+
+def compute_QS(p, xT, xR):
+    """
+    Score each action by objective (truth) and subjective (reflection/identity).
+    """
+    Q, S = [], []
+    for name, d in ACTIONS:
+        # predict one-step motion direction (intended)
+        step = STEP_SIZE * d
+        p1 = p + step
+
+        # Objective: closer to truth target, farther from threat
+        q = -dist(p1, xT)
+        q += 1.2 * dist(p1, THREAT)  # reward being away from threat
+
+        # Subjective: closer to reflection target and home comfort
+        s = -dist(p1, xR)
+        s += 0.5 * (-dist(p1, HOME))
+
+        # mild penalty for STAY if hunger is high
+        if name == "STAY":
+            q -= 2.0*hunger
+
+        Q.append(q)
+        S.append(s)
+    return np.array(Q), np.array(S)
+
+def choose_action(p, hunger):
+    xT = truth_target(p, hunger)
+    xR = reflection_target(p, hunger)
+    Q, S = compute_QS(p, xT, xR)
+
+    scores = w_obj*Q + w_subj*S
+    pi = softmax(scores)
+    a = int(np.argmax(pi))  # greedy for clarity
+    return a, xT, xR, Q, S, pi
+
+def step_world(p, a_idx):
+    """
+    Execute action with slips + threat shock (unpredictable).
+    Returns (p_next_actual, p_next_predicted).
+    """
+    name, d = ACTIONS[a_idx]
+    intended = STEP_SIZE * d
+
+    # predicted: what agent expects (no slip, no shock)
+    p_pred = p + intended
+
+    # actual: slip sometimes
+    p_act = p + intended
+    if rng.random() < SLIP_PROB:
+        p_act = p_act + rng.normal(scale=SLIP_NOISE, size=2)
+
+    # threat shock if inside threat zone
+    prox = threat_proximity(p_act)
+    if prox > 0.001:
+        # random push whose magnitude depends on proximity
+        shock = rng.normal(size=2)
+        shock = unit(shock) * (THREAT_SHOCK * prox)
+        p_act = p_act + shock
+
+    # clip to bounds
+    p_act[0] = float(np.clip(p_act[0], 0.0, W))
+    p_act[1] = float(np.clip(p_act[1], 0.0, H))
+    p_pred[0] = float(np.clip(p_pred[0], 0.0, W))
+    p_pred[1] = float(np.clip(p_pred[1], 0.0, H))
+
+    return p_act, p_pred
 
 # -----------------------------
-# Simulation loop state
+# Simulation state
 # -----------------------------
-x = np.zeros(D, dtype=float)
-x[:] = rng.normal(scale=0.25, size=D)
-
+p = np.array([18.0, 24.0], dtype=float)
+traj = []
 step = 0
+t_last = time.time()
 
 async def handler(websocket):
-    global x, rho, step
+    global p, rho, hunger, reward, food_available, food_cooldown, step, t_last, traj
 
     print("Client connected")
-    last_send = 0
-
     try:
         while True:
             now = time.time()
-            now_s = now  # absolute time is fine for a visual sim
+            dt_sec = now - t_last
+            t_last = now
 
-            # pressure
-            m = m_t(now_s)
+            # handle food respawn timer
+            if not food_available:
+                food_cooldown -= dt_sec
+                if food_cooldown <= 0.0:
+                    food_available = True
+
+            # hunger rises
+            hunger = clamp01(hunger + hunger_rate)
+
+            # choose action
+            a_idx, xT, xR, Q, S, pi = choose_action(p, hunger)
+
+            # pressure m depends on hunger and threat proximity
+            m = pressure_m(p, hunger)
 
             # effective openness
             k_eff = k_base * (1.0 - rho)
 
-            # truth target and scores
-            xT = T_truth_target(x, now_s)
-            Q, S = compute_Q_S(x, xT)
+            # DDA "desired move" vector (in position space)
+            F_id = gamma * (HOME - p)
+            F_T = (xT - p)
+            F_R = (xR - p)
 
-            # reflection target
-            xR = reflection_target(x, now_s, Q, S)
+            delta = F_id + m*(F_T + F_R)
 
-            # forces
-            F_id = gamma * (x_star - x)
-            F_T = (xT - x)
-            F_R = (xR - x)
-
-            # desired movement (pre-action)
-            delta = F_id + m * (F_T + F_R)
-
-            # choose action by cosine alignment with delta
-            a = choose_action(delta)
-
-            # incorporate chosen action as a small bias on reflection (acts like commitment)
-            commit = 0.35 * action_dirs[a]
+            # commit to chosen action a bit (discrete decision projection)
+            commit = 0.8 * ACTIONS[a_idx][1]
             delta2 = delta + commit
 
-            # forward prediction (model uses same update)
-            x_pred = x + k_eff * delta2
+            # predicted next pos from DDA step (this is its internal forward model)
+            p_model_pred = p + k_eff * unit(delta2) * STEP_SIZE
 
-            # "world" outcome: predicted + noise + small truth pull (world pushes back)
-            world_push = 0.10 * (xT - x)
-            x_act = x_pred + world_push + rng.normal(scale=outcome_noise, size=D)
+            # world step: actual and naive predicted from action
+            p_act, p_action_pred = step_world(p, a_idx)
 
-            # prediction error
-            eps = float(np.linalg.norm(x_pred - x_act))
+            # define "actual encoded outcome" as actual position
+            # and "predicted" as model predicted (better matches DDA)
+            eps = float(np.linalg.norm(p_model_pred - p_act))
 
             # rigidity update (centered sigmoid -> bidirectional)
             z = (eps - eps0) / s_sig
             rho = rho + alpha * (sigmoid(z) - 0.5)
-            rho = float(np.clip(rho, 0.0, 1.0))
-            # optional decay (recovery)
-            rho = float(np.clip((1.0 - rho_decay) * rho, 0.0, 1.0))
+            rho = clamp01(rho)
+            rho = clamp01((1.0 - rho_decay) * rho)
 
-            # update actual state (use actual realized next state)
-            x = x_act
+            # update agent state to actual outcome
+            p = p_act
+
+            # eat food if near and available
+            ate = False
+            if food_available and dist(p, FOOD) <= FOOD_RADIUS:
+                ate = True
+                reward += 1
+                hunger = clamp01(hunger - hunger_relief)
+                food_available = False
+                food_cooldown = FOOD_RESPAWN_SEC
 
             # diagnostics
-            mc = float(mcrit(k_eff))
+            mc = mcrit(k_eff)
+            prox = threat_proximity(p)
 
-            # project to 2D
-            p2 = (P @ x).tolist()
+            traj.append(p.copy())
+            if len(traj) > 2500:
+                traj = traj[-2500:]
 
-            # send
             step += 1
-            if step - last_send >= SEND_EVERY:
+
+            if step % SIM_STEPS_PER_SEND == 0:
                 msg = {
-                    "t": now,
                     "step": step,
-                    "p": p2,                 # 2D point
-                    "rho": rho,
+                    "p": [float(p[0]), float(p[1])],
+                    "home": [float(HOME[0]), float(HOME[1])],
+                    "food": [float(FOOD[0]), float(FOOD[1])],
+                    "food_available": bool(food_available),
+                    "threat": [float(THREAT[0]), float(THREAT[1])],
+                    "threat_r": float(THREAT_R),
+
+                    "action": ACTIONS[a_idx][0],
+                    "ate": ate,
+                    "reward": int(reward),
+                    "hunger": float(hunger),
+                    "threat_prox": float(prox),
+
+                    "rho": float(rho),
                     "k_eff": float(k_eff),
                     "m": float(m),
-                    "m_crit": mc,
-                    "eps": eps,
-                    "action": a,
+                    "m_crit": float(mc),
+                    "eps": float(eps),
                 }
                 await websocket.send(json.dumps(msg))
-                last_send = step
 
             await asyncio.sleep(1.0 / FPS)
 
@@ -252,7 +327,7 @@ async def handler(websocket):
 async def main():
     async with websockets.serve(handler, "localhost", 8765):
         print("WebSocket server running on ws://localhost:8765")
-        await asyncio.Future()  # run forever
+        await asyncio.Future()
 
 if __name__ == "__main__":
     asyncio.run(main())

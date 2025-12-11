@@ -3,38 +3,50 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>DDA Live Sim</title>
+  <title>DDA Meaningful Sim</title>
   <style>
     body { font-family: ui-sans-serif, system-ui, Arial; margin: 16px; }
-    #wrap { display: grid; grid-template-columns: 820px 1fr; gap: 16px; align-items: start; }
+    #wrap { display: grid; grid-template-columns: 860px 1fr; gap: 16px; align-items: start; }
     canvas { border: 1px solid #ddd; background: #0b0f14; }
     .panel { padding: 12px; border: 1px solid #ddd; border-radius: 8px; }
-    .k { color: #555; }
-    .v { font-weight: 600; }
+    .k { color: #666; }
+    .v { font-weight: 700; }
     .row { margin: 6px 0; }
+    hr { border: none; border-top: 1px solid #eee; margin: 10px 0; }
     code { background:#f6f6f6; padding:2px 4px; border-radius:4px;}
   </style>
 </head>
 <body>
-  <h2>DDA Live Sim (WebSockets)</h2>
-  <div class="k">Run <code>python server.py</code>, then open this file in your browser.</div>
+  <h2>DDA “Meaningful” Sim: Home vs Food vs Threat</h2>
+  <div class="k">Run <code>python server.py</code>, then open this file (or serve via http.server).</div>
 
   <div id="wrap">
-    <canvas id="c" width="820" height="620"></canvas>
+    <canvas id="c" width="860" height="640"></canvas>
 
     <div class="panel">
       <div class="row"><span class="k">ws:</span> <span id="ws" class="v">disconnected</span></div>
       <div class="row"><span class="k">step:</span> <span id="step" class="v">-</span></div>
+      <hr/>
+
+      <div class="row"><span class="k">action:</span> <span id="action" class="v">-</span></div>
+      <div class="row"><span class="k">ate:</span> <span id="ate" class="v">-</span></div>
+      <div class="row"><span class="k">food:</span> <span id="foodAvail" class="v">-</span></div>
+      <div class="row"><span class="k">reward (food count):</span> <span id="reward" class="v">-</span></div>
+      <div class="row"><span class="k">hunger:</span> <span id="hunger" class="v">-</span></div>
+      <div class="row"><span class="k">threat proximity:</span> <span id="prox" class="v">-</span></div>
+
       <hr/>
       <div class="row"><span class="k">rho (rigidity):</span> <span id="rho" class="v">-</span></div>
       <div class="row"><span class="k">k_eff (openness):</span> <span id="ke" class="v">-</span></div>
       <div class="row"><span class="k">m (pressure):</span> <span id="m" class="v">-</span></div>
       <div class="row"><span class="k">m_crit:</span> <span id="mc" class="v">-</span></div>
       <div class="row"><span class="k">epsilon:</span> <span id="eps" class="v">-</span></div>
-      <div class="row"><span class="k">action:</span> <span id="a" class="v">-</span></div>
+
       <hr/>
       <div class="k">
-        Tip: if you want more “snaps,” increase <code>m_pulse</code> or decrease <code>k_base</code>.
+        Legend: <span style="color:#60a5fa">path</span>, <span style="color:#fbbf24">agent</span>,
+        <span style="color:#22c55e">home</span>, <span style="color:#a855f7">food</span>,
+        <span style="color:#ef4444">threat</span>.
       </div>
     </div>
   </div>
@@ -42,38 +54,51 @@
 <script>
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-
 const el = (id)=>document.getElementById(id);
 
 let pts = [];
-const MAX_PTS = 2000;
+const MAX_PTS = 2200;
+
+// world bounds hardcoded from server (100x100)
+const WORLD_W = 100.0, WORLD_H = 100.0;
 
 function worldToCanvas(p){
-  // auto-scale based on recent points
-  const recent = pts.slice(-600);
-  if (recent.length < 10) return [canvas.width/2, canvas.height/2];
-
-  let minx=Infinity, maxx=-Infinity, miny=Infinity, maxy=-Infinity;
-  for (const q of recent){
-    minx = Math.min(minx, q[0]); maxx = Math.max(maxx, q[0]);
-    miny = Math.min(miny, q[1]); maxy = Math.max(maxy, q[1]);
-  }
-  const pad = 0.4;
-  const dx = (maxx-minx) || 1;
-  const dy = (maxy-miny) || 1;
-
-  const x = (p[0]-minx)/dx;
-  const y = (p[1]-miny)/dy;
-
-  const cx = pad*canvas.width + x*(canvas.width*(1-2*pad));
-  const cy = pad*canvas.height + (1-y)*(canvas.height*(1-2*pad));
-  return [cx, cy];
+  const x = (p[0] / WORLD_W) * canvas.width;
+  const y = (p[1] / WORLD_H) * canvas.height;
+  return [x, y];
 }
 
-function draw(){
+function drawCircleWorld(center, rWorld, stroke, fill, alpha=1.0){
+  const [cx, cy] = worldToCanvas(center);
+  const r = (rWorld / WORLD_W) * canvas.width;
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  if (fill){
+    ctx.fillStyle = fill; ctx.fill();
+  }
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.globalAlpha = 1.0;
+}
+
+function drawPointWorld(p, color, radiusPx=5){
+  const [x,y] = worldToCanvas(p);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x,y,radiusPx,0,Math.PI*2);
+  ctx.fill();
+}
+
+function fmt(x){ return (typeof x === "number") ? x.toFixed(3) : x; }
+
+let lastMsg = null;
+
+function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // faint grid
+  // grid
   ctx.globalAlpha = 0.35;
   ctx.strokeStyle = "#1f2a37";
   ctx.lineWidth = 1;
@@ -89,29 +114,39 @@ function draw(){
   }
   ctx.globalAlpha = 1.0;
 
-  if (pts.length < 2) return;
+  if (!lastMsg) return;
+
+  // threat zone
+  drawCircleWorld(lastMsg.threat, lastMsg.threat_r, "#ef4444", null, 0.9);
+
+  // home
+  drawPointWorld(lastMsg.home, "#22c55e", 6);
+
+  // food
+  if (lastMsg.food_available){
+    drawPointWorld(lastMsg.food, "#a855f7", 6);
+    drawCircleWorld(lastMsg.food, 4.0, "#a855f7", null, 0.5);
+  } else {
+    drawPointWorld(lastMsg.food, "#6b7280", 5);
+  }
 
   // path
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#60a5fa";
-  ctx.beginPath();
-  let [sx, sy] = worldToCanvas(pts[0]);
-  ctx.moveTo(sx, sy);
-  for (let i=1;i<pts.length;i++){
-    const [cx, cy] = worldToCanvas(pts[i]);
-    ctx.lineTo(cx, cy);
+  if (pts.length >= 2){
+    ctx.strokeStyle = "#60a5fa";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let [sx, sy] = worldToCanvas(pts[0]);
+    ctx.moveTo(sx, sy);
+    for (let i=1;i<pts.length;i++){
+      const [cx, cy] = worldToCanvas(pts[i]);
+      ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
   }
-  ctx.stroke();
 
-  // head point
-  const [hx, hy] = worldToCanvas(pts[pts.length-1]);
-  ctx.fillStyle = "#fbbf24";
-  ctx.beginPath();
-  ctx.arc(hx, hy, 4, 0, Math.PI*2);
-  ctx.fill();
+  // agent head
+  drawPointWorld(lastMsg.p, "#fbbf24", 5);
 }
-
-function fmt(x){ return (typeof x === "number") ? x.toFixed(3) : x; }
 
 const ws = new WebSocket("ws://localhost:8765");
 ws.onopen = ()=> { el("ws").textContent = "connected"; el("ws").style.color = "#16a34a"; };
@@ -120,19 +155,26 @@ ws.onerror = ()=> { el("ws").textContent = "error"; el("ws").style.color = "#dc2
 
 ws.onmessage = (ev)=>{
   const msg = JSON.parse(ev.data);
-  const p = msg.p;
-  pts.push(p);
+  lastMsg = msg;
+
+  pts.push(msg.p);
   if (pts.length > MAX_PTS) pts.shift();
 
   el("step").textContent = msg.step;
+  el("action").textContent = msg.action;
+  el("ate").textContent = msg.ate ? "YES" : "no";
+  el("foodAvail").textContent = msg.food_available ? "available" : "cooldown";
+  el("reward").textContent = msg.reward;
+  el("hunger").textContent = fmt(msg.hunger);
+  el("prox").textContent = fmt(msg.threat_prox);
+
   el("rho").textContent = fmt(msg.rho);
   el("ke").textContent = fmt(msg.k_eff);
   el("m").textContent = fmt(msg.m);
   el("mc").textContent = fmt(msg.m_crit);
   el("eps").textContent = fmt(msg.eps);
-  el("a").textContent = msg.action;
 
-  draw();
+  render();
 };
 </script>
 </body>
