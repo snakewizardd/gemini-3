@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>TIDAL — The Sea Breathes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #020408;
+            overflow: hidden;
+            color: #fff;
+            font-family: 'Georgia', serif;
+            height: 100vh;
+        }
+
+        #canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(2, 4, 8, 0.95);
+            z-index: 10;
+            transition: opacity 2s;
+            cursor: pointer;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 4em;
+            font-weight: 300;
+            letter-spacing: 0.4em;
+            color: #4a6a7a;
+            text-transform: uppercase;
+            margin-bottom: 0.2em;
+        }
+
+        .subtitle {
+            font-size: 1em;
+            color: #3a4a5a;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            margin-bottom: 3em;
+        }
+
+        .click-prompt {
+            font-size: 0.9em;
+            color: #2a3a4a;
+            letter-spacing: 0.15em;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        #controls button {
+            background: linear-gradient(135deg, #4a6a7a, #2a4a5a);
+            border: 1px solid #4a6a7a;
+            color: #fff;
+            padding: 12px 30px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 30px;
+            letter-spacing: 0.15em;
+            transition: all 0.3s;
+            font-family: Georgia, serif;
+        }
+
+        #controls button:hover {
+            background: linear-gradient(135deg, #5a7a8a, #3a5a6a);
+            box-shadow: 0 0 20px rgba(74, 106, 122, 0.4);
+        }
+
+        #time-display {
+            color: #4a6a7a;
+            font-size: 14px;
+            letter-spacing: 0.1em;
+        }
+
+        #watch-btn {
+            position: fixed;
+            top: 25px;
+            left: 30px;
+            background: linear-gradient(135deg, #8a6a4a, #6a4a3a);
+            border: 1px solid #8a6a4a;
+            color: #fff;
+            padding: 10px 20px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 30px;
+            z-index: 50;
+            letter-spacing: 0.1em;
+            transition: all 0.3s;
+            font-family: Georgia, serif;
+            display: none;
+        }
+
+        #watch-btn:hover {
+            background: linear-gradient(135deg, #9a7a5a, #7a5a4a);
+            box-shadow: 0 0 20px rgba(138, 106, 74, 0.4);
+        }
+
+        #theater {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 4, 8, 0.98);
+            z-index: 200;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #theater.active {
+            display: flex;
+        }
+
+        .theater-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: rgba(138, 106, 74, 0.3);
+            border: 1px solid #8a6a4a;
+            color: #8a6a4a;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .theater-close:hover {
+            background: #8a6a4a;
+            color: #000;
+        }
+
+        .theater-title {
+            font-size: 2.5em;
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            color: #8a6a4a;
+            margin-bottom: 0.3em;
+        }
+
+        .theater-subtitle {
+            font-size: 0.9em;
+            color: #5a4a3a;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 1.5em;
+        }
+
+        .theater-quote {
+            max-width: 700px;
+            text-align: center;
+            margin-bottom: 2em;
+            padding: 0 2em;
+        }
+
+        .theater-quote p {
+            font-size: 1.1em;
+            line-height: 1.8;
+            color: #5a6a7a;
+            font-style: italic;
+        }
+
+        .theater-frame {
+            background: linear-gradient(135deg, #1a1a1d 0%, #0d0d0e 100%);
+            padding: 3px;
+            border-radius: 8px;
+            box-shadow: 0 25px 80px -20px rgba(0, 0, 0, 0.8);
+        }
+
+        .theater-inner {
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .theater-inner iframe {
+            display: block;
+            border: none;
+        }
+
+        #progress {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #2a4a5a, #4a6a7a);
+            z-index: 50;
+            box-shadow: 0 0 10px rgba(74, 106, 122, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="overlay">
+        <h1>Tidal</h1>
+        <p class="subtitle">The Sea Breathes</p>
+        <p class="click-prompt">[ click to begin ]</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <button id="watch-btn">▶ WATCH: THE LIGHT BETWEEN OCEANS</button>
+
+    <div id="controls" style="display: none;">
+        <button id="playBtn">❚❚ PAUSE</button>
+        <div id="time-display">0:00 / 6:00</div>
+    </div>
+
+    <div id="progress"></div>
+
+    <div id="theater">
+        <button class="theater-close" onclick="closeTheater()">×</button>
+        <div class="theater-title">THE LIGHT BETWEEN OCEANS</div>
+        <div class="theater-subtitle">2016</div>
+        <div class="theater-quote">
+            <p>"Two people. One lighthouse. The sea that connects and separates everything. You just heard what Tom
+                Sherbourne heard every night for four years — the rhythm that drives fishermen mad and poets to ecstasy.
+                The ocean doesn't care about your grief. It just breathes."</p>
+        </div>
+        <div class="theater-frame">
+            <div class="theater-inner">
+                <iframe id="movie-iframe" width="960" height="540" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        // CONFIG
+        // ═══════════════════════════════════════════════════════════════
+        const CONFIG = {
+            BPM: 66,
+            BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+            DURATION_SECONDS: 360
+        };
+
+        const BEAT_SEC = 60 / CONFIG.BPM;
+
+        // ═══════════════════════════════════════════════════════════════
+        // WAVE PHYSICS
+        // ═══════════════════════════════════════════════════════════════
+        const WavePhysics = {
+            getIntensity(phase) {
+                // Tidal breathing curve
+                if (phase < 0.17) return 0.3 + phase * 2;
+                if (phase < 0.45) return 0.6 + (phase - 0.17) * 1.4;
+                if (phase < 0.55) return 1.0;
+                if (phase < 0.83) return 1.0 - (phase - 0.55) * 2;
+                return 0.4 - (phase - 0.83) * 1.5;
+            },
+            getWaveMultiplier(count) {
+                return 0.85 + 0.15 * ((count % 7) / 6);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // AUDIO ENGINE - LOUD AND WARM
+        // ═══════════════════════════════════════════════════════════════
+        const Audio = {
+            ctx: null,
+            master: null,
+            reverb: null,
+            reverbGain: null,
+            compressor: null,
+            playing: false,
+
+            async init() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Compressor for warmth
+                this.compressor = this.ctx.createDynamicsCompressor();
+                this.compressor.threshold.value = -12;
+                this.compressor.knee.value = 20;
+                this.compressor.ratio.value = 4;
+                this.compressor.attack.value = 0.01;
+                this.compressor.release.value = 0.3;
+
+                // Master - LOUD
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 1.0;
+
+                // Big reverb
+                this.reverb = this.ctx.createConvolver();
+                this.reverb.buffer = this.makeReverb(3.5, 2.5);
+                this.reverbGain = this.ctx.createGain();
+                this.reverbGain.gain.value = 0.5;
+
+                // Routing
+                this.master.connect(this.compressor);
+                this.compressor.connect(this.ctx.destination);
+                this.master.connect(this.reverb);
+                this.reverb.connect(this.reverbGain);
+                this.reverbGain.connect(this.ctx.destination);
+            },
+
+            makeReverb(duration, decay) {
+                const len = this.ctx.sampleRate * duration;
+                const buf = this.ctx.createBuffer(2, len, this.ctx.sampleRate);
+                for (let ch = 0; ch < 2; ch++) {
+                    const d = buf.getChannelData(ch);
+                    for (let i = 0; i < len; i++) {
+                        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+                    }
+                }
+                return buf;
+            },
+
+            // NYLON GUITAR - Warm and full
+            playNote(string, fret, time, dur = 2.0, vol = 0.8) {
+                if (!this.ctx || time < this.ctx.currentTime - 0.1) return;
+
+                const freq = CONFIG.BASE_FREQS[string] * Math.pow(2, fret / 12);
+                const ctx = this.ctx;
+
+                // Main body - triangle
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'triangle';
+                osc1.frequency.value = freq;
+
+                // Warmth - sine fundamental
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.value = freq;
+
+                // Brightness - sine 2nd harmonic
+                const osc3 = ctx.createOscillator();
+                osc3.type = 'sine';
+                osc3.frequency.value = freq * 2;
+
+                // Mix
+                const mix = ctx.createGain();
+                const g1 = ctx.createGain(); g1.gain.value = 0.5;
+                const g2 = ctx.createGain(); g2.gain.value = 0.4;
+                const g3 = ctx.createGain(); g3.gain.value = 0.2;
+
+                osc1.connect(g1); g1.connect(mix);
+                osc2.connect(g2); g2.connect(mix);
+                osc3.connect(g3); g3.connect(mix);
+
+                // Mellow filter sweep
+                const filt = ctx.createBiquadFilter();
+                filt.type = 'lowpass';
+                filt.Q.value = 1;
+                filt.frequency.setValueAtTime(2500, time);
+                filt.frequency.exponentialRampToValueAtTime(600, time + dur * 0.6);
+
+                // LOUD envelope
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(vol, time + 0.012);
+                env.gain.setValueAtTime(vol * 0.8, time + 0.05);
+                env.gain.exponentialRampToValueAtTime(0.001, time + dur);
+
+                mix.connect(filt);
+                filt.connect(env);
+                env.connect(this.master);
+
+                osc1.start(time); osc1.stop(time + dur + 0.1);
+                osc2.start(time); osc2.stop(time + dur + 0.1);
+                osc3.start(time); osc3.stop(time + dur + 0.1);
+            },
+
+            // Harmonic - pure and ringing
+            playHarmonic(string, fret, time, dur = 4.0, vol = 0.6) {
+                if (!this.ctx || time < this.ctx.currentTime - 0.1) return;
+
+                const mults = { 12: 2, 7: 3, 5: 4 };
+                const freq = CONFIG.BASE_FREQS[string] * (mults[fret] || 2);
+                const ctx = this.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(vol, time + 0.05);
+                env.gain.exponentialRampToValueAtTime(0.001, time + dur);
+
+                osc.connect(env);
+                env.connect(this.master);
+
+                osc.start(time);
+                osc.stop(time + dur + 0.1);
+
+                addBio();
+            },
+
+            // Soft pad drone
+            playPad(notes, time, dur = 4.0, vol = 0.3) {
+                if (!this.ctx || time < this.ctx.currentTime - 0.1) return;
+                const ctx = this.ctx;
+
+                const mix = ctx.createGain();
+
+                notes.forEach(n => {
+                    const freq = CONFIG.BASE_FREQS[n[0]] * Math.pow(2, n[1] / 12);
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    const g = ctx.createGain();
+                    g.gain.value = 0.2;
+                    osc.connect(g);
+                    g.connect(mix);
+                    osc.start(time);
+                    osc.stop(time + dur + 0.1);
+                });
+
+                const filt = ctx.createBiquadFilter();
+                filt.type = 'lowpass';
+                filt.frequency.value = 800;
+                filt.Q.value = 0.5;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(vol, time + 0.3);
+                env.gain.setValueAtTime(vol, time + dur - 0.5);
+                env.gain.linearRampToValueAtTime(0, time + dur);
+
+                mix.connect(filt);
+                filt.connect(env);
+                env.connect(this.master);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // COMPOSITION - Flowing and Soothing
+        // ═══════════════════════════════════════════════════════════════
+        const EVENTS = [];
+        let b = 0;
+
+        function note(beat, str, fret, dur = 2.0, vol = 0.8) {
+            EVENTS.push({ beat, type: 'note', str, fret, dur, vol });
+        }
+        function harm(beat, str, fret, dur = 4.0, vol = 0.6) {
+            EVENTS.push({ beat, type: 'harm', str, fret, dur, vol });
+        }
+        function pad(beat, notes, dur = 4.0, vol = 0.3) {
+            EVENTS.push({ beat, type: 'pad', notes, dur, vol });
+        }
+        function arp(beat, chord, speed = 0.15, vol = 0.7) {
+            chord.forEach((n, i) => note(beat + i * speed, n[0], n[1], 2.0, vol));
+        }
+        function trem(beat, str, fret, dur, speed = 0.08, vol = 0.6) {
+            for (let t = 0; t < dur; t += speed) {
+                note(beat + t, str, fret, speed * 2, vol * 0.7);
+            }
+        }
+
+        // Chords
+        const Em = [[5, 0], [4, 2], [3, 2], [2, 0], [1, 0], [0, 0]];
+        const Am = [[4, 0], [3, 2], [2, 2], [1, 1], [0, 0]];
+        const C = [[4, 3], [3, 2], [2, 0], [1, 1], [0, 0]];
+        const G = [[5, 3], [4, 2], [3, 0], [2, 0], [1, 0], [0, 3]];
+
+        // ═══ SLACK TIDE (0-60s) - Sparse, breathing ═══
+        note(b, 5, 0, 4, 0.5); b += 4;
+        pad(b, [[5, 0], [3, 2], [1, 0]], 8, 0.2);
+        b += 2;
+        harm(b, 0, 12, 6, 0.4); b += 4;
+        note(b, 5, 0, 3, 0.4); b += 3;
+        note(b, 4, 2, 3, 0.35); b += 4;
+        harm(b, 4, 12, 5, 0.35); b += 3;
+        note(b, 5, 0, 4, 0.45); b += 4;
+        trem(b, 0, 0, 3, 0.12, 0.3); b += 4;
+        note(b, 5, 0, 3, 0.4); b += 4;
+        pad(b, [[5, 0], [2, 0]], 6, 0.25); b += 3;
+        harm(b, 3, 12, 5, 0.3); b += 4;
+
+        // ═══ FLOOD (60-150s) - Arpeggios rising ═══
+        for (let wave = 0; wave < 8; wave++) {
+            const vol = 0.55 + wave * 0.04;
+            const chords = [Em, Am, C, G];
+            const chord = chords[wave % 4];
+
+            arp(b, chord, 0.18, vol);
+            b += 2;
+
+            if (wave % 2 === 1) {
+                pad(b, chord.slice(0, 3), 4, 0.25);
+            }
+            b += 2;
+        }
+
+        // Rising intensity
+        for (let wave = 0; wave < 6; wave++) {
+            const vol = 0.65 + wave * 0.05;
+            arp(b, Em, 0.12, vol); b += 1.5;
+            note(b, 5, 0, 1.5, vol); b += 1;
+            arp(b, Am, 0.12, vol); b += 1.5;
+            note(b, 4, 0, 1.5, vol * 0.9); b += 1.5;
+        }
+
+        // ═══ HIGH WATER (150-210s) - Full and rich ═══
+        for (let phrase = 0; phrase < 6; phrase++) {
+            const vol = 0.85;
+
+            // Full chord arpeggio
+            arp(b, Em, 0.08, vol);
+            pad(b, Em.slice(0, 4), 4, 0.35);
+            b += 2;
+
+            // Melodic response
+            note(b, 0, 12, 1.5, vol); b += 0.5;
+            note(b, 0, 10, 1.5, vol * 0.9); b += 0.5;
+            note(b, 0, 8, 1.5, vol * 0.85); b += 0.5;
+            note(b, 0, 7, 2, vol * 0.8); b += 1.5;
+
+            // Bass anchor
+            note(b, 5, 0, 2, vol * 0.9); b += 1;
+
+            // Another arpeggio
+            const ch2 = [Am, C, G, Em][phrase % 4];
+            arp(b, ch2, 0.1, vol * 0.9);
+            b += 2;
+
+            // Tremolo peak
+            if (phrase === 3 || phrase === 5) {
+                trem(b, 0, 7, 2, 0.06, vol);
+                b += 2.5;
+            } else {
+                b += 1;
+            }
+        }
+
+        // Climax moment
+        pad(b, Em, 6, 0.4);
+        arp(b, Em, 0.05, 0.9); b += 1;
+        trem(b, 0, 12, 4, 0.05, 0.85); b += 4;
+        harm(b, 0, 12, 6, 0.7); b += 2;
+        harm(b, 1, 12, 5, 0.6); b += 3;
+
+        // ═══ EBB (210-300s) - Descending, softening ═══
+        for (let phrase = 0; phrase < 8; phrase++) {
+            const vol = 0.75 - phrase * 0.05;
+            const fretOffset = Math.max(0, 7 - phrase);
+
+            // Descending melody
+            note(b, 0, fretOffset + 5, 2, vol); b += 0.7;
+            note(b, 0, fretOffset + 3, 2, vol * 0.9); b += 0.7;
+            note(b, 0, fretOffset, 2.5, vol * 0.85); b += 1.5;
+
+            // Bass takes over
+            note(b, 5, phrase % 3, 2.5, vol); b += 1.5;
+
+            if (phrase % 2 === 0) {
+                pad(b, [[5, 0], [3, 2], [2, 0]], 4, vol * 0.4);
+            }
+            b += 1.5;
+        }
+
+        // Bass dominant
+        for (let i = 0; i < 4; i++) {
+            note(b, 5, 0, 3, 0.5 - i * 0.08); b += 2;
+            note(b, 4, 2, 2.5, 0.4 - i * 0.06); b += 2;
+            harm(b, 3, 12, 4, 0.3 - i * 0.05); b += 2;
+        }
+
+        // ═══ SLACK TIDE RETURN (300-360s) - Return to stillness ═══
+        note(b, 5, 0, 4, 0.35); b += 4;
+        pad(b, [[5, 0], [3, 2]], 8, 0.2); b += 2;
+        harm(b, 0, 12, 6, 0.3); b += 4;
+        note(b, 5, 0, 4, 0.28); b += 4;
+        trem(b, 5, 0, 4, 0.15, 0.2); b += 5;
+        harm(b, 4, 12, 6, 0.2); b += 4;
+        note(b, 5, 0, 5, 0.18); b += 6;
+        harm(b, 0, 12, 8, 0.15); b += 8;
+        note(b, 5, 0, 6, 0.1); b += 8;
+
+        const TOTAL_BEATS = b;
+        EVENTS.sort((a, b) => a.beat - b.beat);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SEQUENCER
+        // ═══════════════════════════════════════════════════════════════
+        let startTime = 0;
+        let nextIdx = 0;
+        let waveCount = 0;
+
+        function tick() {
+            if (!Audio.playing) return;
+
+            const now = Audio.ctx.currentTime;
+            const elapsed = now - startTime;
+            const beat = elapsed / BEAT_SEC;
+
+            // UI
+            const totalSec = TOTAL_BEATS * BEAT_SEC;
+            const currSec = Math.min(elapsed, totalSec);
+            const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+            document.getElementById('time-display').textContent = `${fmt(currSec)} / ${fmt(totalSec)}`;
+            document.getElementById('progress').style.width = `${(currSec / totalSec) * 100}%`;
+
+            // Phase for dynamics
+            const phase = elapsed / totalSec;
+            const intensity = WavePhysics.getIntensity(phase);
+
+            // Done?
+            if (elapsed > totalSec + 3) {
+                Audio.playing = false;
+                document.getElementById('playBtn').textContent = '▶ PLAY';
+                return;
+            }
+
+            // Schedule
+            const look = 0.2;
+            while (nextIdx < EVENTS.length) {
+                const e = EVENTS[nextIdx];
+                const eTime = startTime + e.beat * BEAT_SEC;
+
+                if (eTime > now + look) break;
+
+                const wm = WavePhysics.getWaveMultiplier(waveCount);
+                const vol = e.vol * intensity * wm;
+
+                if (e.type === 'note') {
+                    Audio.playNote(e.str, e.fret, eTime, e.dur, vol);
+                } else if (e.type === 'harm') {
+                    Audio.playHarmonic(e.str, e.fret, eTime, e.dur, vol);
+                } else if (e.type === 'pad') {
+                    Audio.playPad(e.notes, eTime, e.dur, vol);
+                }
+
+                nextIdx++;
+                waveCount++;
+            }
+
+            requestAnimationFrame(tick);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // VISUALS
+        // ═══════════════════════════════════════════════════════════════
+        const cvs = document.getElementById('canvas');
+        const ctx = cvs.getContext('2d');
+        let w, h;
+        const stars = [];
+        const bio = [];
+
+        function resize() {
+            w = cvs.width = innerWidth;
+            h = cvs.height = innerHeight;
+            stars.length = 0;
+            for (let i = 0; i < 80; i++) {
+                stars.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h * 0.45,
+                    s: Math.random() * 1.5 + 0.3,
+                    p: Math.random() * Math.PI * 2
+                });
+            }
+        }
+        addEventListener('resize', resize);
+        resize();
+
+        function addBio() {
+            for (let i = 0; i < 5; i++) {
+                bio.push({
+                    x: Math.random() * w,
+                    y: h * 0.52 + Math.random() * h * 0.4,
+                    life: 1,
+                    s: Math.random() * 3 + 1
+                });
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#020408';
+            ctx.fillRect(0, 0, w, h);
+
+            const t = performance.now() * 0.001;
+
+            // Stars
+            ctx.fillStyle = '#4a6a8a';
+            stars.forEach(st => {
+                ctx.globalAlpha = (Math.sin(t * 0.5 + st.p) * 0.3 + 0.7) * 0.6;
+                ctx.beginPath();
+                ctx.arc(st.x, st.y, st.s, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+
+            // Water
+            const wy = h * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, wy);
+            for (let x = 0; x <= w; x += 3) {
+                const y = wy +
+                    Math.sin(x * 0.008 + t * 0.5) * 10 +
+                    Math.sin(x * 0.015 + t * 0.8) * 5 +
+                    Math.sin(x * 0.003 + t * 0.2) * 15;
+                ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = '#2a4a5a';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Bioluminescence
+            for (let i = bio.length - 1; i >= 0; i--) {
+                const b = bio[i];
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.s * b.life, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(100,180,200,${b.life * 0.6})`;
+                ctx.fill();
+                b.life -= 0.012;
+                b.y -= 0.3;
+                if (b.life <= 0) bio.splice(i, 1);
+            }
+
+            // Vignette
+            const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.9);
+            vig.addColorStop(0, 'transparent');
+            vig.addColorStop(1, 'rgba(0,0,0,0.4)');
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, w, h);
+
+            requestAnimationFrame(draw);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CONTROLS
+        // ═══════════════════════════════════════════════════════════════
+        async function start() {
+            if (!Audio.ctx) await Audio.init();
+            if (Audio.ctx.state === 'suspended') await Audio.ctx.resume();
+
+            startTime = Audio.ctx.currentTime;
+            nextIdx = 0;
+            waveCount = 0;
+            Audio.playing = true;
+
+            document.getElementById('overlay').classList.add('hidden');
+            document.getElementById('controls').style.display = 'flex';
+            document.getElementById('watch-btn').style.display = 'block';
+            document.getElementById('playBtn').textContent = '❚❚ PAUSE';
+
+            tick();
+        }
+
+        function toggle() {
+            if (!Audio.ctx) return;
+            if (Audio.playing) {
+                Audio.playing = false;
+                document.getElementById('playBtn').textContent = '▶ PLAY';
+            } else {
+                Audio.playing = true;
+                document.getElementById('playBtn').textContent = '❚❚ PAUSE';
+                tick();
+            }
+        }
+
+        function openTheater() {
+            document.getElementById('theater').classList.add('active');
+            document.getElementById('movie-iframe').src = 'https://vidlink.pro/movie/283552';
+            if (Audio.playing) toggle();
+        }
+
+        function closeTheater() {
+            document.getElementById('theater').classList.remove('active');
+            document.getElementById('movie-iframe').src = '';
+        }
+
+        document.getElementById('overlay').addEventListener('click', start);
+        document.getElementById('playBtn').addEventListener('click', toggle);
+        document.getElementById('watch-btn').addEventListener('click', openTheater);
+
+        draw();
+    </script>
+</body>
+
+</html>
