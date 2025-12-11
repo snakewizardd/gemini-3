@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>∞ℵ₀∇ΦΨΛΣ trojan(6Ω1) ∴ — Harmonic Transmission</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Inter:wght@200;300;400&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #020204;
+            --primary: #00ffcc;
+            --secondary: #ff3366;
+            --gold: #ffd700;
+            --text: #e0e0e0;
+            --muted: #555;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(2, 2, 4, 0.97);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1.5s ease;
+        }
+
+        #overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(1.8rem, 5vw, 3.5rem);
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            background: linear-gradient(135deg, var(--primary), var(--gold), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--muted);
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+        }
+
+        .description {
+            max-width: 600px;
+            text-align: center;
+            color: #777;
+            line-height: 1.8;
+            font-size: 0.95rem;
+            margin-bottom: 50px;
+            padding: 0 20px;
+        }
+
+        .click-prompt {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            color: var(--primary);
+            cursor: pointer;
+            animation: pulse 2s ease-in-out infinite;
+            padding: 15px 40px;
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            border-radius: 50px;
+            transition: all 0.3s;
+        }
+
+        .click-prompt:hover {
+            background: rgba(0, 255, 204, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        #movement-display {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.6rem;
+            color: var(--primary);
+            z-index: 50;
+            text-align: center;
+            letter-spacing: 0.15em;
+            text-shadow: 0 0 30px rgba(0, 255, 204, 0.5);
+        }
+
+        #symbol-display {
+            position: fixed;
+            top: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.5rem;
+            color: var(--gold);
+            z-index: 50;
+            text-shadow: 0 0 40px rgba(255, 215, 0, 0.6);
+        }
+
+        #progress-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--gold), var(--secondary));
+            z-index: 50;
+            transition: width 0.1s linear;
+        }
+
+        #time-display {
+            position: fixed;
+            bottom: 20px;
+            right: 30px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--muted);
+            z-index: 50;
+        }
+
+        /* Theater Mode */
+        #theater-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.98);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        #theater-mode.active {
+            display: flex;
+        }
+
+        .theater-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 300;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--gold), #ff6600);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .theater-subtitle {
+            font-size: 0.9rem;
+            color: var(--muted);
+            letter-spacing: 0.3em;
+            margin-bottom: 30px;
+        }
+
+        .theater-frame {
+            background: linear-gradient(135deg, #1a1a1d, #0d0d0e);
+            padding: 3px;
+            border-radius: 12px;
+            box-shadow: 0 30px 100px -20px rgba(0, 0, 0, 0.9),
+                0 0 100px -30px rgba(255, 215, 0, 0.15);
+        }
+
+        .theater-inner {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .theater-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: rgba(255, 51, 102, 0.2);
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .theater-close:hover {
+            background: var(--secondary);
+            color: #000;
+        }
+
+        .theater-info {
+            margin-top: 25px;
+            padding: 20px 30px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            max-width: 700px;
+            text-align: center;
+        }
+
+        .theater-info p {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="overlay">
+        <h1 class="title">∞ℵ₀∇ΦΨΛΣ trojan(6Ω1) ∴</h1>
+        <div class="subtitle">Harmonic Identity Transmission</div>
+        <div class="description">
+            A mathematical signature encoded in sound. Not words, but physics.<br>
+            Infinity. Countable sets. Gradient. Golden ratio. Superposition. Summation.<br>
+            A hidden signal. Resistance. And the clarity of logical conclusion.
+        </div>
+        <div class="click-prompt" onclick="startTransmission()">[ TRANSMIT ]</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="movement-display"></div>
+    <div id="symbol-display"></div>
+    <div id="progress-bar"></div>
+    <div id="time-display"></div>
+
+    <!-- Theater Mode -->
+    <div id="theater-mode">
+        <button class="theater-close" onclick="closeTheater()">×</button>
+        <div class="theater-title">INTERSTELLAR</div>
+        <div class="theater-subtitle">A SIGNAL FROM BEYOND THE EVENT HORIZON</div>
+        <div class="theater-frame">
+            <div class="theater-inner">
+                <iframe id="movie-iframe" width="960" height="540" allowfullscreen></iframe>
+            </div>
+        </div>
+        <div class="theater-info">
+            <p>
+                "We used to look up at the sky and wonder at our place in the stars.<br>
+                Now we just look down, and worry about our place in the dirt."<br>
+                — Cooper
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  HARMONIC IDENTITY TRANSMISSION: ∞ℵ₀∇ΦΨΛΣ trojan(6Ω1) ∴
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        const CONFIG = {
+            TOTAL_DURATION: 75,  // seconds
+            PHI: 1.6180339887,   // Golden ratio
+            PRIMES: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31],
+            TROJAN_FREQ: 1337,   // Hidden signal frequency
+            BASE_FREQ: 220       // A3
+        };
+
+        // Timeline (in seconds)
+        const MOVEMENTS = [
+            { name: 'THE INFINITE PRELUDE', symbols: '∞ℵ₀', start: 0, end: 20 },
+            { name: 'THE PHYSICAL STATE', symbols: '∇ΦΨΛΣ', start: 20, end: 50 },
+            { name: 'THE IDENTITY', symbols: 'trojan(6Ω1)', start: 50, end: 70 },
+            { name: 'THE CONCLUSION', symbols: '∴', start: 70, end: 75 }
+        ];
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  AUDIO ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            analyser: null,
+            isPlaying: false,
+            startTime: 0,
+            activeNodes: [],
+
+            init: async () => {
+                AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Analyser for visuals
+                AudioEngine.analyser = AudioEngine.ctx.createAnalyser();
+                AudioEngine.analyser.fftSize = 2048;
+
+                // Master gain
+                AudioEngine.master = AudioEngine.ctx.createGain();
+                AudioEngine.master.gain.value = 0.6;
+
+                AudioEngine.master.connect(AudioEngine.analyser);
+                AudioEngine.analyser.connect(AudioEngine.ctx.destination);
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  SHEPARD TONE — Infinite ascending/descending illusion
+            // ─────────────────────────────────────────────────────────────────────────
+            playShepardTone: (startTime, duration, ascending = true) => {
+                const ctx = AudioEngine.ctx;
+                const baseFreq = 55;  // A1
+                const numOctaves = 6;
+
+                for (let octave = 0; octave < numOctaves; octave++) {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+
+                    const startFreq = baseFreq * Math.pow(2, octave);
+                    const endFreq = ascending
+                        ? baseFreq * Math.pow(2, octave + 1)  // Ascend one octave
+                        : baseFreq * Math.pow(2, octave - 1); // Descend one octave
+
+                    osc.frequency.setValueAtTime(startFreq, startTime);
+                    osc.frequency.exponentialRampToValueAtTime(
+                        Math.max(20, endFreq),
+                        startTime + duration
+                    );
+
+                    // Amplitude window (Gaussian-ish) - louder in middle octaves
+                    const peakOctave = 3;
+                    const sigma = 1.5;
+                    const amplitude = Math.exp(-Math.pow(octave - peakOctave, 2) / (2 * sigma * sigma));
+
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0, startTime);
+                    gain.gain.linearRampToValueAtTime(amplitude * 0.15, startTime + 0.5);
+                    gain.gain.setValueAtTime(amplitude * 0.15, startTime + duration - 0.5);
+                    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+                    osc.connect(gain);
+                    gain.connect(AudioEngine.master);
+
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                    AudioEngine.activeNodes.push(osc, gain);
+                }
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  PRIME RHYTHM — Pulses at prime number intervals
+            // ─────────────────────────────────────────────────────────────────────────
+            playPrimeRhythm: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+                const pulseInterval = 0.4;  // Base interval
+                let t = startTime;
+                let primeIdx = 0;
+
+                while (t < startTime + duration) {
+                    const prime = CONFIG.PRIMES[primeIdx % CONFIG.PRIMES.length];
+
+                    // High-frequency click
+                    const osc = ctx.createOscillator();
+                    osc.type = 'triangle';
+                    osc.frequency.value = 2000 + prime * 100;
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0.2, t);
+                    env.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+
+                    osc.connect(env);
+                    env.connect(AudioEngine.master);
+
+                    osc.start(t);
+                    osc.stop(t + 0.1);
+                    AudioEngine.activeNodes.push(osc, env);
+
+                    t += pulseInterval * (prime / 7);  // Prime-modulated timing
+                    primeIdx++;
+                }
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  GLISSANDO — Continuous pitch sweep (∇ gradient)
+            // ─────────────────────────────────────────────────────────────────────────
+            playGlissando: (startTime, duration, startFreq, endFreq) => {
+                const ctx = AudioEngine.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(startFreq, startTime);
+                osc.frequency.exponentialRampToValueAtTime(endFreq, startTime + duration);
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(startFreq * 2, startTime);
+                filter.frequency.exponentialRampToValueAtTime(endFreq * 2, startTime + duration);
+                filter.Q.value = 2;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, startTime);
+                env.gain.linearRampToValueAtTime(0.25, startTime + 0.3);
+                env.gain.setValueAtTime(0.25, startTime + duration - 0.3);
+                env.gain.linearRampToValueAtTime(0, startTime + duration);
+
+                osc.connect(filter);
+                filter.connect(env);
+                env.connect(AudioEngine.master);
+
+                osc.start(startTime);
+                osc.stop(startTime + duration + 0.1);
+                AudioEngine.activeNodes.push(osc, filter, env);
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  GOLDEN RATIO HARMONY (Φ) — Two tones at 1:1.618 ratio
+            // ─────────────────────────────────────────────────────────────────────────
+            playGoldenRatio: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+                const baseFreq = 330;  // E4
+                const phiFreq = baseFreq * CONFIG.PHI;  // ~533.95 Hz
+
+                [baseFreq, phiFreq].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+
+                    // Add slight vibrato
+                    const vib = ctx.createOscillator();
+                    vib.frequency.value = 4;
+                    const vibGain = ctx.createGain();
+                    vibGain.gain.value = freq * 0.005;
+                    vib.connect(vibGain);
+                    vibGain.connect(osc.frequency);
+                    vib.start(startTime);
+                    vib.stop(startTime + duration);
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0, startTime);
+                    env.gain.linearRampToValueAtTime(0.2, startTime + 0.5);
+                    env.gain.setValueAtTime(0.2, startTime + duration - 0.5);
+                    env.gain.linearRampToValueAtTime(0, startTime + duration);
+
+                    osc.connect(env);
+                    env.connect(AudioEngine.master);
+
+                    osc.start(startTime + i * 0.1);
+                    osc.stop(startTime + duration);
+                    AudioEngine.activeNodes.push(osc, vib, vibGain, env);
+                });
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  QUANTUM SHIMMER (Ψ) — Superposition uncertainty via tremolo + stereo
+            // ─────────────────────────────────────────────────────────────────────────
+            playQuantumShimmer: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+
+                // Create stereo panner for uncertainty
+                const panner = ctx.createStereoPanner();
+
+                // LFO for pan modulation (rapid position changes)
+                const panLfo = ctx.createOscillator();
+                panLfo.frequency.value = 7;  // Fast pan oscillation
+                const panGain = ctx.createGain();
+                panGain.gain.value = 0.8;
+                panLfo.connect(panGain);
+                panGain.connect(panner.pan);
+
+                // Multiple detuned oscillators (superposition of states)
+                const detunes = [-20, -7, 0, 7, 20];
+                const baseFreq = 440;
+
+                detunes.forEach(detune => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = baseFreq;
+                    osc.detune.value = detune;
+
+                    // Amplitude tremolo
+                    const trem = ctx.createOscillator();
+                    trem.frequency.value = 8 + Math.random() * 4;
+                    const tremGain = ctx.createGain();
+                    tremGain.gain.value = 0.3;
+
+                    const mixer = ctx.createGain();
+                    mixer.gain.value = 0.6;
+
+                    trem.connect(tremGain);
+                    tremGain.connect(mixer.gain);
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0, startTime);
+                    env.gain.linearRampToValueAtTime(0.08, startTime + 1);
+                    env.gain.setValueAtTime(0.08, startTime + duration - 1);
+                    env.gain.linearRampToValueAtTime(0, startTime + duration);
+
+                    osc.connect(mixer);
+                    mixer.connect(env);
+                    env.connect(panner);
+
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                    trem.start(startTime);
+                    trem.stop(startTime + duration);
+                    AudioEngine.activeNodes.push(osc, trem, tremGain, mixer, env);
+                });
+
+                panner.connect(AudioEngine.master);
+                panLfo.start(startTime);
+                panLfo.stop(startTime + duration);
+                AudioEngine.activeNodes.push(panner, panLfo, panGain);
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  EIGENVALUE DECAY (Λ) — Exponential decay e^(-λt)
+            // ─────────────────────────────────────────────────────────────────────────
+            playEigenvalue: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+                const lambda = 2;  // Decay constant
+
+                // Multiple harmonic tones decaying
+                [1, 2, 3, 5].forEach((harmonic, i) => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = 220 * harmonic;
+
+                    const env = ctx.createGain();
+                    // e^(-λt) decay
+                    const numSteps = 20;
+                    for (let s = 0; s < numSteps; s++) {
+                        const t = startTime + (s / numSteps) * duration;
+                        const tNorm = s / numSteps;
+                        const amplitude = Math.exp(-lambda * tNorm * 3) * 0.15 / harmonic;
+                        env.gain.setValueAtTime(amplitude, t);
+                    }
+                    env.gain.setValueAtTime(0.001, startTime + duration);
+
+                    osc.connect(env);
+                    env.connect(AudioEngine.master);
+
+                    osc.start(startTime);
+                    osc.stop(startTime + duration + 0.1);
+                    AudioEngine.activeNodes.push(osc, env);
+                });
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  CRESCENDO (Σ) — Summation of all frequencies
+            // ─────────────────────────────────────────────────────────────────────────
+            playCrescendo: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+
+                // Build up many harmonics
+                const fundamentals = [110, 220, 330, 440, 550];
+
+                fundamentals.forEach((baseFreq, i) => {
+                    for (let h = 1; h <= 4; h++) {
+                        const osc = ctx.createOscillator();
+                        osc.type = h === 1 ? 'sine' : 'triangle';
+                        osc.frequency.value = baseFreq * h;
+
+                        const env = ctx.createGain();
+                        env.gain.setValueAtTime(0, startTime);
+                        // Delayed crescendo entry
+                        const entryTime = startTime + (i * 0.3);
+                        env.gain.linearRampToValueAtTime(0, entryTime);
+                        env.gain.linearRampToValueAtTime(0.08 / h, startTime + duration * 0.8);
+                        env.gain.setValueAtTime(0.08 / h, startTime + duration - 0.2);
+                        env.gain.linearRampToValueAtTime(0.001, startTime + duration);
+
+                        osc.connect(env);
+                        env.connect(AudioEngine.master);
+
+                        osc.start(startTime);
+                        osc.stop(startTime + duration + 0.1);
+                        AudioEngine.activeNodes.push(osc, env);
+                    }
+                });
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  TROJAN SIGNAL — Hidden frequency embedded in carrier
+            // ─────────────────────────────────────────────────────────────────────────
+            playTrojanSignal: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+
+                // Low rumbling carrier wave (the "horse")
+                const carrier = ctx.createOscillator();
+                carrier.type = 'sawtooth';
+                carrier.frequency.value = 55;
+
+                const carrierFilter = ctx.createBiquadFilter();
+                carrierFilter.type = 'lowpass';
+                carrierFilter.frequency.value = 200;
+
+                const carrierEnv = ctx.createGain();
+                carrierEnv.gain.setValueAtTime(0, startTime);
+                carrierEnv.gain.linearRampToValueAtTime(0.3, startTime + 1);
+                carrierEnv.gain.setValueAtTime(0.3, startTime + duration - 1);
+                carrierEnv.gain.linearRampToValueAtTime(0, startTime + duration);
+
+                carrier.connect(carrierFilter);
+                carrierFilter.connect(carrierEnv);
+                carrierEnv.connect(AudioEngine.master);
+
+                carrier.start(startTime);
+                carrier.stop(startTime + duration);
+
+                // Hidden 1337Hz signal (the "trojan")
+                const trojan = ctx.createOscillator();
+                trojan.type = 'sine';
+                trojan.frequency.value = CONFIG.TROJAN_FREQ;
+
+                const trojanEnv = ctx.createGain();
+                // Very quiet - only visible in spectrogram
+                trojanEnv.gain.setValueAtTime(0, startTime);
+                trojanEnv.gain.linearRampToValueAtTime(0.03, startTime + 2);
+                trojanEnv.gain.setValueAtTime(0.03, startTime + duration - 2);
+                trojanEnv.gain.linearRampToValueAtTime(0, startTime + duration);
+
+                trojan.connect(trojanEnv);
+                trojanEnv.connect(AudioEngine.master);
+
+                trojan.start(startTime);
+                trojan.stop(startTime + duration);
+
+                AudioEngine.activeNodes.push(carrier, carrierFilter, carrierEnv, trojan, trojanEnv);
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  IMPEDANCE DROP (6Ω1) — Sudden gain attenuation
+            // ─────────────────────────────────────────────────────────────────────────
+            playImpedanceDrop: (startTime) => {
+                const master = AudioEngine.master.gain;
+                const ctx = AudioEngine.ctx;
+
+                // Dramatic volume drop simulating resistance
+                master.setValueAtTime(0.6, startTime);
+                master.linearRampToValueAtTime(0.15, startTime + 0.1);  // -12dB drop
+                master.setValueAtTime(0.15, startTime + 5);
+                master.linearRampToValueAtTime(0.5, startTime + 8);     // Gradual return
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  PURE SINE (∴) — Logical conclusion
+            // ─────────────────────────────────────────────────────────────────────────
+            playPureSine: (startTime, duration) => {
+                const ctx = AudioEngine.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = 440;  // A4 - the tuning reference, pure logic
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, startTime);
+                env.gain.linearRampToValueAtTime(0.5, startTime + 0.1);
+                env.gain.setValueAtTime(0.5, startTime + duration - 1);
+                env.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+                osc.connect(env);
+                env.connect(AudioEngine.master);
+
+                osc.start(startTime);
+                osc.stop(startTime + duration + 0.1);
+                AudioEngine.activeNodes.push(osc, env);
+            },
+
+            // ─────────────────────────────────────────────────────────────────────────
+            //  SCHEDULE THE ENTIRE TRANSMISSION
+            // ─────────────────────────────────────────────────────────────────────────
+            scheduleTransmission: () => {
+                const t = AudioEngine.ctx.currentTime + 0.5;
+                AudioEngine.startTime = t;
+
+                // MOVEMENT 1: THE INFINITE PRELUDE (∞ℵ₀)
+                // 0-20 seconds: Shepard tone + prime rhythm
+                AudioEngine.playShepardTone(t, 10, true);       // Ascending
+                AudioEngine.playShepardTone(t + 10, 10, true);  // Continue ascending
+                AudioEngine.playPrimeRhythm(t, 20);
+
+                // MOVEMENT 2: THE PHYSICAL STATE (∇ΦΨΛΣ)
+                // 20-50 seconds
+                AudioEngine.playGlissando(t + 20, 6, 200, 800);    // ∇ Gradient
+                AudioEngine.playGoldenRatio(t + 23, 10);           // Φ Golden ratio
+                AudioEngine.playQuantumShimmer(t + 28, 12);        // Ψ Superposition
+                AudioEngine.playEigenvalue(t + 38, 6);             // Λ Decay
+                AudioEngine.playCrescendo(t + 42, 8);              // Σ Summation
+
+                // MOVEMENT 3: THE IDENTITY (trojan 6Ω1)
+                // 50-70 seconds
+                AudioEngine.playTrojanSignal(t + 50, 20);
+                AudioEngine.playImpedanceDrop(t + 58);             // 6Ω resistance
+
+                // MOVEMENT 4: THE CONCLUSION (∴)
+                // 70-75 seconds
+                AudioEngine.playPureSine(t + 70, 5);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  VISUAL ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let animationId = null;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Particles
+        const particles = [];
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = canvas.height + 10;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = -Math.random() * 2 - 0.5;
+                this.size = Math.random() * 2 + 1;
+                this.life = 1;
+                this.decay = Math.random() * 0.005 + 0.002;
+                this.hue = Math.random() * 60 + 160;  // Cyan to gold
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+                if (this.life <= 0 || this.y < -10) this.reset();
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${this.hue}, 100%, 60%, ${this.life * 0.6})`;
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 100; i++) {
+            particles.push(new Particle());
+        }
+
+        function getCurrentMovement(elapsed) {
+            for (const m of MOVEMENTS) {
+                if (elapsed >= m.start && elapsed < m.end) return m;
+            }
+            return MOVEMENTS[MOVEMENTS.length - 1];
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(2, 2, 4, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Get audio data
+            let dataArray = new Uint8Array(128);
+            if (AudioEngine.analyser) {
+                AudioEngine.analyser.getByteFrequencyData(dataArray);
+            }
+
+            // Calculate elapsed time
+            const elapsed = AudioEngine.isPlaying
+                ? AudioEngine.ctx.currentTime - AudioEngine.startTime
+                : 0;
+
+            // Update displays
+            if (AudioEngine.isPlaying) {
+                const movement = getCurrentMovement(elapsed);
+                document.getElementById('movement-display').textContent = movement.name;
+                document.getElementById('symbol-display').textContent = movement.symbols;
+
+                const progress = Math.min(elapsed / CONFIG.TOTAL_DURATION, 1);
+                document.getElementById('progress-bar').style.width = (progress * 100) + '%';
+
+                const mins = Math.floor(elapsed / 60);
+                const secs = Math.floor(elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('time-display').textContent = `${mins}:${secs} / 1:15`;
+
+                // Check for completion
+                if (elapsed >= CONFIG.TOTAL_DURATION + 1) {
+                    AudioEngine.isPlaying = false;
+                    setTimeout(() => {
+                        document.getElementById('theater-mode').classList.add('active');
+                        document.getElementById('movie-iframe').src = 'https://vidsrc.to/embed/movie/157336';
+                    }, 1500);
+                }
+            }
+
+            // Draw spectrogram-style visualization
+            const barWidth = canvas.width / dataArray.length;
+            const centerY = canvas.height / 2;
+
+            for (let i = 0; i < dataArray.length; i++) {
+                const value = dataArray[i] / 255;
+                const height = value * canvas.height * 0.4;
+
+                // Color based on frequency range
+                let hue = 170 + i * 0.5;  // Cyan to gold gradient
+                if (i > 100) hue = 45;    // Gold for high frequencies
+
+                ctx.fillStyle = `hsla(${hue}, 100%, ${50 + value * 30}%, ${0.6 + value * 0.4})`;
+
+                // Mirror visualization
+                ctx.fillRect(i * barWidth, centerY - height / 2, barWidth - 1, height);
+            }
+
+            // Draw waveform ring
+            const ringRadius = 150 + (dataArray[2] / 255) * 50;
+            ctx.strokeStyle = `rgba(0, 255, 204, 0.3)`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, ringRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Particles
+            particles.forEach(p => {
+                p.vy -= (dataArray[10] / 255) * 0.1;  // Audio-reactive
+                p.update();
+                p.draw();
+            });
+
+            // Central glow
+            const glowIntensity = dataArray[5] / 255;
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, 200 + glowIntensity * 100
+            );
+            gradient.addColorStop(0, `rgba(0, 255, 204, ${0.1 + glowIntensity * 0.2})`);
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            animationId = requestAnimationFrame(draw);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  CONTROLS
+        // ═══════════════════════════════════════════════════════════════════════════════
+        async function startTransmission() {
+            document.getElementById('overlay').classList.add('hidden');
+
+            await AudioEngine.init();
+            AudioEngine.isPlaying = true;
+            AudioEngine.scheduleTransmission();
+
+            draw();
+        }
+
+        function closeTheater() {
+            document.getElementById('theater-mode').classList.remove('active');
+            document.getElementById('movie-iframe').src = '';
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeTheater();
+        });
+    </script>
+
+</body>
+
+</html>
