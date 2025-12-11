@@ -1,7 +1,3 @@
-Alright bro — here’s a **revised, fully consistent, implementable** DDA spec. I’m keeping your philosophical core (“persisting structure under pressure”), but cleaning the math so it actually runs, stays bounded, and gives you a real (m\_{\text{crit}}) from the dynamics.
-
-***
-
 # Dynamic Decision Algorithm (DDA) — Revised Formal Specification
 
 ## 0) Core idea (unchanged, just sharpened)
@@ -397,4 +393,3 @@ Higher (W\_t) = more “will” / resistance: strong identity stiffness, low ope
 
 ***
 
-If you want, next I can also give you a **reference pseudocode loop** (like 30 lines) that implements the whole thing step-by-step, including action generation, scoring, retrieval, and updating (\mathbf{x},\rho).
