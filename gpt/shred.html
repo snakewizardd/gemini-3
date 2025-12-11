@@ -1,0 +1,653 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>PYROCLASTIC FLOW — Karplus–Strong Shred Tab Engine</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: radial-gradient(1200px at 50% 50%, #0b0a10 0%, #090813 40%, #05040c 100%);
+    color: #e9e6f4;
+    font-family: 'Palatino Linotype', Georgia, serif;
+    overflow: hidden;
+  }
+  #canvas { position: fixed; inset:0; z-index:1; }
+  #overlay {
+    position: fixed; inset:0; z-index:100; background: rgba(7,6,12,0.95);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition: opacity 0.8s; text-align:center;
+  }
+  #overlay.hidden { opacity:0; pointer-events:none; }
+  #overlay h1 {
+    font-size: 3.1em; letter-spacing: 0.12em; font-weight:300;
+    color:#d24c3a; text-shadow: 0 0 40px rgba(210,76,58,0.35);
+  }
+  #overlay h2 {
+    font-size: 1.1em; color:#b26b58; font-style:italic; letter-spacing:0.25em; margin-top:8px;
+  }
+  #overlay .description {
+    color:#8b8296; max-width:700px; line-height:1.8; margin-top:18px; font-size:0.95em;
+  }
+  #overlay .click { margin-top:40px; color:#564c6e; letter-spacing:0.3em; }
+
+  #hud {
+    position: fixed; top:24px; left:50%; transform:translateX(-50%); z-index:50; text-align:center;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .title { font-size:18px; color:#ff7b66; letter-spacing:0.35em; font-weight:300; text-transform:uppercase; }
+  .mode { font-size:13px; color:#b26b58; letter-spacing:0.2em; font-style:italic; }
+  .time { font-size:13px; font-family: 'Courier New', monospace; color:#a08fb0; }
+
+  #controls {
+    position: fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:50;
+    display:flex; gap:16px; align-items:center; padding:8px 12px; border-radius:24px;
+    background: rgba(20,16,28,0.35); border:1px solid rgba(255,123,102,0.15);
+    backdrop-filter: blur(8px);
+  }
+  #controls button, #controls input, #controls label {
+    font-size:14px; letter-spacing:0.1em; color:#e9e6f4;
+  }
+  #playBtn {
+    cursor:pointer; border:1px solid rgba(255,123,102,0.35);
+    background: linear-gradient(135deg, rgba(255,123,102,0.18), rgba(210,76,58,0.22));
+    padding:12px 28px; border-radius:24px;
+  }
+  #playBtn:hover { box-shadow: 0 0 24px rgba(255,123,102,0.35); }
+  .slider { width:160px; accent-color:#ff7b66; }
+  .toggle {
+    cursor:pointer; border:1px solid rgba(255,123,102,0.35);
+    background: linear-gradient(135deg, rgba(255,123,102,0.12), rgba(210,76,58,0.16));
+    padding:8px 16px; border-radius:18px;
+  }
+  #progress { position:fixed; bottom:0; left:0; height:2px; z-index:50;
+    background: linear-gradient(90deg, #ff7b66, #d24c3a, #b26b58);
+    width:0%;
+  }
+
+  #tab {
+    position: fixed; right:24px; top:24px; z-index:60;
+    background: rgba(12,10,18,0.65); border:1px solid rgba(255,123,102,0.18);
+    border-radius:8px; padding:10px 12px; max-width:560px; backdrop-filter: blur(6px);
+  }
+  #tab h3 { font-size:13px; letter-spacing:0.2em; color:#ff7b66; font-weight:300; margin-bottom:6px; }
+  #tab pre {
+    color:#ddd6ea; font-family: 'Courier New', monospace; font-size:12px; line-height:1.2;
+    overflow:auto; max-height:260px;
+  }
+</style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="overlay">
+    <h1>PYROCLASTIC FLOW</h1>
+    <h2>Karplus–Strong Shred Tab Engine</h2>
+    <div class="description">
+      A high-velocity, string-synthesis guitar engine: noise excitation into a feedback
+      comb with lossy damping (Karplus–Strong), shaped by amp/cab, delay, and reverb.
+      Includes alternate picking, palm mutes, legato slides, bends, sweeps, and tremolo
+      finale. Live ASCII TAB per measure. Click to ignite.
+    </div>
+    <div class="click">[ CLICK TO PLAY ]</div>
+  </div>
+
+  <div id="hud">
+    <div class="title">PYROCLASTIC FLOW — SHRED</div>
+    <div class="mode">E Phrygian Dominant • Em ↔ B7 tension</div>
+    <div class="time" id="time-display">0:00 / 1:45</div>
+  </div>
+
+  <div id="controls">
+    <button id="playBtn">▶ PLAY</button>
+    <label>Tempo&nbsp;<input id="tempo" class="slider" type="range" min="160" max="280" value="220"></label>
+    <button id="toneBtn" class="toggle">TONE: SHRED</button>
+  </div>
+
+  <div id="tab">
+    <h3>LIVE TAB — CURRENT MEASURE (16th grid)</h3>
+    <pre id="tab-pre"></pre>
+  </div>
+
+  <div id="progress"></div>
+
+<script>
+/* ============================================================================
+   PYROCLASTIC FLOW — KARPLUS–STRONG SHRED TAB ENGINE
+   ========================================================================== */
+
+const UI = {
+  overlay: document.getElementById('overlay'),
+  playBtn: document.getElementById('playBtn'),
+  tempo: document.getElementById('tempo'),
+  toneBtn: document.getElementById('toneBtn'),
+  timeDisplay: document.getElementById('time-display'),
+  progress: document.getElementById('progress'),
+  tabPre: document.getElementById('tab-pre'),
+};
+
+const CONFIG = {
+  BPM: 220,
+  SECONDS_PER_BEAT: () => 60 / CONFIG.BPM,
+  TOTAL_BEATS: 384, // ~1:45 at 220 BPM (384 * 60/220 ≈ 105 sec)
+  LOOKAHEAD_BEATS: 0.15,
+};
+
+const GUITAR = {
+  // Standard tuning MIDI (E2 A2 D3 G3 B3 E4)
+  stringsMidi: [40,45,50,55,59,64],
+  names: ['E2','A2','D3','G3','B3','E4'],
+  // Utility: MIDI→Hz and fret→MIDI
+  midiToFreq: (m)=> 440*Math.pow(2,(m-69)/12),
+  fretToMidi: (stringIndex, fret)=> GUITAR.stringsMidi[stringIndex] + fret,
+};
+
+// =========================== AUDIO ENGINE ================================
+const AudioEngine = {
+  ctx: null, master: null, isPlaying: false,
+  compressor: null, shaper: null, cabEQ: null, delayL: null, delayR: null,
+  delayGain: null, delayFeedback: null, reverb: null, reverbGain: null,
+  cleanMode: false,
+
+  async init() {
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    const ctx = this.ctx;
+
+    // Master & compressor
+    this.master = ctx.createGain();
+    this.master.gain.value = 0.8;
+
+    this.compressor = ctx.createDynamicsCompressor();
+    this.compressor.threshold.value = -18;
+    this.compressor.knee.value = 12;
+    this.compressor.ratio.value = 3.5;
+    this.compressor.attack.value = 0.003;
+    this.compressor.release.value = 0.25;
+
+    // Distortion (waveshaper)
+    this.shaper = ctx.createWaveShaper();
+    this.shaper.curve = this.makeShaperCurve(400);
+    this.shaper.oversample = '4x';
+
+    // Cab/EQ (multi-band)
+    const lowcut = ctx.createBiquadFilter(); lowcut.type='highpass'; lowcut.frequency.value=80; lowcut.Q.value=0.7;
+    const midDip = ctx.createBiquadFilter(); midDip.type='peaking'; midDip.frequency.value=600; midDip.Q.value=0.9; midDip.gain.value=-3;
+    const presence = ctx.createBiquadFilter(); presence.type='peaking'; presence.frequency.value=3000; presence.Q.value=0.9; presence.gain.value=2;
+    const air = ctx.createBiquadFilter(); air.type='highshelf'; air.frequency.value=6500; air.gain.value=3;
+    this.cabEQ = [lowcut, midDip, presence, air];
+
+    // Ping-pong delay
+    this.delayL = ctx.createDelay(1.0); this.delayR = ctx.createDelay(1.0);
+    this.delayL.delayTime.value = 0.25; this.delayR.delayTime.value = 0.5;
+    this.delayGain = ctx.createGain(); this.delayGain.gain.value = 0.18;
+    this.delayFeedback = ctx.createGain(); this.delayFeedback.gain.value = 0.3;
+
+    // Create reverb impulse
+    this.reverb = ctx.createConvolver();
+    this.reverb.buffer = this.smallRoomImpulse(2.2, 1.6);
+    this.reverbGain = ctx.createGain(); this.reverbGain.gain.value = 0.28;
+
+    // Routing: (clean/shred selectable)
+    // Dry bus
+    const dryGain = ctx.createGain(); dryGain.gain.value = 0.9;
+
+    // Stereo panning for delay
+    const splitter = ctx.createChannelSplitter(2), merger = ctx.createChannelMerger(2);
+
+    // Build chain
+    this.compressor.connect(dryGain);
+    // Shred chain
+    this.compressor.connect(this.shaper);
+    this.shaper.connect(this.cabEQ[0]);
+    this.cabEQ.reduce((prev, node)=> (prev.connect(node), node), this.cabEQ[0]).connect(dryGain);
+
+    // Delay routing (ping-pong after EQ)
+    dryGain.connect(splitter);
+    splitter.connect(this.delayL, 0); splitter.connect(this.delayR, 1);
+    this.delayL.connect(this.delayGain); this.delayR.connect(this.delayGain);
+    this.delayGain.connect(this.delayFeedback); this.delayFeedback.connect(this.delayL);
+    this.delayGain.connect(merger, 0, 1); this.delayGain.connect(merger, 0, 0);
+
+    // Reverb (post)
+    dryGain.connect(this.reverb); this.reverb.connect(this.reverbGain);
+
+    // Master out
+    dryGain.connect(this.master);
+    merger.connect(this.master);
+    this.reverbGain.connect(this.master);
+    this.master.connect(ctx.destination);
+  },
+
+  makeShaperCurve(amount){
+    const k = amount|0;
+    const n = 44100; const curve = new Float32Array(n);
+    const deg = Math.PI/180;
+    for (let i=0;i<n;i++){
+      const x = i*2/n - 1;
+      curve[i] = (3+k)*x*Math.PI/180 / (Math.PI + k*Math.abs(x));
+    }
+    return curve;
+  },
+
+  smallRoomImpulse(duration, decay){
+    const ctx = this.ctx, rate = ctx.sampleRate, len = Math.floor(rate*duration);
+    const buffer = ctx.createBuffer(2, len, rate);
+    for(let ch=0; ch<2; ch++){
+      const data = buffer.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        const t = i/len;
+        const env = Math.pow(1 - t, decay);
+        const early = (i < rate*0.03) ? Math.sin(i*0.12) * 0.5 : 0;
+        data[i] = (Math.random()*2-1)*0.35*env + early*env;
+      }
+    }
+    return buffer;
+  },
+
+  // Plucked String (Karplus–Strong)
+  pluck({freq, time, duration, velocity=0.6, pick='D', mute=false, vibrato=0, bendSemis=0, slideToFreq=null, pan=0}){
+    const ctx = this.ctx;
+    const period = 1/freq;
+
+    // Excitation: short noise burst shaped by pick direction brightness
+    const burstLen = Math.max(0.008, mute ? 0.006 : 0.015);
+    const noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate*burstLen), ctx.sampleRate);
+    const n = noiseBuf.getChannelData(0);
+    for(let i=0;i<n.length;i++){
+      // Slight brightness tilt for alternate picking
+      const brightness = pick === 'U' ? 1.0 : 1.15;
+      n[i] = (Math.random()*2-1) * (0.6 + 0.4*Math.sin(i*0.001)*brightness);
+    }
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+
+    // Comb loop
+    const delay = ctx.createDelay(1.0); delay.delayTime.setValueAtTime(period, time);
+    const loopLP = ctx.createBiquadFilter(); loopLP.type = 'lowpass';
+    loopLP.frequency.setValueAtTime(mute ? 1500 : 4500, time);
+    loopLP.Q.value = mute ? 0.4 : 0.8;
+
+    const feedback = ctx.createGain();
+    feedback.gain.setValueAtTime(mute ? 0.82 : 0.94, time);
+
+    // Output amp envelope
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0, time);
+    amp.gain.linearRampToValueAtTime(velocity * (mute ? 0.55 : 0.9), time + 0.005);
+    amp.gain.exponentialRampToValueAtTime(0.0008, time + duration);
+
+    // Pre-EQ: pick brightness (high-shelf)
+    const preShelf = ctx.createBiquadFilter(); preShelf.type = 'highshelf';
+    preShelf.frequency.value = 2500; preShelf.gain.value = pick === 'U' ? 1.0 : 2.2;
+
+    // Pan
+    const panner = ctx.createStereoPanner(); panner.pan.value = pan;
+
+    // Vibrato via delay time modulation (tiny)
+    if (vibrato > 0){
+      const vLFO = ctx.createOscillator(); const vGain = ctx.createGain();
+      vLFO.type='sine'; vLFO.frequency.value = 5.5;
+      const depth = period * 0.0015 * vibrato; // small fraction of period
+      vGain.gain.setValueAtTime(depth, time);
+      vLFO.connect(vGain); vGain.connect(delay.delayTime);
+      vLFO.start(time); vLFO.stop(time + duration);
+    }
+
+    // Bend (ramp delay to target period)
+    if (bendSemis !== 0){
+      const bendRatio = Math.pow(2, bendSemis/12);
+      const targetPeriod = period / bendRatio;
+      delay.delayTime.linearRampToValueAtTime(targetPeriod, time + Math.min(0.18, duration*0.6));
+    }
+
+    // Slide (legato to another freq)
+    if (slideToFreq){
+      const targetPeriod = 1/slideToFreq;
+      delay.delayTime.linearRampToValueAtTime(targetPeriod, time + Math.min(0.22, duration*0.7));
+    }
+
+    // Build loop
+    src.connect(preShelf);
+    preShelf.connect(delay);
+    delay.connect(loopLP);
+    loopLP.connect(feedback);
+    feedback.connect(delay);
+    loopLP.connect(amp);
+    amp.connect(this.compressor);
+    // Stereo placement
+    amp.connect(panner); panner.connect(this.compressor);
+
+    src.start(time);
+    src.stop(time + burstLen + 0.05);
+  }
+};
+
+// =========================== VISUALS ================================
+const cvs = document.getElementById('canvas');
+const vctx = cvs.getContext('2d');
+let W,H; function resize(){ W=cvs.width=innerWidth; H=cvs.height=innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+const blips=[], rings=[];
+function triggerVisual(kind, energy, pitchPan=0){
+  if (kind==='note'){
+    blips.push({
+      x: W*0.5 + (pitchPan)*W*0.25 + (Math.random()-0.5)*40,
+      y: H*0.55 + (Math.random()-0.5)*80,
+      r: 2 + energy*12, life: 1.0,
+      color: `rgba(255,123,102,${0.6 + 0.3*Math.random()})`
+    });
+  } else if (kind==='accent'){
+    rings.push({ x: W*0.5, y: H*0.5, r: 0, max: 360+energy*120, life:1.0 });
+  }
+}
+function draw(){
+  vctx.fillStyle = 'rgba(10,8,18,0.06)';
+  vctx.fillRect(0,0,W,H);
+
+  for(let i=blips.length-1;i>=0;i--){
+    const b=blips[i];
+    const g=vctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r*4);
+    g.addColorStop(0, b.color);
+    g.addColorStop(1, 'rgba(255,123,102,0)');
+    vctx.fillStyle=g;
+    vctx.beginPath(); vctx.arc(b.x,b.y,b.r*4,0,Math.PI*2); vctx.fill();
+    b.r*=0.992; b.life-=0.012;
+    if (b.life<=0) blips.splice(i,1);
+  }
+  for(let i=rings.length-1;i>=0;i--){
+    const r=rings[i]; r.r+=2.1; r.life-=0.01;
+    vctx.beginPath(); vctx.arc(r.x,r.y,r.r,0,Math.PI*2);
+    vctx.strokeStyle=`rgba(255,123,102,${r.life*0.25})`; vctx.lineWidth=1.1; vctx.stroke();
+    if (r.r>r.max || r.life<=0) rings.splice(i,1);
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+
+// =========================== TAB / SCORE ================================
+const SCORE = [];  // events
+const measuresMap = new Map(); // measureIndex -> events in that measure
+function addTabNote({
+  beat, stringIndex, fret, durBeats,
+  velocity=0.7, pick='D', mute=false, vibrato=0, bendSemis=0, slideToFret=null, pan=0
+}){
+  const event = { beat, stringIndex, fret, durBeats, velocity, pick, mute, vibrato, bendSemis, slideToFret, pan };
+  SCORE.push(event);
+  const m = Math.floor(beat/4);
+  if (!measuresMap.has(m)) measuresMap.set(m, []);
+  measuresMap.get(m).push(event);
+}
+
+// Helper runs
+function altPickRun(beat, stringIdx, startFret, steps, unit=SIXTEENTH, reps=1, opts={}){
+  let t=beat;
+  for(let r=0;r<reps;r++){
+    let f=startFret;
+    for(let i=0;i<steps.length;i++){
+      const s = steps[i];
+      if (typeof s==='number') f+=s; // step in semitones
+      const pick = (i%2===0)?'D':'U';
+      addTabNote({
+        beat:t, stringIndex:stringIdx, fret:f, durBeats:unit*0.95,
+        pick, pan: (stringIdx-2.5)/2.5, ...opts
+      });
+      t+=unit;
+    }
+  }
+  return t - beat;
+}
+
+function sweepArp(beat, roots, unit=EIGHTH, opts={}){
+  // roots: array of {stringIndex, fret}
+  let t=beat;
+  // up
+  for(let i=0;i<roots.length;i++){
+    const n=roots[i];
+    addTabNote({ beat:t, stringIndex:n.stringIndex, fret:n.fret, durBeats:unit*0.95, pick:'D', pan:(n.stringIndex-2.5)/2.5, ...opts });
+    t+=unit;
+  }
+  // down
+  for(let i=roots.length-2;i>=1;i--){
+    const n=roots[i];
+    addTabNote({ beat:t, stringIndex:n.stringIndex, fret:n.fret, durBeats:unit*0.95, pick:'U', pan:(n.stringIndex-2.5)/2.5, ...opts });
+    t+=unit;
+  }
+  return t - beat;
+}
+
+// Note lengths
+const SIXTEENTH = 0.25, EIGHTH = 0.5, QUARTER = 1.0, HALF = 2.0, WHOLE = 4.0;
+
+// =========================== COMPOSITION ================================
+// Sections: Intro Chugs → Riff A → Riff B → Solo Bursts → Sweep Arps → Tremolo Finale
+(function compose(){
+  let b = 0;
+
+  // INTRO: palm-muted chugs on low E (2 bars)
+  for(let i=0;i<32;i++){
+    addTabNote({ beat:b + i*SIXTEENTH, stringIndex:0, fret:0, durBeats:SIXTEENTH*0.95, mute:true, velocity:0.65, pick:(i%2?'U':'D'), pan:-0.4 });
+  }
+  b += 8*SIXTEENTH;
+
+  // Power accents (shock)
+  addTabNote({ beat:b, stringIndex:0, fret:0, durBeats:HALF, mute:false, velocity:0.9, pick:'D', vibrato:0.4, pan:-0.35 });
+  addTabNote({ beat:b, stringIndex:1, fret:2, durBeats:HALF, mute:false, velocity:0.8, pick:'D', vibrato:0.3, pan:-0.25 });
+  b += HALF;
+
+  triggerVisual('accent', 1.0);
+
+  // RIFF A: E Phrygian Dominant flavor, mid-high strings, 4 bars
+  // Pattern: alternating 12–15–17–19 on E4/B3 strings with chromatic approach
+  const riffAStart = b;
+  for(let bar=0; bar<4; bar++){
+    altPickRun(b, 5, 12, [0,3,2,2, -2,-1, 2,2, 3,-2], SIXTEENTH, 1, { vibrato:0.2 });
+    altPickRun(b+2, 4, 12, [0,3,2,2, -2,-1, 2,2, 3,-2], SIXTEENTH, 1, { vibrato:0.2 });
+    // Palm-muted low E gallop
+    for(let i=0;i<8;i++){
+      addTabNote({ beat:b + i*SIXTEENTH, stringIndex:0, fret:0, durBeats:SIXTEENTH*0.95, mute:true, velocity:0.6, pick:(i%2?'U':'D'), pan:-0.4 });
+    }
+    b += 4; // next bar
+  }
+
+  // RIFF B: String skips + slides, 4 bars
+  for(let bar=0; bar<4; bar++){
+    altPickRun(b, 5, 15, [0,2,2,-3, -2,2,3, -5, 5], SIXTEENTH, 1, { vibrato:0.25 });
+    addTabNote({ beat:b+1.5, stringIndex:3, fret:12, durBeats:EIGHTH, slideToFret:15, pick:'D', vibrato:0.3, pan:0.1 });
+    addTabNote({ beat:b+2.5, stringIndex:2, fret:12, durBeats:EIGHTH, slideToFret:14, pick:'U', vibrato:0.3, pan:-0.1 });
+    // Accent
+    addTabNote({ beat:b+3, stringIndex:0, fret:2, durBeats:QUARTER, mute:false, velocity:0.85, pick:'D', vibrato:0.2, pan:-0.3 });
+    triggerVisual('accent', 0.8);
+    b += 4;
+  }
+
+  // SOLO BURSTS: high register alt-pick runs + bends (8 bars)
+  for(let bar=0; bar<8; bar++){
+    // High E rapid 16ths around 17–22, with bends
+    altPickRun(b, 5, 17, [0,2,2, -1, 3, -2, 2, -2, 5, -3, 2], SIXTEENTH, 1, { vibrato:0.35 });
+    addTabNote({ beat:b+2.0, stringIndex:5, fret:19, durBeats:EIGHTH, bendSemis:1, pick:'D', vibrato:0.4, pan:0.3 });
+    addTabNote({ beat:b+2.5, stringIndex:4, fret:17, durBeats:EIGHTH, bendSemis:2, pick:'U', vibrato:0.5, pan:0.2 });
+    // Low E support chugs
+    for(let i=0;i<6;i++){
+      addTabNote({ beat:b + i*SIXTEENTH, stringIndex:0, fret:(i%4===0)?2:0, durBeats:SIXTEENTH*0.95, mute:true, velocity:0.6, pick:(i%2?'U':'D'), pan:-0.4 });
+    }
+    b += 4;
+  }
+
+  // SWEEP ARPS: Em (XII) → Cmaj → Dmaj → B7 (tension), 8 bars
+  const shapes = [
+    // Em (root on D string 14)
+    [{stringIndex:2,fret:14},{stringIndex:3,fret:12},{stringIndex:4,fret:12},{stringIndex:5,fret:12}],
+    // Cmaj (root on A string 15)
+    [{stringIndex:1,fret:15},{stringIndex:2,fret:14},{stringIndex:3,fret:12},{stringIndex:4,fret:13},{stringIndex:5,fret:12}],
+    // Dmaj
+    [{stringIndex:1,fret:17},{stringIndex:2,fret:16},{stringIndex:3,fret:14},{stringIndex:4,fret:15},{stringIndex:5,fret:14}],
+    // B7 (Phrygian Dom tension)
+    [{stringIndex:1,fret:14},{stringIndex:2,fret:13},{stringIndex:3,fret:11},{stringIndex:4,fret:12},{stringIndex:5,fret:11}],
+  ];
+  for(let bar=0; bar<8; bar++){
+    const shape = shapes[bar%shapes.length];
+    sweepArp(b, shape, EIGHTH, { vibrato:0.25 });
+    // tag end accent
+    addTabNote({ beat:b+3.0, stringIndex:0, fret:2, durBeats:QUARTER, mute:false, velocity:0.9, pick:'D', vibrato:0.35, pan:-0.35 });
+    triggerVisual('accent', 0.9);
+    b += 4;
+  }
+
+  // TREMOLO FINALE: sustained high E (E6) tremolo-picked + slides to unison (4 bars)
+  for(let bar=0; bar<4; bar++){
+    for(let i=0;i<16;i++){
+      const baseBeat = b + i*SIXTEENTH;
+      addTabNote({ beat:baseBeat, stringIndex:5, fret:24, durBeats:SIXTEENTH*0.95, pick:(i%2?'U':'D'), vibrato:0.45, pan:0.35 });
+    }
+    // Slide unison strike
+    addTabNote({ beat:b+3.0, stringIndex:4, fret:19, durBeats:QUARTER, slideToFret:20, pick:'D', vibrato:0.5, pan:0.2 });
+    triggerVisual('accent', 1.0);
+    b += 4;
+  }
+
+  // Tail sustain on Em
+  addTabNote({ beat:b, stringIndex:2, fret:14, durBeats:WHOLE, pick:'D', vibrato:0.35, pan:-0.05 });
+  addTabNote({ beat:b, stringIndex:3, fret:12, durBeats:WHOLE, pick:'D', vibrato:0.3, pan:0.05 });
+})();
+
+// =========================== SCHEDULER ================================
+let startTime = 0, currentBeat = 0, nextIdx = 0;
+function scheduler(){
+  if (!AudioEngine.isPlaying) return;
+  const ctx = AudioEngine.ctx;
+  const now = ctx.currentTime;
+  currentBeat = (now - startTime) * (CONFIG.BPM/60);
+
+  // UI time/progress
+  const elapsed = now - startTime;
+  const total = CONFIG.TOTAL_BEATS * CONFIG.SECONDS_PER_BEAT();
+  UI.timeDisplay.textContent =
+    `${Math.floor(elapsed/60)}:${String(Math.floor(elapsed%60)).padStart(2,'0')} / ${Math.floor(total/60)}:${String(Math.floor(total%60)).padStart(2,'0')}`;
+  UI.progress.style.width = `${Math.min(100,(currentBeat/CONFIG.TOTAL_BEATS)*100)}%`;
+
+  // Tab render (current measure)
+  renderCurrentMeasure(Math.floor(currentBeat/4));
+
+  // Schedule window
+  while(nextIdx < SCORE.length && SCORE[nextIdx].beat <= currentBeat + CONFIG.LOOKAHEAD_BEATS){
+    const e = SCORE[nextIdx];
+    const t = startTime + e.beat * CONFIG.SECONDS_PER_BEAT();
+    const dur = e.durBeats * CONFIG.SECONDS_PER_BEAT();
+
+    // Compute frequency & slide target if any
+    const midi = GUITAR.fretToMidi(e.stringIndex, e.fret);
+    const freq = GUITAR.midiToFreq(midi);
+    const slideFreq = (e.slideToFret != null)
+      ? GUITAR.midiToFreq(GUITAR.fretToMidi(e.stringIndex, e.slideToFret))
+      : null;
+
+    // Tone mode: clean vs shred (just adjust cab/shape intensity quickly)
+    setTone(AudioEngine.cleanMode);
+
+    // Pan from string identity plus small randomness
+    const pan = e.pan + (Math.random()-0.5)*0.1;
+
+    // Play pluck
+    AudioEngine.pluck({
+      freq, time:t, duration:dur, velocity:e.velocity,
+      pick:e.pick, mute:e.mute, vibrato:e.vibrato, bendSemis:e.bendSemis,
+      slideToFreq: slideFreq, pan
+    });
+
+    // Visuals
+    triggerVisual('note', e.velocity, pan);
+
+    nextIdx++;
+  }
+
+  // End
+  if (currentBeat >= CONFIG.TOTAL_BEATS){
+    AudioEngine.isPlaying = false;
+    UI.playBtn.textContent = '▶ PLAY';
+    return;
+  }
+
+  requestAnimationFrame(scheduler);
+}
+
+function setTone(clean){
+  // Swap between shred and clean by adjusting shaper gain + EQ and reverb/delay
+  AudioEngine.cleanMode = clean;
+  const gain = clean ? 0.0 : 0.8;
+  AudioEngine.master.gain.value = clean ? 0.9 : 0.8;
+  AudioEngine.reverbGain.gain.value = clean ? 0.35 : 0.28;
+  AudioEngine.delayGain.gain.value = clean ? 0.22 : 0.18;
+  // Rebuild shaper curve lightweight tweak
+  AudioEngine.shaper.curve = AudioEngine.makeShaperCurve(clean ? 0 : 400);
+}
+
+// =========================== TAB RENDER ================================
+function renderCurrentMeasure(m){
+  const cols = 16; // 16th grid
+  const grid = [
+    ['E|'], ['B|'], ['G|'], ['D|'], ['A|'], ['E|'] // top to bottom display order
+  ].map(row => ({ label: row[0], cells: new Array(cols).fill('-') }));
+
+  const evs = measuresMap.get(m) || [];
+  evs.forEach(e=>{
+    const pos = Math.max(0, Math.min(cols-1, Math.round(((e.beat - m*4)/4) * cols)));
+    const rowIndex = 5 - e.stringIndex; // display order reversed
+    const num = String(e.fret);
+    // Place fret number, overwrite cell (+ handle two-digit)
+    grid[rowIndex].cells[pos] = num.length===1 ? num : num[0];
+    if (num.length>1 && pos+1<cols) grid[rowIndex].cells[pos+1] = num[1];
+    // Mark articulations subtly
+    if (e.mute && pos+2<cols) grid[rowIndex].cells[pos+2] = 'p'; // palm mute
+    if (e.slideToFret!=null && pos+2<cols) grid[rowIndex].cells[pos+2] = '/';
+    if (e.bendSemis && pos+2<cols) grid[rowIndex].cells[pos+2] = '^';
+  });
+
+  const lines = grid.map(g => g.label + g.cells.join('') + '|');
+  UI.tabPre.textContent = lines.join('\n');
+}
+
+// =========================== CONTROLS ================================
+async function ensureAudio(){
+  if (!AudioEngine.ctx) await AudioEngine.init();
+}
+function togglePlay(){
+  if (!AudioEngine.ctx) return;
+  if (AudioEngine.isPlaying){
+    AudioEngine.isPlaying = false;
+    UI.playBtn.textContent = '▶ PLAY';
+  } else {
+    AudioEngine.isPlaying = true;
+    UI.overlay.classList.add('hidden');
+    UI.playBtn.textContent = '⏸ PAUSE';
+    if (currentBeat >= CONFIG.TOTAL_BEATS - 1){
+      currentBeat = 0; nextIdx = 0;
+    }
+    startTime = AudioEngine.ctx.currentTime - (currentBeat * CONFIG.SECONDS_PER_BEAT());
+    scheduler();
+  }
+}
+
+document.addEventListener('click', async ()=>{
+  if (!AudioEngine.ctx) await ensureAudio();
+  togglePlay();
+});
+UI.playBtn.addEventListener('click', async (e)=>{
+  e.stopPropagation();
+  if (!AudioEngine.ctx) await ensureAudio();
+  togglePlay();
+});
+UI.tempo.addEventListener('input', (e)=>{
+  CONFIG.BPM = Number(e.target.value);
+});
+UI.toneBtn.addEventListener('click', ()=>{
+  const nowClean = !AudioEngine.cleanMode;
+  setTone(nowClean);
+  UI.toneBtn.textContent = nowClean ? 'TONE: CLEAN' : 'TONE: SHRED';
+});
+
+// Pre-render initial measure
+renderCurrentMeasure(0);
+</script>
+</body>
+</
