@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>EMERGENCE - Cellular Automaton Symphony</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=JetBrains+Mono:wght@300;400&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-deep: #030508;
+            --bg-panel: rgba(10, 15, 20, 0.9);
+            --cyan: #00d4ff;
+            --cyan-dim: #0088aa;
+            --green: #00ff88;
+            --red: #ff3366;
+            --gold: #c9a55c;
+            --text: #e0f0ff;
+            --text-muted: #607080;
+        }
+
+        body {
+            background: var(--bg-deep);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Overlay */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at center, rgba(0, 20, 30, 0.95), rgba(3, 5, 8, 0.98));
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1.5s ease;
+        }
+
+        #overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #overlay h1 {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 5rem;
+            font-weight: 300;
+            letter-spacing: 0.5em;
+            color: var(--cyan);
+            text-shadow: 0 0 60px var(--cyan), 0 0 120px var(--cyan-dim);
+            animation: pulse-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                text-shadow: 0 0 60px var(--cyan), 0 0 120px var(--cyan-dim);
+            }
+
+            50% {
+                text-shadow: 0 0 80px var(--cyan), 0 0 160px var(--cyan);
+            }
+        }
+
+        #overlay h2 {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.4em;
+            color: var(--text-muted);
+            margin-top: 1rem;
+            text-transform: uppercase;
+        }
+
+        .click-prompt {
+            margin-top: 3rem;
+            color: var(--text-muted);
+            letter-spacing: 0.2em;
+            animation: blink 2s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* HUD Elements */
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 50;
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        .hud-panel {
+            background: var(--bg-panel);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .hud-title {
+            color: var(--cyan);
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            color: var(--text-muted);
+        }
+
+        .hud-value {
+            color: var(--text);
+            font-weight: 400;
+        }
+
+        #phase-display {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.5rem;
+            letter-spacing: 0.3em;
+            color: var(--cyan);
+            text-shadow: 0 0 30px var(--cyan-dim);
+        }
+
+        #genre-display {
+            position: fixed;
+            top: 55px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            font-size: 11px;
+            letter-spacing: 0.15em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* EKG Line */
+        #ekg-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 60px;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        #ekg-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Theater Mode */
+        #theater {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-deep);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        #theater.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        #theater .context {
+            max-width: 700px;
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 0 20px;
+        }
+
+        #theater .context h1 {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 3rem;
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            color: var(--gold);
+            margin-bottom: 0.5rem;
+        }
+
+        #theater .context h2 {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1rem;
+            font-weight: 400;
+            letter-spacing: 0.2em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 2rem;
+        }
+
+        #theater .context p {
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--text-muted);
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.1rem;
+        }
+
+        #theater .screen-frame {
+            background: linear-gradient(135deg, #1a1a1d 0%, #0d0d0e 100%);
+            padding: 3px;
+            border-radius: 8px;
+            box-shadow: 0 0 0 1px rgba(201, 165, 92, 0.15),
+                0 25px 80px -20px rgba(0, 0, 0, 0.8),
+                0 0 100px -30px rgba(201, 165, 92, 0.15);
+        }
+
+        #theater iframe {
+            display: block;
+            border: none;
+            border-radius: 6px;
+        }
+
+        /* Particles */
+        .particles {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--cyan);
+            border-radius: 50%;
+            opacity: 0;
+            animation: float 12s infinite ease-in-out;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                opacity: 0;
+                transform: translateY(100vh) scale(0.5);
+            }
+
+            10%,
+            90% {
+                opacity: 0.3;
+            }
+
+            100% {
+                transform: translateY(-10vh) scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="overlay">
+        <h1>EMERGENCE</h1>
+        <h2>Life Finds a Way</h2>
+        <p class="click-prompt">[ CLICK TO BEGIN SIMULATION ]</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="hud">
+        <div class="hud-panel">
+            <div class="hud-title">Simulation</div>
+            <div class="hud-row">Generation <span class="hud-value" id="gen-val">0</span></div>
+            <div class="hud-row">Population <span class="hud-value" id="pop-val">0</span></div>
+            <div class="hud-row">Density <span class="hud-value" id="density-val">0%</span></div>
+        </div>
+        <div class="hud-panel">
+            <div class="hud-title">DDA Telemetry</div>
+            <div class="hud-row">k (hysteresis) <span class="hud-value" id="k-val">0.50</span></div>
+            <div class="hud-row">m (pressure) <span class="hud-value" id="m-val">0.50</span></div>
+            <div class="hud-row">ε (surprise) <span class="hud-value" id="eps-val">0.00</span></div>
+        </div>
+        <div class="hud-panel">
+            <div class="hud-title">Activity</div>
+            <div class="hud-row">Births <span class="hud-value" id="birth-val">0</span></div>
+            <div class="hud-row">Deaths <span class="hud-value" id="death-val">0</span></div>
+            <div class="hud-row">Gliders <span class="hud-value" id="glider-val">0</span></div>
+        </div>
+    </div>
+
+    <div id="phase-display">GENESIS</div>
+    <div id="genre-display">Ambient Classical</div>
+
+    <div id="ekg-container">
+        <canvas id="ekg-canvas"></canvas>
+    </div>
+
+    <div id="theater">
+        <div class="particles" id="theater-particles"></div>
+        <div class="context">
+            <h1>ARRIVAL</h1>
+            <h2>Life Finds a Way</h2>
+            <p>The heptapods communicated through patterns we had to learn to see. Conway's Game of Life emerged from
+                simple rules into complexity we can barely predict. You just heard mathematics become music through the
+                same principle Louise Banks discovered — that intelligence is pattern recognition, and meaning emerges
+                from structure.</p>
+        </div>
+        <div class="screen-frame">
+            <iframe id="movie-frame" width="960" height="540" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  CONFIGURATION
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const CONFIG = {
+            GRID_WIDTH: 64,
+            GRID_HEIGHT: 16,
+            BPM: 120,
+            GENERATIONS_PER_BEAT: 0.5,
+            MAX_GENERATIONS: 400,
+
+            // E Phrygian scale (2 octaves)
+            SCALE: [
+                82.41, 87.31, 98.00, 110.00, 123.47, 130.81, 146.83, 164.81,  // E2 octave
+                164.81, 174.61, 196.00, 220.00, 246.94, 261.63, 293.66, 329.63 // E3 octave
+            ],
+
+            // Phase boundaries
+            PHASES: [
+                { name: 'GENESIS', start: 0, end: 50 },
+                { name: 'PROLIFERATION', start: 50, end: 150 },
+                { name: 'EQUILIBRIUM', start: 150, end: 250 },
+                { name: 'ENTROPY', start: 250, end: 350 },
+                { name: 'HEAT DEATH', start: 350, end: 400 }
+            ]
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  GAME OF LIFE ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const GoL = {
+            grid: [],
+            prevGrid: [],
+            generation: 0,
+            births: 0,
+            deaths: 0,
+            population: 0,
+
+            init() {
+                this.grid = Array(CONFIG.GRID_HEIGHT).fill(null).map(() =>
+                    Array(CONFIG.GRID_WIDTH).fill(0)
+                );
+                this.prevGrid = this.cloneGrid(this.grid);
+
+                // Seed with Gosper Glider Gun (top-left)
+                this.addGosperGliderGun(1, 1);
+
+                // Add random noise
+                for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+                    for (let x = 20; x < CONFIG.GRID_WIDTH; x++) {
+                        if (Math.random() < 0.25) {
+                            this.grid[y][x] = 1;
+                        }
+                    }
+                }
+
+                this.updateStats();
+            },
+
+            addGosperGliderGun(ox, oy) {
+                const pattern = [
+                    [0, 4], [0, 5], [1, 4], [1, 5],
+                    [10, 4], [10, 5], [10, 6], [11, 3], [11, 7], [12, 2], [12, 8], [13, 2], [13, 8],
+                    [14, 5], [15, 3], [15, 7], [16, 4], [16, 5], [16, 6], [17, 5],
+                    [20, 2], [20, 3], [20, 4], [21, 2], [21, 3], [21, 4], [22, 1], [22, 5],
+                    [24, 0], [24, 1], [24, 5], [24, 6],
+                    [34, 2], [34, 3], [35, 2], [35, 3]
+                ];
+                pattern.forEach(([x, y]) => {
+                    const ny = oy + y;
+                    const nx = ox + x;
+                    if (ny >= 0 && ny < CONFIG.GRID_HEIGHT && nx >= 0 && nx < CONFIG.GRID_WIDTH) {
+                        this.grid[ny][nx] = 1;
+                    }
+                });
+            },
+
+            cloneGrid(g) {
+                return g.map(row => [...row]);
+            },
+
+            countNeighbors(x, y) {
+                let count = 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = (x + dx + CONFIG.GRID_WIDTH) % CONFIG.GRID_WIDTH;
+                        const ny = (y + dy + CONFIG.GRID_HEIGHT) % CONFIG.GRID_HEIGHT;
+                        count += this.grid[ny][nx];
+                    }
+                }
+                return count;
+            },
+
+            step() {
+                this.prevGrid = this.cloneGrid(this.grid);
+                const newGrid = this.cloneGrid(this.grid);
+                this.births = 0;
+                this.deaths = 0;
+
+                for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+                    for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+                        const neighbors = this.countNeighbors(x, y);
+                        const alive = this.grid[y][x] === 1;
+
+                        if (alive) {
+                            if (neighbors < 2 || neighbors > 3) {
+                                newGrid[y][x] = 0;
+                                this.deaths++;
+                            }
+                        } else {
+                            if (neighbors === 3) {
+                                newGrid[y][x] = 1;
+                                this.births++;
+                            }
+                        }
+                    }
+                }
+
+                this.grid = newGrid;
+                this.generation++;
+                this.updateStats();
+
+                return { births: this.births, deaths: this.deaths };
+            },
+
+            updateStats() {
+                this.population = this.grid.flat().reduce((a, b) => a + b, 0);
+            },
+
+            getDensity() {
+                return this.population / (CONFIG.GRID_WIDTH * CONFIG.GRID_HEIGHT);
+            },
+
+            getCellChanges() {
+                const changes = { births: [], deaths: [], survivors: [] };
+                for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+                    for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+                        const was = this.prevGrid[y][x];
+                        const is = this.grid[y][x];
+                        if (was === 0 && is === 1) changes.births.push({ x, y });
+                        else if (was === 1 && is === 0) changes.deaths.push({ x, y });
+                        else if (was === 1 && is === 1) changes.survivors.push({ x, y });
+                    }
+                }
+                return changes;
+            },
+
+            detectGliders() {
+                // Simplified glider detection - count 5-cell patterns moving diagonally
+                let count = 0;
+                for (let y = 0; y < CONFIG.GRID_HEIGHT - 2; y++) {
+                    for (let x = 0; x < CONFIG.GRID_WIDTH - 2; x++) {
+                        const cells = [];
+                        for (let dy = 0; dy < 3; dy++) {
+                            for (let dx = 0; dx < 3; dx++) {
+                                cells.push(this.grid[y + dy][x + dx]);
+                            }
+                        }
+                        const sum = cells.reduce((a, b) => a + b, 0);
+                        if (sum === 5) count++;
+                    }
+                }
+                return Math.floor(count / 2);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  DDA SYSTEM
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const DDA = {
+            k: 0.5,        // Hysteresis (0=explore, 1=stable)
+            m: 0.5,        // Pressure
+            eps: 0,        // Surprise
+            alpha: 0.15,   // Learning rate
+            beta: 1.2,     // Sensitivity
+            decayK: 0.02,
+
+            prevDensity: 0,
+            prevBirthRate: 0,
+
+            update(density, birthRate, deathRate, gliderCount) {
+                // Predict next state
+                const predictedDensity = this.prevDensity * 0.9 + density * 0.1;
+
+                // Compute surprise
+                this.eps = Math.abs(density - predictedDensity) + Math.abs(birthRate - deathRate) * 0.5;
+
+                // Update k based on density
+                // Sparse = low k (explore), dense = high k (stable)
+                const targetK = Math.min(1, density * 2.5);
+                this.k = (1 - this.decayK) * this.k + this.alpha * Math.pow(this.eps, this.beta);
+                this.k = this.k * 0.9 + targetK * 0.1;
+                this.k = Math.max(0, Math.min(1, this.k));
+
+                // Update m based on birth/death differential
+                const netGrowth = (birthRate - deathRate) / Math.max(1, birthRate + deathRate);
+                this.m = 0.5 + netGrowth * 2;
+                this.m += gliderCount * 0.05;
+                this.m = Math.max(0, Math.min(1.5, this.m));
+
+                this.prevDensity = density;
+                this.prevBirthRate = birthRate;
+            },
+
+            getGenre() {
+                // Low k + low m = ambient
+                // Medium k + medium m = EDM
+                // High m or high eps = dubstep
+                if (this.m > 1.0 || this.eps > 0.3) return 'dubstep';
+                if (this.k > 0.6 && this.m < 0.6) return 'classical';
+                return 'edm';
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  AUDIO ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const AudioEngine = {
+            ctx: null,
+            master: null,
+            compressor: null,
+            reverb: null,
+            reverbGain: null,
+
+            async init() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Compressor
+                this.compressor = this.ctx.createDynamicsCompressor();
+                this.compressor.threshold.value = -6;
+                this.compressor.knee.value = 10;
+                this.compressor.ratio.value = 8;
+                this.compressor.attack.value = 0.005;
+                this.compressor.release.value = 0.1;
+
+                // Master
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.7;
+
+                // Reverb
+                this.reverb = this.ctx.createConvolver();
+                this.reverb.buffer = this.createImpulse(2.5, 2.5);
+                this.reverbGain = this.ctx.createGain();
+                this.reverbGain.gain.value = 0.2;
+
+                // Routing
+                this.compressor.connect(this.master);
+                this.master.connect(this.ctx.destination);
+                this.reverb.connect(this.reverbGain);
+                this.reverbGain.connect(this.master);
+            },
+
+            createImpulse(duration, decay) {
+                const rate = this.ctx.sampleRate;
+                const length = rate * duration;
+                const impulse = this.ctx.createBuffer(2, length, rate);
+                for (let ch = 0; ch < 2; ch++) {
+                    const data = impulse.getChannelData(ch);
+                    for (let i = 0; i < length; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+                    }
+                }
+                return impulse;
+            },
+
+            makeDistortion(amount) {
+                const curve = new Float32Array(44100);
+                for (let i = 0; i < 44100; i++) {
+                    const x = (i * 2) / 44100 - 1;
+                    curve[i] = Math.tanh(amount * x);
+                }
+                const shaper = this.ctx.createWaveShaper();
+                shaper.curve = curve;
+                shaper.oversample = '4x';
+                return shaper;
+            },
+
+            // Birth sound - bright pluck
+            playBirth(y, time, genre) {
+                const freq = CONFIG.SCALE[y] || 220;
+                const ctx = this.ctx;
+
+                const osc = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc2.type = 'sine';
+                osc.frequency.value = freq;
+                osc2.frequency.value = freq * 2;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.Q.value = genre === 'dubstep' ? 8 : 2;
+                filter.frequency.setValueAtTime(genre === 'classical' ? 2000 : 4000, time);
+                filter.frequency.exponentialRampToValueAtTime(800, time + 0.3);
+
+                const env = ctx.createGain();
+                const velocity = genre === 'dubstep' ? 0.4 : 0.25;
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(velocity, time + 0.01);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+
+                osc.connect(filter);
+                osc2.connect(filter);
+                filter.connect(env);
+                env.connect(this.compressor);
+                env.connect(this.reverb);
+
+                osc.start(time);
+                osc2.start(time);
+                osc.stop(time + 0.6);
+                osc2.stop(time + 0.6);
+            },
+
+            // Death sound - descending release
+            playDeath(y, time, genre) {
+                const freq = CONFIG.SCALE[y] || 220;
+                const ctx = this.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = genre === 'dubstep' ? 'sawtooth' : 'sine';
+                osc.frequency.setValueAtTime(freq, time);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + 0.4);
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(2000, time);
+                filter.frequency.exponentialRampToValueAtTime(200, time + 0.4);
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0.15, time);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+
+                osc.connect(filter);
+                filter.connect(env);
+                env.connect(this.compressor);
+                env.connect(this.reverb);
+
+                osc.start(time);
+                osc.stop(time + 0.5);
+            },
+
+            // Survivor - sustained pad
+            playSurvivor(y, time, genre) {
+                if (Math.random() > 0.1) return; // Only play 10% of survivors
+
+                const freq = CONFIG.SCALE[y] || 220;
+                const ctx = this.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(0.05, time + 0.1);
+                env.gain.setValueAtTime(0.05, time + 0.3);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.8);
+
+                osc.connect(env);
+                env.connect(this.compressor);
+                env.connect(this.reverb);
+
+                osc.start(time);
+                osc.stop(time + 0.9);
+            },
+
+            // Glider melody - supersaw lead
+            playGliderMelody(pitches, time) {
+                const ctx = this.ctx;
+                const genre = DDA.getGenre();
+
+                pitches.forEach((y, i) => {
+                    const freq = CONFIG.SCALE[y] || 220;
+                    const noteTime = time + i * 0.1;
+
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = genre === 'dubstep' ? 6000 : 3000;
+                    filter.Q.value = 2;
+
+                    const env = ctx.createGain();
+                    env.gain.setValueAtTime(0, noteTime);
+                    env.gain.linearRampToValueAtTime(0.2, noteTime + 0.02);
+                    env.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.3);
+
+                    // Supersaw (5 detuned oscillators)
+                    [-20, -10, 0, 10, 20].forEach(detune => {
+                        const osc = ctx.createOscillator();
+                        osc.type = 'sawtooth';
+                        osc.frequency.value = freq;
+                        osc.detune.value = detune;
+
+                        const g = ctx.createGain();
+                        g.gain.value = 0.15;
+
+                        osc.connect(g);
+                        g.connect(filter);
+                        osc.start(noteTime);
+                        osc.stop(noteTime + 0.4);
+                    });
+
+                    filter.connect(env);
+                    env.connect(this.compressor);
+                });
+            },
+
+            // Kick drum
+            playKick(time, velocity = 1.0) {
+                const ctx = this.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, time);
+                osc.frequency.exponentialRampToValueAtTime(30, time + 0.15);
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(velocity * 0.8, time);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+                osc.connect(env);
+                env.connect(this.compressor);
+
+                osc.start(time);
+                osc.stop(time + 0.4);
+            },
+
+            // Snare
+            playSnare(time, velocity = 0.7) {
+                const ctx = this.ctx;
+
+                // Noise
+                const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const hpf = ctx.createBiquadFilter();
+                hpf.type = 'highpass';
+                hpf.frequency.value = 2000;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(velocity * 0.6, time);
+                env.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+
+                // Body
+                const body = ctx.createOscillator();
+                body.type = 'triangle';
+                body.frequency.setValueAtTime(250, time);
+                body.frequency.exponentialRampToValueAtTime(120, time + 0.05);
+
+                const bodyEnv = ctx.createGain();
+                bodyEnv.gain.setValueAtTime(velocity * 0.5, time);
+                bodyEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+                noise.connect(hpf);
+                hpf.connect(env);
+                env.connect(this.compressor);
+                body.connect(bodyEnv);
+                bodyEnv.connect(this.compressor);
+
+                noise.start(time);
+                body.start(time);
+                body.stop(time + 0.1);
+            },
+
+            // Growl bass for dubstep
+            playGrowlBass(freq, time, duration, wobbleSpeed = 8) {
+                const ctx = this.ctx;
+
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                osc1.type = 'sawtooth';
+                osc2.type = 'square';
+                osc1.frequency.value = freq;
+                osc2.frequency.value = freq;
+                osc2.detune.value = 10;
+
+                // LFO for wobble
+                const lfo = ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = wobbleSpeed;
+
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.value = 1500;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 400;
+                filter.Q.value = 12;
+
+                lfo.connect(lfoGain);
+                lfoGain.connect(filter.frequency);
+
+                const dist = this.makeDistortion(150);
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(0.5, time + 0.02);
+                env.gain.setValueAtTime(0.5, time + duration - 0.05);
+                env.gain.linearRampToValueAtTime(0, time + duration);
+
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(dist);
+                dist.connect(env);
+                env.connect(this.compressor);
+
+                osc1.start(time); osc1.stop(time + duration + 0.1);
+                osc2.start(time); osc2.stop(time + duration + 0.1);
+                lfo.start(time); lfo.stop(time + duration + 0.1);
+            },
+
+            // Sub bass
+            playSubBass(freq, time, duration) {
+                const ctx = this.ctx;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.value = freq / 2;
+
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, time);
+                env.gain.linearRampToValueAtTime(0.4, time + 0.02);
+                env.gain.setValueAtTime(0.4, time + duration - 0.05);
+                env.gain.linearRampToValueAtTime(0, time + duration);
+
+                osc.connect(env);
+                env.connect(this.compressor);
+
+                osc.start(time);
+                osc.stop(time + duration + 0.1);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  VISUAL ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const ekgCanvas = document.getElementById('ekg-canvas');
+        const ekgCtx = ekgCanvas.getContext('2d');
+
+        let W, H;
+        const populationHistory = [];
+        const cellAnimations = [];
+        const gliderTrails = [];
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+            ekgCanvas.width = ekgCanvas.parentElement.clientWidth;
+            ekgCanvas.height = ekgCanvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function getCellColor(x, y, isAlive, wasBorn, justDied) {
+            if (wasBorn) return '#00ff88';
+            if (justDied) return '#ff3366';
+            if (isAlive) return '#00d4ff';
+            return 'rgba(0, 100, 120, 0.15)';
+        }
+
+        function draw() {
+            // Background
+            ctx.fillStyle = '#030508';
+            ctx.fillRect(0, 0, W, H);
+
+            // Calculate grid positioning
+            const cellW = (W * 0.7) / CONFIG.GRID_WIDTH;
+            const cellH = (H * 0.5) / CONFIG.GRID_HEIGHT;
+            const cellSize = Math.min(cellW, cellH);
+            const gridW = cellSize * CONFIG.GRID_WIDTH;
+            const gridH = cellSize * CONFIG.GRID_HEIGHT;
+            const offsetX = (W - gridW) / 2;
+            const offsetY = (H - gridH) / 2 - 30;
+
+            // Draw grid background
+            ctx.fillStyle = 'rgba(0, 20, 30, 0.5)';
+            ctx.fillRect(offsetX - 10, offsetY - 10, gridW + 20, gridH + 20);
+
+            // Draw cells
+            const changes = GoL.getCellChanges();
+
+            for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+                for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+                    const isAlive = GoL.grid[y][x] === 1;
+                    const wasBorn = changes.births.some(c => c.x === x && c.y === y);
+                    const justDied = changes.deaths.some(c => c.x === x && c.y === y);
+
+                    const px = offsetX + x * cellSize;
+                    const py = offsetY + y * cellSize;
+
+                    ctx.fillStyle = getCellColor(x, y, isAlive, wasBorn, justDied);
+
+                    if (isAlive || wasBorn) {
+                        // Glow effect for alive cells
+                        const gradient = ctx.createRadialGradient(
+                            px + cellSize / 2, py + cellSize / 2, 0,
+                            px + cellSize / 2, py + cellSize / 2, cellSize
+                        );
+                        const color = wasBorn ? '#00ff88' : '#00d4ff';
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(0.5, color + '80');
+                        gradient.addColorStop(1, 'transparent');
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(px - cellSize / 2, py - cellSize / 2, cellSize * 2, cellSize * 2);
+
+                        ctx.fillStyle = color;
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(px + cellSize / 2, py + cellSize / 2, cellSize * 0.35, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Add glowing ring for births
+                    if (wasBorn) {
+                        cellAnimations.push({
+                            x: px + cellSize / 2,
+                            y: py + cellSize / 2,
+                            radius: cellSize * 0.4,
+                            maxRadius: cellSize * 2,
+                            alpha: 1,
+                            color: '#00ff88'
+                        });
+                    }
+
+                    // Add fade for deaths
+                    if (justDied) {
+                        cellAnimations.push({
+                            x: px + cellSize / 2,
+                            y: py + cellSize / 2,
+                            radius: cellSize * 0.4,
+                            maxRadius: cellSize * 1.5,
+                            alpha: 1,
+                            color: '#ff3366'
+                        });
+                    }
+                }
+            }
+
+            // Draw animations
+            for (let i = cellAnimations.length - 1; i >= 0; i--) {
+                const anim = cellAnimations[i];
+                anim.radius += 2;
+                anim.alpha -= 0.03;
+
+                if (anim.alpha <= 0) {
+                    cellAnimations.splice(i, 1);
+                    continue;
+                }
+
+                ctx.strokeStyle = anim.color + Math.floor(anim.alpha * 255).toString(16).padStart(2, '0');
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(anim.x, anim.y, anim.radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Draw EKG
+            drawEKG();
+
+            requestAnimationFrame(draw);
+        }
+
+        function drawEKG() {
+            const w = ekgCanvas.width;
+            const h = ekgCanvas.height;
+
+            ekgCtx.fillStyle = 'rgba(3, 5, 8, 0.3)';
+            ekgCtx.fillRect(0, 0, w, h);
+
+            if (populationHistory.length < 2) return;
+
+            const maxPop = CONFIG.GRID_WIDTH * CONFIG.GRID_HEIGHT;
+            const step = w / Math.min(populationHistory.length, 200);
+
+            ekgCtx.strokeStyle = '#00d4ff';
+            ekgCtx.lineWidth = 2;
+            ekgCtx.shadowBlur = 10;
+            ekgCtx.shadowColor = '#00d4ff';
+
+            ekgCtx.beginPath();
+            const startIdx = Math.max(0, populationHistory.length - 200);
+            for (let i = startIdx; i < populationHistory.length; i++) {
+                const x = (i - startIdx) * step;
+                const y = h - (populationHistory[i] / maxPop) * h * 0.8 - 5;
+                if (i === startIdx) ekgCtx.moveTo(x, y);
+                else ekgCtx.lineTo(x, y);
+            }
+            ekgCtx.stroke();
+            ekgCtx.shadowBlur = 0;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  MAIN LOOP
+        // ═══════════════════════════════════════════════════════════════════════════════
+        let isRunning = false;
+        let lastGenTime = 0;
+        let lastBeatTime = 0;
+        const msPerGen = (60000 / CONFIG.BPM) / CONFIG.GENERATIONS_PER_BEAT;
+        const msPerBeat = 60000 / CONFIG.BPM;
+
+        function getCurrentPhase() {
+            const gen = GoL.generation;
+            for (const phase of CONFIG.PHASES) {
+                if (gen >= phase.start && gen < phase.end) return phase.name;
+            }
+            return 'HEAT DEATH';
+        }
+
+        function updateHUD() {
+            document.getElementById('gen-val').textContent = GoL.generation;
+            document.getElementById('pop-val').textContent = GoL.population;
+            document.getElementById('density-val').textContent = (GoL.getDensity() * 100).toFixed(1) + '%';
+
+            document.getElementById('k-val').textContent = DDA.k.toFixed(2);
+            document.getElementById('m-val').textContent = DDA.m.toFixed(2);
+            document.getElementById('eps-val').textContent = DDA.eps.toFixed(3);
+
+            document.getElementById('birth-val').textContent = GoL.births;
+            document.getElementById('death-val').textContent = GoL.deaths;
+            document.getElementById('glider-val').textContent = GoL.detectGliders();
+
+            document.getElementById('phase-display').textContent = getCurrentPhase();
+
+            const genreMap = {
+                'classical': 'Ambient Classical',
+                'edm': 'Progressive EDM',
+                'dubstep': 'Aggressive Dubstep'
+            };
+            document.getElementById('genre-display').textContent = genreMap[DDA.getGenre()];
+        }
+
+        function gameLoop(timestamp) {
+            if (!isRunning) return;
+
+            // Generation stepping
+            if (timestamp - lastGenTime >= msPerGen) {
+                lastGenTime = timestamp;
+
+                const { births, deaths } = GoL.step();
+                populationHistory.push(GoL.population);
+
+                // Update DDA
+                const density = GoL.getDensity();
+                const birthRate = births / (CONFIG.GRID_WIDTH * CONFIG.GRID_HEIGHT);
+                const deathRate = deaths / (CONFIG.GRID_WIDTH * CONFIG.GRID_HEIGHT);
+                const gliders = GoL.detectGliders();
+                DDA.update(density, birthRate, deathRate, gliders);
+
+                // Trigger sounds based on cell changes
+                const changes = GoL.getCellChanges();
+                const time = AudioEngine.ctx.currentTime + 0.05;
+                const genre = DDA.getGenre();
+
+                // Play birth sounds (limit to prevent overload)
+                changes.births.slice(0, 8).forEach((cell, i) => {
+                    AudioEngine.playBirth(cell.y, time + i * 0.02, genre);
+                });
+
+                // Play death sounds
+                changes.deaths.slice(0, 4).forEach((cell, i) => {
+                    AudioEngine.playDeath(cell.y, time + i * 0.03, genre);
+                });
+
+                // Play survivor pads
+                changes.survivors.forEach(cell => {
+                    AudioEngine.playSurvivor(cell.y, time, genre);
+                });
+
+                // Glider melodies
+                if (gliders > 0 && Math.random() < 0.3) {
+                    const pitches = [];
+                    for (let i = 0; i < Math.min(gliders, 5); i++) {
+                        pitches.push(Math.floor(Math.random() * CONFIG.GRID_HEIGHT));
+                    }
+                    AudioEngine.playGliderMelody(pitches, time);
+                }
+
+                updateHUD();
+            }
+
+            // Beat-synced drums
+            if (timestamp - lastBeatTime >= msPerBeat) {
+                lastBeatTime = timestamp;
+                const time = AudioEngine.ctx.currentTime + 0.05;
+                const genre = DDA.getGenre();
+                const beat = Math.floor(timestamp / msPerBeat) % 4;
+
+                if (genre !== 'classical') {
+                    // Kick on 1 and 3
+                    if (beat === 0 || beat === 2) {
+                        AudioEngine.playKick(time, genre === 'dubstep' ? 1.0 : 0.7);
+                    }
+                    // Snare on 2 and 4
+                    if (beat === 1 || beat === 3) {
+                        AudioEngine.playSnare(time, genre === 'dubstep' ? 0.8 : 0.5);
+                    }
+                }
+
+                // Dubstep bass
+                if (genre === 'dubstep' && beat === 0) {
+                    const bassFreq = CONFIG.SCALE[0] / 2;
+                    AudioEngine.playGrowlBass(bassFreq, time, msPerBeat * 2 / 1000, 8 + DDA.m * 8);
+                    AudioEngine.playSubBass(bassFreq, time, msPerBeat * 4 / 1000);
+                }
+            }
+
+            // Check for end
+            if (GoL.generation >= CONFIG.MAX_GENERATIONS) {
+                endSimulation();
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function endSimulation() {
+            isRunning = false;
+
+            // Fade out music, fade in theater
+            setTimeout(() => {
+                document.getElementById('canvas').style.opacity = '0';
+                document.getElementById('hud').style.opacity = '0';
+                document.getElementById('phase-display').style.opacity = '0';
+                document.getElementById('genre-display').style.opacity = '0';
+                document.getElementById('ekg-container').style.opacity = '0';
+
+                setTimeout(() => {
+                    showTheater();
+                }, 2000);
+            }, 2000);
+        }
+
+        function showTheater() {
+            const theater = document.getElementById('theater');
+            theater.classList.add('active');
+
+            // Add particles
+            const container = document.getElementById('theater-particles');
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = `${Math.random() * 100}%`;
+                particle.style.animationDelay = `${Math.random() * 12}s`;
+                particle.style.background = 'var(--gold)';
+                container.appendChild(particle);
+            }
+
+            // Set movie source
+            document.getElementById('movie-frame').src = 'https://vidlink.pro/movie/329865';
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  START
+        // ═══════════════════════════════════════════════════════════════════════════════
+        document.getElementById('overlay').addEventListener('click', async () => {
+            if (isRunning) return;
+
+            await AudioEngine.init();
+            GoL.init();
+
+            document.getElementById('overlay').classList.add('hidden');
+
+            isRunning = true;
+            lastGenTime = performance.now();
+            lastBeatTime = performance.now();
+
+            requestAnimationFrame(draw);
+            requestAnimationFrame(gameLoop);
+        });
+
+        // Pre-init visual loop
+        requestAnimationFrame(draw);
+    </script>
+</body>
+
+</html>
