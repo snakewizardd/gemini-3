@@ -1,0 +1,1243 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NEON COLLIDER — Mind-Melt EDM (Zero Assets)</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; height:100%; background:#050615; overflow:hidden; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#eaf0ff; }
+    #wrap { position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto; }
+
+    #topbar{
+      display:flex; align-items:center; gap:10px; padding:12px 14px;
+      background: rgba(8,10,22,.72); backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    #brand { font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+    .pill{ font-size:12px; padding:6px 10px; border:1px solid rgba(255,255,255,.14); border-radius:999px; opacity:.9; }
+    #controls{ display:flex; align-items:center; gap:8px; margin-left:auto; }
+    button{
+      cursor:pointer;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.06);
+      color: #eaf0ff;
+      padding:8px 12px; border-radius:10px;
+    }
+    button:hover{ background: rgba(255,255,255,.10); }
+    label{ display:flex; align-items:center; gap:8px; }
+    input[type="range"]{ width:160px; }
+
+    #canvas{ width:100%; height:100%; display:block; }
+
+    #bottombar{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 14px; border-top: 1px solid rgba(255,255,255,.08);
+      background: rgba(8,10,22,.72); backdrop-filter: blur(10px);
+    }
+    #progress { height:10px; border-radius:999px; background: rgba(255,255,255,.08); overflow:hidden; flex:1; }
+    #progress > div { height:100%; width:0%; background: linear-gradient(90deg,#48e7ff,#8a5cff,#ff4fd8,#ffcf4a); }
+    #tiny{ font-size:12px; opacity:.7; white-space:nowrap; }
+
+    #overlay{
+      position:fixed; inset:0; display:grid; place-items:center; z-index:10;
+      background:
+        radial-gradient(900px 420px at 50% 35%, rgba(72,231,255,.12), transparent 60%),
+        radial-gradient(800px 380px at 55% 55%, rgba(255,79,216,.10), transparent 60%),
+        rgba(0,0,0,.68);
+    }
+    #card{
+      width:min(860px,92vw);
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(8,10,20,.84);
+      border-radius:18px;
+      padding:18px 18px 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+    }
+    h1{ margin:0 0 8px; font-size:18px; letter-spacing:.22em; text-transform:uppercase; }
+    p{ margin:6px 0; opacity:.86; line-height:1.45; font-size:13px; }
+    .row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px; }
+    code{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+  </style>
+</head>
+
+<body>
+<div id="wrap">
+  <div id="topbar">
+    <div id="brand">NEON COLLIDER</div>
+    <div class="pill" id="sectionPill">SECTION: —</div>
+    <div class="pill" id="beatPill">BEAT: 0.00</div>
+    <div class="pill" id="bpmPill">BPM: 140</div>
+
+    <div id="controls">
+      <button id="playBtn">Play</button>
+      <button id="pauseBtn" disabled>Pause</button>
+      <label class="pill" title="Master volume">
+        Vol <input id="vol" type="range" min="0" max="1" step="0.001" value="0.85">
+      </label>
+      <label class="pill" title="Drop intensity (bass, drums, fx)">
+        Int <input id="intensity" type="range" min="0" max="1" step="0.001" value="1">
+      </label>
+    </div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <div id="bottombar">
+    <div class="pill" id="statusPill">Stopped</div>
+    <div id="progress"><div></div></div>
+    <div class="pill" id="lenPill">Length: —</div>
+    <div id="tiny">Web Audio API • zero assets • compressor→reverb→delay→chorus→master • rAF scheduler</div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="card">
+    <h1>Start Audio</h1>
+    <p>This is fully synthesized EDM (no samples). Click <b>Start</b> once to unlock <code>AudioContext</code>, then hit <b>Play</b>.</p>
+    <p>Physics notes (in code): envelopes shape energy over time; filters redistribute spectral energy; sidechain is gain modulation keyed by kick; FM adds inharmonic sidebands; chorus is time-varying delay; reverb is convolution with generated impulse response.</p>
+    <div class="row">
+      <button id="startBtn">Start</button>
+      <span class="pill">Headphones recommended</span>
+      <span class="pill">Space = play/pause</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  /******************************************************************
+   * NOTE SYSTEM: A4=440, octaves 1-6, sharps/flats.
+   ******************************************************************/
+  const A4 = 440;
+  const NOTE_INDEX = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+  const ENHARMONIC = { "Db":"C#", "Eb":"D#", "Gb":"F#", "Ab":"G#", "Bb":"A#" };
+
+  function parseNoteName(name){
+    const m = /^([A-Ga-g])([#b]?)([1-6])$/.exec(String(name).trim());
+    if(!m) throw new Error(`Bad note: ${name}`);
+    let letter = m[1].toUpperCase();
+    let acc = m[2] || "";
+    let oct = +m[3];
+    let norm = letter + acc;
+    if (acc === "b") norm = ENHARMONIC[letter+"b"] || norm;
+    let semi = NOTE_INDEX[norm[0]];
+    if (norm[1] === "#") semi += 1;
+    return { semi, oct };
+  }
+  function noteToHz(name){
+    if (name === "R" || name === "REST") return 0;
+    const { semi, oct } = parseNoteName(name);
+    const midi = (oct + 1) * 12 + semi;     // C4=60
+    return A4 * Math.pow(2, (midi - 69) / 12);
+  }
+  const NOTES = {};
+  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const flats = { "C#":"Db", "D#":"Eb", "F#":"Gb", "G#":"Ab", "A#":"Bb" };
+  for (let o=1; o<=6; o++){
+    for (const n of names){
+      const k = `${n}${o}`;
+      NOTES[k] = noteToHz(k);
+      if (flats[n]) NOTES[`${flats[n]}${o}`] = NOTES[k];
+    }
+  }
+  window.NOTES = NOTES;
+
+  /******************************************************************
+   * TIMING
+   ******************************************************************/
+  const DUR = { S:0.25, E:0.5, Q:1, H:2, W:4 };
+
+  /******************************************************************
+   * ENGINE
+   ******************************************************************/
+  class NeonEngine {
+    constructor({ bpm=140 } = {}){
+      this.bpm = bpm;
+      this.lookAheadSec = 0.12;
+      this.events = [];
+      this.sections = [];
+      this.totalBeats = 0;
+
+      this.ctx = null;
+
+      // buses / nodes
+      this.input = null;       // voices/drums into here (pre-fx)
+      this.preMaster = null;   // before master gain
+      this.masterGain = null;
+      this.analyser = null;
+
+      // fx chain
+      this.comp = null;
+      this.convolver = null;
+      this.revSend = null;
+      this.revReturn = null;
+
+      this.delay = null;
+      this.delayFb = null;
+      this.delayReturn = null;
+      this.delaySend = null;
+
+      this.chorusDelay = null;
+      this.chorusLFO = null;
+      this.chorusDepth = null;
+      this.chorusMix = null;
+
+      // sidechain pump (gain after fx)
+      this.sidechain = null;
+      this.pump = { amount: 0.65, release: 0.14 };
+
+      // transport
+      this.isPlaying = false;
+      this._startTime = 0;
+      this._pausedAt = 0;
+      this._nextIdx = 0;
+      this._lastBeat = 0;
+
+      // intensity (0..1)
+      this.intensity = 1;
+
+      // visuals hook
+      this.onAudioEvent = () => {};
+    }
+
+    beatsToSec(b){ return (60/this.bpm) * b; }
+    secToBeats(s){ return s / (60/this.bpm); }
+
+    ensureContext(){
+      if (this.ctx) return;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.ctx = ctx;
+
+      // === INPUT BUS ===
+      this.input = ctx.createGain();
+      this.input.gain.value = 1;
+
+      // === COMPRESSOR (glue) ===
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -24;
+      comp.knee.value = 18;
+      comp.ratio.value = 4.2;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.11;
+      this.comp = comp;
+
+      // === CONVOLUTION REVERB ===
+      const convolver = ctx.createConvolver();
+      convolver.buffer = this._makeImpulseResponse(2.8, 2.1);
+      this.convolver = convolver;
+
+      this.revSend = ctx.createGain();
+      this.revSend.gain.value = 0.28;
+      this.revReturn = ctx.createGain();
+      this.revReturn.gain.value = 0.85;
+
+      // === DELAY (feedback) ===
+      this.delay = ctx.createDelay(2.0);
+      this.delay.delayTime.value = 0.27;
+      this.delayFb = ctx.createGain();
+      this.delayFb.gain.value = 0.28;
+      this.delaySend = ctx.createGain();
+      this.delaySend.gain.value = 0.18;
+      this.delayReturn = ctx.createGain();
+      this.delayReturn.gain.value = 0.80;
+
+      // === CHORUS (modulated delay) ===
+      this.chorusDelay = ctx.createDelay(0.05);
+      this.chorusDelay.delayTime.value = 0.018;
+      this.chorusLFO = ctx.createOscillator();
+      this.chorusLFO.type = "sine";
+      this.chorusLFO.frequency.value = 0.9;
+      this.chorusDepth = ctx.createGain();
+      this.chorusDepth.gain.value = 0.006;
+      this.chorusMix = ctx.createGain();
+      this.chorusMix.gain.value = 0.28;
+
+      // === SIDECHAIN GAIN (ducking) ===
+      this.sidechain = ctx.createGain();
+      this.sidechain.gain.value = 1.0;
+
+      // === MASTER ===
+      this.preMaster = ctx.createGain();
+      this.masterGain = ctx.createGain();
+      this.masterGain.gain.value = 0.85;
+
+      this.analyser = ctx.createAnalyser();
+      this.analyser.fftSize = 2048;
+
+      // ROUTING:
+      // input -> comp -> (dry sum) -> (chorus paths) -> sidechain -> master -> analyser -> destination
+      this.input.connect(this.comp);
+
+      // reverb send
+      this.comp.connect(this.revSend);
+      this.revSend.connect(this.convolver);
+      this.convolver.connect(this.revReturn);
+
+      // delay send/return + feedback
+      this.comp.connect(this.delaySend);
+      this.delaySend.connect(this.delay);
+      this.delay.connect(this.delayFb);
+      this.delayFb.connect(this.delay);
+      this.delay.connect(this.delayReturn);
+
+      // sum dry+rev+delay into preMaster
+      this.comp.connect(this.preMaster);
+      this.revReturn.connect(this.preMaster);
+      this.delayReturn.connect(this.preMaster);
+
+      // chorus: preMaster dry + chorused
+      this.preMaster.connect(this.sidechain); // dry
+      this.preMaster.connect(this.chorusDelay);
+      this.chorusDelay.connect(this.chorusMix);
+      this.chorusMix.connect(this.sidechain);
+
+      // chorus modulation
+      this.chorusLFO.connect(this.chorusDepth);
+      this.chorusDepth.connect(this.chorusDelay.delayTime);
+      this.chorusLFO.start();
+
+      // out
+      this.sidechain.connect(this.masterGain);
+      this.masterGain.connect(this.analyser);
+      this.analyser.connect(ctx.destination);
+    }
+
+    _makeImpulseResponse(seconds=2.6, decay=2.0){
+      const ctx = this.ctx;
+      const rate = ctx.sampleRate;
+      const len = Math.floor(rate * seconds);
+      const buf = ctx.createBuffer(2, len, rate);
+      for (let ch=0; ch<2; ch++){
+        const data = buf.getChannelData(ch);
+        for (let i=0; i<len; i++){
+          const t = i/len;
+          const env = Math.pow(1 - t, decay);
+          // a bit of "air" + early reflections ripple
+          const early = (i < rate*0.07) ? (1.0 + 0.6*Math.sin(i/24)) : 1.0;
+          const shimmer = 1.0 + 0.05*Math.sin(i*0.00022 + ch*1.7);
+          data[i] = (Math.random()*2 - 1) * env * early * shimmer * 0.55;
+        }
+      }
+      return buf;
+    }
+
+    setMaster(v){ if (this.masterGain) this.masterGain.gain.value = v; }
+    setIntensity(v){ this.intensity = v; }
+
+    addSection(name, startBeat, endBeat){ this.sections.push({name,startBeat,endBeat}); return this; }
+
+    addNote(beat, note, duration, velocity, vibrato=false, vibratoDelay=0.08){
+      const freq = (typeof note === "number") ? note : noteToHz(note);
+      this.events.push({ beat, duration, kind:"note", data:{ freq, velocity, vibrato, vibratoDelay }});
+      return this;
+    }
+    addChord(beat, notes, duration, velocity, spread=0){
+      notes.forEach((n,i)=>{
+        const b = beat + (spread ? i*spread : 0);
+        this.addNote(b, n, Math.max(0.01, duration - (spread ? i*spread : 0)), velocity, false, 0);
+      });
+      return this;
+    }
+    addBass(beat, note, duration, velocity){
+      const freq = (typeof note === "number") ? note : noteToHz(note);
+      this.events.push({ beat, duration, kind:"bass", data:{ freq, velocity }});
+      return this;
+    }
+    addPad(beat, notes, duration, velocity){
+      this.events.push({ beat, duration, kind:"pad", data:{ notes: notes.slice(), velocity }});
+      return this;
+    }
+    addSlide(beat, startNote, endNote, duration, velocity){
+      const f0 = (typeof startNote === "number") ? startNote : noteToHz(startNote);
+      const f1 = (typeof endNote === "number") ? endNote : noteToHz(endNote);
+      this.events.push({ beat, duration, kind:"slide", data:{ f0, f1, velocity }});
+      return this;
+    }
+    addPercussion(beat, type, velocity){
+      this.events.push({ beat, duration:0, kind:"perc", data:{ type, velocity }});
+      return this;
+    }
+
+    sort(){
+      this.events.sort((a,b)=>a.beat-b.beat);
+      this.totalBeats = 0;
+      for (const e of this.events) this.totalBeats = Math.max(this.totalBeats, e.beat + e.duration);
+      return this;
+    }
+
+    getBeat(){ return this._lastBeat || 0; }
+    getSectionAtBeat(beat){
+      for (const s of this.sections){
+        if (beat >= s.startBeat && beat < s.endBeat) return s.name;
+      }
+      return "—";
+    }
+
+    play(){
+      this.ensureContext();
+      if (this.ctx.state === "suspended") this.ctx.resume();
+
+      this.sort();
+      this.isPlaying = true;
+
+      const now = this.ctx.currentTime;
+      if (this._pausedAt > 0){
+        this._startTime = now - this._pausedAt;
+      } else {
+        this._startTime = now + 0.06;
+        this._nextIdx = 0;
+      }
+
+      const tick = () => {
+        if (!this.isPlaying) return;
+        const t = this.ctx.currentTime;
+        const beat = Math.max(0, this.secToBeats(t - this._startTime));
+        this._lastBeat = beat;
+
+        const ahead = beat + this.secToBeats(this.lookAheadSec);
+        while (this._nextIdx < this.events.length && this.events[this._nextIdx].beat <= ahead){
+          this._scheduleEvent(this.events[this._nextIdx++]);
+        }
+
+        if (beat >= this.totalBeats + 0.5){
+          this.stop();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    pause(){
+      if (!this.isPlaying) return;
+      this._pausedAt = this.ctx.currentTime - this._startTime;
+      this.isPlaying = false;
+    }
+
+    stop(){
+      this.isPlaying = false;
+      this._pausedAt = 0;
+      this._startTime = 0;
+      this._nextIdx = 0;
+      this._lastBeat = 0;
+    }
+
+    /******************************************************************
+     * SOUND DESIGN (EDM)
+     ******************************************************************/
+    _duck(time, amount=0.65, release=0.14){
+      // Sidechain "pump": quick dip then recover (gain modulation)
+      const g = this.sidechain.gain;
+      const a = amount * this.intensity;
+      g.cancelScheduledValues(time);
+      g.setValueAtTime(g.value, time);
+      g.linearRampToValueAtTime(Math.max(0.06, 1 - a), time + 0.008);             // fast attack
+      g.exponentialRampToValueAtTime(1.0, time + Math.max(0.02, release));       // release
+    }
+
+    _noiseBuffer(seconds){
+      const ctx = this.ctx;
+      const len = Math.floor(ctx.sampleRate * seconds);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i=0;i<len;i++) d[i] = Math.random()*2 - 1;
+      return buf;
+    }
+
+    _softClipCurve(amount=220){
+      // Waveshaper curve for aggressive but controllable distortion
+      const n = 44100;
+      const curve = new Float32Array(n);
+      const k = amount;
+      for (let i=0;i<n;i++){
+        const x = (i*2/n) - 1;
+        curve[i] = Math.tanh(k * x) / Math.tanh(k);
+      }
+      return curve;
+    }
+
+    _playKick(time, vel){
+      const ctx = this.ctx;
+      const v = vel * (0.75 + 0.25*this.intensity);
+
+      // Body oscillator (pitch sweep)
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(170, time);
+      osc.frequency.exponentialRampToValueAtTime(44, time + 0.095);
+
+      // Click (very short noise)
+      const click = ctx.createBufferSource();
+      click.buffer = this._noiseBuffer(0.03);
+      const clickHP = ctx.createBiquadFilter();
+      clickHP.type = "highpass";
+      clickHP.frequency.value = 2500;
+
+      const clickG = ctx.createGain();
+      clickG.gain.setValueAtTime(0.0001, time);
+      clickG.gain.exponentialRampToValueAtTime(v*0.22, time + 0.002);
+      clickG.gain.exponentialRampToValueAtTime(0.0001, time + 0.028);
+
+      // Amp envelope
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, v*1.15), time + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.30);
+
+      // Saturation
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = this._softClipCurve(180 + 160*this.intensity);
+      shaper.oversample = "4x";
+
+      // Tight EQ / thump
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 2200;
+
+      osc.connect(g);
+      g.connect(lp);
+      lp.connect(shaper);
+
+      click.connect(clickHP);
+      clickHP.connect(clickG);
+      clickG.connect(shaper);
+
+      shaper.connect(this.input);
+
+      osc.start(time); osc.stop(time + 0.33);
+      click.start(time); click.stop(time + 0.04);
+
+      this._duck(time, 0.72, 0.16);
+
+      this.onAudioEvent({ time, kind:"kick", freq:60, vel:v });
+    }
+
+    _playSnare(time, vel){
+      const ctx = this.ctx;
+      const v = vel * (0.65 + 0.35*this.intensity);
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = this._noiseBuffer(0.24);
+
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 1200;
+
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 2200;
+      bp.Q.value = 0.9;
+
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.0001, time);
+      ng.gain.exponentialRampToValueAtTime(v*0.7, time + 0.006);
+      ng.gain.exponentialRampToValueAtTime(0.0001, time + 0.17);
+
+      // tonal body
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(210, time);
+      osc.frequency.exponentialRampToValueAtTime(165, time + 0.09);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0.0001, time);
+      og.gain.exponentialRampToValueAtTime(v*0.18, time + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
+
+      // slight distortion
+      const sh = ctx.createWaveShaper();
+      sh.curve = this._softClipCurve(120 + 120*this.intensity);
+      sh.oversample = "2x";
+
+      noise.connect(hp); hp.connect(bp); bp.connect(ng);
+      osc.connect(og);
+
+      const sum = ctx.createGain();
+      ng.connect(sum); og.connect(sum);
+      sum.connect(sh);
+      sh.connect(this.input);
+
+      noise.start(time); noise.stop(time + 0.25);
+      osc.start(time); osc.stop(time + 0.16);
+
+      this.onAudioEvent({ time, kind:"snare", freq:2000, vel:v });
+    }
+
+    _playHat(time, vel, open=false){
+      const ctx = this.ctx;
+      const v = vel * (0.55 + 0.45*this.intensity);
+
+      const len = open ? 0.22 : 0.055;
+      const src = ctx.createBufferSource();
+      src.buffer = this._noiseBuffer(len);
+
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = open ? 6500 : 8000;
+
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 14000;
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(v*(open?0.28:0.18), time + 0.0025);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + (open?0.20:0.045));
+
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(this.input);
+      src.start(time); src.stop(time + len + 0.01);
+
+      this.onAudioEvent({ time, kind: open?"hatOpen":"hat", freq:9000, vel:v });
+    }
+
+    _playClap(time, vel){
+      // layered micro-delays (classic EDM clap psychoacoustics)
+      const ctx = this.ctx;
+      const v = vel * (0.6 + 0.4*this.intensity);
+      const taps = [0, 0.012, 0.024, 0.037];
+      for (let i=0;i<taps.length;i++){
+        const t = time + taps[i];
+        const src = ctx.createBufferSource();
+        src.buffer = this._noiseBuffer(0.10);
+
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 1800 + i*120;
+        bp.Q.value = 0.9;
+
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(v*(0.22 - i*0.03), t + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.085);
+
+        src.connect(bp); bp.connect(g); g.connect(this.input);
+        src.start(t); src.stop(t + 0.12);
+      }
+      this.onAudioEvent({ time, kind:"clap", freq:1800, vel:v });
+    }
+
+    _playSubBass({ time, freq, dur, vel }){
+      const ctx = this.ctx;
+      const v = vel * (0.55 + 0.45*this.intensity);
+      if (!freq || freq<=0) return;
+
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, time);
+
+      // subtle saturation from quiet 2nd harmonic
+      const osc2 = ctx.createOscillator();
+      osc2.type = "triangle";
+      osc2.frequency.setValueAtTime(freq, time);
+      osc2.detune.setValueAtTime(2, time);
+
+      const g1 = ctx.createGain(); g1.gain.value = 1.0;
+      const g2 = ctx.createGain(); g2.gain.value = 0.18;
+
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.setValueAtTime(220, time);
+      lp.frequency.exponentialRampToValueAtTime(520, time + Math.min(0.14, dur*0.35));
+      lp.Q.value = 0.7;
+
+      const amp = ctx.createGain();
+      amp.gain.setValueAtTime(0.0001, time);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, v), time + 0.006);
+      amp.gain.setValueAtTime(Math.max(0.0002, v*0.92), time + Math.max(0.02, dur-0.06));
+      amp.gain.exponentialRampToValueAtTime(0.0001, time + Math.max(0.06, dur));
+
+      const sh = ctx.createWaveShaper();
+      sh.curve = this._softClipCurve(70 + 140*this.intensity);
+      sh.oversample = "2x";
+
+      osc.connect(g1); g1.connect(lp);
+      osc2.connect(g2); g2.connect(lp);
+      lp.connect(sh); sh.connect(amp); amp.connect(this.input);
+
+      osc.start(time); osc2.start(time);
+      osc.stop(time + dur + 0.08); osc2.stop(time + dur + 0.08);
+
+      this.onAudioEvent({ time, kind:"bass", freq, vel:v });
+    }
+
+    _playFMLead({ time, freq, dur, vel, vibrato=false, vibratoDelay=0.06 }){
+      // FM = carrier freq modulated by modulator => sidebands (brightness grows with index)
+      const ctx = this.ctx;
+      const v = vel * (0.55 + 0.45*this.intensity);
+      if (!freq || freq<=0) return;
+
+      const carrier = ctx.createOscillator();
+      carrier.type = "sine";
+      carrier.frequency.setValueAtTime(freq, time);
+
+      const mod = ctx.createOscillator();
+      mod.type = "sine";
+      mod.frequency.setValueAtTime(freq*2, time);
+
+      const index = ctx.createGain();
+      // stronger at attack then relax (classic "pluck" brightness)
+      index.gain.setValueAtTime(freq*(2.2 + 4.5*this.intensity), time);
+      index.gain.exponentialRampToValueAtTime(freq*(0.35 + 0.65*this.intensity), time + 0.14);
+
+      mod.connect(index);
+      index.connect(carrier.frequency);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(6500, time);
+      filter.frequency.exponentialRampToValueAtTime(1800, time + Math.min(0.28, dur*0.7));
+      filter.Q.value = 0.75;
+
+      const amp = ctx.createGain();
+      amp.gain.setValueAtTime(0.0001, time);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, v*0.9), time + 0.010);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, v*0.35), time + 0.12);
+      amp.gain.exponentialRampToValueAtTime(0.0001, time + Math.max(0.08, dur));
+
+      // subtle stereo animation
+      const pan = ctx.createStereoPanner();
+      pan.pan.setValueAtTime((Math.random()*2-1)*0.35, time);
+
+      // vibrato
+      let vibOsc=null, vibGain=null, vibGate=null;
+      if (vibrato){
+        vibOsc = ctx.createOscillator();
+        vibOsc.type="sine";
+        vibOsc.frequency.setValueAtTime(5.6, time);
+        vibGain = ctx.createGain();
+        vibGain.gain.setValueAtTime(0, time);
+        vibGain.gain.linearRampToValueAtTime(0, time + vibratoDelay);
+        vibGain.gain.linearRampToValueAtTime(7.0, time + vibratoDelay + 0.12);
+        vibOsc.connect(vibGain);
+        vibGain.connect(carrier.frequency);
+        vibOsc.start(time);
+      }
+
+      carrier.connect(filter);
+      filter.connect(amp);
+      amp.connect(pan);
+      pan.connect(this.input);
+
+      carrier.start(time); mod.start(time);
+      const tOff = time + Math.max(0.05, dur);
+      carrier.stop(tOff + 0.03);
+      mod.stop(tOff + 0.03);
+      if (vibOsc) vibOsc.stop(tOff + 0.03);
+
+      this.onAudioEvent({ time, kind:"lead", freq, vel:v });
+    }
+
+    _playPad({ time, freqs, dur, vel }){
+      const ctx = this.ctx;
+      const v = vel * (0.55 + 0.45*this.intensity);
+      const pans = [-0.35,-0.15,0.15,0.35];
+      freqs.forEach((f0,i)=>{
+        if (!f0 || f0<=0) return;
+
+        // detuned supersaw-ish pad (but gentle)
+        const o1 = ctx.createOscillator(); o1.type="sawtooth";
+        const o2 = ctx.createOscillator(); o2.type="sawtooth";
+        const o3 = ctx.createOscillator(); o3.type="triangle";
+        o1.frequency.setValueAtTime(f0, time);
+        o2.frequency.setValueAtTime(f0, time);
+        o3.frequency.setValueAtTime(f0*2, time);
+        o1.detune.setValueAtTime(-9 + i*1.5, time);
+        o2.detune.setValueAtTime( 9 - i*1.5, time);
+        o3.detune.setValueAtTime( 2, time);
+
+        const mix = ctx.createGain();
+        mix.gain.value = 1;
+
+        const lp = ctx.createBiquadFilter();
+        lp.type="lowpass";
+        lp.frequency.setValueAtTime(520, time);
+        lp.frequency.exponentialRampToValueAtTime(2400, time + Math.min(1.2, dur*0.6));
+        lp.Q.value = 0.55;
+
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0.0001, time);
+        amp.gain.linearRampToValueAtTime(Math.max(0.0002, v*0.22), time + 0.45);
+        amp.gain.setValueAtTime(Math.max(0.0002, v*0.20), time + Math.max(0.5, dur-0.7));
+        amp.gain.exponentialRampToValueAtTime(0.0001, time + Math.max(0.8, dur));
+
+        const pan = ctx.createStereoPanner();
+        pan.pan.setValueAtTime(pans[i % pans.length], time);
+
+        o1.connect(mix); o2.connect(mix); o3.connect(mix);
+        mix.connect(lp); lp.connect(amp); amp.connect(pan); pan.connect(this.input);
+
+        o1.start(time); o2.start(time); o3.start(time);
+        o1.stop(time + dur + 0.2); o2.stop(time + dur + 0.2); o3.stop(time + dur + 0.2);
+      });
+
+      this.onAudioEvent({ time, kind:"pad", freq:220, vel:v });
+    }
+
+    _playSlide({ time, f0, f1, dur, vel }){
+      // acid-ish glide (bandpass + resonance)
+      const ctx = this.ctx;
+      const v = vel * (0.55 + 0.45*this.intensity);
+      const osc = ctx.createOscillator();
+      osc.type="sawtooth";
+      osc.frequency.setValueAtTime(f0, time);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(10,f1), time + Math.max(0.02, dur));
+
+      const filter = ctx.createBiquadFilter();
+      filter.type="bandpass";
+      filter.Q.value = 1.4;
+      filter.frequency.setValueAtTime(Math.min(2200, Math.max(250, f0*3.0)), time);
+      filter.frequency.exponentialRampToValueAtTime(Math.min(4200, Math.max(250, f1*3.0)), time + Math.max(0.02, dur*0.85));
+
+      const amp = ctx.createGain();
+      amp.gain.setValueAtTime(0.0001, time);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, v*0.55), time + 0.01);
+      amp.gain.exponentialRampToValueAtTime(0.0001, time + Math.max(0.06, dur));
+
+      osc.connect(filter); filter.connect(amp); amp.connect(this.input);
+
+      osc.start(time);
+      osc.stop(time + dur + 0.06);
+
+      this.onAudioEvent({ time, kind:"slide", freq:f1, vel:v });
+    }
+
+    _scheduleEvent(e){
+      const t = this._startTime + this.beatsToSec(e.beat);
+      const d = this.beatsToSec(e.duration);
+
+      if (e.kind === "perc"){
+        const { type, velocity } = e.data;
+        if (type === "kick") this._playKick(t, velocity);
+        else if (type === "snare") this._playSnare(t, velocity);
+        else if (type === "hat") this._playHat(t, velocity, false);
+        else if (type === "openhat") this._playHat(t, velocity, true);
+        else if (type === "clap") this._playClap(t, velocity);
+        return;
+      }
+      if (e.kind === "bass"){
+        this._playSubBass({ time:t, freq:e.data.freq, dur:Math.max(0.06,d), vel:e.data.velocity });
+        return;
+      }
+      if (e.kind === "pad"){
+        const freqs = e.data.notes.map(n => (typeof n==="number") ? n : noteToHz(n));
+        this._playPad({ time:t, freqs, dur:Math.max(0.2,d), vel:e.data.velocity });
+        return;
+      }
+      if (e.kind === "slide"){
+        this._playSlide({ time:t, f0:e.data.f0, f1:e.data.f1, dur:Math.max(0.06,d), vel:e.data.velocity });
+        return;
+      }
+      if (e.kind === "note"){
+        this._playFMLead({ time:t, freq:e.data.freq, dur:Math.max(0.05,d), vel:e.data.velocity, vibrato:e.data.vibrato, vibratoDelay:e.data.vibratoDelay });
+        return;
+      }
+    }
+  }
+
+  /******************************************************************
+   * COMPOSITION: "sick EDM" structure (intro → build → drop → break → final)
+   ******************************************************************/
+  const engine = new NeonEngine({ bpm: 140 });
+
+  // section beats
+  engine.addSection("INTRO (neon fog)", 0, 32);
+  engine.addSection("BUILD (tension)", 32, 64);
+  engine.addSection("DROP (collider)", 64, 128);
+  engine.addSection("BREAK (float)", 128, 160);
+  engine.addSection("FINAL DROP", 160, 224);
+
+  let b = 0;
+
+  // Helpers
+  const fourOnFloor = (startBeat, bars, kickVel=1.0, hatVel=0.5) => {
+    for (let bar=0; bar<bars; bar++){
+      const base = startBeat + bar*4;
+      engine.addPercussion(base+0, "kick", kickVel);
+      engine.addPercussion(base+1, "hat", hatVel*0.9);
+      engine.addPercussion(base+2, "kick", kickVel*0.92);
+      engine.addPercussion(base+3, "hat", hatVel*1.0);
+      engine.addPercussion(base+0.5, "hat", hatVel*0.55);
+      engine.addPercussion(base+1.5, "hat", hatVel*0.55);
+      engine.addPercussion(base+2.5, "hat", hatVel*0.55);
+      engine.addPercussion(base+3.5, "hat", hatVel*0.55);
+    }
+  };
+
+  const addSnareRoll = (startBeat, lengthBeats) => {
+    // accelerating roll near build end
+    let t = startBeat;
+    let step = DUR.E;
+    while (t < startBeat + lengthBeats){
+      const progress = (t - startBeat) / Math.max(0.001, lengthBeats);
+      step = Math.max(0.06, DUR.E * (1 - progress*0.75));
+      engine.addPercussion(t, "snare", 0.35 + progress*0.5);
+      if (progress > 0.6) engine.addPercussion(t + step*0.5, "clap", 0.18 + progress*0.32);
+      t += step;
+    }
+  };
+
+  // Key center: F minor-ish / dark EDM (Fm: F Ab C) – using notes in 1-6 octaves
+  const Fm = ["F3","Ab3","C4"];
+  const Db = ["Db3","F3","Ab3"];
+  const Eb = ["Eb3","G3","Bb3"];
+  const Cdim = ["C3","Eb3","Gb3"]; // tension
+
+  // INTRO (0-32): atmospheric pad + sparse lead + hats
+  engine.addPad(b, Fm, DUR.W*4, 0.22);
+  engine.addPad(b+8, Db, DUR.W*4, 0.20);
+  engine.addPad(b+16, Eb, DUR.W*4, 0.20);
+  engine.addPad(b+24, Cdim, DUR.W*2, 0.18);
+
+  // light hats + occasional openhat
+  for (let i=0;i<64;i++){
+    engine.addPercussion(b + i*DUR.E, "hat", 0.22);
+    if (i%16===14) engine.addPercussion(b + i*DUR.E, "openhat", 0.28);
+  }
+  // melodic whispers (FM lead)
+  engine.addNote(b+6, "C5", DUR.H, 0.22, true, 0.14);
+  engine.addSlide(b+14, "Ab4", "C5", DUR.Q, 0.22);
+  engine.addNote(b+22, "Bb4", DUR.Q, 0.20, false, 0);
+  engine.addNote(b+24, "Ab4", DUR.H, 0.24, true, 0.12);
+  b += 32;
+
+  // BUILD (32-64): kick enters, bass pulses, rising tension, snare roll
+  fourOnFloor(b, 8, 0.92, 0.42);
+  for (let bar=0; bar<8; bar++){
+    const base = b + bar*4;
+    // offbeat open hat
+    engine.addPercussion(base+3.5, "openhat", 0.32);
+
+    // bass pulses (staccato)
+    const roots = ["F2","Db2","Eb2","C2","F2","Db2","Eb2","C2"];
+    engine.addBass(base+0, roots[bar], DUR.Q*0.9, 0.65);
+    engine.addBass(base+2, roots[bar], DUR.Q*0.9, 0.62);
+
+    // tension lead stabs
+    engine.addNote(base+1.0, "C5", DUR.E*0.95, 0.26, false, 0);
+    engine.addNote(base+1.5, "Db5", DUR.E*0.95, 0.22, false, 0);
+    engine.addNote(base+3.0, "Eb5", DUR.E*0.95, 0.24, true, 0.06);
+  }
+  // snare roll last 4 beats
+  addSnareRoll(b+28, 4);
+  // riser slide
+  engine.addSlide(b+30, "C4", "C6", DUR.H, 0.26);
+  b += 32;
+
+  // DROP (64-128): heavy 4-on-floor + syncopated bass + chords + hook lead
+  fourOnFloor(b, 16, 1.0, 0.55);
+  for (let bar=0; bar<16; bar++){
+    const base = b + bar*4;
+
+    // backbeat snare/clap
+    engine.addPercussion(base+2, "snare", 0.88);
+    engine.addPercussion(base+2.02, "clap", 0.55);
+
+    // open hat on offbeat
+    engine.addPercussion(base+3.5, "openhat", 0.42);
+
+    // bassline: syncopated (1/8 + 1/16 pushes)
+    const prog = bar % 4;
+    const root = prog===0 ? "F2" : prog===1 ? "Db2" : prog===2 ? "Eb2" : "C2";
+    engine.addBass(base+0.0, root, DUR.E*0.95, 0.78);
+    engine.addBass(base+0.5, root, DUR.S*0.95, 0.62);
+    engine.addBass(base+1.0, root, DUR.E*0.95, 0.74);
+    engine.addBass(base+2.5, root, DUR.S*0.95, 0.62);
+    engine.addBass(base+3.0, root, DUR.E*0.95, 0.76);
+
+    // pad-chord punches (shorter, sidechain makes them breathe)
+    const chord = prog===0 ? ["F3","Ab3","C4"] : prog===1 ? ["Db3","F3","Ab3"] : prog===2 ? ["Eb3","G3","Bb3"] : ["C3","Eb3","Gb3"];
+    engine.addPad(base+0, chord, DUR.H, 0.12);
+    engine.addPad(base+2, chord, DUR.H, 0.10);
+
+    // hook lead (call/response), with some slides
+    if (bar % 2 === 0){
+      engine.addNote(base+0.75, "C5", DUR.E, 0.42, true, 0.08);
+      engine.addNote(base+1.25, "Ab4", DUR.E, 0.34, false, 0);
+      engine.addSlide(base+1.75, "Bb4", "C5", DUR.E, 0.34);
+      engine.addNote(base+2.75, "Eb5", DUR.E, 0.38, true, 0.06);
+    } else {
+      engine.addNote(base+0.75, "Db5", DUR.E, 0.40, false, 0);
+      engine.addNote(base+1.25, "C5", DUR.E, 0.34, false, 0);
+      engine.addNote(base+1.75, "Ab4", DUR.E, 0.33, false, 0);
+      engine.addSlide(base+2.25, "C5", "F5", DUR.Q, 0.36);
+    }
+  }
+  b += 64;
+
+  // BREAK (128-160): halftime vibe, pads + airy lead, less drums
+  engine.addPad(b, ["Db3","F3","Ab3","C4"], DUR.W*2, 0.18);
+  engine.addPad(b+8, ["Eb3","G3","Bb3","Db4"], DUR.W*2, 0.17);
+  for (let bar=0; bar<8; bar++){
+    const base = b + bar*4;
+    // sparse kick + hats
+    engine.addPercussion(base+0, "kick", 0.72);
+    engine.addPercussion(base+2, "snare", 0.55);
+    engine.addPercussion(base+1, "hat", 0.22);
+    engine.addPercussion(base+3, "hat", 0.22);
+
+    // bass long notes
+    const root = (bar<4) ? "Db2" : "Eb2";
+    engine.addBass(base+0, root, DUR.W*0.95, 0.50);
+
+    // floating melody
+    engine.addNote(base+0.5, bar<4 ? "Ab4" : "Bb4", DUR.H, 0.26, true, 0.18);
+    engine.addSlide(base+2.5, "C5", "Db5", DUR.E, 0.22);
+  }
+  b += 32;
+
+  // FINAL DROP (160-224): heavier, more hats, extra fill, final stabs
+  fourOnFloor(b, 16, 1.05, 0.62);
+  for (let bar=0; bar<16; bar++){
+    const base = b + bar*4;
+
+    engine.addPercussion(base+2, "snare", 0.92);
+    engine.addPercussion(base+2.01, "clap", 0.62);
+    engine.addPercussion(base+3.5, "openhat", 0.48);
+
+    // more hats (16ths)
+    for (let i=0;i<16;i++){
+      engine.addPercussion(base + i*DUR.S, "hat", 0.22 + 0.12*(i%2));
+    }
+
+    // bass: more aggressive pattern + octave jumps
+    const prog = bar % 4;
+    const root = prog===0 ? "F2" : prog===1 ? "Db2" : prog===2 ? "Eb2" : "C2";
+    engine.addBass(base+0.0, root, DUR.E*0.95, 0.82);
+    engine.addBass(base+1.0, root, DUR.S*0.95, 0.64);
+    engine.addBass(base+1.5, root, DUR.S*0.95, 0.62);
+    engine.addBass(base+2.5, root, DUR.E*0.95, 0.78);
+    engine.addBass(base+3.0, root, DUR.S*0.95, 0.66);
+    engine.addBass(base+3.5, root, DUR.S*0.95, 0.62);
+
+    // chord stab (short)
+    const chord = prog===0 ? ["F3","Ab3","C4"] : prog===1 ? ["Db3","F3","Ab3"] : prog===2 ? ["Eb3","G3","Bb3"] : ["C3","Eb3","Gb3"];
+    engine.addPad(base+0, chord, DUR.Q*0.75, 0.12);
+    engine.addPad(base+2, chord, DUR.Q*0.75, 0.11);
+
+    // lead: final motif + octave pop
+    engine.addNote(base+0.75, "C5", DUR.E, 0.46, true, 0.06);
+    engine.addNote(base+1.25, "Ab4", DUR.E, 0.38, false, 0);
+    engine.addNote(base+1.75, "F5", DUR.E, 0.42, true, 0.06);
+    engine.addSlide(base+2.25, "Eb5", "C5", DUR.E, 0.34);
+    engine.addNote(base+2.75, "Db5", DUR.E, 0.36, false, 0);
+
+    // fill every 4 bars
+    if (bar % 4 === 3){
+      engine.addPercussion(base+3.0, "snare", 0.55);
+      engine.addPercussion(base+3.25, "snare", 0.60);
+      engine.addPercussion(base+3.5, "snare", 0.68);
+      engine.addPercussion(base+3.75, "snare", 0.78);
+      engine.addSlide(base+3.0, "C5", "C6", DUR.Q, 0.28);
+    }
+  }
+  b += 64;
+
+  engine.sort();
+
+  /******************************************************************
+   * VISUALS: spectrum + particles + shockwaves
+   ******************************************************************/
+  const canvas = document.getElementById("canvas");
+  const g = canvas.getContext("2d", { alpha:false });
+
+  const timeDomain = new Uint8Array(2048);
+  const freqDomain = new Uint8Array(1024);
+
+  const particles = [];
+  const waves = [];
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    canvas.width = Math.floor(canvas.clientWidth * dpr);
+    canvas.height = Math.floor(canvas.clientHeight * dpr);
+    g.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize", resize);
+
+  function spawn(kind, freq=220, vel=0.5){
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const hue = (Math.log2(Math.max(50,freq)) * 60 + (kind==="kick"?8: kind==="snare"?300: kind==="lead"?180: 230)) % 360;
+    const r = 3 + vel*18 + (kind==="kick"?18:0);
+    particles.push({
+      x: w*(0.25 + Math.random()*0.5),
+      y: h*(0.20 + Math.random()*0.6),
+      vx: (Math.random()*2-1) * (40 + vel*160),
+      vy: (Math.random()*2-1) * (40 + vel*160),
+      life: 0,
+      max: 0.8 + Math.random()*0.8,
+      r, hue, vel
+    });
+
+    if (kind==="kick" || kind==="snare"){
+      waves.push({ x:w*0.5, y:h*0.55, r: 0, max: 260 + vel*420, life: 1.0, hue });
+    }
+  }
+
+  engine.onAudioEvent = (e) => spawn(e.kind, e.freq, e.vel);
+
+  function draw(){
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+
+    // background
+    g.fillStyle = "rgba(5,6,21,1)";
+    g.fillRect(0,0,w,h);
+
+    // glow fog
+    const bg = g.createRadialGradient(w*0.5,h*0.5, 40, w*0.5,h*0.5, Math.max(w,h)*0.7);
+    bg.addColorStop(0, "rgba(72,231,255,0.10)");
+    bg.addColorStop(0.45, "rgba(138,92,255,0.06)");
+    bg.addColorStop(0.75, "rgba(255,79,216,0.05)");
+    bg.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = bg;
+    g.fillRect(0,0,w,h);
+
+    // analyzer visuals
+    if (engine.analyser){
+      engine.analyser.getByteTimeDomainData(timeDomain);
+      engine.analyser.getByteFrequencyData(freqDomain);
+
+      // waveform
+      g.lineWidth = 2;
+      g.strokeStyle = "rgba(210,220,255,0.22)";
+      g.beginPath();
+      for (let i=0;i<timeDomain.length;i++){
+        const v = (timeDomain[i] - 128)/128;
+        const x = (i/(timeDomain.length-1))*w;
+        const y = h*0.62 + v*(h*0.12);
+        if (!i) g.moveTo(x,y); else g.lineTo(x,y);
+      }
+      g.stroke();
+
+      // spectrum bars
+      const bars = 96;
+      const bw = w / bars;
+      for (let i=0;i<bars;i++){
+        const idx = Math.floor((i/bars) * freqDomain.length);
+        const mag = freqDomain[idx] / 255;
+        const hh = mag * h * 0.22;
+        const hue = (200 + i*2.0 + mag*120) % 360;
+        g.fillStyle = `hsla(${hue},90%,60%,${0.10 + mag*0.45})`;
+        g.fillRect(i*bw, h - hh - 12, bw*0.7, hh);
+      }
+    }
+
+    // shockwaves
+    for (let i=waves.length-1;i>=0;i--){
+      const W = waves[i];
+      W.r += 6.5;
+      W.life *= 0.965;
+      g.strokeStyle = `hsla(${W.hue},90%,65%,${0.18*W.life})`;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(W.x, W.y, W.r, 0, Math.PI*2);
+      g.stroke();
+      if (W.r > W.max || W.life < 0.03) waves.splice(i,1);
+    }
+
+    // particles
+    const dt = 1/60;
+    for (let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.life += dt;
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+      p.vx *= 0.985;
+      p.vy *= 0.985;
+
+      const a = Math.max(0, 1 - p.life/p.max);
+      const rr = p.r*(0.7 + 0.9*a);
+
+      // glow
+      const grad = g.createRadialGradient(p.x,p.y, 0, p.x,p.y, rr*3.4);
+      grad.addColorStop(0, `hsla(${p.hue},95%,70%,${0.22*a})`);
+      grad.addColorStop(0.35, `hsla(${p.hue},95%,60%,${0.10*a})`);
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(p.x,p.y, rr*3.4, 0, Math.PI*2); g.fill();
+
+      // core
+      g.fillStyle = `hsla(${p.hue},95%,68%,${0.25 + 0.55*a})`;
+      g.beginPath(); g.arc(p.x,p.y, rr, 0, Math.PI*2); g.fill();
+
+      if (p.life > p.max) particles.splice(i,1);
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  /******************************************************************
+   * UI
+   ******************************************************************/
+  const overlay = document.getElementById("overlay");
+  const startBtn = document.getElementById("startBtn");
+  const playBtn = document.getElementById("playBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const vol = document.getElementById("vol");
+  const intensity = document.getElementById("intensity");
+
+  const sectionPill = document.getElementById("sectionPill");
+  const beatPill = document.getElementById("beatPill");
+  const bpmPill = document.getElementById("bpmPill");
+  const statusPill = document.getElementById("statusPill");
+  const lenPill = document.getElementById("lenPill");
+  const progressBar = document.querySelector("#progress > div");
+
+  bpmPill.textContent = `BPM: ${engine.bpm}`;
+  lenPill.textContent = `Length: ${engine.totalBeats.toFixed(2)} beats`;
+
+  function setStatus(s){ statusPill.textContent = s; }
+
+  function uiTick(){
+    const beat = engine.getBeat();
+    sectionPill.textContent = `SECTION: ${engine.getSectionAtBeat(beat)}`;
+    beatPill.textContent = `BEAT: ${beat.toFixed(2)}`;
+    const pct = engine.totalBeats ? Math.max(0, Math.min(1, beat/engine.totalBeats)) : 0;
+    progressBar.style.width = `${(pct*100).toFixed(2)}%`;
+    requestAnimationFrame(uiTick);
+  }
+
+  startBtn.addEventListener("click", async () => {
+    engine.ensureContext();
+    await engine.ctx.resume();
+    overlay.style.display = "none";
+    setStatus("Ready");
+  });
+
+  playBtn.addEventListener("click", async () => {
+    engine.ensureContext();
+    await engine.ctx.resume();
+    engine.play();
+    setStatus("Playing");
+    playBtn.disabled = true;
+    pauseBtn.disabled = false;
+  });
+
+  pauseBtn.addEventListener("click", () => {
+    engine.pause();
+    setStatus("Paused");
+    playBtn.disabled = false;
+    pauseBtn.disabled = true;
+  });
+
+  vol.addEventListener("input", () => engine.setMaster(+vol.value));
+  intensity.addEventListener("input", () => engine.setIntensity(+intensity.value));
+
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space"){
+      e.preventDefault();
+      if (!engine.ctx) return;
+      if (engine.isPlaying) pauseBtn.click();
+      else playBtn.click();
+    }
+  });
+
+  // init
+  resize();
+  draw();
+  uiTick();
+})();
+</script>
+</body>
+</html>
