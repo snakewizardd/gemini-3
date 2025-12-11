@@ -393,3 +393,113 @@ Higher (W\_t) = more “will” / resistance: strong identity stiffness, low ope
 
 ***
 
+
+___
+
+
+Yep, that feedback is on point, bro. Here are **corrected versions of Sections 6 and 7**, with the interpretations fixed and the rigidity update made properly bidirectional.
+
+***
+
+## Corrected Section 7) Pressure (m\_t) and (m\_{crit}) (interpretation fixed)
+
+We had the sufficient contraction condition:
+\[
+|1-k^{eff}\_t(\gamma+2m\_t)| < 1
+\quad\Longrightarrow\quad
+0 < k^{eff}\_t(\gamma+2m\_t) < 2
+]
+
+Solving the upper bound for (m\_t) gives:
+\[
+\boxed{
+m\_{crit}(t)=\frac{1}{2}\left(\frac{2}{k^{eff}\_t}-\gamma\right)
+================================================================
+
+\frac{1}{k^{eff}\_t}-\frac{\gamma}{2}
+}
+]
+
+### Correct interpretation
+
+If rigidity rises, then (\rho\uparrow \Rightarrow k^{eff}\downarrow). Since (m\_{crit}\propto 1/k^{eff}), we get:
+\[
+k^{eff}\downarrow ;\Rightarrow; \frac{1}{k^{eff}}\uparrow ;\Rightarrow; m\_{crit}\uparrow
+]
+
+So:
+
+*   **More rigidity ⇒ larger (m\_{crit})** ⇒ **harder to destabilize** (protective crouch).
+*   **More openness ⇒ smaller (m\_{crit})** ⇒ easier to tip/phase-change under pressure.
+
+### Trauma/anxiety nuance (how to get “hair-trigger” without breaking math)
+
+If you want “traumatized = crises from small pressure,” don’t force it through the *stability boundary*. Do it through a **protect-mode trigger** (a different threshold), like:
+
+*   “enter protect mode if (m\_t > m\_{\text{protect}})” where
+    \[
+    \boxed{
+    m\_{\text{protect}}(\rho)=m\_0(1-\rho)+m\_{min}
+    }
+    ]
+    So higher rigidity can mean **you enter protect mode sooner**, even though the underlying dynamics are mathematically more stable once you’re in that mode.
+
+That separates:
+
+*   **behavioral brittleness / defensive switching** (low protect threshold)
+    from
+*   **dynamical instability** (true divergence/phase change boundary)
+
+***
+
+## Corrected Section 6) Rigidity update (bidirectional, not one-way)
+
+You’re right: (\rho\_t + \alpha\sigma(\cdot)) is one-way unless decay dominates. If you want **low error to actively relax rigidity**, center the update around zero.
+
+### Option A (centered sigmoid — your suggested fix, it’s good)
+
+\[
+\boxed{
+\rho\_{t+1}
+===========
+
+\mathrm{clip}\left(
+\rho\_t + \alpha\left\[\sigma\left(\frac{\epsilon\_t-\epsilon\_0}{s}\right)-\frac{1}{2}\right],
+0,1
+\right)
+}
+]
+
+Behavior:
+
+*   If (\epsilon\_t \ll \epsilon\_0): sigmoid < 1/2 ⇒ term negative ⇒ (\rho) decreases.
+*   If (\epsilon\_t \gg \epsilon\_0): sigmoid > 1/2 ⇒ (\rho) increases.
+*   (s) controls how sharp the switch is.
+
+### Option B (tanh, same idea but symmetric)
+
+\[
+\boxed{
+\rho\_{t+1}
+===========
+
+\mathrm{clip}\left(
+\rho\_t + \alpha,\tanh\left(\frac{\epsilon\_t-\epsilon\_0}{s}\right),
+0,1
+\right)
+}
+]
+
+This is basically “signed surprise” around (\epsilon\_0).
+
+### Effective openness / step size stays the same
+
+Keep:
+\[
+k^{eff}*t = k*{base}(1-\rho\_t)
+]
+So rigidity still means “smaller step / less integration,” and the math stays bounded and stable.
+
+***
+
+If you want the “traumatized” persona to match your original writeup more closely, the clean move is: **rigidity protects stability** (higher (m\_{crit})), but trauma is modeled as **lower (\epsilon\_0)** (threat threshold) plus maybe higher (\alpha) (faster rigidity ramp) and/or a higher baseline (\rho). That gives you hair-trigger defensiveness without contradicting the stability derivation.
