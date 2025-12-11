@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FLUID ARCHITECTURE — A Tribute to Allan Holdsworth</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+        background: linear-gradient(135deg, #0a0814 0%, #1a1428 50%, #0d0a18 100%); 
+        overflow: hidden; 
+        font-family: 'Palatino Linotype', 'Georgia', serif;
+        color: #e0dce8;
+    }
+    
+    #canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 1;
+    }
+    
+    #overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(5, 3, 10, 0.97);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        transition: opacity 1.2s;
+    }
+    .hidden { opacity: 0; pointer-events: none; }
+    
+    #overlay h1 {
+        font-size: 4em;
+        color: #9b7fd4;
+        text-shadow: 
+            0 0 40px rgba(155, 127, 212, 0.4),
+            0 0 80px rgba(155, 127, 212, 0.2);
+        letter-spacing: 0.15em;
+        font-weight: 300;
+        margin-bottom: 10px;
+    }
+    
+    #overlay h2 {
+        font-size: 1.4em;
+        color: #6b5b95;
+        font-weight: 300;
+        font-style: italic;
+        margin-bottom: 10px;
+        letter-spacing: 0.3em;
+    }
+    
+    #overlay h3 {
+        font-size: 1.1em;
+        color: #8e7cc3;
+        font-weight: 300;
+        margin-top: 30px;
+    }
+    
+    .description {
+        max-width: 600px;
+        text-align: center;
+        color: #888;
+        line-height: 1.8;
+        font-size: 1em;
+        margin-top: 25px;
+    }
+    
+    .click-prompt {
+        margin-top: 60px;
+        font-size: 1em;
+        color: #444;
+        letter-spacing: 0.3em;
+    }
+    
+    #controls {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    #controls button {
+        background: linear-gradient(135deg, rgba(155, 127, 212, 0.2), rgba(107, 91, 149, 0.3));
+        border: 1px solid rgba(155, 127, 212, 0.4);
+        color: #b8a4dc;
+        padding: 14px 40px;
+        font-size: 14px;
+        font-family: inherit;
+        cursor: pointer;
+        border-radius: 30px;
+        transition: all 0.4s;
+        letter-spacing: 0.15em;
+    }
+    
+    #controls button:hover {
+        background: linear-gradient(135deg, rgba(155, 127, 212, 0.3), rgba(107, 91, 149, 0.4));
+        box-shadow: 0 0 30px rgba(155, 127, 212, 0.4);
+        transform: scale(1.05);
+    }
+    
+    #time-display {
+        color: #6b5b95;
+        font-size: 14px;
+        font-family: 'Courier New', monospace;
+        text-shadow: 0 0 10px rgba(107, 91, 149, 0.4);
+    }
+    
+    #section-display {
+        position: fixed;
+        top: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 18px;
+        font-weight: 300;
+        color: #9b7fd4;
+        z-index: 50;
+        letter-spacing: 0.4em;
+        text-transform: uppercase;
+        text-shadow: 0 0 20px rgba(155, 127, 212, 0.3);
+    }
+    
+    #mode-display {
+        position: fixed;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 14px;
+        font-weight: 300;
+        color: #6b5b95;
+        z-index: 50;
+        letter-spacing: 0.2em;
+        font-style: italic;
+    }
+    
+    #progress {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #6b5b95, #9b7fd4, #b8a4dc, #9b7fd4);
+        z-index: 50;
+        box-shadow: 0 0 15px rgba(155, 127, 212, 0.5);
+    }
+    
+    #harmonic-field {
+        position: fixed;
+        top: 30px;
+        right: 30px;
+        font-size: 12px;
+        color: #666;
+        z-index: 50;
+        text-align: right;
+        line-height: 1.6;
+        font-family: 'Courier New', monospace;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>FLUID ARCHITECTURE</h1>
+    <h2>A Tribute to Allan Holdsworth</h2>
+    <h3>The Master of Legato</h3>
+    <div class="description">
+        An exploration of the sonic architecture that defined the greatest guitarist who ever lived —
+        where notes flow like liquid mercury, chords dissolve tritone boundaries, 
+        and melody transcends the limitations of the fretboard.
+        <br><br>
+        <em>Featuring: Lydian chromaticism, 4th voicings, legato cascades, wide interval leaps</em>
+    </div>
+    <p class="click-prompt">[ CLICK TO ENTER THE SONIC ARCHITECTURE ]</p>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="section-display">FLUID ARCHITECTURE</div>
+<div id="mode-display">B Lydian</div>
+<div id="harmonic-field">
+    MODE: Lydian<br>
+    VOICE: Legato<br>
+    INTERVAL: 4ths
+</div>
+
+<div id="controls">
+    <button id="playBtn">▶ PLAY</button>
+    <div id="time-display">0:00 / 4:20</div>
+</div>
+
+<div id="progress"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FLUID ARCHITECTURE — ALLAN HOLDSWORTH TRIBUTE
+//  
+//  Stylistic Elements:
+//  - Legato phrasing (flowing lines, minimal pick attack)
+//  - Wide interval voicings (4ths, avoid 3rds)
+//  - Lydian and Lydian Dominant modes
+//  - Chromatic approach notes
+//  - Delayed vibrato
+//  - Long sustaining tones
+//  - "SynthAxe" influenced clean tones
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+    BPM: 72,  // Holdsworth often played rubato, but we'll use a slow, fluid tempo
+    KEY: 'B'  // B Lydian is a classic Holdsworth key
+};
+
+// Note frequencies (Equal temperament, A4 = 440Hz)
+const NOTES = {
+    'B1': 61.74, 'C#2': 69.30, 'D#2': 77.78, 'E2': 82.41, 'F#2': 92.50, 'G#2': 103.83, 'A#2': 116.54,
+    'B2': 123.47, 'C#3': 138.59, 'D#3': 155.56, 'E3': 164.81, 'F#3': 185.00, 'G#3': 207.65, 'A#3': 233.08,
+    'B3': 246.94, 'C#4': 277.18, 'D#4': 311.13, 'E4': 329.63, 'F#4': 369.99, 'G#4': 415.30, 'A#4': 466.16,
+    'B4': 493.88, 'C#5': 554.37, 'D#5': 622.25, 'E5': 659.26, 'F#5': 739.99, 'G#5': 830.61, 'A#5': 932.33,
+    'B5': 987.77, 'C#6': 1108.73, 'D#6': 1244.51, 'E6': 1318.51, 'F#6': 1479.98, 'G#6': 1661.22,
+    // Chromatic notes for passing tones
+    'C2': 65.41, 'D2': 73.42, 'F2': 87.31, 'G2': 98.00, 'A2': 110.00,
+    'C3': 130.81, 'D3': 146.83, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00,
+    'C4': 261.63, 'D4': 293.66, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00,
+    'C5': 523.25, 'D5': 587.33, 'F5': 698.46, 'G5': 783.99, 'A5': 880.00,
+    'C6': 1046.50, 'D6': 1174.66, 'E#5': 698.46  // Enharmonic
+};
+
+// B Lydian scale: B C# D# E# F# G# A#
+// Lydian Dominant (Lydian b7): B C# D# E# F# G# A (natural)
+const LYDIAN = ['B', 'C#', 'D#', 'E#', 'F#', 'G#', 'A#'];
+const LYDIAN_DOM = ['B', 'C#', 'D#', 'E#', 'F#', 'G#', 'A'];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE — "SynthAxe" Clean Tone with Lush Reverb
+// ═══════════════════════════════════════════════════════════════════════════════
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    reverb: null,
+    reverbGain: null,
+    delay: null,
+    delayGain: null,
+    compressor: null,
+    chorus: null,
+    isPlaying: false,
+    activeOscs: [],
+    
+    init: async () => {
+        AudioEngine.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = AudioEngine.ctx;
+        
+        // Compressor for dynamics control
+        AudioEngine.compressor = ctx.createDynamicsCompressor();
+        AudioEngine.compressor.threshold.value = -18;
+        AudioEngine.compressor.knee.value = 10;
+        AudioEngine.compressor.ratio.value = 4;
+        AudioEngine.compressor.attack.value = 0.005;
+        AudioEngine.compressor.release.value = 0.2;
+        
+        // Master gain
+        AudioEngine.master = ctx.createGain();
+        AudioEngine.master.gain.value = 0.7;
+        
+        // Create lush hall reverb (Holdsworth loved big reverb)
+        AudioEngine.reverb = ctx.createConvolver();
+        AudioEngine.reverb.buffer = await AudioEngine.createHallReverb(4.5, 1.8);
+        
+        AudioEngine.reverbGain = ctx.createGain();
+        AudioEngine.reverbGain.gain.value = 0.45;  // Wet/dry mix
+        
+        // Stereo delay for width
+        AudioEngine.delay = ctx.createDelay(1.0);
+        AudioEngine.delay.delayTime.value = 0.375;  // Dotted eighth feel
+        
+        AudioEngine.delayGain = ctx.createGain();
+        AudioEngine.delayGain.gain.value = 0.25;
+        
+        AudioEngine.delayFeedback = ctx.createGain();
+        AudioEngine.delayFeedback.gain.value = 0.35;
+        
+        // Delay feedback loop
+        AudioEngine.delay.connect(AudioEngine.delayFeedback);
+        AudioEngine.delayFeedback.connect(AudioEngine.delay);
+        AudioEngine.delay.connect(AudioEngine.delayGain);
+        
+        // Subtle chorus effect (stereo width)
+        AudioEngine.chorusLFO = ctx.createOscillator();
+        AudioEngine.chorusLFO.type = 'sine';
+        AudioEngine.chorusLFO.frequency.value = 0.5;
+        
+        AudioEngine.chorusDelay = ctx.createDelay(0.05);
+        AudioEngine.chorusDelay.delayTime.value = 0.012;
+        
+        AudioEngine.chorusDepth = ctx.createGain();
+        AudioEngine.chorusDepth.gain.value = 0.003;
+        
+        AudioEngine.chorusLFO.connect(AudioEngine.chorusDepth);
+        AudioEngine.chorusDepth.connect(AudioEngine.chorusDelay.delayTime);
+        AudioEngine.chorusLFO.start();
+        
+        // Signal routing
+        // Dry path
+        AudioEngine.compressor.connect(AudioEngine.master);
+        
+        // Reverb path
+        AudioEngine.compressor.connect(AudioEngine.reverb);
+        AudioEngine.reverb.connect(AudioEngine.reverbGain);
+        AudioEngine.reverbGain.connect(AudioEngine.master);
+        
+        // Delay path
+        AudioEngine.compressor.connect(AudioEngine.delay);
+        AudioEngine.delayGain.connect(AudioEngine.reverbGain);  // Delay into reverb
+        
+        // Chorus path
+        AudioEngine.compressor.connect(AudioEngine.chorusDelay);
+        AudioEngine.chorusDelay.connect(AudioEngine.master);
+        
+        // Master to output
+        AudioEngine.master.connect(ctx.destination);
+    },
+    
+    // Long, lush hall reverb
+    createHallReverb: async (duration, decay) => {
+        const ctx = AudioEngine.ctx;
+        const rate = ctx.sampleRate;
+        const length = rate * duration;
+        const impulse = ctx.createBuffer(2, length, rate);
+        const L = impulse.getChannelData(0);
+        const R = impulse.getChannelData(1);
+        
+        for (let i = 0; i < length; i++) {
+            const t = i / rate;
+            // Early reflections + diffuse tail
+            const early = i < rate * 0.08 ? Math.sin(i * 0.01) * 0.3 : 0;
+            const envelope = Math.pow(1 - i / length, decay);
+            // Add modulation for realistic hall
+            const mod = 1 + Math.sin(i * 0.0002) * 0.1;
+            L[i] = ((Math.random() * 2 - 1) * envelope + early) * mod;
+            R[i] = ((Math.random() * 2 - 1) * envelope + early * 0.8) * mod;
+        }
+        return impulse;
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOLDSWORTH LEGATO TONE
+    // Clean, warm, incredibly smooth - the "liquid" guitar sound
+    // ═══════════════════════════════════════════════════════════════════════════
+    playNote: (note, time, duration, velocity = 0.5, vibrato = false, vibratoDelay = 0.4) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        // Multiple oscillators for rich harmonic content
+        // Holdsworth's tone was warm but clear
+        const osc1 = ctx.createOscillator();  // Fundamental (sine for warmth)
+        const osc2 = ctx.createOscillator();  // Character (triangle)
+        const osc3 = ctx.createOscillator();  // Shimmer (slight detune)
+        
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        osc3.type = 'sine';
+        
+        osc1.frequency.value = freq;
+        osc2.frequency.value = freq;
+        osc3.frequency.value = freq * 2;  // Octave harmonic
+        osc3.detune.value = 3;  // Slight chorus effect
+        
+        // Mix gains (emphasize fundamental for legato clarity)
+        const g1 = ctx.createGain(); g1.gain.value = 0.45;
+        const g2 = ctx.createGain(); g2.gain.value = 0.35;
+        const g3 = ctx.createGain(); g3.gain.value = 0.15;  // Subtle shimmer
+        
+        // Warm lowpass filter
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(4000, time);
+        filter.frequency.exponentialRampToValueAtTime(2000, time + 0.3);
+        filter.Q.value = 0.7;
+        
+        // Very soft attack for legato feel (this is KEY to Holdsworth's sound)
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(velocity * 0.6, time + 0.025);  // Soft attack
+        amp.gain.setValueAtTime(velocity * 0.55, time + 0.1);  // Slight sustain decay
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        // Delayed vibrato (Holdsworth's signature)
+        if (vibrato) {
+            const vibratoLFO = ctx.createOscillator();
+            const vibratoGain = ctx.createGain();
+            vibratoLFO.frequency.value = 5.5;  // Human vibrato rate
+            vibratoGain.gain.setValueAtTime(0, time);
+            vibratoGain.gain.linearRampToValueAtTime(0, time + vibratoDelay);
+            vibratoGain.gain.linearRampToValueAtTime(8, time + vibratoDelay + 0.2);  // Subtle pitch variation
+            
+            vibratoLFO.connect(vibratoGain);
+            vibratoGain.connect(osc1.frequency);
+            vibratoGain.connect(osc2.frequency);
+            vibratoLFO.start(time);
+            vibratoLFO.stop(time + duration);
+        }
+        
+        // Panner for stereo image
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = (Math.random() - 0.5) * 0.3;  // Subtle random pan
+        
+        // Connections
+        osc1.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        osc3.connect(g3); g3.connect(filter);
+        filter.connect(amp);
+        amp.connect(panner);
+        panner.connect(AudioEngine.compressor);
+        
+        osc1.start(time); osc1.stop(time + duration + 0.1);
+        osc2.start(time); osc2.stop(time + duration + 0.1);
+        osc3.start(time); osc3.stop(time + duration + 0.1);
+        
+        triggerVisual('note', velocity, freq);
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOLDSWORTH CHORD VOICINGS
+    // Non-tertial, 4th-based, no octave doubling, wide intervals
+    // ═══════════════════════════════════════════════════════════════════════════
+    playChord: (notes, time, duration, velocity = 0.4, spread = 0.015) => {
+        notes.forEach((note, i) => {
+            const t = time + i * spread;  // Slight timing spread for human feel
+            AudioEngine.playNote(note, t, duration, velocity * (0.9 + Math.random() * 0.1), false);
+        });
+        triggerVisual('chord', velocity, 0);
+    },
+    
+    // Glissando/Slide between notes (Holdsworth loved these)
+    playSlide: (startNote, endNote, time, duration, velocity = 0.5) => {
+        const ctx = AudioEngine.ctx;
+        const startFreq = NOTES[startNote];
+        const endFreq = NOTES[endNote];
+        if (!startFreq || !endFreq) return;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(startFreq, time);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration * 0.3);
+        osc.frequency.setValueAtTime(endFreq, time + duration * 0.3);
+        
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(startFreq, time);
+        osc2.frequency.exponentialRampToValueAtTime(endFreq, time + duration * 0.3);
+        
+        const g1 = ctx.createGain(); g1.gain.value = 0.4;
+        const g2 = ctx.createGain(); g2.gain.value = 0.25;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 3500;
+        filter.Q.value = 0.7;
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(velocity * 0.5, time + 0.02);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(g1); g1.connect(filter);
+        osc2.connect(g2); g2.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.compressor);
+        
+        osc.start(time); osc.stop(time + duration + 0.1);
+        osc2.start(time); osc2.stop(time + duration + 0.1);
+        
+        triggerVisual('slide', velocity, endFreq);
+    },
+    
+    // Bass pad (soft, supportive)
+    playBassPad: (note, time, duration, velocity = 0.3) => {
+        const ctx = AudioEngine.ctx;
+        const freq = NOTES[note];
+        if (!freq) return;
+        
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800;
+        filter.Q.value = 1;
+        
+        const amp = ctx.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(velocity * 0.4, time + 0.1);
+        amp.gain.setValueAtTime(velocity * 0.35, time + duration - 0.2);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(filter);
+        filter.connect(amp);
+        amp.connect(AudioEngine.compressor);
+        
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPOSITION DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+const SCORE = [];
+const CHORDS = [];
+const BASS = [];
+
+function addNote(beat, note, duration, velocity = 0.5, vibrato = false, vibratoDelay = 0.4) {
+    SCORE.push({ beat, note, duration, velocity, vibrato, vibratoDelay });
+}
+
+function addChord(beat, notes, duration, velocity = 0.4) {
+    CHORDS.push({ beat, notes, duration, velocity });
+}
+
+function addSlide(beat, startNote, endNote, duration, velocity = 0.5) {
+    SCORE.push({ beat, startNote, endNote, duration, velocity, type: 'slide' });
+}
+
+function addBass(beat, note, duration, velocity = 0.3) {
+    BASS.push({ beat, note, duration, velocity });
+}
+
+// Duration constants
+const S = 0.25;   // Sixteenth
+const E = 0.5;    // Eighth  
+const Q = 1.0;    // Quarter
+const H = 2.0;    // Half
+const W = 4.0;    // Whole
+const T = 1/3;    // Triplet
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SECTION I: PROLOGUE — Atmospheric 4th Voicings (0-16 beats)
+//  Establishing the Lydian sound world
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Opening chord: B Lydian voicing with 4ths (B-E#-A#-D#-G#)
+addChord(b, ['B2', 'F#3', 'B3', 'E4'], W * 2, 0.35);
+addBass(b, 'B1', W * 2, 0.25);
+b += W * 2;
+
+// Second voicing ascending
+addChord(b, ['C#3', 'F#3', 'B3', 'E5'], W * 2, 0.35);
+addBass(b, 'C#2', W * 2, 0.25);
+b += W * 2;
+
+// Third voicing - add tension
+addChord(b, ['D#3', 'G#3', 'C#4', 'F#4'], W * 2, 0.38);
+addBass(b, 'D#2', W * 2, 0.25);
+b += W * 2;
+
+// Resolution with suspension
+addChord(b, ['B2', 'E#3', 'A#3', 'D#4', 'G#4'], W * 2, 0.35);
+addBass(b, 'B1', W * 2, 0.28);
+b += W * 2;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SECTION II: LEGATO STATEMENT — The First Theme (16-48 beats)
+//  Flowing Holdsworth-style lines with wide intervals
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// First lyrical phrase - wide interval leap then stepwise
+addNote(b, 'B4', Q * 1.5, 0.5, true, 0.5);  // Long note with vibrato
+b += Q * 1.5;
+addNote(b, 'D#5', E, 0.45);
+b += E;
+addNote(b, 'G#5', Q, 0.5, true, 0.3);  // Wide leap up a 4th
+b += Q;
+addNote(b, 'F#5', E, 0.42);
+b += E;
+addNote(b, 'E5', E, 0.4);
+b += E;
+addNote(b, 'D#5', Q, 0.5, true, 0.4);
+b += Q;
+
+// Supportive chord
+addChord(b, ['B2', 'F#3', 'E4', 'A#4'], W, 0.3);
+addBass(b, 'B1', W, 0.22);
+
+// Second phrase - chromatic approach notes (Holdsworth signature)
+addNote(b, 'C#5', E, 0.4);  // Chromatic approach
+b += E;
+addNote(b, 'D5', S, 0.35);   // Chromatic passing tone
+b += S;
+addNote(b, 'D#5', Q, 0.48);
+b += Q;
+addNote(b, 'B4', E, 0.42);
+b += E;
+addNote(b, 'A#4', H, 0.5, true, 0.6);
+b += H;
+
+// Descending legato cascade
+addNote(b, 'G#4', E, 0.45);
+b += E;
+addNote(b, 'F#4', E, 0.42);
+b += E;
+addNote(b, 'E4', E, 0.4);
+b += E;
+addNote(b, 'D#4', E, 0.38);
+b += E;
+addNote(b, 'C#4', Q, 0.45);
+b += Q;
+addNote(b, 'B3', H, 0.5, true, 0.5);
+b += H;
+
+// Chord accompaniment
+addChord(b, ['F#2', 'B2', 'E#3', 'A#3'], W, 0.32);
+addBass(b, 'F#1', W, 0.22);
+b += W;
+
+// Rising phrase with wide leaps
+addNote(b, 'B3', E, 0.42);
+b += E;
+addNote(b, 'F#4', E, 0.45);  // 4th leap
+b += E;
+addNote(b, 'E5', E, 0.48);   // Another 4th+
+b += E;
+addNote(b, 'D#5', S, 0.42);
+b += S;
+addNote(b, 'E5', S, 0.44);
+b += S;
+addNote(b, 'G#5', Q, 0.52, true, 0.3);  // Peak note with vibrato
+b += Q;
+
+addChord(b, ['G#2', 'C#3', 'F#3', 'B3'], W, 0.3);
+addBass(b, 'G#1', W, 0.2);
+
+// Descending with chromatic color
+addNote(b, 'A5', S, 0.35);   // Chromatic upper neighbor
+b += S;
+addNote(b, 'G#5', E, 0.45);
+b += E;
+addNote(b, 'F#5', E, 0.42);
+b += E;
+addNote(b, 'E5', E, 0.4);
+b += E;
+addNote(b, 'D#5', H, 0.48, true, 0.5);
+b += H;
+
+// Longer resolution
+addChord(b, ['B2', 'E#3', 'A#3', 'D#4'], W * 1.5, 0.35);
+addBass(b, 'B1', W * 1.5, 0.25);
+b += W * 1.5;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SECTION III: DEVELOPMENT — Increased Complexity (48-80 beats)
+//  More chromatic, wider intervals, chord melody integration
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Fast legato run (32nd note feel compressed to 16ths)
+const fastRun = ['B4', 'C#5', 'D5', 'D#5', 'E5', 'F#5', 'G#5', 'A#5'];
+fastRun.forEach((note, i) => {
+    addNote(b, note, S, 0.35 + i * 0.02);
+    b += S;
+});
+
+// Land on high note
+addNote(b, 'B5', Q * 1.5, 0.55, true, 0.2);
+b += Q * 1.5;
+
+// Support chord
+addChord(b - Q, ['C#3', 'F#3', 'B3', 'E4'], Q * 2, 0.3);
+
+// Wide interval melody (Holdsworth loved 5ths and 4ths)
+addNote(b, 'E5', E, 0.45);
+b += E;
+addNote(b, 'B4', E, 0.4);   // Down a 4th
+b += E;
+addNote(b, 'F#4', E, 0.42);  // Down another 4th
+b += E;
+addNote(b, 'C#5', E, 0.48); // Up a 5th
+b += E;
+addNote(b, 'G#5', Q, 0.5, true, 0.35);  // Up another 5th+
+b += Q;
+
+// Chord voicing change
+addChord(b, ['A#2', 'D#3', 'G#3', 'C#4', 'F#4'], H, 0.35);
+addBass(b, 'A#1', H, 0.22);
+b += H;
+
+// Descending 4ths sequence
+addNote(b, 'F#5', E, 0.45);
+b += E;
+addNote(b, 'C#5', E, 0.42);  // Down a 4th
+b += E;
+addNote(b, 'G#4', E, 0.4);   // Down a 4th
+b += E;
+addNote(b, 'D#4', E, 0.38);  // Down a 4th
+b += E;
+addNote(b, 'A#3', H, 0.45, true, 0.5);  // Landing with vibrato
+b += H;
+
+// Chromatic approach chord
+addChord(b, ['B2', 'E3', 'A3', 'D4'], E, 0.28);  // "Outside" chord
+b += E;
+addChord(b, ['B2', 'E#3', 'A#3', 'D#4'], W, 0.38);  // Resolution
+addBass(b, 'B1', W + E, 0.25);
+b += W;
+
+// Ascending legato with slides
+addSlide(b, 'B3', 'D#4', E, 0.45);
+b += E;
+addNote(b, 'F#4', E, 0.42);
+b += E;
+addSlide(b, 'G#4', 'B4', E, 0.45);
+b += E;
+addNote(b, 'D#5', E, 0.48);
+b += E;
+addSlide(b, 'E5', 'G#5', Q, 0.5);
+b += Q;
+addNote(b, 'B5', H, 0.55, true, 0.3);  // Peak
+b += H;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SECTION IV: CLIMAX — Full Expression (80-112 beats)  
+//  Intense legato lines, complex voicings, emotional peak
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Rich chord backdrop
+addChord(b, ['B2', 'F#3', 'C#4', 'G#4', 'D#5'], W * 1.5, 0.4);
+addBass(b, 'B1', W * 1.5, 0.28);
+
+// Intense ascending line with chromatic passing tones
+addNote(b + E, 'B4', E, 0.5);
+addNote(b + E * 2, 'C5', S, 0.42);  // Chromatic
+addNote(b + E * 2 + S, 'C#5', E, 0.48);
+addNote(b + E * 3 + S, 'D5', S, 0.4);  // Chromatic
+addNote(b + E * 4, 'D#5', E, 0.52);
+addNote(b + E * 5, 'E5', S, 0.45);
+addNote(b + E * 5 + S, 'E#5', S, 0.42);
+addNote(b + E * 6, 'F#5', E, 0.55);
+addNote(b + E * 7, 'G5', S, 0.42);  // Chromatic
+addNote(b + E * 7 + S, 'G#5', Q, 0.58, true, 0.25);
+b += W * 1.5;
+
+// New chord
+addChord(b, ['D#3', 'G#3', 'C#4', 'F#4', 'B4'], W, 0.38);
+addBass(b, 'D#2', W, 0.25);
+
+// Descending cascade with wide leaps
+addNote(b, 'A#5', E, 0.52);
+b += E;
+addNote(b, 'D#5', E, 0.48);  // Down a 5th
+b += E;
+addNote(b, 'B4', E, 0.45);
+b += E;
+addNote(b, 'F#5', E, 0.5);  // Up a 5th (leap)
+b += E;
+addNote(b, 'C#5', E, 0.45);
+b += E;
+addNote(b, 'G#4', E, 0.42);
+b += E;
+addNote(b, 'E5', Q, 0.52, true, 0.3);  // Leap up
+b += Q;
+
+// Tension chord
+addChord(b, ['C#3', 'F#3', 'B3', 'E#4', 'A#4'], H, 0.4);
+addBass(b, 'C#2', H, 0.25);
+b += H;
+
+// Climactic phrase
+addNote(b, 'F#5', E, 0.55);
+b += E;
+addNote(b, 'G#5', E, 0.58);
+b += E;
+addNote(b, 'A#5', Q, 0.6, true, 0.2);  // Peak intensity
+b += Q;
+addNote(b, 'B5', H, 0.62, true, 0.15);  // Highest point
+b += H;
+
+// Resolution chord
+addChord(b, ['B2', 'E#3', 'A#3', 'D#4', 'G#4'], W, 0.42);
+addBass(b, 'B1', W, 0.3);
+b += W;
+
+// Gentle descent from climax
+addNote(b, 'G#5', E, 0.5);
+b += E;
+addNote(b, 'F#5', E, 0.48);
+b += E;
+addNote(b, 'D#5', E, 0.45);
+b += E;
+addNote(b, 'B4', E, 0.42);
+b += E;
+addNote(b, 'A#4', Q, 0.45);
+b += Q;
+addNote(b, 'G#4', H, 0.5, true, 0.5);
+b += H;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SECTION V: CODA — Return to Calm (112-144 beats)
+//  Reflective, sparse, beautiful resolution
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Sparse voicing
+addChord(b, ['B2', 'E#3', 'A#4'], W * 2, 0.32);
+addBass(b, 'B1', W * 2, 0.2);
+
+// Simple, singing melody
+addNote(b + Q, 'D#5', H, 0.45, true, 0.6);
+addNote(b + Q + H, 'C#5', Q, 0.4);
+addNote(b + Q + H + Q, 'B4', W, 0.5, true, 0.8);
+b += W * 2;
+
+// Final chord sequence
+addChord(b, ['F#2', 'B2', 'E#3', 'A#3'], W, 0.3);
+addBass(b, 'F#1', W, 0.2);
+addNote(b + E, 'F#4', H, 0.42, true, 0.5);
+b += W;
+
+addChord(b, ['G#2', 'C#3', 'F#3', 'B3'], W, 0.28);
+addBass(b, 'G#1', W, 0.18);
+addNote(b + E, 'G#4', H, 0.4, true, 0.5);
+b += W;
+
+addChord(b, ['A#2', 'D#3', 'G#3', 'C#4'], W, 0.26);
+addBass(b, 'A#1', W, 0.18);
+addNote(b + H, 'A#4', H, 0.38, true, 0.4);
+b += W;
+
+// Final resolution - B major (Lydian resolved)
+addChord(b, ['B2', 'F#3', 'D#4', 'B4'], W * 2, 0.35);
+addBass(b, 'B1', W * 2, 0.25);
+addNote(b + Q, 'B5', W * 1.5, 0.5, true, 0.3);
+b += W * 2;
+
+// Final sustain
+addChord(b, ['B2', 'F#3', 'B3', 'D#4', 'F#4', 'B4'], W * 4, 0.3);
+addBass(b, 'B1', W * 4, 0.22);
+b += W * 4;
+
+const TOTAL_LENGTH = b + 4;  // Add a little silence at end
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SEQUENCER
+// ═══════════════════════════════════════════════════════════════════════════════
+let currentBeat = 0, startTime = 0;
+let nextNoteIdx = 0, nextChordIdx = 0, nextBassIdx = 0;
+let currentSection = 'PROLOGUE';
+let currentMode = 'B Lydian';
+
+const SECTIONS = [
+    { beat: 0, name: 'PROLOGUE', mode: 'B Lydian' },
+    { beat: 16, name: 'LEGATO STATEMENT', mode: 'B Lydian' },
+    { beat: 48, name: 'DEVELOPMENT', mode: 'B Lydian / Chromatic' },
+    { beat: 80, name: 'CLIMAX', mode: 'B Lydian Dominant' },
+    { beat: 112, name: 'CODA', mode: 'B Lydian' }
+];
+
+function updateSection() {
+    for (let i = SECTIONS.length - 1; i >= 0; i--) {
+        if (currentBeat >= SECTIONS[i].beat) {
+            if (currentSection !== SECTIONS[i].name) {
+                currentSection = SECTIONS[i].name;
+                currentMode = SECTIONS[i].mode;
+                document.getElementById('section-display').textContent = currentSection;
+                document.getElementById('mode-display').textContent = currentMode;
+            }
+            break;
+        }
+    }
+}
+
+function scheduler() {
+    if (!AudioEngine.isPlaying) return;
+    
+    const currentTime = AudioEngine.ctx.currentTime;
+    currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+    
+    updateSection();
+    
+    // Update time display
+    const elapsed = currentTime - startTime;
+    const total = TOTAL_LENGTH * 60 / CONFIG.BPM;
+    const mins = Math.floor(elapsed / 60);
+    const secs = Math.floor(elapsed % 60);
+    const totalMins = Math.floor(total / 60);
+    const totalSecs = Math.floor(total % 60);
+    document.getElementById('time-display').textContent = 
+        `${mins}:${secs.toString().padStart(2, '0')} / ${totalMins}:${totalSecs.toString().padStart(2, '0')}`;
+    
+    // Progress bar
+    document.getElementById('progress').style.width = `${(currentBeat / TOTAL_LENGTH) * 100}%`;
+    
+    // Schedule notes
+    while (nextNoteIdx < SCORE.length && SCORE[nextNoteIdx].beat <= currentBeat + 0.15) {
+        const note = SCORE[nextNoteIdx];
+        const playTime = startTime + (note.beat * (60 / CONFIG.BPM));
+        
+        if (note.type === 'slide') {
+            AudioEngine.playSlide(note.startNote, note.endNote, playTime, 
+                (note.duration * 60 / CONFIG.BPM), note.velocity);
+        } else {
+            AudioEngine.playNote(note.note, playTime, 
+                (note.duration * 60 / CONFIG.BPM), note.velocity, 
+                note.vibrato, note.vibratoDelay);
+        }
+        nextNoteIdx++;
+    }
+    
+    // Schedule chords
+    while (nextChordIdx < CHORDS.length && CHORDS[nextChordIdx].beat <= currentBeat + 0.15) {
+        const chord = CHORDS[nextChordIdx];
+        const playTime = startTime + (chord.beat * (60 / CONFIG.BPM));
+        AudioEngine.playChord(chord.notes, playTime, 
+            (chord.duration * 60 / CONFIG.BPM), chord.velocity);
+        nextChordIdx++;
+    }
+    
+    // Schedule bass
+    while (nextBassIdx < BASS.length && BASS[nextBassIdx].beat <= currentBeat + 0.15) {
+        const bass = BASS[nextBassIdx];
+        const playTime = startTime + (bass.beat * (60 / CONFIG.BPM));
+        AudioEngine.playBassPad(bass.note, playTime, 
+            (bass.duration * 60 / CONFIG.BPM), bass.velocity);
+        nextBassIdx++;
+    }
+    
+    // Check for end
+    if (currentBeat >= TOTAL_LENGTH) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('overlay').classList.remove('hidden');
+        document.getElementById('playBtn').textContent = '▶ PLAY';
+        return;
+    }
+    
+    requestAnimationFrame(scheduler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VISUAL ENGINE — Fluid, Ethereal
+// ═══════════════════════════════════════════════════════════════════════════════
+const cvs = document.getElementById('canvas');
+const ctx = cvs.getContext('2d');
+let w, h;
+const activeNotes = [];
+const waves = [];
+
+function resize() {
+    w = cvs.width = window.innerWidth;
+    h = cvs.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function triggerVisual(type, velocity, freq) {
+    if (type === 'note' || type === 'slide') {
+        const y = freq ? h - (Math.log2(freq / 60) / 6) * h * 0.8 : h * 0.5;
+        activeNotes.push({
+            x: w * 0.2 + Math.random() * w * 0.6,
+            y: Math.max(100, Math.min(h - 100, y)),
+            life: 1.0,
+            radius: velocity * 40,
+            color: type === 'slide' ? '#a48fd4' : '#9b7fd4',
+            type: type
+        });
+    } else if (type === 'chord') {
+        waves.push({
+            x: w * 0.5,
+            y: h * 0.5,
+            life: 1.0,
+            radius: 0,
+            maxRadius: 300 + velocity * 200
+        });
+    }
+}
+
+function draw() {
+    // Fade trail (very smooth)
+    ctx.fillStyle = 'rgba(10, 8, 20, 0.06)';
+    ctx.fillRect(0, 0, w, h);
+    
+    // Draw flowing waves (for chords)
+    for (let i = waves.length - 1; i >= 0; i--) {
+        const wave = waves[i];
+        wave.radius += 2;
+        wave.life -= 0.015;
+        
+        ctx.beginPath();
+        ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(155, 127, 212, ${wave.life * 0.3})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        if (wave.life <= 0 || wave.radius > wave.maxRadius) {
+            waves.splice(i, 1);
+        }
+    }
+    
+    // Draw note trails
+    for (let i = activeNotes.length - 1; i >= 0; i--) {
+        const n = activeNotes[i];
+        
+        // Glow
+        const gradient = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 2);
+        gradient.addColorStop(0, `rgba(155, 127, 212, ${n.life * 0.4})`);
+        gradient.addColorStop(0.5, `rgba(155, 127, 212, ${n.life * 0.15})`);
+        gradient.addColorStop(1, 'rgba(155, 127, 212, 0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius * 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Core
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius * n.life * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = n.color;
+        ctx.fill();
+        
+        // Movement (drift slowly)
+        n.x += (Math.random() - 0.5) * 0.5;
+        n.y += (Math.random() - 0.5) * 0.5;
+        
+        n.life -= 0.012;
+        n.radius *= 0.998;
+        
+        if (n.life <= 0) {
+            activeNotes.splice(i, 1);
+        }
+    }
+    
+    // Subtle background particles
+    if (AudioEngine.isPlaying && Math.random() < 0.15) {
+        activeNotes.push({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            life: 0.4 + Math.random() * 0.3,
+            radius: 2 + Math.random() * 4,
+            color: `rgba(107, 91, 149, 0.5)`,
+            type: 'ambient'
+        });
+    }
+    
+    requestAnimationFrame(draw);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+document.addEventListener('click', () => {
+    if (!AudioEngine.ctx) {
+        AudioEngine.init().then(() => togglePlay());
+    } else {
+        togglePlay();
+    }
+});
+
+document.getElementById('playBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!AudioEngine.ctx) {
+        AudioEngine.init().then(() => togglePlay());
+    } else {
+        togglePlay();
+    }
+});
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+    }
+});
+
+function togglePlay() {
+    if (!AudioEngine.ctx) return;
+    
+    if (AudioEngine.isPlaying) {
+        AudioEngine.isPlaying = false;
+        document.getElementById('playBtn').textContent = '▶ PLAY';
+    } else {
+        AudioEngine.isPlaying = true;
+        document.getElementById('overlay').classList.add('hidden');
+        document.getElementById('playBtn').textContent = '⏸ PAUSE';
+        
+        // Reset if at end
+        if (currentBeat >= TOTAL_LENGTH - 1) {
+            currentBeat = 0;
+            nextNoteIdx = 0;
+            nextChordIdx = 0;
+            nextBassIdx = 0;
+        }
+        
+        startTime = AudioEngine.ctx.currentTime - (currentBeat * (60 / CONFIG.BPM));
+        scheduler();
+    }
+}
+
+// Start visual loop
+draw();
+</script>
+</body>
+</html>
