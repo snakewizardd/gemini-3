@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>REACHING FOR THE UNREACHABLE — A Holdsworthian Journey</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0814 0%, #1a1428 50%, #0d0a18 100%);
+            overflow: hidden;
+            font-family: 'Palatino Linotype', 'Georgia', serif;
+            color: #e0dce8;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 3, 10, 0.97);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1.2s;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #overlay h1 {
+            font-size: 3.5em;
+            color: #9b7fd4;
+            text-shadow: 0 0 40px rgba(155, 127, 212, 0.4);
+            letter-spacing: 0.1em;
+            font-weight: 300;
+            margin-bottom: 10px;
+        }
+
+        #overlay h2 {
+            font-size: 1.3em;
+            color: #6b5b95;
+            font-weight: 300;
+            font-style: italic;
+            margin-bottom: 10px;
+            letter-spacing: 0.2em;
+        }
+
+        .description {
+            max-width: 650px;
+            text-align: center;
+            color: #888;
+            line-height: 1.8;
+            font-size: 0.95em;
+            margin-top: 25px;
+        }
+
+        .click-prompt {
+            margin-top: 50px;
+            font-size: 1em;
+            color: #444;
+            letter-spacing: 0.3em;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        #controls button {
+            background: linear-gradient(135deg, rgba(155, 127, 212, 0.2), rgba(107, 91, 149, 0.3));
+            border: 1px solid rgba(155, 127, 212, 0.4);
+            color: #b8a4dc;
+            padding: 14px 40px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 30px;
+            transition: all 0.4s;
+            letter-spacing: 0.15em;
+        }
+
+        #controls button:hover {
+            background: linear-gradient(135deg, rgba(155, 127, 212, 0.3), rgba(107, 91, 149, 0.4));
+            box-shadow: 0 0 30px rgba(155, 127, 212, 0.4);
+        }
+
+        #time-display {
+            color: #6b5b95;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #section-display {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            font-weight: 300;
+            color: #9b7fd4;
+            z-index: 50;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+        }
+
+        #mode-display {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #6b5b95;
+            z-index: 50;
+            letter-spacing: 0.2em;
+            font-style: italic;
+        }
+
+        #progress {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #6b5b95, #9b7fd4, #b8a4dc);
+            z-index: 50;
+        }
+
+        #theater-mode {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #0a0a0b;
+            z-index: 200;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #theater-mode.active {
+            display: flex;
+        }
+
+        .theater-title {
+            font-size: 2.5em;
+            color: #c9a55c;
+            letter-spacing: 0.3em;
+            margin-bottom: 1rem;
+            font-weight: 300;
+        }
+
+        .theater-subtitle {
+            font-size: 1rem;
+            color: #5a5a5f;
+            margin-bottom: 2rem;
+            letter-spacing: 0.2em;
+        }
+
+        .screen-frame {
+            background: linear-gradient(135deg, #1a1a1d, #0d0d0e);
+            padding: 3px;
+            border-radius: 8px;
+            box-shadow: 0 25px 80px -20px rgba(0, 0, 0, 0.8), 0 0 100px -30px rgba(201, 165, 92, 0.15);
+        }
+
+        .screen-inner {
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        iframe {
+            display: block;
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="overlay">
+        <h1>REACHING FOR THE UNREACHABLE</h1>
+        <h2>A Holdsworthian Fusion Journey</h2>
+        <div class="description">
+            An exploration of the harmonic and melodic philosophy of Allan Holdsworth—<br>
+            where notes flow like liquid mercury, chords dissolve tritone boundaries,<br>
+            and melody transcends the fretboard through wide intervallic leaps,<br>
+            quartal voicings, and chromatic fluidity.<br><br>
+            <em>Lydian • Lydian Dominant • Altered Modes • Legato Cascades</em>
+        </div>
+        <p class="click-prompt">[ CLICK TO BEGIN THE JOURNEY ]</p>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="section-display">REACHING FOR THE UNREACHABLE</div>
+    <div id="mode-display">B Lydian</div>
+    <div id="controls">
+        <button id="playBtn">▶ PLAY</button>
+        <div id="time-display">0:00 / 6:30</div>
+    </div>
+    <div id="progress"></div>
+    <div id="theater-mode">
+        <div class="theater-title">THE JOURNEY CONTINUES</div>
+        <div class="theater-subtitle">A Film for Contemplation</div>
+        <div class="screen-frame">
+            <div class="screen-inner">
+                <iframe id="theater-iframe" width="960" height="540" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  REACHING FOR THE UNREACHABLE — HOLDSWORTHIAN FUSION
+        //  Stylistic Elements: Wide interval voicings (4ths/5ths), Lydian modes,
+        //  Chromatic enclosures, Legato phrasing, Delayed vibrato, Synth-like clean tone
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const CONFIG = { BPM: 68 };
+
+        // Note frequencies (A4=440Hz)
+        const NOTES = {
+            'B1': 61.74, 'C#2': 69.30, 'D#2': 77.78, 'E2': 82.41, 'F#2': 92.50, 'G#2': 103.83, 'A#2': 116.54, 'A2': 110.00,
+            'B2': 123.47, 'C#3': 138.59, 'D#3': 155.56, 'E3': 164.81, 'F#3': 185.00, 'G#3': 207.65, 'A#3': 233.08, 'A3': 220.00,
+            'B3': 246.94, 'C#4': 277.18, 'D#4': 311.13, 'E4': 329.63, 'F#4': 369.99, 'G#4': 415.30, 'A#4': 466.16, 'A4': 440.00,
+            'B4': 493.88, 'C#5': 554.37, 'D#5': 622.25, 'E5': 659.26, 'F#5': 739.99, 'G#5': 830.61, 'A#5': 932.33, 'A5': 880.00,
+            'B5': 987.77, 'C#6': 1108.73, 'D#6': 1244.51, 'E6': 1318.51, 'F#6': 1479.98,
+            'C2': 65.41, 'D2': 73.42, 'F2': 87.31, 'G2': 98.00, 'C3': 130.81, 'D3': 146.83, 'F3': 174.61, 'G3': 196.00,
+            'C4': 261.63, 'D4': 293.66, 'F4': 349.23, 'G4': 392.00, 'C5': 523.25, 'D5': 587.33, 'F5': 698.46, 'G5': 783.99,
+            'C6': 1046.50, 'D6': 1174.66, 'Eb3': 155.56, 'Eb4': 311.13, 'Eb5': 622.25, 'Ab3': 207.65, 'Ab4': 415.30, 'Bb3': 233.08, 'Bb4': 466.16
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  AUDIO ENGINE — Holdsworth "SynthAxe" Clean Tone with Lush Effects
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const AudioEngine = {
+            ctx: null, master: null, reverb: null, reverbGain: null, delay: null, delayGain: null,
+            chorusLFO: null, chorusDelay: null, compressor: null, isPlaying: false,
+
+            init: async function () {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = this.ctx;
+
+                // Compressor
+                this.compressor = ctx.createDynamicsCompressor();
+                this.compressor.threshold.value = -20; this.compressor.knee.value = 12;
+                this.compressor.ratio.value = 4; this.compressor.attack.value = 0.003; this.compressor.release.value = 0.25;
+
+                // Master
+                this.master = ctx.createGain();
+                this.master.gain.value = 0.65;
+
+                // Hall Reverb
+                this.reverb = ctx.createConvolver();
+                this.reverb.buffer = await this.createHallReverb(5.0, 1.6);
+                this.reverbGain = ctx.createGain();
+                this.reverbGain.gain.value = 0.5;
+
+                // Stereo Delay
+                this.delay = ctx.createDelay(1.0);
+                this.delay.delayTime.value = 0.4;
+                this.delayGain = ctx.createGain();
+                this.delayGain.gain.value = 0.2;
+                this.delayFeedback = ctx.createGain();
+                this.delayFeedback.gain.value = 0.3;
+                this.delay.connect(this.delayFeedback);
+                this.delayFeedback.connect(this.delay);
+                this.delay.connect(this.delayGain);
+
+                // Chorus
+                this.chorusLFO = ctx.createOscillator();
+                this.chorusLFO.type = 'sine';
+                this.chorusLFO.frequency.value = 0.4;
+                this.chorusDelay = ctx.createDelay(0.05);
+                this.chorusDelay.delayTime.value = 0.015;
+                this.chorusDepth = ctx.createGain();
+                this.chorusDepth.gain.value = 0.004;
+                this.chorusLFO.connect(this.chorusDepth);
+                this.chorusDepth.connect(this.chorusDelay.delayTime);
+                this.chorusLFO.start();
+
+                // Routing
+                this.compressor.connect(this.master);
+                this.compressor.connect(this.reverb);
+                this.reverb.connect(this.reverbGain);
+                this.reverbGain.connect(this.master);
+                this.compressor.connect(this.delay);
+                this.delayGain.connect(this.reverbGain);
+                this.compressor.connect(this.chorusDelay);
+                this.chorusDelay.connect(this.master);
+                this.master.connect(ctx.destination);
+            },
+
+            createHallReverb: async function (duration, decay) {
+                const ctx = this.ctx, rate = ctx.sampleRate, length = rate * duration;
+                const impulse = ctx.createBuffer(2, length, rate);
+                const L = impulse.getChannelData(0), R = impulse.getChannelData(1);
+                for (let i = 0; i < length; i++) {
+                    const t = i / rate, early = i < rate * 0.1 ? Math.sin(i * 0.01) * 0.25 : 0;
+                    const envelope = Math.pow(1 - i / length, decay);
+                    const mod = 1 + Math.sin(i * 0.00015) * 0.08;
+                    L[i] = ((Math.random() * 2 - 1) * envelope + early) * mod;
+                    R[i] = ((Math.random() * 2 - 1) * envelope + early * 0.85) * mod;
+                }
+                return impulse;
+            },
+
+            // Holdsworth legato tone - warm, crystalline, singing
+            playNote: function (note, time, duration, velocity = 0.5, vibrato = false, vibratoDelay = 0.5) {
+                const ctx = this.ctx, freq = NOTES[note];
+                if (!freq) return;
+
+                const osc1 = ctx.createOscillator(), osc2 = ctx.createOscillator(), osc3 = ctx.createOscillator();
+                osc1.type = 'sine'; osc2.type = 'triangle'; osc3.type = 'sine';
+                osc1.frequency.value = freq; osc2.frequency.value = freq; osc3.frequency.value = freq * 2; osc3.detune.value = 4;
+
+                const g1 = ctx.createGain(), g2 = ctx.createGain(), g3 = ctx.createGain();
+                g1.gain.value = 0.42; g2.gain.value = 0.32; g3.gain.value = 0.12;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(4500, time);
+                filter.frequency.exponentialRampToValueAtTime(2200, time + 0.25);
+                filter.Q.value = 0.6;
+
+                const amp = ctx.createGain();
+                amp.gain.setValueAtTime(0, time);
+                amp.gain.linearRampToValueAtTime(velocity * 0.55, time + 0.03);
+                amp.gain.setValueAtTime(velocity * 0.5, time + 0.12);
+                amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                if (vibrato) {
+                    const vLFO = ctx.createOscillator(), vGain = ctx.createGain();
+                    vLFO.frequency.value = 5.2;
+                    vGain.gain.setValueAtTime(0, time);
+                    vGain.gain.linearRampToValueAtTime(0, time + vibratoDelay);
+                    vGain.gain.linearRampToValueAtTime(10, time + vibratoDelay + 0.25);
+                    vLFO.connect(vGain); vGain.connect(osc1.frequency); vGain.connect(osc2.frequency);
+                    vLFO.start(time); vLFO.stop(time + duration);
+                }
+
+                const pan = ctx.createStereoPanner();
+                pan.pan.value = (Math.random() - 0.5) * 0.25;
+
+                osc1.connect(g1); g1.connect(filter);
+                osc2.connect(g2); g2.connect(filter);
+                osc3.connect(g3); g3.connect(filter);
+                filter.connect(amp); amp.connect(pan); pan.connect(this.compressor);
+
+                osc1.start(time); osc1.stop(time + duration + 0.1);
+                osc2.start(time); osc2.stop(time + duration + 0.1);
+                osc3.start(time); osc3.stop(time + duration + 0.1);
+
+                triggerVisual('note', velocity, freq);
+            },
+
+            // Wide voicing chord (4ths/5ths)
+            playChord: function (notes, time, duration, velocity = 0.35, spread = 0.018) {
+                notes.forEach((note, i) => {
+                    this.playNote(note, time + i * spread, duration, velocity * (0.88 + Math.random() * 0.12), false);
+                });
+                triggerVisual('chord', velocity, 0);
+            },
+
+            // Synth pad (warm, supportive)
+            playPad: function (notes, time, duration, velocity = 0.15) {
+                const ctx = this.ctx;
+                notes.forEach((note, idx) => {
+                    const freq = NOTES[note]; if (!freq) return;
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine'; osc.frequency.value = freq;
+
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'lowpass'; filter.frequency.value = 1200; filter.Q.value = 0.5;
+
+                    const amp = ctx.createGain();
+                    amp.gain.setValueAtTime(0, time);
+                    amp.gain.linearRampToValueAtTime(velocity * 0.3, time + 0.3);
+                    amp.gain.setValueAtTime(velocity * 0.28, time + duration - 0.5);
+                    amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                    const pan = ctx.createStereoPanner();
+                    pan.pan.value = (idx - notes.length / 2) * 0.15;
+
+                    osc.connect(filter); filter.connect(amp); amp.connect(pan); pan.connect(this.compressor);
+                    osc.start(time); osc.stop(time + duration + 0.1);
+                });
+            },
+
+            // Fretless bass character
+            playBass: function (note, time, duration, velocity = 0.25) {
+                const ctx = this.ctx, freq = NOTES[note]; if (!freq) return;
+                const osc = ctx.createOscillator();
+                osc.type = 'sine'; osc.frequency.value = freq;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass'; filter.frequency.value = 600; filter.Q.value = 1.2;
+
+                const amp = ctx.createGain();
+                amp.gain.setValueAtTime(0, time);
+                amp.gain.linearRampToValueAtTime(velocity * 0.4, time + 0.08);
+                amp.gain.setValueAtTime(velocity * 0.35, time + duration - 0.15);
+                amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                osc.connect(filter); filter.connect(amp); amp.connect(this.compressor);
+                osc.start(time); osc.stop(time + duration + 0.1);
+            },
+
+            // Glissando slide
+            playSlide: function (startNote, endNote, time, duration, velocity = 0.45) {
+                const ctx = this.ctx, startFreq = NOTES[startNote], endFreq = NOTES[endNote];
+                if (!startFreq || !endFreq) return;
+
+                const osc = ctx.createOscillator(), osc2 = ctx.createOscillator();
+                osc.type = 'sine'; osc2.type = 'triangle';
+                osc.frequency.setValueAtTime(startFreq, time);
+                osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration * 0.35);
+                osc2.frequency.setValueAtTime(startFreq, time);
+                osc2.frequency.exponentialRampToValueAtTime(endFreq, time + duration * 0.35);
+
+                const g1 = ctx.createGain(), g2 = ctx.createGain();
+                g1.gain.value = 0.38; g2.gain.value = 0.22;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass'; filter.frequency.value = 3800; filter.Q.value = 0.6;
+
+                const amp = ctx.createGain();
+                amp.gain.setValueAtTime(0, time);
+                amp.gain.linearRampToValueAtTime(velocity * 0.45, time + 0.025);
+                amp.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+                osc.connect(g1); g1.connect(filter);
+                osc2.connect(g2); g2.connect(filter);
+                filter.connect(amp); amp.connect(this.compressor);
+
+                osc.start(time); osc.stop(time + duration + 0.1);
+                osc2.start(time); osc2.stop(time + duration + 0.1);
+
+                triggerVisual('slide', velocity, endFreq);
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  COMPOSITION DATA
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const SCORE = [], CHORDS = [], PADS = [], BASS = [];
+
+        function addNote(beat, note, duration, velocity = 0.5, vibrato = false, vibratoDelay = 0.5) {
+            SCORE.push({ beat, note, duration, velocity, vibrato, vibratoDelay });
+        }
+        function addChord(beat, notes, duration, velocity = 0.35) { CHORDS.push({ beat, notes, duration, velocity }); }
+        function addPad(beat, notes, duration, velocity = 0.15) { PADS.push({ beat, notes, duration, velocity }); }
+        function addBass(beat, note, duration, velocity = 0.25) { BASS.push({ beat, note, duration, velocity }); }
+        function addSlide(beat, startNote, endNote, duration, velocity = 0.45) {
+            SCORE.push({ beat, startNote, endNote, duration, velocity, type: 'slide' });
+        }
+
+        const S = 0.25, E = 0.5, Q = 1.0, H = 2.0, W = 4.0, T = 1 / 3;
+        let b = 0;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SECTION I: ATMOSPHERIC INTRODUCTION (0-32 beats) — Floating Harmonics
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Opening pad - establishing B Lydian with 4th voicings
+        addPad(b, ['B2', 'E3', 'A3', 'D#4'], W * 3, 0.12);
+        addBass(b, 'B1', W * 3, 0.2);
+        b += W;
+
+        // First melodic statement - sparse, questioning
+        addNote(b, 'F#5', H, 0.4, true, 0.8);
+        b += H + Q;
+        addNote(b, 'B4', Q, 0.35);
+        b += Q;
+        addNote(b, 'E5', H * 1.5, 0.45, true, 0.6);
+        b += H * 1.5;
+
+        // Second voicing - Lydian #11 character
+        addChord(b, ['C#3', 'F#3', 'B3', 'E#4', 'A#4'], W * 2, 0.3);
+        addBass(b, 'C#2', W * 2, 0.18);
+        b += W;
+
+        // Melodic response with wide leap
+        addNote(b, 'G#4', E, 0.38);
+        b += E;
+        addNote(b, 'D#5', E, 0.42); // up a 5th
+        b += E;
+        addNote(b, 'A#5', Q * 1.5, 0.5, true, 0.4); // another 5th
+        b += Q * 1.5;
+        addNote(b, 'G#5', E, 0.4);
+        b += E;
+        addNote(b, 'F#5', H, 0.48, true, 0.5);
+        b += H;
+
+        // Pad shift
+        addPad(b, ['D#3', 'G#3', 'C#4', 'F#4'], W * 2, 0.12);
+        addBass(b, 'D#2', W * 2, 0.18);
+        b += W * 2;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SECTION II: THEME EXPOSITION (32-80 beats) — The Singing Line
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Main theme - long arcing phrase with Holdsworth intervals
+        addChord(b, ['B2', 'F#3', 'E4', 'A#4'], W * 1.5, 0.32);
+        addBass(b, 'B1', W * 1.5, 0.22);
+
+        addNote(b + E, 'B4', Q, 0.48);
+        addNote(b + E + Q, 'E5', E, 0.45);
+        addNote(b + Q * 2, 'A#5', Q * 1.5, 0.52, true, 0.35);
+        addNote(b + W, 'G#5', E, 0.45);
+        addNote(b + W + E, 'F#5', E, 0.42);
+        addNote(b + W + Q, 'D#5', H, 0.5, true, 0.5);
+        b += W * 1.5;
+
+        // Chromatic approach sequence
+        addChord(b, ['G#2', 'C#3', 'F#3', 'B3', 'E4'], W, 0.3);
+        addBass(b, 'G#1', W, 0.2);
+
+        addNote(b, 'C5', S, 0.35); // chromatic approach
+        addNote(b + S, 'C#5', E, 0.42);
+        addNote(b + S + E, 'D5', S, 0.32); // chromatic
+        addNote(b + E * 2, 'D#5', Q, 0.48);
+        addNote(b + Q * 1.5, 'F#5', E, 0.45);
+        addNote(b + Q * 2, 'B5', H, 0.52, true, 0.3);
+        b += W;
+
+        // Wide interval descent
+        addChord(b, ['A#2', 'D#3', 'G#3', 'C#4'], W, 0.32);
+        addBass(b, 'A#1', W, 0.2);
+
+        addNote(b, 'A#5', E, 0.48);
+        addNote(b + E, 'D#5', E, 0.44); // down a 5th
+        addNote(b + Q, 'G#4', E, 0.42); // down a 5th
+        addNote(b + Q + E, 'E5', E, 0.46); // up a 6th
+        addNote(b + H, 'C#5', Q, 0.45);
+        addNote(b + H + Q, 'B4', H, 0.5, true, 0.6);
+        b += W;
+
+        // Second theme phrase
+        addPad(b, ['B2', 'E3', 'A3', 'D#4', 'G#4'], W * 2, 0.1);
+        addBass(b, 'B1', W * 2, 0.2);
+
+        addSlide(b + E, 'D#4', 'F#4', E, 0.42);
+        addNote(b + Q, 'B4', E, 0.45);
+        addNote(b + Q + E, 'E5', E, 0.48);
+        addSlide(b + H, 'F#5', 'A#5', Q, 0.5);
+        addNote(b + H + Q, 'G#5', E, 0.46);
+        addNote(b + W, 'F#5', Q, 0.48);
+        addNote(b + W + Q, 'D#5', H, 0.52, true, 0.45);
+        b += W * 2;
+
+        // Legato cascade
+        const cascade = ['B5', 'A#5', 'G#5', 'F#5', 'E5', 'D#5', 'C#5', 'B4'];
+        cascade.forEach((note, i) => {
+            addNote(b + i * S, note, S * 1.5, 0.38 + i * 0.01);
+        });
+        b += Q * 2;
+
+        addNote(b, 'A#4', Q, 0.45);
+        addNote(b + Q, 'G#4', H, 0.5, true, 0.5);
+        b += H + Q;
+
+        // Resolution chord
+        addChord(b, ['B2', 'E#3', 'A#3', 'D#4', 'G#4'], W * 1.5, 0.35);
+        addBass(b, 'B1', W * 1.5, 0.22);
+        b += W * 1.5;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SECTION III: DEVELOPMENT (80-144 beats) — Increased Complexity
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Fast legato run with chromatic color
+        addChord(b, ['C#3', 'F#3', 'B3', 'E4', 'A#4'], W, 0.32);
+        addBass(b, 'C#2', W, 0.2);
+
+        const fastRun = ['B4', 'C5', 'C#5', 'D5', 'D#5', 'E5', 'E#5', 'F#5', 'G5', 'G#5', 'A5', 'A#5'];
+        fastRun.forEach((note, i) => {
+            addNote(b + i * (S * 0.8), note, S, 0.32 + i * 0.015);
+        });
+        b += Q * 2.5;
+
+        addNote(b, 'B5', Q * 1.5, 0.55, true, 0.2);
+        b += Q * 1.5;
+
+        // Lydian Dominant section - more tension
+        addChord(b, ['D#3', 'G#3', 'C#4', 'F#4', 'A4'], W * 1.5, 0.35);
+        addBass(b, 'D#2', W * 1.5, 0.22);
+
+        addNote(b + E, 'A5', E, 0.48); // natural 7 = Lydian Dominant
+        addNote(b + Q, 'F#5', E, 0.45);
+        addNote(b + Q + E, 'C#5', E, 0.42);
+        addNote(b + H, 'G#5', Q, 0.5, true, 0.35);
+        addNote(b + H + Q, 'E5', E, 0.45);
+        addNote(b + W, 'D#5', H, 0.48, true, 0.5);
+        b += W * 1.5;
+
+        // Altered scale passage
+        addChord(b, ['F#2', 'B2', 'E3', 'A3', 'D#4'], W, 0.32);
+        addBass(b, 'F#1', W, 0.2);
+
+        addNote(b, 'C6', S, 0.4);
+        addNote(b + S, 'B5', E, 0.45);
+        addNote(b + S + E, 'Bb4', S, 0.38);
+        addNote(b + E * 2, 'A5', E, 0.42);
+        addNote(b + Q + E, 'Ab4', S, 0.35);
+        addNote(b + H, 'G#5', Q, 0.48);
+        addNote(b + H + Q, 'F#5', H, 0.52, true, 0.4);
+        b += W;
+
+        // Contrapuntal moment
+        addPad(b, ['G#2', 'C#3', 'F#3', 'B3'], W * 2, 0.12);
+        addBass(b, 'G#1', W * 2, 0.18);
+
+        // Two voices
+        addNote(b, 'B4', Q, 0.4);
+        addNote(b + E, 'E5', Q, 0.38);
+        addNote(b + Q, 'D#5', E, 0.42);
+        addNote(b + Q + E, 'G#5', E, 0.4);
+        addNote(b + H, 'F#5', Q, 0.45);
+        addNote(b + H + E, 'B5', Q, 0.42);
+        addNote(b + W, 'A#5', E, 0.48);
+        addNote(b + W + E, 'E5', E, 0.44);
+        addNote(b + W + Q, 'G#5', H, 0.52, true, 0.35);
+        b += W * 2;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SECTION IV: CLIMACTIC PEAK (144-192 beats) — Maximum Expression
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Rich backdrop
+        addChord(b, ['B2', 'F#3', 'C#4', 'G#4', 'D#5'], W * 2, 0.38);
+        addPad(b, ['B2', 'E3', 'A3', 'D#4', 'G#4', 'C#5'], W * 2, 0.15);
+        addBass(b, 'B1', W * 2, 0.25);
+
+        // Intense ascending with maximum chromaticism
+        addNote(b + E, 'B4', E, 0.52);
+        addNote(b + Q, 'C5', S, 0.45);
+        addNote(b + Q + S, 'C#5', E, 0.5);
+        addNote(b + H, 'D5', S, 0.42);
+        addNote(b + H + S, 'D#5', E, 0.52);
+        addNote(b + H + Q, 'E5', S, 0.48);
+        addNote(b + W, 'E#5', S, 0.45);
+        addNote(b + W + S, 'F#5', E, 0.55);
+        addNote(b + W + Q, 'G5', S, 0.42);
+        addNote(b + W + Q + S, 'G#5', Q, 0.58, true, 0.2);
+        addNote(b + W + H + E, 'A5', E, 0.55);
+        addNote(b + W * 1.5, 'A#5', Q, 0.6, true, 0.15);
+        addNote(b + W * 1.5 + Q, 'B5', H, 0.65, true, 0.15); // Peak
+        b += W * 2;
+
+        // Tension chord
+        addChord(b, ['D#3', 'G#3', 'C#4', 'F#4', 'B4', 'E5'], W, 0.4);
+        addBass(b, 'D#2', W, 0.25);
+
+        // Descending cascade from peak
+        addNote(b, 'A#5', E, 0.55);
+        addNote(b + E, 'F#5', E, 0.52);
+        addNote(b + Q, 'D#5', E, 0.48);
+        addNote(b + Q + E, 'B5', E, 0.5); // leap up
+        addNote(b + H, 'G#5', E, 0.52);
+        addNote(b + H + E, 'E5', E, 0.48);
+        addNote(b + W - E, 'C#5', Q, 0.5, true, 0.4);
+        b += W;
+
+        // Climactic phrase
+        addChord(b, ['C#3', 'F#3', 'B3', 'E#4', 'A#4', 'D#5'], H, 0.42);
+        addBass(b, 'C#2', H, 0.25);
+
+        addNote(b, 'F#5', E, 0.55);
+        addNote(b + E, 'A#5', E, 0.58);
+        addNote(b + Q, 'B5', Q, 0.62, true, 0.2);
+        addNote(b + H, 'C#6', H, 0.65, true, 0.15); // Highest point
+        b += W;
+
+        // Resolution
+        addChord(b, ['B2', 'E#3', 'A#3', 'D#4', 'G#4', 'C#5'], W * 1.5, 0.4);
+        addBass(b, 'B1', W * 1.5, 0.28);
+
+        addNote(b + Q, 'B5', H, 0.55, true, 0.25);
+        addNote(b + H + Q, 'A#5', E, 0.48);
+        addNote(b + W, 'G#5', E, 0.45);
+        addNote(b + W + E, 'F#5', Q, 0.48);
+        b += W * 1.5;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SECTION V: DENOUEMENT (192-240 beats) — Return & Transformation
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Sparse, reflective
+        addPad(b, ['B2', 'E3', 'A3', 'D#4'], W * 3, 0.1);
+        addBass(b, 'B1', W * 3, 0.18);
+
+        addNote(b + H, 'D#5', H * 1.5, 0.42, true, 0.7);
+        addNote(b + W, 'C#5', Q, 0.38);
+        addNote(b + W + Q, 'B4', W, 0.48, true, 0.8);
+        b += W * 2;
+
+        // Final melodic callback - transformed
+        addChord(b, ['F#2', 'B2', 'E#3', 'A#3'], W, 0.3);
+        addBass(b, 'F#1', W, 0.18);
+        addNote(b + E, 'F#4', H, 0.4, true, 0.6);
+        b += W;
+
+        addChord(b, ['G#2', 'C#3', 'F#3', 'B3'], W, 0.28);
+        addBass(b, 'G#1', W, 0.16);
+        addNote(b + E, 'G#4', H, 0.38, true, 0.6);
+        b += W;
+
+        addChord(b, ['A#2', 'D#3', 'G#3', 'C#4'], W, 0.26);
+        addBass(b, 'A#1', W, 0.15);
+        addNote(b + Q, 'A#4', H, 0.36, true, 0.5);
+        b += W;
+
+        // Final resolution
+        addChord(b, ['B2', 'F#3', 'D#4', 'B4'], W * 2, 0.35);
+        addPad(b, ['B2', 'E3', 'A3', 'D#4', 'G#4'], W * 2, 0.12);
+        addBass(b, 'B1', W * 2, 0.22);
+        addNote(b + Q, 'B5', W * 1.5, 0.5, true, 0.35);
+        b += W * 2;
+
+        // Final sustain
+        addChord(b, ['B2', 'F#3', 'B3', 'D#4', 'F#4', 'B4'], W * 4, 0.3);
+        addPad(b, ['B2', 'E3', 'A3', 'D#4', 'G#4', 'C#5'], W * 4, 0.1);
+        addBass(b, 'B1', W * 4, 0.2);
+        b += W * 4;
+
+        const TOTAL_LENGTH = b + 8;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  SEQUENCER
+        // ═══════════════════════════════════════════════════════════════════════════════
+        let currentBeat = 0, startTime = 0;
+        let nextNoteIdx = 0, nextChordIdx = 0, nextPadIdx = 0, nextBassIdx = 0;
+        let currentSection = 'ATMOSPHERIC INTRODUCTION', currentMode = 'B Lydian';
+
+        const SECTIONS = [
+            { beat: 0, name: 'ATMOSPHERIC INTRODUCTION', mode: 'B Lydian' },
+            { beat: 32, name: 'THEME EXPOSITION', mode: 'B Lydian' },
+            { beat: 80, name: 'DEVELOPMENT', mode: 'Lydian Dominant / Altered' },
+            { beat: 144, name: 'CLIMACTIC PEAK', mode: 'B Lydian Chromatic' },
+            { beat: 192, name: 'DENOUEMENT', mode: 'B Lydian' }
+        ];
+
+        function updateSection() {
+            for (let i = SECTIONS.length - 1; i >= 0; i--) {
+                if (currentBeat >= SECTIONS[i].beat) {
+                    if (currentSection !== SECTIONS[i].name) {
+                        currentSection = SECTIONS[i].name;
+                        currentMode = SECTIONS[i].mode;
+                        document.getElementById('section-display').textContent = currentSection;
+                        document.getElementById('mode-display').textContent = currentMode;
+                    }
+                    break;
+                }
+            }
+        }
+
+        function scheduler() {
+            if (!AudioEngine.isPlaying) return;
+
+            const currentTime = AudioEngine.ctx.currentTime;
+            currentBeat = (currentTime - startTime) * (CONFIG.BPM / 60);
+
+            updateSection();
+
+            const elapsed = currentTime - startTime;
+            const total = TOTAL_LENGTH * 60 / CONFIG.BPM;
+            document.getElementById('time-display').textContent =
+                `${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, '0')} / ${Math.floor(total / 60)}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
+            document.getElementById('progress').style.width = `${(currentBeat / TOTAL_LENGTH) * 100}%`;
+
+            while (nextNoteIdx < SCORE.length && SCORE[nextNoteIdx].beat <= currentBeat + 0.15) {
+                const n = SCORE[nextNoteIdx];
+                const t = startTime + (n.beat * 60 / CONFIG.BPM);
+                if (n.type === 'slide') AudioEngine.playSlide(n.startNote, n.endNote, t, n.duration * 60 / CONFIG.BPM, n.velocity);
+                else AudioEngine.playNote(n.note, t, n.duration * 60 / CONFIG.BPM, n.velocity, n.vibrato, n.vibratoDelay);
+                nextNoteIdx++;
+            }
+            while (nextChordIdx < CHORDS.length && CHORDS[nextChordIdx].beat <= currentBeat + 0.15) {
+                const c = CHORDS[nextChordIdx];
+                AudioEngine.playChord(c.notes, startTime + c.beat * 60 / CONFIG.BPM, c.duration * 60 / CONFIG.BPM, c.velocity);
+                nextChordIdx++;
+            }
+            while (nextPadIdx < PADS.length && PADS[nextPadIdx].beat <= currentBeat + 0.15) {
+                const p = PADS[nextPadIdx];
+                AudioEngine.playPad(p.notes, startTime + p.beat * 60 / CONFIG.BPM, p.duration * 60 / CONFIG.BPM, p.velocity);
+                nextPadIdx++;
+            }
+            while (nextBassIdx < BASS.length && BASS[nextBassIdx].beat <= currentBeat + 0.15) {
+                const bNote = BASS[nextBassIdx];
+                AudioEngine.playBass(bNote.note, startTime + bNote.beat * 60 / CONFIG.BPM, bNote.duration * 60 / CONFIG.BPM, bNote.velocity);
+                nextBassIdx++;
+            }
+
+            if (currentBeat >= TOTAL_LENGTH) {
+                AudioEngine.isPlaying = false;
+                document.getElementById('playBtn').textContent = '▶ PLAY';
+                // Show theater mode after music ends
+                setTimeout(() => showTheaterMode(), 2000);
+                return;
+            }
+
+            requestAnimationFrame(scheduler);
+        }
+
+        function showTheaterMode() {
+            document.getElementById('theater-iframe').src = 'https://vidsrc.to/embed/movie/tt0816692'; // Interstellar
+            document.getElementById('theater-mode').classList.add('active');
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  VISUAL ENGINE — Ethereal, Flowing
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const cvs = document.getElementById('canvas');
+        const ctx = cvs.getContext('2d');
+        let w, h;
+        const activeNotes = [], waves = [];
+
+        function resize() { w = cvs.width = innerWidth; h = cvs.height = innerHeight; }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function triggerVisual(type, velocity, freq) {
+            if (type === 'note' || type === 'slide') {
+                const y = freq ? h - (Math.log2(freq / 60) / 6) * h * 0.75 : h * 0.5;
+                activeNotes.push({
+                    x: w * 0.15 + Math.random() * w * 0.7,
+                    y: Math.max(80, Math.min(h - 80, y)),
+                    life: 1.0, radius: velocity * 45,
+                    color: type === 'slide' ? '#a48fd4' : '#9b7fd4', type
+                });
+            } else if (type === 'chord') {
+                waves.push({ x: w * 0.5, y: h * 0.5, life: 1.0, radius: 0, maxRadius: 350 + velocity * 200 });
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(10, 8, 20, 0.05)';
+            ctx.fillRect(0, 0, w, h);
+
+            for (let i = waves.length - 1; i >= 0; i--) {
+                const wv = waves[i];
+                wv.radius += 1.8; wv.life -= 0.012;
+                ctx.beginPath();
+                ctx.arc(wv.x, wv.y, wv.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(155, 127, 212, ${wv.life * 0.25})`;
+                ctx.lineWidth = 1.5; ctx.stroke();
+                if (wv.life <= 0 || wv.radius > wv.maxRadius) waves.splice(i, 1);
+            }
+
+            for (let i = activeNotes.length - 1; i >= 0; i--) {
+                const n = activeNotes[i];
+                const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 2.5);
+                grad.addColorStop(0, `rgba(155, 127, 212, ${n.life * 0.35})`);
+                grad.addColorStop(0.5, `rgba(155, 127, 212, ${n.life * 0.12})`);
+                grad.addColorStop(1, 'rgba(155, 127, 212, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath(); ctx.arc(n.x, n.y, n.radius * 2.5, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(n.x, n.y, n.radius * n.life * 0.4, 0, Math.PI * 2);
+                ctx.fillStyle = n.color; ctx.fill();
+                n.x += (Math.random() - 0.5) * 0.4;
+                n.y += (Math.random() - 0.5) * 0.4;
+                n.life -= 0.01; n.radius *= 0.997;
+                if (n.life <= 0) activeNotes.splice(i, 1);
+            }
+
+            if (AudioEngine.isPlaying && Math.random() < 0.12) {
+                activeNotes.push({
+                    x: Math.random() * w, y: Math.random() * h,
+                    life: 0.35 + Math.random() * 0.25, radius: 2 + Math.random() * 3,
+                    color: 'rgba(107, 91, 149, 0.4)', type: 'ambient'
+                });
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //  CONTROLS
+        // ═══════════════════════════════════════════════════════════════════════════════
+        document.addEventListener('click', () => {
+            if (document.getElementById('theater-mode').classList.contains('active')) return;
+            if (!AudioEngine.ctx) AudioEngine.init().then(() => togglePlay());
+            else togglePlay();
+        });
+
+        document.getElementById('playBtn').addEventListener('click', e => {
+            e.stopPropagation();
+            if (!AudioEngine.ctx) AudioEngine.init().then(() => togglePlay());
+            else togglePlay();
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+            if (e.code === 'Escape') document.getElementById('theater-mode').classList.remove('active');
+        });
+
+        function togglePlay() {
+            if (!AudioEngine.ctx) return;
+            if (AudioEngine.isPlaying) {
+                AudioEngine.isPlaying = false;
+                document.getElementById('playBtn').textContent = '▶ PLAY';
+            } else {
+                AudioEngine.isPlaying = true;
+                document.getElementById('overlay').classList.add('hidden');
+                document.getElementById('playBtn').textContent = '⏸ PAUSE';
+                if (currentBeat >= TOTAL_LENGTH - 1) {
+                    currentBeat = 0; nextNoteIdx = 0; nextChordIdx = 0; nextPadIdx = 0; nextBassIdx = 0;
+                }
+                startTime = AudioEngine.ctx.currentTime - (currentBeat * 60 / CONFIG.BPM);
+                scheduler();
+            }
+        }
+
+        draw();
+    </script>
+</body>
+
+</html>
