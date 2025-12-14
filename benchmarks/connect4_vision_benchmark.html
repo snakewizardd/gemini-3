@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Connect 4 - AI Benchmark</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-cyan: #06b6d4;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --yellow: #fbbf24;
+            --red: #ef4444;
+            --board-blue: #1e40af;
+            --success: #10b981;
+            --error: #f43f5e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr 350px;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: linear-gradient(to bottom, var(--accent-blue), var(--accent-purple));
+            border-radius: 2px;
+        }
+
+        /* API Configuration */
+        .api-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .api-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .api-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .api-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.8rem;
+            transition: border-color 0.2s;
+        }
+
+        .api-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .api-status {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .api-status.valid {
+            color: var(--success);
+        }
+
+        .api-status.invalid {
+            color: var(--error);
+        }
+
+        /* Player Config */
+        .player-config {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+        }
+
+        .player-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .player-indicator {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(0,0,0,0.3);
+        }
+
+        .player-indicator.yellow {
+            background: radial-gradient(circle at 30% 30%, #fde047, var(--yellow), #b45309);
+        }
+
+        .player-indicator.red {
+            background: radial-gradient(circle at 30% 30%, #fca5a5, var(--red), #991b1b);
+        }
+
+        .player-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .model-select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+        }
+
+        .model-select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        /* Game Board */
+        .game-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .turn-indicator {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .turn-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.9); }
+        }
+
+        .board-container {
+            position: relative;
+            padding: 20px;
+            background: linear-gradient(145deg, #1e3a8a, var(--board-blue), #1e40af);
+            border-radius: 20px;
+            box-shadow: 
+                0 20px 60px rgba(30, 64, 175, 0.4),
+                inset 0 2px 4px rgba(255,255,255,0.1);
+        }
+
+        #gameCanvas {
+            display: block;
+            border-radius: 12px;
+        }
+
+        .column-labels {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+            padding: 0 10px;
+        }
+
+        .col-label {
+            width: 60px;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.875rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        /* Game Log */
+        .log-container {
+            height: 500px;
+            overflow-y: auto;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .log-entry {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            border-left: 3px solid var(--text-muted);
+        }
+
+        .log-entry.yellow {
+            border-left-color: var(--yellow);
+        }
+
+        .log-entry.red {
+            border-left-color: var(--red);
+        }
+
+        .log-entry.system {
+            border-left-color: var(--accent-cyan);
+            color: var(--text-secondary);
+        }
+
+        .log-entry.error {
+            border-left-color: var(--error);
+            color: var(--error);
+        }
+
+        .log-entry.win {
+            border-left-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .log-time {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .log-model {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .log-move {
+            color: var(--text-secondary);
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-card {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Settings */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .setting-input {
+            width: 80px;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        /* Winner Overlay */
+        .winner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .winner-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .winner-card {
+            background: var(--bg-secondary);
+            padding: 3rem;
+            border-radius: 24px;
+            text-align: center;
+            transform: scale(0.9);
+            transition: transform 0.3s;
+        }
+
+        .winner-overlay.active .winner-card {
+            transform: scale(1);
+        }
+
+        .winner-title {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .winner-title.yellow {
+            color: var(--yellow);
+        }
+
+        .winner-title.red {
+            color: var(--red);
+        }
+
+        .winner-title.draw {
+            background: linear-gradient(135deg, var(--yellow), var(--red));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .winner-model {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--text-muted);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚔️ Vision Connect 4</h1>
+            <p class="subtitle">AI Vision Model Benchmark — GPT vs Claude</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Left Panel: Configuration -->
+            <div class="panel">
+                <div class="panel-title">API Configuration</div>
+                
+                <div class="api-section">
+                    <label class="api-label">OpenAI API Key</label>
+                    <input type="password" id="openaiKey" class="api-input" placeholder="sk-...">
+                    <div class="api-status" id="openaiStatus"></div>
+                </div>
+
+                <div class="api-section">
+                    <label class="api-label">Anthropic API Key</label>
+                    <input type="password" id="anthropicKey" class="api-input" placeholder="sk-ant-...">
+                    <div class="api-status" id="anthropicStatus"></div>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5rem 0;">
+
+                <div class="panel-title">Players</div>
+
+                <div class="player-config">
+                    <div class="player-header">
+                        <div class="player-indicator yellow"></div>
+                        <span class="player-name">Player 1 (Yellow)</span>
+                    </div>
+                    <select id="player1Model" class="model-select">
+                        <optgroup label="OpenAI">
+                            <option value="openai:gpt-4o">GPT-4o</option>
+                            <option value="openai:gpt-4o-mini">GPT-4o Mini</option>
+                            <option value="openai:gpt-4.1">GPT-4.1</option>
+                            <option value="openai:o4-mini">o4-mini</option>
+                        </optgroup>
+                        <optgroup label="Anthropic">
+                            <option value="anthropic:claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                            <option value="anthropic:claude-opus-4-20250514">Claude Opus 4</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="player-config">
+                    <div class="player-header">
+                        <div class="player-indicator red"></div>
+                        <span class="player-name">Player 2 (Red)</span>
+                    </div>
+                    <select id="player2Model" class="model-select">
+                        <optgroup label="OpenAI">
+                            <option value="openai:gpt-4o">GPT-4o</option>
+                            <option value="openai:gpt-4o-mini">GPT-4o Mini</option>
+                            <option value="openai:gpt-4.1">GPT-4.1</option>
+                            <option value="openai:o4-mini">o4-mini</option>
+                        </optgroup>
+                        <optgroup label="Anthropic">
+                            <option value="anthropic:claude-sonnet-4-20250514" selected>Claude Sonnet 4</option>
+                            <option value="anthropic:claude-opus-4-20250514">Claude Opus 4</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5rem 0;">
+
+                <div class="panel-title">Settings</div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Move Delay (ms)</span>
+                    <input type="number" id="moveDelay" class="setting-input" value="1500" min="500" max="10000" step="500">
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Max Retries</span>
+                    <input type="number" id="maxRetries" class="setting-input" value="3" min="1" max="10">
+                </div>
+            </div>
+
+            <!-- Center: Game Board -->
+            <div class="game-area">
+                <div class="turn-indicator" id="turnIndicator">
+                    <div class="turn-dot" id="turnDot" style="background: var(--yellow);"></div>
+                    <span id="turnText">Waiting to Start</span>
+                </div>
+
+                <div class="board-container">
+                    <canvas id="gameCanvas" width="490" height="420"></canvas>
+                    <div class="column-labels">
+                        <span class="col-label">0</span>
+                        <span class="col-label">1</span>
+                        <span class="col-label">2</span>
+                        <span class="col-label">3</span>
+                        <span class="col-label">4</span>
+                        <span class="col-label">5</span>
+                        <span class="col-label">6</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" id="startBtn" onclick="startMatch()">
+                        ▶ Start Match
+                    </button>
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="togglePause()" disabled>
+                        ⏸ Pause
+                    </button>
+                    <button class="btn btn-danger" id="resetBtn" onclick="resetGame()">
+                        ↺ Reset
+                    </button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="p1Wins">0</div>
+                        <div class="stat-label">Yellow Wins</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="p2Wins">0</div>
+                        <div class="stat-label">Red Wins</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="draws">0</div>
+                        <div class="stat-label">Draws</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalMoves">0</div>
+                        <div class="stat-label">Total Moves</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Game Log -->
+            <div class="panel">
+                <div class="panel-title">Game Log</div>
+                <div class="log-container" id="gameLog">
+                    <div class="log-entry system">
+                        <div class="log-time">System</div>
+                        <div class="log-move">Configure API keys and click Start Match to begin.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Winner Overlay -->
+    <div class="winner-overlay" id="winnerOverlay">
+        <div class="winner-card">
+            <div class="winner-title" id="winnerTitle">Winner!</div>
+            <div class="winner-model" id="winnerModel">Model Name</div>
+            <button class="btn btn-primary" onclick="closeOverlay()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // GAME STATE
+        // ============================================
+        const ROWS = 6;
+        const COLS = 7;
+        const CELL_SIZE = 70;
+        const PIECE_RADIUS = 28;
+
+        let board = [];
+        let currentPlayer = 1; // 1 = Yellow, 2 = Red
+        let gameRunning = false;
+        let gamePaused = false;
+        let gameOver = false;
+        let stats = { p1Wins: 0, p2Wins: 0, draws: 0, totalMoves: 0 };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        function initBoard() {
+            board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+            currentPlayer = 1;
+            gameOver = false;
+            renderBoard();
+        }
+
+        function loadSettings() {
+            const openaiKey = localStorage.getItem('openaiKey');
+            const anthropicKey = localStorage.getItem('anthropicKey');
+            if (openaiKey) document.getElementById('openaiKey').value = openaiKey;
+            if (anthropicKey) document.getElementById('anthropicKey').value = anthropicKey;
+            validateKeys();
+        }
+
+        function saveSettings() {
+            localStorage.setItem('openaiKey', document.getElementById('openaiKey').value);
+            localStorage.setItem('anthropicKey', document.getElementById('anthropicKey').value);
+        }
+
+        function validateKeys() {
+            const openaiKey = document.getElementById('openaiKey').value;
+            const anthropicKey = document.getElementById('anthropicKey').value;
+            
+            const openaiStatus = document.getElementById('openaiStatus');
+            const anthropicStatus = document.getElementById('anthropicStatus');
+
+            if (openaiKey.startsWith('sk-')) {
+                openaiStatus.className = 'api-status valid';
+                openaiStatus.innerHTML = '✓ Key format valid';
+            } else if (openaiKey) {
+                openaiStatus.className = 'api-status invalid';
+                openaiStatus.innerHTML = '✗ Invalid format';
+            } else {
+                openaiStatus.innerHTML = '';
+            }
+
+            if (anthropicKey.startsWith('sk-ant-')) {
+                anthropicStatus.className = 'api-status valid';
+                anthropicStatus.innerHTML = '✓ Key format valid';
+            } else if (anthropicKey) {
+                anthropicStatus.className = 'api-status invalid';
+                anthropicStatus.innerHTML = '✗ Invalid format';
+            } else {
+                anthropicStatus.innerHTML = '';
+            }
+        }
+
+        document.getElementById('openaiKey').addEventListener('input', () => { validateKeys(); saveSettings(); });
+        document.getElementById('anthropicKey').addEventListener('input', () => { validateKeys(); saveSettings(); });
+
+        // ============================================
+        // RENDERING
+        // ============================================
+        function renderBoard(winningCells = null) {
+            // Clear canvas
+            ctx.fillStyle = '#1e40af';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw cells
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const x = col * CELL_SIZE + CELL_SIZE / 2;
+                    const y = row * CELL_SIZE + CELL_SIZE / 2;
+
+                    // Cell hole
+                    ctx.beginPath();
+                    ctx.arc(x, y, PIECE_RADIUS + 3, 0, Math.PI * 2);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fill();
+
+                    // Piece
+                    const piece = board[row][col];
+                    if (piece !== 0) {
+                        const isWinning = winningCells && winningCells.some(c => c[0] === row && c[1] === col);
+                        drawPiece(x, y, piece, isWinning);
+                    }
+                }
+            }
+        }
+
+        function drawPiece(x, y, player, highlight = false) {
+            ctx.beginPath();
+            ctx.arc(x, y, PIECE_RADIUS, 0, Math.PI * 2);
+
+            if (player === 1) {
+                // Yellow piece
+                const gradient = ctx.createRadialGradient(x - 8, y - 8, 0, x, y, PIECE_RADIUS);
+                gradient.addColorStop(0, '#fef08a');
+                gradient.addColorStop(0.5, '#fbbf24');
+                gradient.addColorStop(1, '#b45309');
+                ctx.fillStyle = gradient;
+            } else {
+                // Red piece
+                const gradient = ctx.createRadialGradient(x - 8, y - 8, 0, x, y, PIECE_RADIUS);
+                gradient.addColorStop(0, '#fca5a5');
+                gradient.addColorStop(0.5, '#ef4444');
+                gradient.addColorStop(1, '#991b1b');
+                ctx.fillStyle = gradient;
+            }
+
+            ctx.fill();
+
+            if (highlight) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        // ============================================
+        // GAME LOGIC
+        // ============================================
+        function dropPiece(col) {
+            for (let row = ROWS - 1; row >= 0; row--) {
+                if (board[row][col] === 0) {
+                    board[row][col] = currentPlayer;
+                    stats.totalMoves++;
+                    updateStats();
+                    return row;
+                }
+            }
+            return -1; // Column full
+        }
+
+        function isValidMove(col) {
+            return col >= 0 && col < COLS && board[0][col] === 0;
+        }
+
+        function checkWin() {
+            // Check horizontal
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS - 3; col++) {
+                    if (board[row][col] !== 0 &&
+                        board[row][col] === board[row][col + 1] &&
+                        board[row][col] === board[row][col + 2] &&
+                        board[row][col] === board[row][col + 3]) {
+                        return [[row, col], [row, col + 1], [row, col + 2], [row, col + 3]];
+                    }
+                }
+            }
+
+            // Check vertical
+            for (let row = 0; row < ROWS - 3; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    if (board[row][col] !== 0 &&
+                        board[row][col] === board[row + 1][col] &&
+                        board[row][col] === board[row + 2][col] &&
+                        board[row][col] === board[row + 3][col]) {
+                        return [[row, col], [row + 1, col], [row + 2, col], [row + 3, col]];
+                    }
+                }
+            }
+
+            // Check diagonal (down-right)
+            for (let row = 0; row < ROWS - 3; row++) {
+                for (let col = 0; col < COLS - 3; col++) {
+                    if (board[row][col] !== 0 &&
+                        board[row][col] === board[row + 1][col + 1] &&
+                        board[row][col] === board[row + 2][col + 2] &&
+                        board[row][col] === board[row + 3][col + 3]) {
+                        return [[row, col], [row + 1, col + 1], [row + 2, col + 2], [row + 3, col + 3]];
+                    }
+                }
+            }
+
+            // Check diagonal (up-right)
+            for (let row = 3; row < ROWS; row++) {
+                for (let col = 0; col < COLS - 3; col++) {
+                    if (board[row][col] !== 0 &&
+                        board[row][col] === board[row - 1][col + 1] &&
+                        board[row][col] === board[row - 2][col + 2] &&
+                        board[row][col] === board[row - 3][col + 3]) {
+                        return [[row, col], [row - 1, col + 1], [row - 2, col + 2], [row - 3, col + 3]];
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function checkDraw() {
+            return board[0].every(cell => cell !== 0);
+        }
+
+        // ============================================
+        // API CALLS
+        // ============================================
+        async function getAIMove(player) {
+            const modelSelector = player === 1 ? 'player1Model' : 'player2Model';
+            const modelValue = document.getElementById(modelSelector).value;
+            const [provider, model] = modelValue.split(':');
+            const color = player === 1 ? 'YELLOW' : 'RED';
+
+            // Capture board image
+            const imageData = canvas.toDataURL('image/png').split(',')[1];
+
+            const prompt = `You are playing Connect 4. You are ${color}.
+Look at the board image. Columns are numbered 0-6 from left to right (shown below the board).
+The blue board has circular holes. Yellow and Red pieces are visible.
+Empty cells appear as dark holes.
+
+Respond with ONLY a single digit (0-6) for the column you want to drop your piece in.
+Choose a valid column that is not full (has at least one empty cell at the top).
+Think strategically: block opponent wins, create winning opportunities.
+
+Your response must be exactly one character: 0, 1, 2, 3, 4, 5, or 6.`;
+
+            const maxRetries = parseInt(document.getElementById('maxRetries').value);
+            
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    let response;
+                    if (provider === 'openai') {
+                        response = await callOpenAI(model, prompt, imageData);
+                    } else {
+                        response = await callAnthropic(model, prompt, imageData);
+                    }
+
+                    // Parse response - extract first digit
+                    const match = response.match(/[0-6]/);
+                    if (match) {
+                        const col = parseInt(match[0]);
+                        if (isValidMove(col)) {
+                            return { col, reasoning: response, model: `${provider}:${model}` };
+                        } else {
+                            addLog(`Column ${col} is full, retrying...`, player === 1 ? 'yellow' : 'red');
+                        }
+                    } else {
+                        addLog(`Invalid response: "${response.substring(0, 50)}", retrying...`, 'error');
+                    }
+                } catch (error) {
+                    addLog(`API Error: ${error.message}`, 'error');
+                    if (attempt === maxRetries - 1) throw error;
+                }
+            }
+
+            // Fallback: pick first valid column
+            for (let col = 0; col < COLS; col++) {
+                if (isValidMove(col)) {
+                    addLog(`Fallback: picking column ${col}`, 'system');
+                    return { col, reasoning: 'Fallback move', model: `${provider}:${model}` };
+                }
+            }
+
+            throw new Error('No valid moves available');
+        }
+
+        async function callOpenAI(model, prompt, imageBase64) {
+            const apiKey = document.getElementById('openaiKey').value;
+            if (!apiKey) throw new Error('OpenAI API key not set');
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: prompt },
+                                {
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: `data:image/png;base64,${imageBase64}`,
+                                        detail: 'high'
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens: 100,
+                    temperature: 0.3
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || 'OpenAI API error');
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        async function callAnthropic(model, prompt, imageBase64) {
+            const apiKey = document.getElementById('anthropicKey').value;
+            if (!apiKey) throw new Error('Anthropic API key not set');
+
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: model,
+                    max_tokens: 100,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: [
+                                {
+                                    type: 'image',
+                                    source: {
+                                        type: 'base64',
+                                        media_type: 'image/png',
+                                        data: imageBase64
+                                    }
+                                },
+                                { type: 'text', text: prompt }
+                            ]
+                        }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || 'Anthropic API error');
+            }
+
+            const data = await response.json();
+            return data.content[0].text;
+        }
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        async function gameLoop() {
+            if (!gameRunning || gamePaused || gameOver) return;
+
+            const color = currentPlayer === 1 ? 'Yellow' : 'Red';
+            updateTurnIndicator();
+
+            try {
+                addLog(`Thinking...`, currentPlayer === 1 ? 'yellow' : 'red', true);
+                
+                const move = await getAIMove(currentPlayer);
+                
+                // Remove thinking log
+                removeLastLog();
+                
+                // Make the move
+                const row = dropPiece(move.col);
+                if (row === -1) {
+                    addLog(`Invalid move to column ${move.col}!`, 'error');
+                    return;
+                }
+
+                renderBoard();
+                addLog(`Played column ${move.col}`, currentPlayer === 1 ? 'yellow' : 'red', false, move.model);
+
+                // Check for win
+                const winningCells = checkWin();
+                if (winningCells) {
+                    gameOver = true;
+                    gameRunning = false;
+                    renderBoard(winningCells);
+                    
+                    if (currentPlayer === 1) {
+                        stats.p1Wins++;
+                        showWinner('yellow', document.getElementById('player1Model').value);
+                    } else {
+                        stats.p2Wins++;
+                        showWinner('red', document.getElementById('player2Model').value);
+                    }
+                    updateStats();
+                    addLog(`${color} wins!`, 'win');
+                    document.getElementById('startBtn').disabled = false;
+                    return;
+                }
+
+                // Check for draw
+                if (checkDraw()) {
+                    gameOver = true;
+                    gameRunning = false;
+                    stats.draws++;
+                    updateStats();
+                    showWinner('draw');
+                    addLog('Game ended in a draw!', 'system');
+                    document.getElementById('startBtn').disabled = false;
+                    return;
+                }
+
+                // Switch player
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+
+                // Continue game loop with delay
+                const delay = parseInt(document.getElementById('moveDelay').value);
+                setTimeout(gameLoop, delay);
+
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+                gameRunning = false;
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+            }
+        }
+
+        // ============================================
+        // UI CONTROLS
+        // ============================================
+        function startMatch() {
+            saveSettings();
+            
+            // Validate API keys for selected models
+            const p1Model = document.getElementById('player1Model').value;
+            const p2Model = document.getElementById('player2Model').value;
+            
+            if (p1Model.startsWith('openai') || p2Model.startsWith('openai')) {
+                if (!document.getElementById('openaiKey').value) {
+                    addLog('OpenAI API key required!', 'error');
+                    return;
+                }
+            }
+            
+            if (p1Model.startsWith('anthropic') || p2Model.startsWith('anthropic')) {
+                if (!document.getElementById('anthropicKey').value) {
+                    addLog('Anthropic API key required!', 'error');
+                    return;
+                }
+            }
+
+            initBoard();
+            gameRunning = true;
+            gamePaused = false;
+            
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+
+            addLog('Match started!', 'system');
+            addLog(`Yellow: ${p1Model}`, 'yellow');
+            addLog(`Red: ${p2Model}`, 'red');
+
+            gameLoop();
+        }
+
+        function togglePause() {
+            gamePaused = !gamePaused;
+            document.getElementById('pauseBtn').textContent = gamePaused ? '▶ Resume' : '⏸ Pause';
+            
+            if (!gamePaused) {
+                gameLoop();
+            }
+            
+            addLog(gamePaused ? 'Game paused' : 'Game resumed', 'system');
+        }
+
+        function resetGame() {
+            gameRunning = false;
+            gamePaused = false;
+            gameOver = false;
+            initBoard();
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('pauseBtn').textContent = '⏸ Pause';
+            
+            updateTurnIndicator(true);
+            addLog('Game reset', 'system');
+        }
+
+        function updateTurnIndicator(waiting = false) {
+            const dot = document.getElementById('turnDot');
+            const text = document.getElementById('turnText');
+            
+            if (waiting) {
+                dot.style.background = 'var(--text-muted)';
+                text.textContent = 'Waiting to Start';
+            } else {
+                const color = currentPlayer === 1 ? 'var(--yellow)' : 'var(--red)';
+                const name = currentPlayer === 1 ? 'Yellow' : 'Red';
+                dot.style.background = color;
+                text.textContent = `${name}'s Turn`;
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('p1Wins').textContent = stats.p1Wins;
+            document.getElementById('p2Wins').textContent = stats.p2Wins;
+            document.getElementById('draws').textContent = stats.draws;
+            document.getElementById('totalMoves').textContent = stats.totalMoves;
+        }
+
+        function showWinner(type, modelValue = '') {
+            const overlay = document.getElementById('winnerOverlay');
+            const title = document.getElementById('winnerTitle');
+            const model = document.getElementById('winnerModel');
+            
+            title.className = 'winner-title ' + type;
+            
+            if (type === 'draw') {
+                title.textContent = "It's a Draw!";
+                model.textContent = 'Both models played to a stalemate';
+            } else {
+                title.textContent = type === 'yellow' ? 'Yellow Wins!' : 'Red Wins!';
+                model.textContent = modelValue.split(':')[1] || modelValue;
+            }
+            
+            overlay.classList.add('active');
+        }
+
+        function closeOverlay() {
+            document.getElementById('winnerOverlay').classList.remove('active');
+            resetGame();
+        }
+
+        // ============================================
+        // LOGGING
+        // ============================================
+        function addLog(message, type = 'system', isThinking = false, model = '') {
+            const log = document.getElementById('gameLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            if (isThinking) entry.id = 'thinkingLog';
+            
+            const time = new Date().toLocaleTimeString();
+            
+            let html = `<div class="log-time">${time}</div>`;
+            if (model) {
+                html += `<div class="log-model">${model.split(':')[1]}</div>`;
+            }
+            html += `<div class="log-move">${message}</div>`;
+            
+            entry.innerHTML = html;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function removeLastLog() {
+            const thinking = document.getElementById('thinkingLog');
+            if (thinking) thinking.remove();
+        }
+
+        // ============================================
+        // INIT
+        // ============================================
+        loadSettings();
+        initBoard();
+        updateTurnIndicator(true);
+    </script>
+</body>
+</html>
