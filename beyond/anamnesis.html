@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Anamnesis — A DDA Musical Journey</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #0a0a1a; color: #fff; font-family: 'Georgia', serif; }
+    canvas { display: block; position: absolute; top: 0; left: 0; }
+    #overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.92); z-index: 100;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        transition: opacity 1.5s ease;
+    }
+    .hidden { opacity: 0; pointer-events: none; }
+    h1 { font-size: 3.5em; letter-spacing: 0.15em; color: #d4af37;
+         text-shadow: 0 0 40px rgba(212,175,55,0.3); margin-bottom: 8px; }
+    .subtitle { font-size: 1.3em; color: #888; font-style: italic; margin-bottom: 5px; }
+    .prompt { margin-top: 50px; color: #444; font-size: 0.95em; letter-spacing: 0.2em;
+              animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+    #hud {
+        position: fixed; bottom: 20px; left: 20px; z-index: 50;
+        font-family: 'Courier New', monospace; font-size: 12px;
+        color: rgba(212,175,55,0.6); line-height: 1.6;
+        pointer-events: none; transition: opacity 0.5s;
+    }
+    #section-label {
+        position: fixed; top: 30px; left: 50%; transform: translateX(-50%);
+        z-index: 50; font-size: 1.1em; letter-spacing: 0.3em; text-transform: uppercase;
+        color: rgba(255,255,255,0.3); pointer-events: none;
+        transition: color 1s, opacity 1s;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>Anamnesis</h1>
+    <p class="subtitle">ἀνάμνησις — the recollection of what was always known</p>
+    <p class="subtitle" style="color:#555; font-size:0.95em; margin-top:10px;">
+        A unified DDA · String Engine · Visual experience
+    </p>
+    <p class="prompt">[ click anywhere to begin ]</p>
+</div>
+
+<canvas id="canvas"></canvas>
+<div id="hud"></div>
+<div id="section-label"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// ANAMNESIS — The DDA drives the music. The music drives the visuals.
+// The visuals reveal the DDA. Unity.
+//
+// F_n = P₀ · k · F_{n-1} + m · (T + R)
+//
+// P₀ is the key of A minor — the identity the piece returns to.
+// k is the reverb — echoes of the past that refuse to release.
+// m is the orchestration — external forces pressing inward.
+// F is the living state — what you hear right now.
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── CONFIGURATION ───
+const CONFIG = {
+    BPM: 78,
+    BASE_FREQS: [329.63, 246.94, 196.00, 146.83, 110.00, 82.41],
+    STRINGS: ['e','B','G','D','A','E']
+};
+
+// ─── DDA STATE ENGINE ───
+// The equation is not separate from the music. It IS the conductor.
+const DDA = {
+    P0: 0.5,        // Identity attractor
+    k: 0.1,         // Hysteresis / Trauma
+    F: 0.5,         // Current state
+    F_prev: 0.5,    // Previous state
+    m: 0.2,         // Pressure / Gain
+    T: 0.3,         // External truth signal
+    section: 0,
+    sectionName: 'Genesis',
+
+    // Section presets: each section shifts the DDA parameters
+    sections: [
+        { name:'Genesis',       T:0.2, m:0.15, kTarget:0.10, color:[10,10,26]  },
+        { name:'Breath',        T:0.35, m:0.30, kTarget:0.18, color:[18,18,42]  },
+        { name:'Pulse',         T:0.55, m:0.55, kTarget:0.35, color:[10,30,38]  },
+        { name:'Storm',         T:0.90, m:0.85, kTarget:0.72, color:[38,10,10]  },
+        { name:'Transcendence', T:0.25, m:0.20, kTarget:0.30, color:[20,10,32]  },
+    ],
+
+    update(sectionIdx) {
+        const s = this.sections[sectionIdx];
+        this.section = sectionIdx;
+        this.sectionName = s.name;
+        this.T = s.T;
+        this.m = s.m;
+        // Trauma drifts toward target (not instant — scars linger)
+        this.k += (s.kTarget - this.k) * 0.3;
+        this.k = Math.max(0.05, Math.min(0.95, this.k));
+
+        // THE EQUATION
+        this.F_prev = this.F;
+        const inertia = this.P0 * this.k * this.F_prev;
+        const pressure = this.m * (this.T + this.F_prev * 0.1);
+        this.F = inertia + pressure * (1 - this.k);
+        this.F = Math.max(0, Math.min(1, this.F));
+    },
+
+    // Derived musical parameters from F
+    get reverbMix()    { return 0.15 + this.k * 0.55; },
+    get filterBright() { return 1500 + this.F * 5000; },
+    get masterGain()   { return 0.3 + this.F * 0.4; },
+    get padLevel()     { return Math.max(0, (this.m - 0.25) * 0.6); },
+    get drumLevel()    { return Math.max(0, (this.m - 0.4) * 0.8); },
+    get electricLevel(){ return Math.max(0, (this.m - 0.65) * 1.2); },
+};
+
+// ─── AUDIO ENGINE ───
+const Audio = {
+    ctx: null, master: null, compressor: null,
+    reverbNode: null, reverbGain: null, analyser: null,
+    isPlaying: false,
+
+    init: async function() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Compressor (glues the mix)
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -18;
+        this.compressor.ratio.value = 4;
+        this.compressor.attack.value = 0.003;
+        this.compressor.release.value = 0.15;
+
+        // Master gain
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.5;
+
+        // Analyser for waveform visualization
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 2048;
+
+        // Reverb (k drives wet/dry — trauma = echoes of the past)
+        this.reverbNode = this.ctx.createConvolver();
+        this.reverbNode.buffer = await this._createImpulse(3.5, 2.2);
+        this.reverbGain = this.ctx.createGain();
+        this.reverbGain.gain.value = DDA.reverbMix;
+
+        // Routing: master → compressor → destination
+        //          master → reverb → reverbGain → compressor
+        this.master.connect(this.compressor);
+        this.master.connect(this.reverbNode);
+        this.reverbNode.connect(this.reverbGain);
+        this.reverbGain.connect(this.compressor);
+        this.compressor.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+    },
+
+    _createImpulse: async function(duration, decay) {
+        const rate = this.ctx.sampleRate, len = rate * duration;
+        const buf = this.ctx.createBuffer(2, len, rate);
+        const L = buf.getChannelData(0), R = buf.getChannelData(1);
+        for (let i = 0; i < len; i++) {
+            const env = Math.pow(1 - i / len, decay);
+            // Early reflections (discrete echoes in first 80ms)
+            const early = (i < rate * 0.08) ? Math.sin(i * 0.05) * 0.3 : 0;
+            L[i] = ((Math.random() * 2 - 1) + early) * env;
+            R[i] = ((Math.random() * 2 - 1) - early) * env;
+        }
+        return buf;
+    },
+
+    updateDDA() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        this.reverbGain.gain.linearRampToValueAtTime(DDA.reverbMix, t + 0.5);
+        this.master.gain.linearRampToValueAtTime(DDA.masterGain, t + 0.5);
+    },
+
+    // ─── ACOUSTIC GUITAR (Enhanced Karplus-Strong Hybrid) ───
+    // Noise-burst attack + oscillator body + per-string harmonic shaping
+    playAcoustic(stringIdx, fret, time, dur = 2.0, vel = 0.6) {
+        if (!this.ctx) return;
+        const c = this.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+
+        // ATTACK TRANSIENT — noise burst shaped by the fundamental
+        // This is what makes it sound "plucked" rather than "bowed"
+        const atkLen = Math.floor(c.sampleRate * 0.012);
+        const atkBuf = c.createBuffer(1, atkLen, c.sampleRate);
+        const atkData = atkBuf.getChannelData(0);
+        for (let i = 0; i < atkLen; i++) {
+            atkData[i] = (Math.random() * 2 - 1) * (1 - i / atkLen) * vel;
+        }
+        const atkSrc = c.createBufferSource();
+        atkSrc.buffer = atkBuf;
+        const atkFilt = c.createBiquadFilter();
+        atkFilt.type = 'bandpass';
+        atkFilt.frequency.value = freq * 3;
+        atkFilt.Q.value = 0.8;
+        const atkGain = c.createGain();
+        atkGain.gain.value = vel * 0.35;
+
+        // BODY — oscillator stack with per-string harmonic variation
+        const osc1 = c.createOscillator(); osc1.type = 'triangle'; osc1.frequency.value = freq;
+        const osc2 = c.createOscillator(); osc2.type = 'sine'; osc2.frequency.value = freq * 2;
+        const osc3 = c.createOscillator(); osc3.type = 'sine'; osc3.frequency.value = freq * 3;
+        osc3.detune.value = Math.random() * 3 - 1.5; // Organic micro-detune
+
+        // Thicker strings = darker (less high harmonics)
+        const g1 = c.createGain(); g1.gain.value = 0.45 * vel;
+        const g2 = c.createGain(); g2.gain.value = (0.28 - stringIdx * 0.025) * vel;
+        const g3 = c.createGain(); g3.gain.value = (0.14 - stringIdx * 0.015) * vel;
+
+        // FILTER — lowpass with brightness decay (string losing energy)
+        const filt = c.createBiquadFilter();
+        filt.type = 'lowpass';
+        filt.frequency.setValueAtTime(Math.min(2800 * vel + 800, DDA.filterBright), time);
+        filt.frequency.exponentialRampToValueAtTime(500 + freq * 0.4, time + 0.35);
+        filt.Q.value = 0.7;
+
+        // BODY RESONANCE — simulates the guitar body cavity
+        const body = c.createBiquadFilter();
+        body.type = 'peaking';
+        body.frequency.value = 180 + stringIdx * 25;
+        body.gain.value = 3.5;
+        body.Q.value = 1.8;
+
+        // ENVELOPE
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(vel * 0.45, time + 0.009);
+        amp.gain.exponentialRampToValueAtTime(vel * 0.18, time + 0.18);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + dur);
+
+        // ROUTING
+        atkSrc.connect(atkFilt); atkFilt.connect(atkGain); atkGain.connect(filt);
+        osc1.connect(g1); g1.connect(filt);
+        osc2.connect(g2); g2.connect(filt);
+        osc3.connect(g3); g3.connect(filt);
+        filt.connect(body); body.connect(amp); amp.connect(this.master);
+
+        osc1.start(time); osc1.stop(time + dur);
+        osc2.start(time); osc2.stop(time + dur);
+        osc3.start(time); osc3.stop(time + dur);
+        atkSrc.start(time);
+        emitParticles('acoustic', freq);
+    },
+
+    // ─── BASS ───
+    playBass(freq, time, dur = 1.5) {
+        if (!this.ctx) return;
+        const c = this.ctx;
+        const osc = c.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq;
+        const osc2 = c.createOscillator(); osc2.type = 'triangle'; osc2.frequency.value = freq;
+        const g1 = c.createGain(); g1.gain.value = 0.5;
+        const g2 = c.createGain(); g2.gain.value = 0.15;
+        const filt = c.createBiquadFilter();
+        filt.type = 'lowpass'; filt.frequency.value = 400; filt.Q.value = 1;
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.55, time + 0.02);
+        amp.gain.setValueAtTime(0.55, time + dur - 0.1);
+        amp.gain.linearRampToValueAtTime(0.001, time + dur);
+        osc.connect(g1); g1.connect(amp);
+        osc2.connect(g2); g2.connect(filt); filt.connect(amp);
+        amp.connect(this.master);
+        osc.start(time); osc.stop(time + dur);
+        osc2.start(time); osc2.stop(time + dur);
+        emitParticles('bass', freq);
+    },
+
+    // ─── ELECTRIC GUITAR (Distortion Chain) ───
+    playElectric(stringIdx, fret, time, dur = 0.5, vel = 0.7) {
+        if (!this.ctx) return;
+        const c = this.ctx;
+        const freq = CONFIG.BASE_FREQS[stringIdx] * Math.pow(2, fret / 12);
+        const osc1 = c.createOscillator(); osc1.type = 'sawtooth'; osc1.frequency.value = freq;
+        const osc2 = c.createOscillator(); osc2.type = 'square';
+        osc2.frequency.value = freq; osc2.detune.value = 6;
+        const mix = c.createGain(); mix.gain.value = vel * 0.3;
+        // Distortion waveshaper
+        const drive = c.createWaveShaper();
+        const k = 300;
+        const curve = new Float32Array(44100);
+        for (let i = 0; i < 44100; i++) { let x = i * 2 / 44100 - 1; curve[i] = Math.tanh(k * x); }
+        drive.curve = curve;
+        drive.oversample = '4x';
+        // Cabinet sim (lowpass)
+        const cab = c.createBiquadFilter();
+        cab.type = 'lowpass'; cab.frequency.value = 3800; cab.Q.value = 0.8;
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(vel * DDA.electricLevel * 0.3, time + 0.006);
+        amp.gain.exponentialRampToValueAtTime(0.001, time + dur);
+        osc1.connect(mix); osc2.connect(mix);
+        mix.connect(drive); drive.connect(cab); cab.connect(amp);
+        amp.connect(this.master);
+        osc1.start(time); osc1.stop(time + dur);
+        osc2.start(time); osc2.stop(time + dur);
+        emitParticles('electric', freq);
+    },
+
+    // ─── PAD (Atmosphere) ───
+    playPad(freqs, time, dur = 4.0) {
+        if (!this.ctx || DDA.padLevel <= 0) return;
+        const c = this.ctx;
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(DDA.padLevel * 0.12, time + 1.0);
+        amp.gain.setValueAtTime(DDA.padLevel * 0.12, time + dur - 1.5);
+        amp.gain.linearRampToValueAtTime(0.001, time + dur);
+        freqs.forEach(f => {
+            const o1 = c.createOscillator(); o1.type = 'sine'; o1.frequency.value = f;
+            const o2 = c.createOscillator(); o2.type = 'sine';
+            o2.frequency.value = f; o2.detune.value = 7;
+            const g = c.createGain(); g.gain.value = 0.15;
+            o1.connect(g); o2.connect(g); g.connect(amp);
+            o1.start(time); o1.stop(time + dur);
+            o2.start(time); o2.stop(time + dur);
+        });
+        amp.connect(this.master);
+        emitParticles('pad', freqs[0]);
+    },
+
+    // ─── PERCUSSION ───
+    playKick(time) {
+        if (!this.ctx || DDA.drumLevel <= 0) return;
+        const c = this.ctx;
+        const osc = c.createOscillator();
+        osc.frequency.setValueAtTime(180, time);
+        osc.frequency.exponentialRampToValueAtTime(42, time + 0.09);
+        const g = c.createGain();
+        g.gain.setValueAtTime(DDA.drumLevel * 0.7, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+        // Noise layer for beater
+        const nBuf = c.createBuffer(1, c.sampleRate * 0.015, c.sampleRate);
+        const nData = nBuf.getChannelData(0);
+        for (let i = 0; i < nData.length; i++) nData[i] = Math.random() * 2 - 1;
+        const nSrc = c.createBufferSource(); nSrc.buffer = nBuf;
+        const nG = c.createGain(); nG.gain.value = DDA.drumLevel * 0.15;
+        const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 800;
+        osc.connect(g); g.connect(this.master);
+        nSrc.connect(hp); hp.connect(nG); nG.connect(this.master);
+        osc.start(time); osc.stop(time + 0.35);
+        nSrc.start(time);
+        beatPulse = 1.0;
+        emitParticles('kick', 50);
+    },
+
+    playSnare(time) {
+        if (!this.ctx || DDA.drumLevel <= 0) return;
+        const c = this.ctx;
+        const bufSz = c.sampleRate * 0.08;
+        const buf = c.createBuffer(1, bufSz, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSz; i++) d[i] = Math.random() * 2 - 1;
+        const src = c.createBufferSource(); src.buffer = buf;
+        const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+        const g = c.createGain();
+        g.gain.setValueAtTime(DDA.drumLevel * 0.45, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        const osc = c.createOscillator();
+        osc.frequency.setValueAtTime(220, time);
+        osc.frequency.exponentialRampToValueAtTime(140, time + 0.05);
+        const og = c.createGain();
+        og.gain.setValueAtTime(DDA.drumLevel * 0.2, time);
+        og.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+        src.connect(hp); hp.connect(g); g.connect(this.master);
+        osc.connect(og); og.connect(this.master);
+        src.start(time); osc.start(time); osc.stop(time + 0.1);
+        emitParticles('snare', 220);
+    },
+
+    playHat(time, open = false) {
+        if (!this.ctx || DDA.drumLevel <= 0) return;
+        const c = this.ctx;
+        const len = open ? 0.12 : 0.035;
+        const bufSz = c.sampleRate * len;
+        const buf = c.createBuffer(1, bufSz, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSz; i++) d[i] = Math.random() * 2 - 1;
+        const src = c.createBufferSource(); src.buffer = buf;
+        const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 9000;
+        const g = c.createGain();
+        g.gain.setValueAtTime(DDA.drumLevel * 0.22, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + len);
+        src.connect(hp); hp.connect(g); g.connect(this.master);
+        src.start(time);
+    },
+
+    playCrash(time) {
+        if (!this.ctx) return;
+        const c = this.ctx;
+        const buf = c.createBuffer(1, c.sampleRate * 0.8, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        const src = c.createBufferSource(); src.buffer = buf;
+        const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 6000; bp.Q.value = 0.5;
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.35, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 2.0);
+        src.connect(bp); bp.connect(g); g.connect(this.master);
+        src.start(time);
+    }
+};
+
+// ─── COMPOSITION ───
+// Each track is a separate array. The sequencer interleaves them.
+const guitarTAB = [];
+const bassTAB = [];
+const drumTAB = [];
+const padTAB = [];
+const electricTAB = [];
+
+function addG(beat, string, fret, dur, vel) { guitarTAB.push({beat, string, fret, dur: dur||2.0, vel: vel||0.6}); }
+function addB(beat, freq, dur) { bassTAB.push({beat, freq, dur: dur||1.5}); }
+function addD(beat, type) { drumTAB.push({beat, type}); }
+function addP(beat, freqs, dur) { padTAB.push({beat, freqs, dur: dur||4.0}); }
+function addE(beat, string, fret, dur, vel) { electricTAB.push({beat, string, fret, dur: dur||0.5, vel: vel||0.7}); }
+
+// Chord definitions for the classical pattern
+const chords = {
+    Am:  { bass:[4,0], mid:[2,2], high:[1,1] },
+    Em:  { bass:[5,0], mid:[2,0], high:[1,0] },
+    F:   { bass:[5,1], mid:[2,2], high:[1,1] },
+    E7:  { bass:[5,0], mid:[2,1], high:[1,0] },
+    Dm:  { bass:[3,0], mid:[2,2], high:[1,3] },
+    G:   { bass:[5,3], mid:[2,0], high:[1,0] },
+    C:   { bass:[4,3], mid:[2,0], high:[1,1] },
+    Bdim:{ bass:[4,2], mid:[2,0], high:[1,0] },
+};
+
+// Classical fingerpicking pattern: p-i-m-a-m-i over 2 beats with triplet subdivisions
+const T = 1/3;
+function classical(beat, chord, melodyFret, vel) {
+    const v = vel || 0.6;
+    addG(beat,         chord.bass[0], chord.bass[1], 2.5, v * 0.8); // Thumb (bass)
+    addG(beat + T,     chord.mid[0],  chord.mid[1],  1.8, v * 0.55); // Index
+    addG(beat + T*2,   chord.high[0], chord.high[1], 1.8, v * 0.55); // Middle
+    addG(beat + T*3,   0,             melodyFret,     2.0, v);        // Ring (MELODY)
+    addG(beat + T*4,   chord.high[0], chord.high[1], 1.5, v * 0.45); // Middle
+    addG(beat + T*5,   chord.mid[0],  chord.mid[1],  1.5, v * 0.45); // Index
+}
+
+// Strum helper
+function strum(beat, notes, speed, dur, vel) {
+    notes.forEach((n, i) => addG(beat + i * (speed||0.02), n[0], n[1], dur||1.5, vel||0.5));
+}
+
+// Section boundaries (in beats)
+const SEC = [0, 32, 64, 112, 160, 192];
+
+let b = 0;
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 1: GENESIS — Solo acoustic. Identity establishing.
+// DDA: k=0.1, m=0.15. The agent at rest, exploring self.
+// ═══════════════════════════════════════════════════════════
+
+// Am — ascending melody: E(0) → G(3) → A(5) → G(3)
+classical(b, chords.Am, 0, 0.5);  b += 2;
+classical(b, chords.Am, 0, 0.52); b += 2;
+classical(b, chords.Am, 3, 0.55); b += 2;
+classical(b, chords.Am, 5, 0.58); b += 2;
+
+// Em — descending: G(3) → E(0)
+classical(b, chords.Em, 3, 0.5);  b += 2;
+classical(b, chords.Em, 0, 0.5);  b += 2;
+
+// F → E7 — tension and resolve
+classical(b, chords.F, 1, 0.55);  b += 2;
+classical(b, chords.E7, 0, 0.5);  b += 2;
+
+// Repeat with variation: melody reaches higher
+classical(b, chords.Am, 0, 0.55); b += 2;
+classical(b, chords.Am, 3, 0.58); b += 2;
+classical(b, chords.Am, 5, 0.62); b += 2;
+classical(b, chords.Am, 7, 0.65); b += 2; // High B — the peak
+
+classical(b, chords.Em, 5, 0.55); b += 2;
+classical(b, chords.Em, 3, 0.52); b += 2;
+classical(b, chords.F, 1, 0.55);  b += 2;
+// Ritardando — final measure of genesis
+classical(b, chords.E7, 0, 0.48); b += 2;
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 2: BREATH — Bass enters. Pads bloom. World opens.
+// DDA: k=0.18, m=0.30. The agent senses the external.
+// ═══════════════════════════════════════════════════════════
+
+// Am – bass on roots, pad on chord tones
+addP(b, [220, 329.63, 440], 8); // Am pad
+addB(b, 110, 2); classical(b, chords.Am, 0, 0.58); b += 2;
+classical(b, chords.Am, 3, 0.6); b += 2;
+addB(b, 110, 2); classical(b, chords.Am, 5, 0.62); b += 2;
+classical(b, chords.Am, 7, 0.65); b += 2;
+
+// F – bass walks F → A
+addP(b, [174.61, 261.63, 349.23], 8); // F pad
+addB(b, 87.31, 2); classical(b, chords.F, 5, 0.6);  b += 2;
+classical(b, chords.F, 3, 0.58); b += 2;
+addB(b, 110, 2); classical(b, chords.F, 1, 0.58); b += 2;
+classical(b, chords.F, 0, 0.55); b += 2;
+
+// C – G
+addP(b, [261.63, 329.63, 392], 8); // C pad
+addB(b, 130.81, 2); classical(b, chords.C, 0, 0.58); b += 2;
+classical(b, chords.C, 3, 0.6); b += 2;
+addB(b, 98, 2); classical(b, chords.G, 3, 0.6); b += 2;
+classical(b, chords.G, 0, 0.58); b += 2;
+
+// Am – E7 (resolve to tonic)
+addP(b, [220, 329.63, 440], 8); // Am pad
+addB(b, 110, 2); classical(b, chords.Am, 5, 0.62); b += 2;
+classical(b, chords.Am, 3, 0.6); b += 2;
+addB(b, 82.41, 2); classical(b, chords.E7, 0, 0.58); b += 2;
+classical(b, chords.E7, 0, 0.52); b += 2;
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 3: PULSE — Drums enter. Energy builds.
+// DDA: k=0.35, m=0.55. Pressure mounting.
+// ═══════════════════════════════════════════════════════════
+
+// Drum pattern: kick on 1 & 3, snare on 2 & 4, hats on 8ths
+function drumPattern(start, len) {
+    for (let i = start; i < start + len; i += 4) {
+        addD(i, 'kick'); addD(i + 1, 'hat'); addD(i + 2, 'snare');
+        addD(i + 2.5, 'hat'); addD(i + 3, 'hat'); addD(i + 3.5, 'kick');
+    }
+}
+
+drumPattern(b, 48);
+
+// Fuller chord progression: Am → Dm → G → C → F → Bdim → E7 → Am (x2)
+for (let rep = 0; rep < 2; rep++) {
+    const vBase = 0.6 + rep * 0.05;
+    addP(b, [220, 329.63, 440], 8);
+    addB(b, 110, 2); classical(b, chords.Am, 5, vBase); b += 2;
+    addB(b+0.5, 130.81, 1); classical(b, chords.Am, 3, vBase); b += 2;
+    addB(b, 146.83, 2); classical(b, chords.Dm, 1, vBase); b += 2;
+    classical(b, chords.Dm, 3, vBase); b += 2;
+
+    addP(b, [196, 293.66, 392], 8);
+    addB(b, 98, 2); classical(b, chords.G, 3, vBase); b += 2;
+    classical(b, chords.G, 0, vBase); b += 2;
+    addB(b, 130.81, 2); classical(b, chords.C, 0, vBase + 0.05); b += 2;
+    classical(b, chords.C, 3, vBase + 0.05); b += 2;
+
+    addP(b, [174.61, 261.63, 349.23], 8);
+    addB(b, 87.31, 2); classical(b, chords.F, 1, vBase); b += 2;
+    classical(b, chords.F, 0, vBase); b += 2;
+    addB(b, 123.47, 2); classical(b, chords.Bdim, 1, vBase); b += 2;
+    classical(b, chords.Bdim, 0, vBase - 0.05); b += 2;
+
+    // Tension → resolution
+    addB(b, 82.41, 2); classical(b, chords.E7, 4, vBase + 0.08); b += 2;
+    addD(b, 'crash');
+    addB(b+0.5, 110, 1); classical(b, chords.E7, 0, vBase); b += 2;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 4: STORM — Electric guitar. Full intensity. Bifurcation.
+// DDA: k=0.72, m=0.85. The agent at the breaking point.
+// ═══════════════════════════════════════════════════════════
+
+// Heavy drums
+function heavyDrums(start, len) {
+    for (let i = start; i < start + len; i += 4) {
+        addD(i, 'kick'); addD(i + 0.5, 'hat');
+        addD(i + 1, 'kick'); addD(i + 1.5, 'hat');
+        addD(i + 2, 'snare'); addD(i + 2.5, 'hat');
+        addD(i + 3, 'hat'); addD(i + 3.5, 'kick');
+    }
+}
+heavyDrums(b, 48);
+addD(b, 'crash');
+
+// Power chords + electric lead
+for (let rep = 0; rep < 2; rep++) {
+    // Am5
+    addP(b, [220, 330, 440, 550], 8);
+    addB(b, 55, 2);
+    addE(b, 5, 5, 1.5, 0.8); addE(b+0.01, 4, 5, 1.5, 0.8); addE(b+0.02, 3, 7, 1.5, 0.8);
+    classical(b, chords.Am, 5, 0.4); b += 2;
+    addE(b, 5, 5, 0.3, 0.7); addE(b+0.5, 5, 5, 0.3, 0.7); b += 2;
+
+    addB(b, 55, 2);
+    addE(b, 5, 5, 1.5, 0.8); addE(b+0.01, 4, 5, 1.5, 0.8); addE(b+0.02, 3, 7, 1.5, 0.8);
+    b += 2;
+    addE(b, 0, 8, 1.5, 0.75); // Lead melody — high C
+    b += 2;
+
+    // F5
+    addP(b, [174.61, 261.63, 349.23, 440], 8);
+    addB(b, 43.65, 2);
+    addE(b, 5, 1, 1.5, 0.8); addE(b+0.01, 4, 1, 1.5, 0.8); addE(b+0.02, 3, 3, 1.5, 0.8);
+    b += 2;
+    addE(b, 0, 5, 1.0, 0.7); addE(b+1, 0, 8, 0.8, 0.7); // Lead: A → C
+    b += 2;
+
+    // G5
+    addB(b, 49, 2);
+    addE(b, 5, 3, 1.5, 0.85); addE(b+0.01, 4, 3, 1.5, 0.85); addE(b+0.02, 3, 5, 1.5, 0.85);
+    b += 2;
+    addE(b, 0, 10, 1.5, 0.8); // Lead: high D
+    b += 2;
+
+    // E5 → resolve
+    addB(b, 41.2, 2);
+    addE(b, 5, 0, 2.0, 0.9); addE(b+0.01, 4, 2, 2.0, 0.9); addE(b+0.02, 3, 2, 2.0, 0.9);
+    addD(b, 'crash');
+    b += 2;
+    addE(b, 0, 12, 2.5, 0.85); // Lead: high E — the scream
+    b += 2;
+
+    // Chugs
+    addB(b, 55, 1);
+    addE(b, 5, 5, 0.15, 0.9); addE(b+0.25, 5, 5, 0.15, 0.9);
+    addE(b+0.5, 5, 5, 0.15, 0.9); addE(b+1, 5, 5, 0.15, 0.9);
+    b += 2;
+    addE(b, 5, 5, 0.15, 0.9); addE(b+0.5, 5, 3, 0.15, 0.9);
+    addE(b+1, 5, 1, 0.15, 0.9); addE(b+1.5, 5, 0, 0.15, 0.9);
+    b += 2;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 5: TRANSCENDENCE — Return to acoustic. Transformed.
+// DDA: k=0.30, m=0.20. Scars remain but the agent has grown.
+// ═══════════════════════════════════════════════════════════
+
+addD(b, 'crash');
+addP(b, [220, 329.63, 440], 16); // Sustained pad
+
+// Spare drums, fading out
+for (let i = b; i < b + 24; i += 4) {
+    addD(i, 'kick'); addD(i + 2, 'hat');
+}
+
+// Original theme returns, but richer with bass support
+addB(b, 110, 4);
+classical(b, chords.Am, 0, 0.5);  b += 2;
+classical(b, chords.Am, 0, 0.52); b += 2;
+classical(b, chords.Am, 3, 0.55); b += 2;
+classical(b, chords.Am, 5, 0.58); b += 2;
+
+addB(b, 82.41, 4);
+classical(b, chords.Em, 3, 0.5);  b += 2;
+classical(b, chords.Em, 0, 0.48); b += 2;
+classical(b, chords.F, 1, 0.5);   b += 2;
+
+// Final resolution — Am chord, slow strum, held
+addB(b, 110, 4);
+strum(b, [[5,0],[4,0],[3,2],[2,2],[1,1],[0,0]], 0.06, 4.0, 0.55);
+b += 2;
+// Silence / ring out
+b += 6;
+
+const TOTAL_BEATS = b;
+
+// ─── SECTION MANAGER ───
+function getSectionIdx(beat) {
+    for (let i = SEC.length - 1; i >= 0; i--) { if (beat >= SEC[i]) return i; }
+    return 0;
+}
+
+// ─── SEQUENCER ───
+let currentBeat = 0, startTime = 0;
+let gIdx = 0, bIdx = 0, dIdx = 0, pIdx = 0, eIdx = 0;
+let lastSection = -1;
+
+function scheduler() {
+    if (!Audio.isPlaying) return;
+    const now = Audio.ctx.currentTime;
+    currentBeat = (now - startTime) * (CONFIG.BPM / 60);
+
+    // Loop
+    if (currentBeat >= TOTAL_BEATS) {
+        startTime = now; currentBeat = 0;
+        gIdx = bIdx = dIdx = pIdx = eIdx = 0;
+        lastSection = -1;
+    }
+
+    // Section transitions drive DDA
+    const secIdx = getSectionIdx(currentBeat);
+    if (secIdx !== lastSection) {
+        lastSection = secIdx;
+        DDA.update(secIdx);
+        Audio.updateDDA();
+        updateHUD();
+        document.getElementById('section-label').textContent = DDA.sectionName;
+    }
+
+    const ahead = 0.15;
+    const toTime = beat => startTime + beat * (60 / CONFIG.BPM);
+
+    // Guitar
+    while (gIdx < guitarTAB.length && guitarTAB[gIdx].beat <= currentBeat + ahead) {
+        const n = guitarTAB[gIdx++];
+        Audio.playAcoustic(n.string, n.fret, toTime(n.beat), n.dur, n.vel);
+    }
+    // Bass
+    while (bIdx < bassTAB.length && bassTAB[bIdx].beat <= currentBeat + ahead) {
+        const n = bassTAB[bIdx++];
+        Audio.playBass(n.freq, toTime(n.beat), n.dur);
+    }
+    // Drums
+    while (dIdx < drumTAB.length && drumTAB[dIdx].beat <= currentBeat + ahead) {
+        const n = drumTAB[dIdx++]; const t = toTime(n.beat);
+        if (n.type === 'kick') Audio.playKick(t);
+        else if (n.type === 'snare') Audio.playSnare(t);
+        else if (n.type === 'hat') Audio.playHat(t);
+        else if (n.type === 'crash') Audio.playCrash(t);
+    }
+    // Pad
+    while (pIdx < padTAB.length && padTAB[pIdx].beat <= currentBeat + ahead) {
+        const n = padTAB[pIdx++];
+        Audio.playPad(n.freqs, toTime(n.beat), n.dur);
+    }
+    // Electric
+    while (eIdx < electricTAB.length && electricTAB[eIdx].beat <= currentBeat + ahead) {
+        const n = electricTAB[eIdx++];
+        Audio.playElectric(n.string, n.fret, toTime(n.beat), n.dur, n.vel);
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// ─── VISUAL ENGINE ───
+const cvs = document.getElementById('canvas');
+const cx = cvs.getContext('2d');
+let w, h;
+function resize() { w = cvs.width = innerWidth; h = cvs.height = innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+let beatPulse = 0;
+let particleCount = 0;
+const particles = [];
+const GOLDEN_ANGLE = 137.508 * Math.PI / 180;
+
+const COLORS = {
+    acoustic: [212,175,55],
+    bass:     [40,100,255],
+    electric: [231,76,60],
+    pad:      [155,89,182],
+    kick:     [255,255,255],
+    snare:    [200,200,200],
+};
+
+function emitParticles(type, freq) {
+    const col = COLORS[type] || COLORS.acoustic;
+    const count = type === 'kick' ? 12 : (type === 'pad' ? 3 : 6);
+    for (let i = 0; i < count; i++) {
+        const angle = particleCount * GOLDEN_ANGLE + (Math.random() - 0.5) * 0.4;
+        const speed = 0.8 + Math.random() * 2.5 + DDA.m * 2;
+        const size = 2 + Math.random() * 4 + (type === 'kick' ? 4 : 0);
+        particles.push({
+            x: w / 2, y: h / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: col[0], g: col[1], b: col[2],
+            size, life: 1.0, decay: 0.006 + Math.random() * 0.008
+        });
+        particleCount++;
+    }
+}
+
+// Waveform data
+const waveData = new Uint8Array(1024);
+
+function draw() {
+    // Background — color shifts per section via DDA
+    const sc = DDA.sections[DDA.section]?.color || [10,10,26];
+    cx.fillStyle = `rgba(${sc[0]},${sc[1]},${sc[2]},0.14)`;
+    cx.fillRect(0, 0, w, h);
+
+    beatPulse *= 0.92;
+    const pulse = 1 + beatPulse * 0.25;
+
+    // Central glow
+    const grad = cx.createRadialGradient(w/2, h/2, 0, w/2, h/2, 150 * pulse);
+    grad.addColorStop(0, `rgba(212,175,55,${0.04 + beatPulse * 0.08})`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.fillStyle = grad;
+    cx.fillRect(w/2 - 200, h/2 - 200, 400, 400);
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        p.vx *= 0.995; p.vy *= 0.995;
+        p.life -= p.decay;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        cx.beginPath();
+        cx.arc(p.x, p.y, p.size * pulse * p.life, 0, Math.PI * 2);
+        cx.fillStyle = `rgba(${p.r},${p.g},${p.b},${p.life * 0.7})`;
+        cx.fill();
+    }
+
+    // DDA phase-space orbit (small visualization in bottom-right)
+    if (Audio.isPlaying) {
+        const ox = w - 120, oy = h - 120;
+        cx.strokeStyle = 'rgba(212,175,55,0.15)';
+        cx.strokeRect(ox - 50, oy - 50, 100, 100);
+        const px = ox - 50 + DDA.F * 100;
+        const py = oy - 50 + (1 - DDA.k) * 100;
+        cx.beginPath(); cx.arc(px, py, 4 + beatPulse * 3, 0, Math.PI * 2);
+        cx.fillStyle = `rgba(212,175,55,${0.5 + beatPulse * 0.5})`;
+        cx.fill();
+        cx.font = '9px Courier New';
+        cx.fillStyle = 'rgba(255,255,255,0.2)';
+        cx.fillText('F →', ox - 50, oy + 60);
+        cx.fillText('k ↑', ox - 65, oy - 40);
+    }
+
+    // Waveform (subtle ring around center)
+    if (Audio.analyser) {
+        Audio.analyser.getByteTimeDomainData(waveData);
+        cx.beginPath();
+        cx.strokeStyle = `rgba(212,175,55,${0.08 + beatPulse * 0.12})`;
+        cx.lineWidth = 1;
+        const radius = 80 + beatPulse * 20;
+        for (let i = 0; i < waveData.length; i++) {
+            const angle = (i / waveData.length) * Math.PI * 2;
+            const amp = (waveData[i] - 128) / 128;
+            const r = radius + amp * 40;
+            const x = w/2 + Math.cos(angle) * r;
+            const y = h/2 + Math.sin(angle) * r;
+            if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+        }
+        cx.closePath(); cx.stroke();
+    }
+
+    // Progress bar (very subtle)
+    if (Audio.isPlaying) {
+        const prog = currentBeat / TOTAL_BEATS;
+        cx.fillStyle = 'rgba(212,175,55,0.15)';
+        cx.fillRect(0, h - 2, w * prog, 2);
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// ─── HUD ───
+function updateHUD() {
+    document.getElementById('hud').innerHTML =
+        `P₀ ${DDA.P0.toFixed(2)}  k ${DDA.k.toFixed(2)}  m ${DDA.m.toFixed(2)}  F ${DDA.F.toFixed(2)}<br>` +
+        `reverb ${DDA.reverbMix.toFixed(2)}  brightness ${DDA.filterBright.toFixed(0)}Hz`;
+}
+
+// ─── CONTROLS ───
+document.getElementById('overlay').addEventListener('click', async () => {
+    await Audio.init();
+    Audio.isPlaying = true;
+    startTime = Audio.ctx.currentTime;
+    document.getElementById('overlay').classList.add('hidden');
+    DDA.update(0);
+    Audio.updateDDA();
+    updateHUD();
+    document.getElementById('section-label').textContent = DDA.sectionName;
+    scheduler();
+});
+
+draw();
+</script>
+</body>
+</html>
