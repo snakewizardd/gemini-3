@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PHOSPHENE</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { overflow:hidden; background:#05050f; color:#fff; font-family:'Courier New',monospace; }
+    canvas { display:block; position:absolute; top:0; left:0; }
+    #overlay {
+        position:fixed; top:0; left:0; width:100%; height:100%;
+        background:rgba(5,5,15,0.96); z-index:100;
+        display:flex; flex-direction:column; justify-content:center; align-items:center;
+        transition: opacity 2s ease;
+    }
+    .hidden { opacity:0; pointer-events:none; }
+    h1 { font-size:4.5em; letter-spacing:0.4em; color:#00f7ff;
+         text-shadow: 0 0 60px rgba(0,247,255,0.4), 0 0 120px rgba(0,247,255,0.15);
+         font-weight:100; }
+    .sub { font-size:0.85em; color:#ff00aa; letter-spacing:0.6em; margin-top:8px;
+           text-shadow: 0 0 30px rgba(255,0,170,0.3); font-weight:100; }
+    .prompt { margin-top:60px; color:#333; font-size:0.75em; letter-spacing:0.3em;
+              animation:blink 1.5s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:0.8} }
+    #hud {
+        position:fixed; top:15px; right:20px; z-index:50;
+        font-size:10px; color:rgba(0,247,255,0.35); text-align:right;
+        pointer-events:none; line-height:1.8; letter-spacing:0.15em;
+    }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>PHOSPHENE</h1>
+    <p class="sub">CLOSE YOUR EYES · THE LIGHT IS INSIDE</p>
+    <p class="prompt">[ CLICK TO INITIATE ]</p>
+</div>
+
+<canvas id="c"></canvas>
+<div id="hud"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// PHOSPHENE — Darkcore Tech Trance
+// Formant vocal synthesis · TB-303 acid bass · Supersaw leads
+// Sidechain compression · Tunnel vortex visuals
+// No samples. No libraries. No rules. Pure mathematics becoming sound.
+// ═══════════════════════════════════════════════════════════════════
+
+const BPM = 140;
+const BEAT = 60 / BPM;
+
+// ─── AUDIO ENGINE ───
+const E = {
+    ctx: null, master: null, comp: null, analyser: null,
+    reverbNode: null, reverbWet: null,
+    sidechain: null, // Everything except kick routes through this
+    playing: false,
+
+    init: async function() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Compressor
+        this.comp = this.ctx.createDynamicsCompressor();
+        this.comp.threshold.value = -12; this.comp.ratio.value = 6;
+        this.comp.attack.value = 0.001; this.comp.release.value = 0.08;
+
+        // Analyser
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 2048;
+
+        // Master
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.65;
+
+        // Sidechain bus (pumping simulation)
+        this.sidechain = this.ctx.createGain();
+        this.sidechain.gain.value = 1.0;
+
+        // Reverb (large dark space)
+        this.reverbNode = this.ctx.createConvolver();
+        this.reverbNode.buffer = await this._impulse(4.0, 1.8);
+        this.reverbWet = this.ctx.createGain();
+        this.reverbWet.gain.value = 0.25;
+
+        // Routing
+        this.sidechain.connect(this.master);
+        this.master.connect(this.comp);
+        this.master.connect(this.reverbNode);
+        this.reverbNode.connect(this.reverbWet);
+        this.reverbWet.connect(this.comp);
+        this.comp.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+    },
+
+    _impulse: async function(dur, decay) {
+        const r = this.ctx.sampleRate, len = r * dur;
+        const buf = this.ctx.createBuffer(2, len, r);
+        const L = buf.getChannelData(0), R = buf.getChannelData(1);
+        for (let i = 0; i < len; i++) {
+            const e = Math.pow(1 - i/len, decay);
+            const er = i < r*0.06 ? Math.sin(i*0.08)*0.25 : 0;
+            L[i] = ((Math.random()*2-1) + er) * e;
+            R[i] = ((Math.random()*2-1) - er) * e;
+        }
+        return buf;
+    },
+
+    _noiseBuf(dur) {
+        const len = Math.floor(this.ctx.sampleRate * dur);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        return buf;
+    },
+
+    // ─── TECHNO KICK (Heavy, long tail, sub-heavy) ───
+    kick(time) {
+        const c = this.ctx;
+        // Sub body
+        const osc = c.createOscillator();
+        osc.frequency.setValueAtTime(300, time);
+        osc.frequency.exponentialRampToValueAtTime(35, time + 0.08);
+        osc.frequency.setValueAtTime(35, time + 0.08);
+        osc.frequency.exponentialRampToValueAtTime(28, time + 0.4);
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.9, time);
+        g.gain.linearRampToValueAtTime(0.7, time + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 0.45);
+
+        // Click layer
+        const click = c.createOscillator();
+        click.frequency.setValueAtTime(4000, time);
+        click.frequency.exponentialRampToValueAtTime(200, time + 0.01);
+        const cg = c.createGain();
+        cg.gain.setValueAtTime(0.5, time);
+        cg.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
+
+        // Distortion on kick
+        const dist = c.createWaveShaper();
+        const curve = new Float32Array(44100);
+        for (let i = 0; i < 44100; i++) { let x = i*2/44100-1; curve[i] = Math.tanh(8*x); }
+        dist.curve = curve;
+
+        osc.connect(dist); dist.connect(g);
+        click.connect(cg); cg.connect(g);
+        g.connect(this.master); // Kick bypasses sidechain
+
+        osc.start(time); osc.stop(time + 0.5);
+        click.start(time); click.stop(time + 0.03);
+
+        // SIDECHAIN DUCK — everything else pumps
+        this.sidechain.gain.setValueAtTime(0.15, time);
+        this.sidechain.gain.linearRampToValueAtTime(1.0, time + BEAT * 0.6);
+
+        beatPulse = 1.0;
+    },
+
+    // ─── CLAP ───
+    clap(time) {
+        const c = this.ctx;
+        // Multiple short bursts (like multiple hands)
+        for (let i = 0; i < 3; i++) {
+            const t = time + i * 0.008;
+            const buf = this._noiseBuf(0.04);
+            const src = c.createBufferSource(); src.buffer = buf;
+            const bp = c.createBiquadFilter();
+            bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 1.5;
+            const g = c.createGain();
+            g.gain.setValueAtTime(0.35, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+            src.connect(bp); bp.connect(g); g.connect(this.sidechain);
+            src.start(t);
+        }
+        // Tail
+        const tail = c.createBufferSource(); tail.buffer = this._noiseBuf(0.12);
+        const hp = c.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1200;
+        const tg = c.createGain();
+        tg.gain.setValueAtTime(0.25, time + 0.02);
+        tg.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+        tail.connect(hp); hp.connect(tg); tg.connect(this.sidechain);
+        tail.start(time + 0.02);
+    },
+
+    // ─── HI-HAT (Metallic, filtered) ───
+    hat(time, open = false) {
+        const c = this.ctx;
+        const dur = open ? 0.15 : 0.03;
+        const src = c.createBufferSource(); src.buffer = this._noiseBuf(dur);
+        const hp = c.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=8500;
+        const peak = c.createBiquadFilter(); peak.type='peaking';
+        peak.frequency.value = 12000; peak.gain.value = 6; peak.Q.value = 3;
+        const g = c.createGain();
+        g.gain.setValueAtTime(open ? 0.18 : 0.12, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + dur);
+        src.connect(hp); hp.connect(peak); peak.connect(g); g.connect(this.sidechain);
+        src.start(time);
+    },
+
+    // ─── TB-303 ACID BASS ───
+    acid(freq, time, dur = BEAT * 0.8, accent = false) {
+        const c = this.ctx;
+        const osc = c.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = freq;
+        const sub = c.createOscillator(); sub.type = 'square'; sub.frequency.value = freq;
+        const subG = c.createGain(); subG.gain.value = 0.15;
+
+        // THE FILTER — this is the soul of acid
+        const filt = c.createBiquadFilter(); filt.type = 'lowpass';
+        filt.Q.value = accent ? 20 : 13;
+        const peak = accent ? freq * 14 : freq * 8;
+        filt.frequency.setValueAtTime(peak, time);
+        filt.frequency.exponentialRampToValueAtTime(freq * 1.2, time + 0.12);
+
+        // Slight distortion for grit
+        const drv = c.createWaveShaper();
+        const crv = new Float32Array(8192);
+        for (let i = 0; i < 8192; i++) { let x = i*2/8192-1; crv[i] = Math.tanh(4*x); }
+        drv.curve = crv;
+
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(accent ? 0.55 : 0.35, time + 0.004);
+        amp.gain.setValueAtTime(accent ? 0.55 : 0.35, time + dur - 0.02);
+        amp.gain.linearRampToValueAtTime(0.001, time + dur);
+
+        osc.connect(filt); sub.connect(subG); subG.connect(filt);
+        filt.connect(drv); drv.connect(amp); amp.connect(this.sidechain);
+        osc.start(time); osc.stop(time + dur + 0.05);
+        sub.start(time); sub.stop(time + dur + 0.05);
+    },
+
+    // ─── SUPERSAW (7 detuned oscillators — the trance wall) ───
+    supersaw(freqs, time, dur = BEAT * 2, filterSweep = true) {
+        const c = this.ctx;
+        const detunes = [-35, -20, -8, 0, 8, 20, 35];
+        const mix = c.createGain(); mix.gain.value = 0.04; // quiet per-osc, LOUD together
+
+        freqs.forEach(freq => {
+            detunes.forEach(d => {
+                const o = c.createOscillator(); o.type = 'sawtooth';
+                o.frequency.value = freq; o.detune.value = d;
+                o.connect(mix);
+                o.start(time); o.stop(time + dur + 0.1);
+            });
+        });
+
+        const filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 2;
+        if (filterSweep) {
+            filt.frequency.setValueAtTime(800, time);
+            filt.frequency.linearRampToValueAtTime(6000, time + dur * 0.4);
+            filt.frequency.linearRampToValueAtTime(2000, time + dur);
+        } else {
+            filt.frequency.value = 5000;
+        }
+
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.55, time + 0.05);
+        amp.gain.setValueAtTime(0.55, time + dur - 0.08);
+        amp.gain.linearRampToValueAtTime(0.001, time + dur);
+
+        mix.connect(filt); filt.connect(amp); amp.connect(this.sidechain);
+    },
+
+    // ─── FORMANT VOCAL SYNTHESIS (The Siren) ───
+    // Sawtooth glottal source → parallel bandpass formant bank → breathiness
+    // Female formant frequencies from phonetics research
+    vocal(freq, time, dur = BEAT * 2, vowel = 'oo', vol = 0.5) {
+        const c = this.ctx;
+        const formants = {
+            'ee': { f:[310, 2790, 3310], bw:[45, 200, 250], a:[1, 0.4, 0.15] },
+            'oo': { f:[370, 950, 2670],  bw:[40, 60, 200],  a:[1, 0.5, 0.1] },
+            'ah': { f:[850, 1220, 2810], bw:[80, 70, 200],  a:[1, 0.6, 0.2] },
+            'eh': { f:[530, 1840, 2480], bw:[60, 100, 200], a:[1, 0.45, 0.15] },
+        };
+        const fm = formants[vowel] || formants['oo'];
+
+        // Glottal source (sawtooth = vocal fold vibration)
+        const src = c.createOscillator(); src.type = 'sawtooth'; src.frequency.value = freq;
+
+        // Vibrato (human ~5.5Hz, subtle)
+        const vib = c.createOscillator(); vib.frequency.value = 5.5;
+        const vibG = c.createGain(); vibG.gain.value = freq * 0.008;
+        vib.connect(vibG); vibG.connect(src.frequency);
+        vib.start(time + 0.15); // Delayed onset like a real singer
+
+        // Formant filter bank (parallel bandpass filters = the throat shape)
+        const mix = c.createGain(); mix.gain.value = vol * 0.35;
+        fm.f.forEach((f, i) => {
+            const bp = c.createBiquadFilter(); bp.type = 'bandpass';
+            bp.frequency.value = f; bp.Q.value = f / fm.bw[i];
+            const g = c.createGain(); g.gain.value = fm.a[i];
+            src.connect(bp); bp.connect(g); g.connect(mix);
+        });
+
+        // Breathiness layer (filtered noise through same formants)
+        const breathLen = Math.floor(c.sampleRate * dur);
+        const breathBuf = c.createBuffer(1, breathLen, c.sampleRate);
+        const bd = breathBuf.getChannelData(0);
+        for (let i = 0; i < breathLen; i++) bd[i] = (Math.random()*2-1) * 0.03;
+        const breathSrc = c.createBufferSource(); breathSrc.buffer = breathBuf;
+        const breathFilt = c.createBiquadFilter(); breathFilt.type = 'bandpass';
+        breathFilt.frequency.value = fm.f[1]; breathFilt.Q.value = 2;
+        breathSrc.connect(breathFilt); breathFilt.connect(mix);
+
+        // Envelope (soft attack, sustain, gentle release)
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(vol * 0.4, time + 0.08);
+        amp.gain.setValueAtTime(vol * 0.4, time + dur - 0.15);
+        amp.gain.linearRampToValueAtTime(0.001, time + dur);
+
+        mix.connect(amp); amp.connect(this.sidechain);
+        src.start(time); src.stop(time + dur + 0.1);
+        breathSrc.start(time);
+        vib.stop(time + dur + 0.1);
+    },
+
+    // ─── PAD (Dark evolving texture) ───
+    pad(freqs, time, dur = BEAT * 8) {
+        const c = this.ctx;
+        const amp = c.createGain();
+        amp.gain.setValueAtTime(0, time);
+        amp.gain.linearRampToValueAtTime(0.12, time + 2.0);
+        amp.gain.setValueAtTime(0.12, time + dur - 2.0);
+        amp.gain.linearRampToValueAtTime(0.001, time + dur);
+
+        freqs.forEach(f => {
+            const o1 = c.createOscillator(); o1.type='sine'; o1.frequency.value=f;
+            const o2 = c.createOscillator(); o2.type='sine'; o2.frequency.value=f; o2.detune.value=8;
+            const o3 = c.createOscillator(); o3.type='sine'; o3.frequency.value=f*2; o3.detune.value=-5;
+            const g = c.createGain(); g.gain.value = 0.08;
+            o1.connect(g); o2.connect(g); o3.connect(g); g.connect(amp);
+            o1.start(time); o1.stop(time+dur+0.1);
+            o2.start(time); o2.stop(time+dur+0.1);
+            o3.start(time); o3.stop(time+dur+0.1);
+        });
+        amp.connect(this.sidechain);
+    },
+
+    // ─── RISER (Build tension) ───
+    riser(time, dur) {
+        const c = this.ctx;
+        const src = c.createBufferSource(); src.buffer = this._noiseBuf(dur);
+        const hp = c.createBiquadFilter(); hp.type='highpass';
+        hp.frequency.setValueAtTime(200, time);
+        hp.frequency.exponentialRampToValueAtTime(14000, time + dur);
+        hp.Q.value = 6;
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.01, time);
+        g.gain.exponentialRampToValueAtTime(0.45, time + dur);
+        src.connect(hp); hp.connect(g); g.connect(this.sidechain);
+        src.start(time);
+    },
+
+    // ─── IMPACT (Drop hit) ───
+    impact(time) {
+        const c = this.ctx;
+        const osc = c.createOscillator();
+        osc.frequency.setValueAtTime(250, time);
+        osc.frequency.exponentialRampToValueAtTime(18, time + 0.8);
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.8, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
+        const src = c.createBufferSource(); src.buffer = this._noiseBuf(0.5);
+        const ng = c.createGain(); ng.gain.setValueAtTime(0.4, time);
+        ng.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+        osc.connect(g); g.connect(this.master);
+        src.connect(ng); ng.connect(this.master);
+        osc.start(time); osc.stop(time + 1.5); src.start(time);
+    }
+};
+
+// ─── COMPOSITION ───
+// Key: F minor
+// F1=43.65  Ab1=51.91  Bb1=58.27  C2=65.41  Db2=69.30  Eb2=77.78
+// F4=349.23 Ab4=415.30 Bb4=466.16 C5=523.25 Eb5=622.25 F5=698.46
+const F1=43.65, Ab1=51.91, Bb1=58.27, C2=65.41, Db2=69.30, Eb2=77.78;
+const F4=349.23, Ab4=415.30, Bb4=466.16, C5=523.25, Db5=554.37, Eb5=622.25, F5=698.46;
+
+const events = []; // {beat, fn}
+function at(beat, fn) { events.push({beat, fn}); }
+
+// Section boundaries
+const S = { INTRO:0, BUILD:64, DROP1:96, BREAK:160, BUILD2:192, DROP2:224, OUTRO:288, END:320 };
+
+// ─── INTRO (0-64): Atmosphere, distant vocal, filtered sweep ───
+at(0, t => E.pad([F4/2, Ab4/2, C5/2], t, BEAT*32));
+at(32, t => E.pad([Db5/2, F4/2, Ab4/2], t, BEAT*32));
+// Distant vocal morphs
+for (let i = 0; i < 4; i++) {
+    const vowels = ['oo','ah','ee','oo'];
+    at(i*16, t => E.vocal(F5/2, t, BEAT*8, vowels[i], 0.2));
+}
+at(48, t => E.riser(t, BEAT * 16)); // Riser into build
+
+// ─── BUILD (64-96): Kick half-time, hats, bass pulse, vocal melody ───
+for (let b = 64; b < 96; b += 2) at(b, t => E.kick(t)); // Half-time kick
+for (let b = 64; b < 96; b += 1) at(b + 0.5, t => E.hat(t));
+for (let b = 64; b < 96; b += 4) at(b + 2, t => E.clap(t));
+// Bass pulse
+for (let b = 64; b < 96; b += 8) {
+    at(b, t => E.acid(F1, t, BEAT*2, true));
+    at(b+4, t => E.acid(Ab1, t, BEAT*2, false));
+}
+at(64, t => E.pad([F4/2, Ab4/2, C5/2], t, BEAT*32));
+// Vocal melody emerges
+at(64, t => E.vocal(F5, t, BEAT*4, 'oo', 0.35));
+at(72, t => E.vocal(Eb5, t, BEAT*3, 'ah', 0.35));
+at(78, t => E.vocal(C5, t, BEAT*2, 'ee', 0.35));
+at(80, t => E.vocal(Bb4, t, BEAT*4, 'oo', 0.3));
+at(88, t => E.vocal(C5, t, BEAT*3, 'eh', 0.35));
+at(92, t => E.riser(t, BEAT * 4)); // Short riser into drop
+
+// ─── DROP 1 (96-160): Full driving techno ───
+at(96, t => E.impact(t));
+// 4-on-the-floor
+for (let b = 96; b < 160; b++) {
+    at(b, t => E.kick(t));
+    if (b % 2 === 0) at(b + 0.5, t => E.hat(t, true)); // open hat
+    else at(b + 0.5, t => E.hat(t));
+    if (b % 2 === 1) at(b, t => E.clap(t));
+}
+
+// Acid bassline (8-beat repeating pattern)
+for (let rep = 96; rep < 160; rep += 8) {
+    at(rep,     t => E.acid(F1, t, BEAT*0.6, true));
+    at(rep+0.75,t => E.acid(F1, t, BEAT*0.4));
+    at(rep+1.5, t => E.acid(Ab1, t, BEAT*0.6));
+    at(rep+2,   t => E.acid(Bb1, t, BEAT*0.8, true));
+    at(rep+3,   t => E.acid(Ab1, t, BEAT*0.5));
+    at(rep+3.5, t => E.acid(F1, t, BEAT*0.4));
+    at(rep+4,   t => E.acid(Db2, t, BEAT*0.6, true));
+    at(rep+4.75,t => E.acid(Db2, t, BEAT*0.4));
+    at(rep+5.5, t => E.acid(C2, t, BEAT*0.6));
+    at(rep+6,   t => E.acid(Bb1, t, BEAT*0.8, true));
+    at(rep+7,   t => E.acid(Ab1, t, BEAT*0.5));
+    at(rep+7.5, t => E.acid(F1, t, BEAT*0.4));
+}
+
+// Supersaw stabs on chord changes
+for (let rep = 96; rep < 160; rep += 16) {
+    at(rep,    t => E.supersaw([F4, Ab4, C5], t, BEAT*1.5));
+    at(rep+4,  t => E.supersaw([Db5, F4, Ab4], t, BEAT*1.5));
+    at(rep+8,  t => E.supersaw([Ab4, C5, Eb5], t, BEAT*1.5));
+    at(rep+12, t => E.supersaw([Eb5, Bb4, F4], t, BEAT*2, false));
+}
+
+// Vocal hook (the siren)
+for (let rep = 96; rep < 160; rep += 16) {
+    at(rep,    t => E.vocal(F5, t, BEAT*3, 'oo', 0.5));
+    at(rep+3,  t => E.vocal(Eb5, t, BEAT*2, 'ah', 0.5));
+    at(rep+5,  t => E.vocal(C5, t, BEAT*3, 'ee', 0.5));
+    at(rep+8,  t => E.vocal(Bb4, t, BEAT*2, 'oo', 0.45));
+    at(rep+10, t => E.vocal(C5, t, BEAT*2, 'ah', 0.45));
+    at(rep+12, t => E.vocal(Eb5, t, BEAT*2, 'ee', 0.5));
+    at(rep+14, t => E.vocal(F5, t, BEAT*2, 'oo', 0.5));
+}
+
+// ─── BREAKDOWN (160-192): Strip to pad + vocal, new idea ───
+at(160, t => E.pad([F4/2, Ab4/2, C5/2], t, BEAT*16));
+at(176, t => E.pad([Bb4/2, Db5/2, F4/2], t, BEAT*16));
+// Exposed vocal — slower, more intimate
+at(160, t => E.vocal(F5, t, BEAT*6, 'oo', 0.55));
+at(168, t => E.vocal(Eb5, t, BEAT*4, 'ah', 0.5));
+at(172, t => E.vocal(C5, t, BEAT*4, 'ee', 0.5));
+at(176, t => E.vocal(Ab4, t, BEAT*6, 'oo', 0.5));
+at(182, t => E.vocal(Bb4, t, BEAT*4, 'eh', 0.5));
+at(186, t => E.vocal(C5, t, BEAT*6, 'oo', 0.55));
+
+// ─── BUILD 2 (192-224): Energy rebuilds, snare roll, riser ───
+for (let b = 192; b < 224; b += 2) at(b, t => E.kick(t));
+// Accelerating snare roll
+let snrDiv = 2;
+for (let b = 208; b < 224; ) {
+    at(b, t => E.clap(t));
+    b += 1/snrDiv;
+    snrDiv = Math.min(8, snrDiv * 1.08);
+}
+at(192, t => E.pad([F4/2, Ab4/2, C5/2], t, BEAT*32));
+at(200, t => E.riser(t, BEAT * 24)); // Long riser
+at(192, t => E.vocal(F5, t, BEAT*8, 'oo', 0.4));
+at(208, t => E.vocal(F5, t, BEAT*8, 'ee', 0.5));
+// Hats building
+for (let b = 192; b < 224; b += 0.5) at(b, t => E.hat(t));
+
+// ─── DROP 2 (224-288): Maximum intensity, vocal chops ───
+at(224, t => E.impact(t));
+// 4-on-the-floor
+for (let b = 224; b < 288; b++) {
+    at(b, t => E.kick(t));
+    at(b + 0.25, t => E.hat(t));
+    at(b + 0.5, t => E.hat(t, b%4===2));
+    at(b + 0.75, t => E.hat(t));
+    if (b % 2 === 1) at(b, t => E.clap(t));
+}
+
+// Acid (more aggressive pattern)
+for (let rep = 224; rep < 288; rep += 4) {
+    at(rep,     t => E.acid(F1, t, BEAT*0.3, true));
+    at(rep+0.25,t => E.acid(F1, t, BEAT*0.3, true));
+    at(rep+0.75,t => E.acid(Ab1, t, BEAT*0.4));
+    at(rep+1,   t => E.acid(Bb1, t, BEAT*0.5, true));
+    at(rep+1.5, t => E.acid(C2, t, BEAT*0.4));
+    at(rep+2,   t => E.acid(Db2, t, BEAT*0.5, true));
+    at(rep+2.5, t => E.acid(C2, t, BEAT*0.4));
+    at(rep+3,   t => E.acid(Bb1, t, BEAT*0.5, true));
+    at(rep+3.5, t => E.acid(Ab1, t, BEAT*0.3));
+    at(rep+3.75,t => E.acid(F1, t, BEAT*0.2));
+}
+
+// Supersaw — wider chords, more aggressive
+for (let rep = 224; rep < 288; rep += 8) {
+    at(rep,   t => E.supersaw([F4, Ab4, C5, F5], t, BEAT*2, false));
+    at(rep+2, t => E.supersaw([Db5, F4, Ab4, Db5*2], t, BEAT*2, false));
+    at(rep+4, t => E.supersaw([Ab4, C5, Eb5, Ab4*2], t, BEAT*2, false));
+    at(rep+6, t => E.supersaw([Eb5, Bb4, F4, Eb5*2], t, BEAT*2, false));
+}
+
+// Vocal chops (rhythmic sliced vocals)
+for (let rep = 224; rep < 288; rep += 4) {
+    const chops = [
+        [0, F5, 'ee', 0.25], [0.5, Eb5, 'ah', 0.25],
+        [1, C5, 'oo', 0.5], [1.5, Eb5, 'ee', 0.25],
+        [2, F5, 'oo', 0.75], [3, C5, 'ah', 0.5],
+        [3.5, Eb5, 'ee', 0.25]
+    ];
+    chops.forEach(([off, freq, vow, d]) => {
+        at(rep + off, t => E.vocal(freq, t, BEAT*d, vow, 0.5));
+    });
+}
+
+// ─── OUTRO (288-320): Gradual strip-down ───
+// Kick continues but thins
+for (let b = 288; b < 308; b++) at(b, t => E.kick(t));
+for (let b = 288; b < 308; b += 2) at(b + 0.5, t => E.hat(t));
+at(288, t => E.pad([F4/2, Ab4/2, C5/2], t, BEAT*32));
+// Final vocal
+at(288, t => E.vocal(F5, t, BEAT*8, 'oo', 0.45));
+at(296, t => E.vocal(Eb5, t, BEAT*8, 'ah', 0.35));
+at(308, t => E.vocal(C5, t, BEAT*12, 'oo', 0.25));
+
+const TOTAL = S.END;
+
+// Sort events by beat
+events.sort((a, b) => a.beat - b.beat);
+
+// ─── SEQUENCER ───
+let currentBeat = 0, startTime = 0, evtIdx = 0;
+let sectionName = 'INTRO';
+
+function getSection(beat) {
+    if (beat >= S.OUTRO) return 'OUTRO';
+    if (beat >= S.DROP2) return 'DROP II';
+    if (beat >= S.BUILD2) return 'BUILD II';
+    if (beat >= S.BREAK) return 'BREAKDOWN';
+    if (beat >= S.DROP1) return 'DROP I';
+    if (beat >= S.BUILD) return 'BUILD';
+    return 'INTRO';
+}
+
+function scheduler() {
+    if (!E.playing) return;
+    const now = E.ctx.currentTime;
+    currentBeat = (now - startTime) / BEAT;
+
+    if (currentBeat >= TOTAL) {
+        startTime = now; currentBeat = 0; evtIdx = 0;
+    }
+
+    sectionName = getSection(currentBeat);
+
+    const ahead = 0.2;
+    while (evtIdx < events.length && events[evtIdx].beat <= currentBeat + ahead) {
+        const ev = events[evtIdx++];
+        const t = startTime + ev.beat * BEAT;
+        ev.fn(t);
+    }
+
+    requestAnimationFrame(scheduler);
+}
+
+// ─── VISUAL ENGINE ───
+const cvs = document.getElementById('c');
+const cx = cvs.getContext('2d');
+let w, h;
+function resize() { w = cvs.width = innerWidth; h = cvs.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+let beatPulse = 0;
+let frameCount = 0;
+const waveData = new Uint8Array(1024);
+
+// Tunnel stars
+const stars = [];
+for (let i = 0; i < 400; i++) {
+    stars.push({
+        x: (Math.random()-0.5) * 2000,
+        y: (Math.random()-0.5) * 2000,
+        z: Math.random() * 2000
+    });
+}
+
+// Particles for impacts
+const particles = [];
+
+function draw() {
+    frameCount++;
+    // Dark fade with section-aware tint
+    const isDrop = sectionName.includes('DROP');
+    const isBuild = sectionName.includes('BUILD');
+    const r = isDrop ? 8 : 3, g = 3, b = isDrop ? 12 : (isBuild ? 8 : 15);
+    cx.fillStyle = `rgba(${r},${g},${b},${isDrop ? 0.12 : 0.18})`;
+    cx.fillRect(0, 0, w, h);
+
+    beatPulse *= 0.88;
+    const pulse = 1 + beatPulse * 0.4;
+    const time = frameCount / 60;
+
+    // ── TUNNEL ──
+    const speed = isDrop ? 8 + beatPulse * 15 : 2 + beatPulse * 5;
+    stars.forEach(s => {
+        s.z -= speed;
+        if (s.z < 1) { s.z = 2000; s.x = (Math.random()-0.5)*2000; s.y = (Math.random()-0.5)*2000; }
+        const px = (s.x / s.z) * 600 + w/2;
+        const py = (s.y / s.z) * 600 + h/2;
+        const sz = Math.max(0.3, (1 - s.z/2000) * 3 * pulse);
+        const a = (1 - s.z/2000);
+        // Trail line
+        const pz = s.z + speed;
+        const px2 = (s.x / pz) * 600 + w/2;
+        const py2 = (s.y / pz) * 600 + h/2;
+        cx.beginPath(); cx.moveTo(px2, py2); cx.lineTo(px, py);
+        cx.strokeStyle = isDrop ?
+            `rgba(${Math.floor(200+55*Math.sin(time+s.x))}, 0, ${Math.floor(170+85*Math.cos(time+s.y))}, ${a*0.5})` :
+            `rgba(0, ${Math.floor(200+55*a)}, 255, ${a*0.4})`;
+        cx.lineWidth = sz; cx.stroke();
+    });
+
+    // ── ROTATING GEOMETRY ──
+    const sides = 8;
+    for (let ring = 0; ring < 3; ring++) {
+        const radius = (60 + ring * 40) * pulse;
+        const rot = time * (0.4 - ring * 0.15) * (ring % 2 ? -1 : 1);
+        cx.beginPath();
+        for (let i = 0; i <= sides; i++) {
+            const angle = (i / sides) * Math.PI * 2 + rot;
+            const x = w/2 + Math.cos(angle) * radius;
+            const y = h/2 + Math.sin(angle) * radius;
+            i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+        }
+        cx.closePath();
+        const colors = ['rgba(0,247,255,', 'rgba(255,0,170,', 'rgba(123,45,255,'];
+        cx.strokeStyle = colors[ring] + (0.15 + beatPulse * 0.5) + ')';
+        cx.lineWidth = 1.5; cx.stroke();
+    }
+
+    // ── WAVEFORM RING ──
+    if (E.analyser) {
+        E.analyser.getByteTimeDomainData(waveData);
+        cx.beginPath();
+        const wRadius = 35 + beatPulse * 15;
+        for (let i = 0; i < waveData.length; i++) {
+            const angle = (i / waveData.length) * Math.PI * 2;
+            const amp = (waveData[i] - 128) / 128;
+            const r = wRadius + amp * 25;
+            const x = w/2 + Math.cos(angle) * r;
+            const y = h/2 + Math.sin(angle) * r;
+            i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+        }
+        cx.closePath();
+        cx.strokeStyle = `rgba(255,255,255,${0.08 + beatPulse * 0.15})`;
+        cx.lineWidth = 1; cx.stroke();
+    }
+
+    // ── IMPACT PARTICLES ──
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.life -= 0.015;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        cx.beginPath(); cx.arc(p.x, p.y, p.s * p.life, 0, Math.PI*2);
+        cx.fillStyle = `rgba(${p.r},${p.g},${p.b},${p.life*0.6})`; cx.fill();
+    }
+
+    // Emit particles on strong beats
+    if (beatPulse > 0.8) {
+        for (let i = 0; i < 20; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = 3 + Math.random() * 6;
+            particles.push({
+                x: w/2, y: h/2,
+                vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
+                s: 2+Math.random()*3, life: 1,
+                r: isDrop ? 255 : 0, g: isDrop ? 0 : 247, b: 255
+            });
+        }
+    }
+
+    // ── SCANLINES ──
+    cx.fillStyle = 'rgba(0,0,0,0.04)';
+    for (let y = 0; y < h; y += 3) cx.fillRect(0, y, w, 1);
+
+    // ── HUD ──
+    document.getElementById('hud').innerHTML =
+        `${sectionName}<br>${Math.floor(currentBeat)}/${TOTAL}<br>BPM ${BPM}`;
+
+    // ── PROGRESS ──
+    const prog = currentBeat / TOTAL;
+    cx.fillStyle = isDrop ? 'rgba(255,0,170,0.3)' : 'rgba(0,247,255,0.2)';
+    cx.fillRect(0, h - 2, w * prog, 2);
+
+    requestAnimationFrame(draw);
+}
+
+// ─── LAUNCH ───
+document.getElementById('overlay').addEventListener('click', async () => {
+    await E.init();
+    E.playing = true;
+    startTime = E.ctx.currentTime;
+    document.getElementById('overlay').classList.add('hidden');
+    scheduler();
+});
+
+draw();
+</script>
+</body>
+</html>
