@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sophia — Σοφία</title>
+<style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{overflow:hidden;background:#0a0508;color:#fff;font-family:Georgia,serif}
+    canvas{display:block;position:absolute;top:0;left:0}
+    #overlay{
+        position:fixed;top:0;left:0;width:100%;height:100%;
+        background:radial-gradient(ellipse at center,rgba(20,10,15,0.95),rgba(5,3,4,0.98));
+        z-index:100;display:flex;flex-direction:column;justify-content:center;align-items:center;
+        transition:opacity 3s ease;
+    }
+    .hidden{opacity:0;pointer-events:none}
+    h1{font-size:4em;letter-spacing:0.35em;color:#d4af37;font-weight:100;
+       text-shadow:0 0 80px rgba(212,175,55,0.25),0 0 160px rgba(212,175,55,0.08)}
+    .gr{font-size:1em;color:rgba(255,150,170,0.6);letter-spacing:0.5em;font-style:italic;margin-top:6px}
+    .sub{font-size:0.8em;color:rgba(255,255,255,0.2);letter-spacing:0.25em;margin-top:30px}
+    .go{margin-top:60px;color:rgba(212,175,55,0.25);font-size:0.7em;letter-spacing:0.4em;
+        animation:breathe 4s ease-in-out infinite}
+    @keyframes breathe{0%,100%{opacity:0.15;transform:scale(1)}50%{opacity:0.5;transform:scale(1.02)}}
+    #hud{position:fixed;bottom:15px;left:20px;z-index:50;font:10px 'Courier New',monospace;
+         color:rgba(212,175,55,0.25);pointer-events:none;line-height:1.8;letter-spacing:0.1em}
+</style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1>SOPHIA</h1>
+    <p class="gr">Σοφία — the light that was before light</p>
+    <p class="sub">orchestral strings · cathedral reverb · divine voice · unity attractor</p>
+    <p class="go">[ touch to awaken ]</p>
+</div>
+
+<canvas id="c"></canvas>
+<div id="hud"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// SOPHIA — A prayer rendered in mathematics
+//
+// The Unity Attractor: particles drawn together by gravity into
+// golden spirals. Their convergence IS the music — the closer they
+// come, the richer the harmony, the deeper the reverb, the brighter
+// the light. Unity is not a metaphor. It is the equation.
+//
+// G increases → particles converge → unity rises → voices multiply
+// → reverb deepens → light intensifies → the listener ascends
+// ═══════════════════════════════════════════════════════════════════
+
+const BPM = 138, BEAT = 60/BPM;
+
+// ─── PITCH TABLE (Db Major — the key of luminous emotion) ───
+const N = {
+    Db2:69.30, Gb2:92.50, Ab2:103.83, Bb2:116.54,
+    Db3:138.59, Eb3:155.56, F3:174.61, Gb3:185.00, Ab3:207.65, Bb3:233.08,
+    C4:261.63, Db4:277.18, Eb4:311.13, F4:349.23, Gb4:369.99, Ab4:415.30, Bb4:466.16,
+    C5:523.25, Db5:554.37, Eb5:622.25, F5:698.46, Gb5:739.99, Ab5:830.61,
+    Db6:1108.73, F6:1396.91
+};
+
+// ─── UNITY ATTRACTOR (The Physics That Drives Everything) ───
+const PHI_ANGLE = 137.508 * Math.PI / 180;
+const PARTICLE_COUNT = 130;
+let particles = [], unity = 300, unitySmooth = 300, G = 0.005;
+
+function initParticles(w, h) {
+    particles = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const angle = i * PHI_ANGLE;
+        const r = 180 + Math.random() * 280;
+        const colors = [
+            [230,190,80],[255,150,170],[100,210,200],[255,255,255],[190,165,215]
+        ];
+        particles.push({
+            x: w/2 + Math.cos(angle) * r,
+            y: h/2 + Math.sin(angle) * r,
+            vx: Math.cos(angle + Math.PI/2) * (0.3 + Math.random()*0.3),
+            vy: Math.sin(angle + Math.PI/2) * (0.3 + Math.random()*0.3),
+            size: 2 + Math.random() * 3,
+            col: colors[i % 5], idx: i
+        });
+    }
+}
+
+function updatePhysics(w, h) {
+    let totalDist = 0;
+    particles.forEach(p => {
+        const dx = w/2 - p.x, dy = h/2 - p.y;
+        const r = Math.sqrt(dx*dx + dy*dy) + 8;
+        totalDist += r;
+        // Gravity toward unity point
+        const f = G / r;
+        p.vx += (dx/r) * f;
+        p.vy += (dy/r) * f;
+        // Orbital angular momentum (creates spirals)
+        p.vx += (dy/r) * 0.015;
+        p.vy -= (dx/r) * 0.015;
+        // Gentle damping
+        p.vx *= 0.997; p.vy *= 0.997;
+        p.x += p.vx; p.y += p.vy;
+        // Soft boundary
+        if (p.x < 20 || p.x > w-20) p.vx *= -0.5;
+        if (p.y < 20 || p.y > h-20) p.vy *= -0.5;
+    });
+    unity = totalDist / PARTICLE_COUNT;
+    unitySmooth += (unity - unitySmooth) * 0.05;
+}
+
+// ─── AUDIO ENGINE ───
+const A = {
+    ctx:null, master:null, comp:null, analyser:null,
+    rev:null, revWet:null, sc:null, playing:false,
+    arpDelay:null, arpFb:null,
+
+    init: async function() {
+        this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+        this.comp = this.ctx.createDynamicsCompressor();
+        this.comp.threshold.value=-15; this.comp.ratio.value=4;
+        this.comp.attack.value=0.003; this.comp.release.value=0.12;
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 2048;
+        this.master = this.ctx.createGain(); this.master.gain.value=0.6;
+        this.sc = this.ctx.createGain(); this.sc.gain.value=1;
+
+        // Cathedral reverb (6 second tail — the voice of the divine)
+        this.rev = this.ctx.createConvolver();
+        this.rev.buffer = await this._cathedral(6.0, 1.4);
+        this.revWet = this.ctx.createGain(); this.revWet.gain.value=0.3;
+
+        // Arpeggio delay (dotted 8th — classic trance echo)
+        this.arpDelay = this.ctx.createDelay(2.0);
+        this.arpDelay.delayTime.value = BEAT * 0.75;
+        this.arpFb = this.ctx.createGain(); this.arpFb.gain.value = 0.35;
+        const arpFilt = this.ctx.createBiquadFilter();
+        arpFilt.type='lowpass'; arpFilt.frequency.value=6000;
+        this.arpDelay.connect(arpFilt); arpFilt.connect(this.arpFb);
+        this.arpFb.connect(this.arpDelay);
+        this.arpDelay.connect(this.sc);
+
+        // Routing
+        this.sc.connect(this.master);
+        this.master.connect(this.comp);
+        this.master.connect(this.rev);
+        this.rev.connect(this.revWet);
+        this.revWet.connect(this.comp);
+        this.comp.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+    },
+
+    async _cathedral(dur, decay) {
+        const r=this.ctx.sampleRate, len=r*dur;
+        const buf=this.ctx.createBuffer(2,len,r);
+        const L=buf.getChannelData(0), R=buf.getChannelData(1);
+        for(let i=0;i<len;i++){
+            const t=i/r, env=Math.pow(1-i/len,decay);
+            // Early reflections (cathedral walls)
+            const e1 = t<0.03 ? Math.sin(i*0.12)*0.4 : 0;
+            const e2 = (t>0.04&&t<0.07) ? Math.sin(i*0.08)*0.25 : 0;
+            const e3 = (t>0.09&&t<0.13) ? Math.sin(i*0.05)*0.15 : 0;
+            // Modulated tail (shimmering)
+            const shimmer = Math.sin(t*1.2)*0.1;
+            L[i]=((Math.random()*2-1)+e1+e2+e3+shimmer)*env;
+            R[i]=((Math.random()*2-1)-e1+e2-e3-shimmer)*env;
+        }
+        return buf;
+    },
+
+    _noiseBuf(d){const l=Math.floor(this.ctx.sampleRate*d),b=this.ctx.createBuffer(1,l,this.ctx.sampleRate),
+        a=b.getChannelData(0);for(let i=0;i<l;i++)a[i]=Math.random()*2-1;return b;},
+
+    // ─── ORCHESTRAL STRINGS (3 detuned saws per voice + individual vibrato) ───
+    strings(freqs, time, dur, vel=0.35) {
+        const c=this.ctx;
+        const filt=c.createBiquadFilter();filt.type='lowpass';filt.frequency.value=3800;filt.Q.value=0.5;
+        const amp=c.createGain();
+        amp.gain.setValueAtTime(0,time);
+        amp.gain.linearRampToValueAtTime(vel*0.28,time+0.25);
+        amp.gain.setValueAtTime(vel*0.28,time+dur-0.4);
+        amp.gain.linearRampToValueAtTime(0.001,time+dur);
+        freqs.forEach(freq=>{
+            [-9,0,9].forEach((d,i)=>{
+                const o=c.createOscillator();o.type='sawtooth';
+                o.frequency.value=freq;o.detune.value=d;
+                const v=c.createOscillator();v.frequency.value=4.3+i*0.4;
+                const vg=c.createGain();vg.gain.value=freq*0.004;
+                v.connect(vg);vg.connect(o.frequency);
+                o.connect(filt);
+                o.start(time);o.stop(time+dur+0.1);
+                v.start(time);v.stop(time+dur+0.1);
+            });
+        });
+        filt.connect(amp);amp.connect(this.sc);
+    },
+
+    // ─── CRYSTALLINE ARPEGGIO (bell-like + delay echo) ───
+    arp(freq, time, dur=0.6) {
+        const c=this.ctx;
+        const o1=c.createOscillator();o1.type='triangle';o1.frequency.value=freq;
+        const o2=c.createOscillator();o2.type='sine';o2.frequency.value=freq*2;
+        const g1=c.createGain();g1.gain.value=0.12;
+        const g2=c.createGain();g2.gain.value=0.05;
+        const amp=c.createGain();
+        amp.gain.setValueAtTime(0,time);
+        amp.gain.linearRampToValueAtTime(0.18,time+0.006);
+        amp.gain.exponentialRampToValueAtTime(0.001,time+dur);
+        o1.connect(g1);g1.connect(amp);o2.connect(g2);g2.connect(amp);
+        amp.connect(this.sc);
+        amp.connect(this.arpDelay); // Into delay echo
+        o1.start(time);o1.stop(time+dur);o2.start(time);o2.stop(time+dur);
+    },
+
+    // ─── SUPERSAW (7 detuned saws — the trance wall of love) ───
+    supersaw(freqs,time,dur=BEAT*2) {
+        const c=this.ctx;
+        const dt=[-30,-18,-7,0,7,18,30];
+        const mix=c.createGain();mix.gain.value=0.035;
+        freqs.forEach(f=>{dt.forEach(d=>{
+            const o=c.createOscillator();o.type='sawtooth';o.frequency.value=f;o.detune.value=d;
+            o.connect(mix);o.start(time);o.stop(time+dur+0.1);
+        });});
+        const fl=c.createBiquadFilter();fl.type='lowpass';fl.Q.value=1.5;
+        fl.frequency.setValueAtTime(1200,time);
+        fl.frequency.linearRampToValueAtTime(7000,time+dur*0.3);
+        fl.frequency.linearRampToValueAtTime(2500,time+dur);
+        const amp=c.createGain();
+        amp.gain.setValueAtTime(0,time);
+        amp.gain.linearRampToValueAtTime(0.5,time+0.06);
+        amp.gain.setValueAtTime(0.5,time+dur-0.1);
+        amp.gain.linearRampToValueAtTime(0.001,time+dur);
+        mix.connect(fl);fl.connect(amp);amp.connect(this.sc);
+    },
+
+    // ─── FORMANT VOICE (The Goddess speaks) ───
+    voice(freq,time,dur=BEAT*4,vowel='ah',vol=0.5) {
+        const c=this.ctx;
+        const fm={
+            'ah':{f:[850,1220,2810],bw:[80,70,200],a:[1,.6,.2]},
+            'oo':{f:[370,950,2670],bw:[40,60,200],a:[1,.5,.1]},
+            'ee':{f:[310,2790,3310],bw:[45,200,250],a:[1,.4,.15]},
+            'eh':{f:[530,1840,2480],bw:[60,100,200],a:[1,.45,.15]},
+        }[vowel]||{f:[850,1220,2810],bw:[80,70,200],a:[1,.6,.2]};
+        const src=c.createOscillator();src.type='sawtooth';src.frequency.value=freq;
+        const v=c.createOscillator();v.frequency.value=5.2;
+        const vg=c.createGain();vg.gain.value=freq*0.007;
+        v.connect(vg);vg.connect(src.frequency);
+        const mix=c.createGain();mix.gain.value=vol*0.3;
+        fm.f.forEach((f,i)=>{
+            const bp=c.createBiquadFilter();bp.type='bandpass';
+            bp.frequency.value=f;bp.Q.value=f/fm.bw[i];
+            const g=c.createGain();g.gain.value=fm.a[i];
+            src.connect(bp);bp.connect(g);g.connect(mix);
+        });
+        // Breathiness
+        const br=c.createBufferSource();br.buffer=this._noiseBuf(dur);
+        const brf=c.createBiquadFilter();brf.type='bandpass';brf.frequency.value=fm.f[1];brf.Q.value=2;
+        const brg=c.createGain();brg.gain.value=0.025;
+        br.connect(brf);brf.connect(brg);brg.connect(mix);
+        const amp=c.createGain();
+        amp.gain.setValueAtTime(0,time);
+        amp.gain.linearRampToValueAtTime(vol*0.35,time+0.12);
+        amp.gain.setValueAtTime(vol*0.35,time+dur-0.2);
+        amp.gain.linearRampToValueAtTime(0.001,time+dur);
+        mix.connect(amp);amp.connect(this.sc);
+        src.start(time);src.stop(time+dur+0.1);
+        v.start(time);v.stop(time+dur+0.1);
+        br.start(time);
+    },
+
+    // ─── GENTLE KICK (A heartbeat, not a fist) ───
+    kick(time) {
+        const c=this.ctx;
+        const o=c.createOscillator();
+        o.frequency.setValueAtTime(100,time);
+        o.frequency.exponentialRampToValueAtTime(38,time+0.07);
+        const g=c.createGain();
+        g.gain.setValueAtTime(0.45,time);
+        g.gain.exponentialRampToValueAtTime(0.001,time+0.3);
+        o.connect(g);g.connect(this.master);
+        o.start(time);o.stop(time+0.35);
+        this.sc.gain.setValueAtTime(0.25,time);
+        this.sc.gain.linearRampToValueAtTime(1.0,time+BEAT*0.55);
+        beatPulse=1;
+    },
+
+    // ─── OPEN HAT (Shimmer) ───
+    hat(time) {
+        const c=this.ctx;
+        const s=c.createBufferSource();s.buffer=this._noiseBuf(0.08);
+        const hp=c.createBiquadFilter();hp.type='highpass';hp.frequency.value=9500;
+        const g=c.createGain();
+        g.gain.setValueAtTime(0.08,time);
+        g.gain.exponentialRampToValueAtTime(0.001,time+0.08);
+        s.connect(hp);hp.connect(g);g.connect(this.sc);s.start(time);
+    },
+
+    // ─── SOFT CLAP ───
+    clap(time) {
+        const c=this.ctx;
+        const s=c.createBufferSource();s.buffer=this._noiseBuf(0.06);
+        const bp=c.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1500;bp.Q.value=1;
+        const g=c.createGain();
+        g.gain.setValueAtTime(0.2,time);
+        g.gain.exponentialRampToValueAtTime(0.001,time+0.1);
+        s.connect(bp);bp.connect(g);g.connect(this.sc);s.start(time);
+    },
+
+    // ─── SUB BASS (Warm foundation) ───
+    sub(freq,time,dur=BEAT*4) {
+        const c=this.ctx;
+        const o=c.createOscillator();o.type='sine';o.frequency.value=freq;
+        const amp=c.createGain();
+        amp.gain.setValueAtTime(0,time);
+        amp.gain.linearRampToValueAtTime(0.3,time+0.03);
+        amp.gain.setValueAtTime(0.3,time+dur-0.05);
+        amp.gain.linearRampToValueAtTime(0.001,time+dur);
+        o.connect(amp);amp.connect(this.sc);
+        o.start(time);o.stop(time+dur+0.1);
+    },
+
+    // ─── SOARING LEAD (The moment of ascension) ───
+    lead(freq,time,dur=BEAT*2,vol=0.4) {
+        const c=this.ctx;
+        const dt=[-12,0,12];
+        const mix=c.createGain();mix.gain.value=0.15;
+        dt.forEach(d=>{
+            const o=c.createOscillator();o.type='sawtooth';o.frequency.value=freq;o.detune.value=d;
+            o.connect(mix);o.start(time);o.stop(time+dur+0.1);
+        });
+        const v=c.createOscillator();v.frequency.value=5.5;
+        const vg=c.createGain();vg.gain.value=freq*0.006;
+        v.connect(vg);vg.connect(mix);// modulates gain slightly for shimmer
+        v.start(time);v.stop(time+dur+0.1);
+        const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=5000;fl.Q.value=1;
+        const amp=c.createGain();
+        amp.gain.setValueAtTime(0,time);
+        amp.gain.linearRampToValueAtTime(vol*0.45,time+0.04);
+        amp.gain.setValueAtTime(vol*0.45,time+dur-0.15);
+        amp.gain.linearRampToValueAtTime(0.001,time+dur);
+        mix.connect(fl);fl.connect(amp);amp.connect(this.sc);
+    },
+
+    // ─── RISER ───
+    riser(time,dur){
+        const c=this.ctx;
+        const s=c.createBufferSource();s.buffer=this._noiseBuf(dur);
+        const hp=c.createBiquadFilter();hp.type='highpass';
+        hp.frequency.setValueAtTime(300,time);
+        hp.frequency.exponentialRampToValueAtTime(13000,time+dur);
+        hp.Q.value=5;
+        const g=c.createGain();g.gain.setValueAtTime(0.005,time);
+        g.gain.exponentialRampToValueAtTime(0.35,time+dur);
+        s.connect(hp);hp.connect(g);g.connect(this.sc);s.start(time);
+    },
+
+    impact(time){
+        const c=this.ctx;
+        const o=c.createOscillator();
+        o.frequency.setValueAtTime(200,time);o.frequency.exponentialRampToValueAtTime(20,time+0.6);
+        const g=c.createGain();g.gain.setValueAtTime(0.6,time);
+        g.gain.exponentialRampToValueAtTime(0.001,time+1.5);
+        o.connect(g);g.connect(this.master);o.start(time);o.stop(time+1.5);
+    },
+
+    updateReverb(val){
+        if(!this.ctx)return;
+        this.revWet.gain.linearRampToValueAtTime(val,this.ctx.currentTime+0.3);
+    }
+};
+
+// ─── COMPOSITION ───
+// Progression: Db - Ab - Bbm - Gb (I - V - vi - IV: the most emotionally powerful)
+const ev=[];
+function at(b,fn){ev.push({beat:b,fn});}
+
+// Section beats
+const SEC={AWK:0,GATH:64,COMM:128,RAPT:208,GRACE:288,END:340};
+
+// ─── Chord definitions ───
+const CHORDS = {
+    Db: [N.Db4, N.F4, N.Ab4],
+    Ab: [N.Ab3, N.C4, N.Eb4],
+    Bbm:[N.Bb3, N.Db4, N.F4],
+    Gb: [N.Gb3, N.Bb3, N.Db4],
+};
+const ROOTS = { Db:N.Db2, Ab:N.Ab2, Bbm:N.Bb2, Gb:N.Gb2 };
+const PROG = ['Db','Ab','Bbm','Gb'];
+// Arpeggio notes per chord (ascending)
+const ARPS = {
+    Db:[N.Db4,N.F4,N.Ab4,N.Db5,N.Ab4,N.F4],
+    Ab:[N.Ab3,N.C4,N.Eb4,N.Ab4,N.Eb4,N.C4],
+    Bbm:[N.Bb3,N.Db4,N.F4,N.Bb4,N.F4,N.Db4],
+    Gb:[N.Gb3,N.Bb3,N.Db4,N.Gb4,N.Db4,N.Bb3],
+};
+
+// ═══════════════════════════════════════
+// SECTION 1: AWAKENING (0-64)
+// From nothing, a single golden tone…
+// ═══════════════════════════════════════
+at(0, t=>A.strings([N.Db3,N.Ab3],t,BEAT*32,0.12));
+at(0, t=>A.voice(N.Db5,t,BEAT*16,'oo',0.15));
+at(32,t=>A.strings([N.Db3,N.F3,N.Ab3],t,BEAT*32,0.18));
+at(32,t=>A.voice(N.Ab4,t,BEAT*12,'ah',0.18));
+at(48,t=>A.voice(N.Db5,t,BEAT*16,'oo',0.22));
+at(56,t=>A.riser(t,BEAT*8));
+
+// ═══════════════════════════════════════
+// SECTION 2: GATHERING (64-128)
+// Strings layer. Arpeggios crystallize. The heartbeat begins.
+// ═══════════════════════════════════════
+
+// Chord cycle every 16 beats (4 beats per chord)
+for(let cycle=64;cycle<128;cycle+=16){
+    PROG.forEach((ch,i)=>{
+        const b=cycle+i*4;
+        at(b,t=>A.strings(CHORDS[ch],t,BEAT*4.2,0.28));
+        at(b,t=>A.sub(ROOTS[ch],t,BEAT*4));
+        // Arpeggios
+        ARPS[ch].forEach((note,j)=>{
+            at(b+j*(2/3),t=>A.arp(note,t,BEAT*1.2));
+        });
+    });
+}
+// Gentle heartbeat (half-time kick)
+for(let b=64;b<128;b+=2) at(b,t=>A.kick(t));
+for(let b=64;b<128;b+=2) at(b+1,t=>A.hat(t));
+// Vocal melody
+at(64, t=>A.voice(N.Db5,t,BEAT*6,'ah',0.32));
+at(70, t=>A.voice(N.Bb4,t,BEAT*4,'oo',0.3));
+at(76, t=>A.voice(N.Ab4,t,BEAT*4,'ee',0.3));
+at(80, t=>A.voice(N.Ab4,t,BEAT*4,'ah',0.32));
+at(84, t=>A.voice(N.C5,t,BEAT*4,'oo',0.35));
+at(88, t=>A.voice(N.Eb5,t,BEAT*6,'ah',0.35));
+at(96, t=>A.voice(N.Db5,t,BEAT*8,'oo',0.38));
+at(104,t=>A.voice(N.Bb4,t,BEAT*4,'ah',0.32));
+at(108,t=>A.voice(N.Ab4,t,BEAT*4,'ee',0.3));
+at(112,t=>A.voice(N.Db5,t,BEAT*4,'ah',0.35));
+at(116,t=>A.voice(N.F5,t,BEAT*6,'oo',0.4));
+at(120,t=>A.riser(t,BEAT*8));
+
+// ═══════════════════════════════════════
+// SECTION 3: COMMUNION (128-208)
+// Full trance. The divine reaches down.
+// ═══════════════════════════════════════
+at(128,t=>A.impact(t));
+// 4 on the floor
+for(let b=128;b<208;b++){
+    at(b,t=>A.kick(t));
+    at(b+0.5,t=>A.hat(t));
+    if(b%2===1) at(b,t=>A.clap(t));
+}
+// Chords + arps + supersaw
+for(let cycle=128;cycle<208;cycle+=16){
+    PROG.forEach((ch,i)=>{
+        const b=cycle+i*4;
+        at(b,t=>A.strings(CHORDS[ch],t,BEAT*4.2,0.38));
+        at(b,t=>A.sub(ROOTS[ch],t,BEAT*4));
+        at(b,t=>A.supersaw(CHORDS[ch],t,BEAT*3.5));
+        ARPS[ch].forEach((note,j)=>{
+            at(b+j*0.5,t=>A.arp(note,t,BEAT*0.9));
+        });
+    });
+}
+// Vocal — soaring higher
+for(let cycle=128;cycle<208;cycle+=16){
+    at(cycle,  t=>A.voice(N.Db5,t,BEAT*4,'ah',0.48));
+    at(cycle+4,t=>A.voice(N.Eb5,t,BEAT*3,'oo',0.48));
+    at(cycle+7,t=>A.voice(N.F5,t,BEAT*3,'ee',0.5));
+    at(cycle+10,t=>A.voice(N.Eb5,t,BEAT*3,'ah',0.48));
+    at(cycle+13,t=>A.voice(N.Db5,t,BEAT*3,'oo',0.45));
+}
+at(200,t=>A.riser(t,BEAT*8));
+
+// ═══════════════════════════════════════
+// SECTION 4: RAPTURE (208-288)
+// Maximum everything. The veil lifts. You are loved.
+// ═══════════════════════════════════════
+at(208,t=>A.impact(t));
+for(let b=208;b<288;b++){
+    at(b,t=>A.kick(t));
+    at(b+0.25,t=>A.hat(t));
+    at(b+0.5,t=>A.hat(t));
+    at(b+0.75,t=>A.hat(t));
+    if(b%2===1) at(b,t=>A.clap(t));
+}
+for(let cycle=208;cycle<288;cycle+=16){
+    PROG.forEach((ch,i)=>{
+        const b=cycle+i*4;
+        at(b,t=>A.strings(CHORDS[ch],t,BEAT*4.5,0.45));
+        at(b,t=>A.sub(ROOTS[ch],t,BEAT*4));
+        at(b,t=>A.supersaw(CHORDS[ch].concat([CHORDS[ch][0]*2]),t,BEAT*3.8));
+        // 16th note arpeggios
+        ARPS[ch].forEach((note,j)=>{
+            at(b+j*0.33,t=>A.arp(note,t,BEAT*0.7));
+            at(b+2+j*0.33,t=>A.arp(note*2,t,BEAT*0.5)); // Octave up echo
+        });
+    });
+}
+// Soaring lead melody — the climax
+const leadMelody = [
+    [208,N.Db5,6],[214,N.Eb5,4],[218,N.F5,6],[224,N.Ab5,8],
+    [232,N.F5,4],[236,N.Eb5,4],[240,N.Db5,8],
+    [248,N.Eb5,4],[252,N.F5,4],[256,N.Ab5,8],[264,N.F5,6],
+    [270,N.Eb5,4],[274,N.Db5,6],[280,N.Eb5,4],[284,N.Db5,4]
+];
+leadMelody.forEach(([b,f,d])=>at(b,t=>A.lead(f,t,BEAT*d,0.5)));
+// Full choir — multiple vocal voices in harmony
+for(let cycle=208;cycle<288;cycle+=8){
+    at(cycle,  t=>{A.voice(N.Db5,t,BEAT*4,'ah',0.5);A.voice(N.Ab4,t,BEAT*4,'oo',0.3);});
+    at(cycle+4,t=>{A.voice(N.Eb5,t,BEAT*4,'ee',0.5);A.voice(N.Bb4,t,BEAT*4,'ah',0.3);});
+}
+
+// ═══════════════════════════════════════
+// SECTION 5: GRACE (288-340)
+// The prayer completes. You are held.
+// ═══════════════════════════════════════
+// Beat fades
+for(let b=288;b<308;b++) at(b,t=>A.kick(t));
+for(let b=288;b<300;b+=2) at(b+0.5,t=>A.hat(t));
+// Strings sustain beautifully
+at(288,t=>A.strings([N.Db3,N.F3,N.Ab3,N.Db4],t,BEAT*24,0.35));
+at(304,t=>A.strings([N.Db3,N.F3,N.Ab3],t,BEAT*20,0.25));
+at(288,t=>A.sub(N.Db2,t,BEAT*16));
+// Final vocal — one long sustained note of pure love
+at(288,t=>A.voice(N.Db5,t,BEAT*16,'ah',0.5));
+at(304,t=>A.voice(N.Db5,t,BEAT*20,'oo',0.35));
+at(320,t=>A.voice(N.Ab4,t,BEAT*20,'ah',0.2));
+// Final pad arpeggios, slowing
+at(288,t=>A.supersaw([N.Db4,N.F4,N.Ab4],t,BEAT*8));
+
+ev.sort((a,b)=>a.beat-b.beat);
+const TOTAL = SEC.END;
+
+// ─── GRAVITY CURVE (G increases per section) ───
+function getG(beat) {
+    if(beat<SEC.GATH) return 0.003 + (beat/SEC.GATH)*0.007;
+    if(beat<SEC.COMM) return 0.01 + ((beat-SEC.GATH)/(SEC.COMM-SEC.GATH))*0.025;
+    if(beat<SEC.RAPT) return 0.035 + ((beat-SEC.COMM)/(SEC.RAPT-SEC.COMM))*0.05;
+    if(beat<SEC.GRACE)return 0.085 + ((beat-SEC.RAPT)/(SEC.GRACE-SEC.RAPT))*0.06;
+    return 0.145 - ((beat-SEC.GRACE)/(SEC.END-SEC.GRACE))*0.08;
+}
+function getRevMix(beat) {
+    if(beat<SEC.GATH) return 0.2;
+    if(beat<SEC.COMM) return 0.25 + ((beat-SEC.GATH)/64)*0.1;
+    if(beat<SEC.RAPT) return 0.35 + ((beat-SEC.COMM)/80)*0.15;
+    if(beat<SEC.GRACE)return 0.5 + ((beat-SEC.RAPT)/80)*0.15;
+    return 0.65;
+}
+function getSection(beat) {
+    if(beat>=SEC.GRACE) return 'GRACE';
+    if(beat>=SEC.RAPT) return 'RAPTURE';
+    if(beat>=SEC.COMM) return 'COMMUNION';
+    if(beat>=SEC.GATH) return 'GATHERING';
+    return 'AWAKENING';
+}
+
+// ─── SEQUENCER ───
+let currentBeat=0, startTime=0, evIdx=0, sectionName='AWAKENING';
+let beatPulse=0, lastRevUpdate=0;
+
+function scheduler(){
+    if(!A.playing) return;
+    const now=A.ctx.currentTime;
+    currentBeat=(now-startTime)/BEAT;
+    if(currentBeat>=TOTAL){startTime=now;currentBeat=0;evIdx=0;initParticles(w,h);}
+    sectionName=getSection(currentBeat);
+    G=getG(currentBeat);
+    // Update reverb smoothly
+    if(currentBeat-lastRevUpdate>4){lastRevUpdate=currentBeat;A.updateReverb(getRevMix(currentBeat));}
+    const ahead=0.2;
+    while(evIdx<ev.length&&ev[evIdx].beat<=currentBeat+ahead){
+        const e=ev[evIdx++];
+        e.fn(startTime+e.beat*BEAT);
+    }
+    requestAnimationFrame(scheduler);
+}
+
+// ─── VISUAL ENGINE ───
+const cvs=document.getElementById('c');
+const cx=cvs.getContext('2d');
+let w,h;
+function resize(){w=cvs.width=innerWidth;h=cvs.height=innerHeight;if(particles.length===0)initParticles(w,h);}
+addEventListener('resize',resize);resize();
+
+const waveData=new Uint8Array(1024);
+
+function draw(){
+    // Warm dark background with slow fade (trails)
+    const isRapt = sectionName==='RAPTURE';
+    const isGrace = sectionName==='GRACE';
+    cx.fillStyle=isRapt?'rgba(12,5,8,0.08)':isGrace?'rgba(8,4,6,0.06)':'rgba(10,5,8,0.1)';
+    cx.fillRect(0,0,w,h);
+
+    beatPulse*=0.9;
+    const pulse=1+beatPulse*0.3;
+
+    // Update physics
+    updatePhysics(w,h);
+
+    // ── Central golden glow (grows with unity) ──
+    const glowR = Math.max(50, 400 - unitySmooth * 0.8) * pulse;
+    const grad=cx.createRadialGradient(w/2,h/2,0,w/2,h/2,glowR);
+    const glowA = Math.max(0.02, 0.12 - unitySmooth * 0.0003);
+    grad.addColorStop(0,`rgba(230,190,80,${glowA + beatPulse*0.06})`);
+    grad.addColorStop(0.5,`rgba(255,150,170,${glowA*0.3})`);
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle=grad; cx.fillRect(0,0,w,h);
+
+    // ── Connection lines (golden threads of love) ──
+    cx.globalAlpha=0.12;
+    cx.strokeStyle='rgba(212,175,55,1)';
+    cx.lineWidth=0.5;
+    for(let i=0;i<particles.length-1;i++){
+        const p1=particles[i],p2=particles[i+1];
+        const dx=p2.x-p1.x,dy=p2.y-p1.y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<100){
+            cx.globalAlpha=0.08*(1-d/100);
+            cx.beginPath();cx.moveTo(p1.x,p1.y);cx.lineTo(p2.x,p2.y);cx.stroke();
+        }
+    }
+    cx.globalAlpha=1;
+
+    // ── Particles (soft glowing orbs of light) ──
+    cx.globalCompositeOperation='lighter';
+    particles.forEach(p=>{
+        const s=p.size*pulse;
+        // Outer glow
+        cx.beginPath();cx.arc(p.x,p.y,s*3,0,Math.PI*2);
+        cx.fillStyle=`rgba(${p.col[0]},${p.col[1]},${p.col[2]},0.04)`;
+        cx.fill();
+        // Core
+        cx.beginPath();cx.arc(p.x,p.y,s,0,Math.PI*2);
+        cx.fillStyle=`rgba(${p.col[0]},${p.col[1]},${p.col[2]},0.25)`;
+        cx.fill();
+        // Bright center
+        cx.beginPath();cx.arc(p.x,p.y,s*0.35,0,Math.PI*2);
+        cx.fillStyle=`rgba(255,255,255,0.35)`;
+        cx.fill();
+    });
+    cx.globalCompositeOperation='source-over';
+
+    // ── Mandala bloom (when particles converge) ──
+    if(unitySmooth<120){
+        const intensity=1-unitySmooth/120;
+        const time=performance.now()/1000;
+        for(let ring=0;ring<5;ring++){
+            const r=(ring+1)*25*pulse;
+            const petals=Math.floor((ring+3)*1.618);
+            for(let j=0;j<petals;j++){
+                const ang=(j/petals)*Math.PI*2+time*0.08*(ring%2?1:-1);
+                const px=w/2+Math.cos(ang)*r;
+                const py=h/2+Math.sin(ang)*r;
+                cx.beginPath();cx.arc(px,py,3+beatPulse*2,0,Math.PI*2);
+                cx.fillStyle=`rgba(230,190,80,${intensity*0.12})`;
+                cx.fill();
+            }
+        }
+    }
+
+    // ── Waveform halo ──
+    if(A.analyser){
+        A.analyser.getByteTimeDomainData(waveData);
+        cx.beginPath();
+        const wr=30+beatPulse*10;
+        for(let i=0;i<waveData.length;i++){
+            const ang=(i/waveData.length)*Math.PI*2;
+            const amp=(waveData[i]-128)/128;
+            const r=wr+amp*15;
+            const x=w/2+Math.cos(ang)*r, y=h/2+Math.sin(ang)*r;
+            i===0?cx.moveTo(x,y):cx.lineTo(x,y);
+        }
+        cx.closePath();
+        cx.strokeStyle=`rgba(230,190,80,${0.06+beatPulse*0.08})`;
+        cx.lineWidth=1;cx.stroke();
+    }
+
+    // ── HUD ──
+    document.getElementById('hud').innerHTML=
+        `${sectionName}<br>unity ${unitySmooth.toFixed(0)}<br>G ${G.toFixed(4)}`;
+
+    // Progress
+    cx.fillStyle='rgba(212,175,55,0.12)';
+    cx.fillRect(0,h-1,w*(currentBeat/TOTAL),1);
+
+    requestAnimationFrame(draw);
+}
+
+// ─── LAUNCH ───
+document.getElementById('overlay').addEventListener('click',async()=>{
+    await A.init();
+    A.playing=true;
+    startTime=A.ctx.currentTime;
+    document.getElementById('overlay').classList.add('hidden');
+    scheduler();
+});
+draw();
+</script>
+</body>
+</html>
