@@ -1,6 +1,6 @@
 # Opus Folder Index
 
-The `opus/` folder contains 7 masterwork HTML simulations demonstrating the **String Engine** procedural audio-visual synthesis framework in its most refined, artistic form. Each file combines real-time Web Audio API synthesis with synchronized canvas visualization.
+The `opus/` folder contains 8 masterwork HTML simulations demonstrating the **String Engine** procedural audio-visual synthesis framework in its most refined, artistic form. Each file combines real-time Web Audio API synthesis with synchronized canvas visualization.
 
 ## Files Overview
 
@@ -15,6 +15,7 @@ The `opus/` folder contains 7 masterwork HTML simulations demonstrating the **St
 | **[festival.html](festival.html)** | HTML5/Audio | Multi-instrument festival simulation blending orchestral layers, rhythm sections, and crowd energy visualization | ~500 lines | Orchestral/multi-instrument composition |
 | **[evening.html](evening.html)** | HTML5/Audio | Contemplative evening ambience with sparse arpeggios, reverb-drenched pads, and subtle parameter evolution | ~380 lines | Ambient/contemplative mood |
 | **[fullclassic.html](fullclassic.html)** | HTML5/Audio | Full classical orchestra simulation with multiple instrument layers, complex timing relationships, and ensemble visualization | ~550 lines | Orchestral/classical composition |
+| **[temple_of_e.html](temple_of_e.html)** | HTML5/Audio | Bass-first E Aeolian techno ritual with kick/sub authority, formant-like mantra textures, and sacred-geometry visual synchronization | ~1500 lines | Consciousness-inducing techno masterwork |
 
 ## Technical Foundation
 
@@ -33,7 +34,8 @@ All opus/ files leverage the **String Engine** framework ([reference](../whatami
 2. **Experience [jellyfish.html](jellyfish.html)** - Pure ambient, minimal structure
 3. **Explore [evening.html](evening.html)** - Emotional depth and sparse beauty
 4. **Challenge yourself with [lilypond.html](lilypond.html)** - Maximum complexity
-5. **Feel the extremes**: [annihilate.html](annihilate.html) (aggressive) vs [fullclassic.html](fullclassic.html) (orchestral)
+5. **Enter [temple_of_e.html](temple_of_e.html)** - Bass ritual and altered-state propulsion
+6. **Feel the extremes**: [annihilate.html](annihilate.html) (aggressive) vs [fullclassic.html](fullclassic.html) (orchestral)
 
 ## Cross-References
 
@@ -53,6 +55,7 @@ Each opus/ file represents a different **emotional/musical territory**:
 - **festival.html** = Collective celebration
 - **evening.html** = Introspection
 - **fullclassic.html** = Orchestral grandeur
+- **temple_of_e.html** = Ritual techno consciousness
 
 All demonstrate that **procedural synthesis without external assets** can achieve profound artistic expression through mathematics, timing, and psychoacoustic design principles.
 

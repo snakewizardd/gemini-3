@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEMPLE OF E // CONSCIOUSNESS ENGINE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+    :root {
+        --obsidian: #06070c;
+        --deep: #0e1220;
+        --cyan: #41f1ff;
+        --gold: #f6c566;
+        --ash: #d8deef;
+        --violet: #7b6cff;
+        --crimson: #ff5e68;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 50% 25%, rgba(65, 241, 255, 0.08), transparent 32%),
+            radial-gradient(circle at 50% 75%, rgba(246, 197, 102, 0.08), transparent 40%),
+            linear-gradient(180deg, #06070c 0%, #0a0d16 45%, #04050a 100%);
+        color: var(--ash);
+        font-family: 'Space Grotesk', sans-serif;
+    }
+
+    canvas {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+
+    #overlay,
+    #hud,
+    #footer {
+        position: fixed;
+        z-index: 10;
+    }
+
+    #overlay {
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 18px;
+        background:
+            radial-gradient(circle at center, rgba(65, 241, 255, 0.08), transparent 28%),
+            rgba(4, 5, 10, 0.94);
+        text-align: center;
+        transition: opacity 0.8s ease;
+        backdrop-filter: blur(10px);
+    }
+
+    #overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #overlay h1 {
+        margin: 0;
+        font-family: 'Cinzel', serif;
+        font-size: clamp(2.8rem, 7vw, 6rem);
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: transparent;
+        background: linear-gradient(90deg, var(--ash), var(--cyan), var(--gold));
+        -webkit-background-clip: text;
+        background-clip: text;
+        text-shadow: 0 0 40px rgba(65, 241, 255, 0.16);
+    }
+
+    #overlay .subtitle {
+        max-width: 840px;
+        padding: 0 24px;
+        font-size: clamp(0.95rem, 2vw, 1.15rem);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(216, 222, 239, 0.74);
+    }
+
+    #overlay .note {
+        max-width: 760px;
+        padding: 0 24px;
+        font-size: 0.95rem;
+        line-height: 1.7;
+        color: rgba(216, 222, 239, 0.68);
+    }
+
+    #enter-btn {
+        margin-top: 8px;
+        padding: 16px 34px;
+        border: 1px solid rgba(65, 241, 255, 0.45);
+        border-radius: 999px;
+        background:
+            linear-gradient(135deg, rgba(65, 241, 255, 0.18), rgba(246, 197, 102, 0.16));
+        color: var(--ash);
+        font-family: inherit;
+        font-size: 0.98rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        box-shadow: 0 0 22px rgba(65, 241, 255, 0.12);
+    }
+
+    #enter-btn:hover {
+        transform: scale(1.03);
+        border-color: rgba(65, 241, 255, 0.85);
+        box-shadow: 0 0 36px rgba(65, 241, 255, 0.22);
+    }
+
+    #hud {
+        top: 24px;
+        left: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: min(540px, calc(100vw - 48px));
+        pointer-events: none;
+    }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 8px 12px;
+        border: 1px solid rgba(216, 222, 239, 0.12);
+        border-radius: 999px;
+        background: rgba(8, 10, 17, 0.45);
+        backdrop-filter: blur(12px);
+        font-size: 0.82rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    .chip strong {
+        color: var(--gold);
+        font-weight: 700;
+    }
+
+    #section-label {
+        font-family: 'Cinzel', serif;
+        font-size: clamp(1.4rem, 3vw, 2.8rem);
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgba(246, 197, 102, 0.94);
+        text-shadow: 0 0 24px rgba(246, 197, 102, 0.16);
+    }
+
+    #footer {
+        left: 24px;
+        right: 24px;
+        bottom: 22px;
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 18px;
+        pointer-events: none;
+    }
+
+    #footer .left,
+    #footer .right {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    #footer .left {
+        max-width: min(620px, 65vw);
+    }
+
+    #footer .label {
+        font-size: 0.74rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(216, 222, 239, 0.58);
+    }
+
+    #footer .value {
+        font-size: 0.94rem;
+        line-height: 1.5;
+        color: rgba(216, 222, 239, 0.88);
+    }
+
+    #intensity-bar {
+        width: min(320px, 42vw);
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(216, 222, 239, 0.08);
+        overflow: hidden;
+        border: 1px solid rgba(216, 222, 239, 0.08);
+    }
+
+    #intensity-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, var(--cyan), var(--gold), var(--crimson));
+        box-shadow: 0 0 20px rgba(65, 241, 255, 0.45);
+    }
+
+    @media (max-width: 760px) {
+        #footer {
+            flex-direction: column;
+            align-items: start;
+        }
+
+        #footer .left {
+            max-width: 100%;
+        }
+
+        #intensity-bar {
+            width: min(320px, 72vw);
+        }
+    }
+</style>
+</head>
+<body>
+
+<canvas id="void"></canvas>
+
+<div id="overlay">
+    <h1>Temple Of E</h1>
+    <div class="subtitle">E Aeolian techno for bass pressure, ritual atmosphere, and altered-state induction</div>
+    <div class="note">
+        Four-on-the-floor is only the doorway. The actual engine is the bond between kick and sub,
+        with upper harmonics opening the headspace while the low end owns the body.
+        Click to enter. Move the mouse vertically to raise or lower intensity.
+    </div>
+    <button id="enter-btn">Open The Chamber</button>
+</div>
+
+<div id="hud">
+    <div class="chip"><span>Key</span> <strong>E Aeolian</strong></div>
+    <div class="chip"><span>Tempo</span> <strong>132 BPM</strong></div>
+    <div class="chip"><span>Bass Doctrine</span> <strong>kick and sub are sacred</strong></div>
+    <div id="section-label">Invocation</div>
+</div>
+
+<div id="footer">
+    <div class="left">
+        <div class="label">Current Harmonic Image</div>
+        <div class="value" id="chord-label">Em9 pressure field</div>
+        <div class="value" id="instruction-label">Move slowly. Let the repetition act like an incantation.</div>
+    </div>
+    <div class="right">
+        <div class="label">Intensity</div>
+        <div id="intensity-bar"><div id="intensity-fill"></div></div>
+    </div>
+</div>
+
+<script>
+const CONFIG = {
+    BPM: 132,
+    BAR_BEATS: 4,
+    LOOKAHEAD_SEC: 0.35,
+    SCHEDULE_INTERVAL_MS: 45,
+    COLORS: {
+        obsidian: '#06070c',
+        cyan: '#41f1ff',
+        gold: '#f6c566',
+        ash: '#d8deef',
+        violet: '#7b6cff',
+        crimson: '#ff5e68'
+    }
+};
+
+const THEORY = {
+    rootMidi: 28,
+    harmony: [
+        { name: 'Em9 pressure field', root: 52, intervals: [0, 3, 7, 14] },
+        { name: 'Cmaj7 memory flare', root: 48, intervals: [0, 4, 7, 11] },
+        { name: 'Dadd9 ascent gate', root: 50, intervals: [0, 2, 7, 14] },
+        { name: 'Bm7 nocturne braid', root: 47, intervals: [0, 3, 7, 10] },
+        { name: 'Em9 pressure field', root: 52, intervals: [0, 3, 7, 14] },
+        { name: 'Am9 inward spiral', root: 45, intervals: [0, 3, 7, 14] },
+        { name: 'Dadd9 ascent gate', root: 50, intervals: [0, 2, 7, 14] },
+        { name: 'Em9 pressure field', root: 52, intervals: [0, 3, 7, 14] }
+    ]
+};
+
+const SECTIONS = [
+    { name: 'Invocation', bars: 8, energy: 0.18, color: '#7b6cff', instruction: 'Open the chamber. Let the drone arrive before the body follows.' },
+    { name: 'Descent', bars: 8, energy: 0.42, color: '#41f1ff', instruction: 'The floor appears. Kick and sub start binding the body.' },
+    { name: 'Trance Engine', bars: 16, energy: 0.66, color: '#f6c566', instruction: 'Commit to repetition. The groove is the ritual now.' },
+    { name: 'Expansion', bars: 8, energy: 0.58, color: '#d8deef', instruction: 'Open the ceiling. Keep the body moving while the headspace blooms.' },
+    { name: 'Peak State', bars: 16, energy: 0.94, color: '#ff5e68', instruction: 'Maximum pressure. The bass becomes architecture.' },
+    { name: 'Return', bars: 8, energy: 0.34, color: '#41f1ff', instruction: 'Close the rite without breaking the spell.' }
+];
+
+const LOOP_BARS = SECTIONS.reduce((sum, section) => sum + section.bars, 0);
+const SECTION_OFFSETS = (() => {
+    let offset = 0;
+    return SECTIONS.map(section => {
+        const start = offset;
+        offset += section.bars;
+        return start;
+    });
+})();
+
+const BASS_PATTERNS = {
+    descentA: [0, null, null, 0, null, 3, null, 0, 5, null, null, 0, 10, null, 7, null],
+    descentB: [0, null, 0, null, 7, null, 3, null, 0, null, 5, null, 10, null, 7, null],
+    tranceA: [0, null, 0, 12, null, 3, null, 0, 5, null, 0, null, 10, null, 7, null],
+    tranceB: [0, null, 7, null, 0, null, 3, null, 0, null, 10, null, 5, null, 7, null],
+    peakA: [0, null, 0, 12, 0, null, 3, null, 5, null, 0, null, 10, 12, 7, null],
+    peakB: [0, 12, null, 10, 0, null, 7, null, 0, 12, null, 5, 3, null, 7, null],
+    returnA: [0, null, null, 0, null, null, 7, null, 0, null, null, 0, 10, null, 7, null]
+};
+
+const PULSE_PATTERNS = {
+    invocation: [null, 14, null, null, 7, null, 14, null],
+    descent: [7, null, 14, null, 10, null, 14, null],
+    trance: [14, null, 7, null, 10, null, 7, null],
+    peak: [14, 10, 7, null, 14, 17, 10, null],
+    return: [7, null, 14, null, 10, null, null, null]
+};
+
+const dom = {
+    canvas: document.getElementById('void'),
+    overlay: document.getElementById('overlay'),
+    enterButton: document.getElementById('enter-btn'),
+    sectionLabel: document.getElementById('section-label'),
+    chordLabel: document.getElementById('chord-label'),
+    instructionLabel: document.getElementById('instruction-label'),
+    intensityFill: document.getElementById('intensity-fill')
+};
+
+const view = {
+    ctx: dom.canvas.getContext('2d', { alpha: false }),
+    width: 0,
+    height: 0,
+    cx: 0,
+    cy: 0,
+    stars: [],
+    particles: [],
+    ripples: []
+};
+
+const motion = {
+    beatPulse: 0,
+    bassPulse: 0,
+    shimmerPulse: 0,
+    sectionEnergy: 0,
+    low: 0,
+    mid: 0,
+    high: 0,
+    time: 0,
+    intensity: 0.74,
+    sectionName: 'Invocation'
+};
+
+const sequencer = {
+    isPlaying: false,
+    nextBarTime: 0,
+    absoluteBar: 0,
+    schedulerId: null,
+    startTime: 0
+};
+
+function midiToFreq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function beatToSec(beats) {
+    return beats * (60 / CONFIG.BPM);
+}
+
+function barToSec(bars) {
+    return beatToSec(bars * CONFIG.BAR_BEATS);
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function stepTime(barStart, step) {
+    return barStart + beatToSec(step / 4);
+}
+
+function scheduleMotionPulse(time, target, amount) {
+    const delay = Math.max(0, (time - AudioEngine.ctx.currentTime) * 1000);
+    window.setTimeout(() => {
+        motion[target] = Math.max(motion[target], amount);
+    }, delay);
+}
+
+function scheduleSectionDisplay(section, chordName, time) {
+    const delay = Math.max(0, (time - AudioEngine.ctx.currentTime) * 1000);
+    window.setTimeout(() => {
+        motion.sectionName = section.name;
+        motion.sectionEnergy = section.energy;
+        dom.sectionLabel.textContent = section.name;
+        dom.sectionLabel.style.color = section.color;
+        dom.chordLabel.textContent = chordName;
+        dom.instructionLabel.textContent = section.instruction;
+    }, delay);
+}
+
+function makeDistortionCurve(amount) {
+    const n = 44100;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        const x = (i * 2 / n) - 1;
+        curve[i] = Math.tanh(amount * x);
+    }
+    return curve;
+}
+
+function getLoopBar(absoluteBar) {
+    return absoluteBar % LOOP_BARS;
+}
+
+function getSectionForBar(loopBar) {
+    for (let i = 0; i < SECTIONS.length; i++) {
+        const start = SECTION_OFFSETS[i];
+        const end = start + SECTIONS[i].bars;
+        if (loopBar >= start && loopBar < end) {
+            return {
+                section: SECTIONS[i],
+                sectionIndex: i,
+                localBar: loopBar - start
+            };
+        }
+    }
+    return { section: SECTIONS[0], sectionIndex: 0, localBar: 0 };
+}
+
+function currentChordForBar(loopBar) {
+    return THEORY.harmony[loopBar % THEORY.harmony.length];
+}
+
+function scheduleKickBar(barStart, accentPattern) {
+    accentPattern.forEach((accent, beat) => {
+        if (accent <= 0) return;
+        AudioEngine.playKick(barStart + beatToSec(beat), accent);
+    });
+}
+
+function scheduleHatBar(barStart, density, includeOpen = true) {
+    for (let step = 0; step < 16; step++) {
+        const offbeat = step % 2 === 1;
+        const sixteenthChance = density > 0.82 ? 0.7 : density > 0.6 ? 0.35 : 0.15;
+        const play = offbeat || (step % 4 !== 0 && Math.random() < sixteenthChance);
+        if (!play) continue;
+        AudioEngine.playHat(stepTime(barStart, step), false);
+    }
+
+    if (includeOpen) {
+        AudioEngine.playHat(barStart + beatToSec(3.5), true);
+    }
+}
+
+function scheduleBassPattern(barStart, pattern, baseMidi, sectionEnergy) {
+    for (let step = 0; step < pattern.length; step++) {
+        const offset = pattern[step];
+        if (offset === null) continue;
+        const nextOffset = pattern[(step + 1) % pattern.length];
+        const duration = beatToSec(nextOffset === null ? 0.75 : 0.42);
+        const glideChance = sectionEnergy > 0.7 && step % 8 === 7 && nextOffset !== null;
+        const glideMidi = glideChance ? baseMidi + nextOffset : null;
+        AudioEngine.playSub(stepTime(barStart, step), baseMidi + offset, duration, glideMidi);
+    }
+}
+
+function schedulePulsePattern(barStart, chord, patternName, sectionEnergy) {
+    const pattern = PULSE_PATTERNS[patternName];
+    const notes = chord.intervals.map(interval => chord.root + interval);
+    for (let step = 0; step < pattern.length; step++) {
+        const slot = pattern[step];
+        if (slot === null) continue;
+        const noteMidi = chord.root + slot;
+        const brightness = 0.36 + sectionEnergy * 0.55;
+        AudioEngine.playPulse(barStart + beatToSec(step * 0.5), noteMidi, beatToSec(0.42), brightness);
+        if (step % 2 === 0 && motion.intensity > 0.72 && notes.length > 2) {
+            AudioEngine.playPulse(barStart + beatToSec(step * 0.5 + 0.25), notes[(step + 1) % notes.length], beatToSec(0.18), brightness * 0.78);
+        }
+    }
+}
+
+function scheduleTomFill(barStart, rootMidi) {
+    const start = barStart + beatToSec(3);
+    const fill = [rootMidi + 12, rootMidi + 15, rootMidi + 17, rootMidi + 15];
+    fill.forEach((midi, index) => {
+        AudioEngine.playTom(start + beatToSec(index * 0.25), midi, 0.13);
+    });
+}
+
+function scheduleInvocation(sectionInfo, chord, barStart) {
+    if (sectionInfo.localBar % 2 === 0) {
+        AudioEngine.playPadChord(barStart, chord, barToSec(2));
+    }
+
+    schedulePulsePattern(barStart, chord, 'invocation', sectionInfo.section.energy);
+
+    if (sectionInfo.localBar >= 4) {
+        AudioEngine.playKick(barStart + beatToSec(2), 0.55);
+        AudioEngine.playKick(barStart + beatToSec(3), 0.72);
+    }
+
+    if (sectionInfo.localBar % 4 === 2) {
+        AudioEngine.playMantra(barStart + beatToSec(2.5), THEORY.rootMidi + 24, 1.4);
+    }
+
+    if (sectionInfo.localBar === sectionInfo.section.bars - 1) {
+        scheduleTomFill(barStart, THEORY.rootMidi);
+    }
+}
+
+function scheduleDescent(sectionInfo, chord, barStart) {
+    if (sectionInfo.localBar % 2 === 0) {
+        AudioEngine.playPadChord(barStart, chord, barToSec(2));
+    }
+
+    scheduleKickBar(barStart, [1.0, 0.96, 0.98, 1.04]);
+    scheduleHatBar(barStart, 0.44, sectionInfo.localBar > 1);
+    scheduleBassPattern(
+        barStart,
+        sectionInfo.localBar % 2 === 0 ? BASS_PATTERNS.descentA : BASS_PATTERNS.descentB,
+        THEORY.rootMidi,
+        sectionInfo.section.energy
+    );
+    schedulePulsePattern(barStart, chord, 'descent', sectionInfo.section.energy);
+
+    if (sectionInfo.localBar % 4 === 3) {
+        scheduleTomFill(barStart, THEORY.rootMidi);
+    }
+}
+
+function scheduleTrance(sectionInfo, chord, barStart) {
+    if (sectionInfo.localBar % 4 === 0) {
+        AudioEngine.playPadChord(barStart, chord, barToSec(4));
+    }
+
+    scheduleKickBar(barStart, [1.0, 0.98, 1.0, 1.05]);
+    scheduleHatBar(barStart, 0.66, true);
+    AudioEngine.playClap(barStart + beatToSec(1), 0.95);
+    AudioEngine.playClap(barStart + beatToSec(3), 1.0);
+
+    scheduleBassPattern(
+        barStart,
+        sectionInfo.localBar % 2 === 0 ? BASS_PATTERNS.tranceA : BASS_PATTERNS.tranceB,
+        THEORY.rootMidi,
+        sectionInfo.section.energy
+    );
+    schedulePulsePattern(barStart, chord, 'trance', sectionInfo.section.energy);
+
+    if (sectionInfo.localBar % 8 === 4) {
+        AudioEngine.playMantra(barStart + beatToSec(0.5), THEORY.rootMidi + 24, 1.7);
+    }
+
+    if (sectionInfo.localBar % 4 === 3) {
+        scheduleTomFill(barStart, THEORY.rootMidi);
+    }
+}
+
+function scheduleExpansion(sectionInfo, chord, barStart) {
+    AudioEngine.playPadChord(barStart, chord, barToSec(2));
+
+    const accents = sectionInfo.localBar < 4 ? [0.75, 0.68, 0.74, 0.82] : [0.94, 0.88, 0.9, 0.98];
+    scheduleKickBar(barStart, accents);
+    scheduleHatBar(barStart, sectionInfo.localBar < 4 ? 0.34 : 0.54, sectionInfo.localBar >= 3);
+    if (sectionInfo.localBar >= 2) {
+        AudioEngine.playClap(barStart + beatToSec(1), 0.78);
+        AudioEngine.playClap(barStart + beatToSec(3), 0.84);
+    }
+
+    const pattern = sectionInfo.localBar % 2 === 0 ? BASS_PATTERNS.returnA : BASS_PATTERNS.descentB;
+    scheduleBassPattern(barStart, pattern, THEORY.rootMidi, sectionInfo.section.energy);
+    schedulePulsePattern(barStart, chord, 'trance', sectionInfo.section.energy * 0.92);
+
+    if (sectionInfo.localBar % 2 === 1) {
+        AudioEngine.playMantra(barStart + beatToSec(1.5), THEORY.rootMidi + 24, 1.8);
+    }
+}
+
+function schedulePeak(sectionInfo, chord, barStart) {
+    if (sectionInfo.localBar % 4 === 0) {
+        AudioEngine.playPadChord(barStart, chord, barToSec(4));
+    }
+
+    scheduleKickBar(barStart, [1.08, 1.0, 1.04, 1.12]);
+    scheduleHatBar(barStart, 0.9, true);
+    AudioEngine.playClap(barStart + beatToSec(1), 1.05);
+    AudioEngine.playClap(barStart + beatToSec(3), 1.08);
+
+    scheduleBassPattern(
+        barStart,
+        sectionInfo.localBar % 2 === 0 ? BASS_PATTERNS.peakA : BASS_PATTERNS.peakB,
+        THEORY.rootMidi,
+        sectionInfo.section.energy
+    );
+    schedulePulsePattern(barStart, chord, 'peak', sectionInfo.section.energy);
+
+    AudioEngine.playHat(barStart + beatToSec(0.75), true);
+    AudioEngine.playHat(barStart + beatToSec(2.75), true);
+
+    if (sectionInfo.localBar % 4 === 1) {
+        AudioEngine.playMantra(barStart + beatToSec(2.0), THEORY.rootMidi + 24, 1.4);
+    }
+
+    if (sectionInfo.localBar % 2 === 1) {
+        scheduleTomFill(barStart, THEORY.rootMidi);
+    }
+}
+
+function scheduleReturn(sectionInfo, chord, barStart) {
+    if (sectionInfo.localBar % 2 === 0) {
+        AudioEngine.playPadChord(barStart, chord, barToSec(2));
+    }
+
+    const kickAccents = sectionInfo.localBar < 6 ? [0.92, 0.86, 0.88, 0.96] : [0.8, 0, 0.72, 0];
+    scheduleKickBar(barStart, kickAccents);
+
+    if (sectionInfo.localBar < 5) {
+        scheduleHatBar(barStart, 0.42, sectionInfo.localBar < 4);
+        AudioEngine.playClap(barStart + beatToSec(1), 0.75);
+        AudioEngine.playClap(barStart + beatToSec(3), 0.78);
+    }
+
+    scheduleBassPattern(barStart, BASS_PATTERNS.returnA, THEORY.rootMidi, sectionInfo.section.energy);
+    schedulePulsePattern(barStart, chord, 'return', sectionInfo.section.energy);
+
+    if (sectionInfo.localBar === 4) {
+        AudioEngine.playMantra(barStart + beatToSec(1.5), THEORY.rootMidi + 24, 2.0);
+    }
+}
+
+function scheduleBar(loopBar, barStart) {
+    const sectionInfo = getSectionForBar(loopBar);
+    const chord = currentChordForBar(loopBar);
+    scheduleSectionDisplay(sectionInfo.section, chord.name, barStart);
+
+    switch (sectionInfo.section.name) {
+        case 'Invocation':
+            scheduleInvocation(sectionInfo, chord, barStart);
+            break;
+        case 'Descent':
+            scheduleDescent(sectionInfo, chord, barStart);
+            break;
+        case 'Trance Engine':
+            scheduleTrance(sectionInfo, chord, barStart);
+            break;
+        case 'Expansion':
+            scheduleExpansion(sectionInfo, chord, barStart);
+            break;
+        case 'Peak State':
+            schedulePeak(sectionInfo, chord, barStart);
+            break;
+        case 'Return':
+            scheduleReturn(sectionInfo, chord, barStart);
+            break;
+    }
+}
+
+function runScheduler() {
+    if (!sequencer.isPlaying) return;
+    while (sequencer.nextBarTime < AudioEngine.ctx.currentTime + CONFIG.LOOKAHEAD_SEC) {
+        const loopBar = getLoopBar(sequencer.absoluteBar);
+        scheduleBar(loopBar, sequencer.nextBarTime);
+        sequencer.absoluteBar += 1;
+        sequencer.nextBarTime += barToSec(1);
+    }
+    sequencer.schedulerId = window.setTimeout(runScheduler, CONFIG.SCHEDULE_INTERVAL_MS);
+}
+
+function spawnParticles(kind, strength) {
+    const count = kind === 'mantra' ? 24 : kind === 'kick' ? 18 : 12;
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = kind === 'bass'
+            ? view.height * 0.22 + Math.random() * view.height * 0.08
+            : 20 + Math.random() * 60;
+        const hue = kind === 'kick' ? 36 : kind === 'mantra' ? 194 : 220;
+        view.particles.push({
+            kind,
+            x: view.cx + Math.cos(angle) * radius,
+            y: view.cy + Math.sin(angle) * radius,
+            vx: Math.cos(angle) * (0.2 + Math.random() * strength * 2.2),
+            vy: Math.sin(angle) * (0.2 + Math.random() * strength * 2.2),
+            life: 1,
+            size: (kind === 'kick' ? 1.8 : 1.2) + Math.random() * strength * 5,
+            hue,
+            orbit: radius
+        });
+    }
+}
+
+function spawnRippleFuture(time, strength, kind) {
+    const delay = Math.max(0, (time - AudioEngine.ctx.currentTime) * 1000);
+    window.setTimeout(() => {
+        view.ripples.push({
+            x: view.cx,
+            y: kind === 'bass' ? view.height * 0.78 : view.cy,
+            radius: 30,
+            width: kind === 'kick' ? 5 : 3,
+            alpha: 0.5 + strength * 0.35,
+            speed: kind === 'bass' ? 2.6 : 3.6,
+            hue: kind === 'mantra' ? 194 : kind === 'kick' ? 38 : 220
+        });
+        spawnParticles(kind, strength);
+    }, delay);
+}
+
+function resize() {
+    view.width = dom.canvas.width = window.innerWidth;
+    view.height = dom.canvas.height = window.innerHeight;
+    view.cx = view.width * 0.5;
+    view.cy = view.height * 0.48;
+
+    view.stars = Array.from({ length: 180 }, () => ({
+        angle: Math.random() * Math.PI * 2,
+        radius: Math.random() * Math.max(view.width, view.height) * 0.55,
+        size: Math.random() * 2.2 + 0.4,
+        speed: 0.0008 + Math.random() * 0.002,
+        alpha: 0.08 + Math.random() * 0.26
+    }));
+}
+
+function updateAnalysis() {
+    if (!AudioEngine.analyser) return;
+
+    const bins = AudioEngine.analyser.frequencyBinCount;
+    const data = new Uint8Array(bins);
+    AudioEngine.analyser.getByteFrequencyData(data);
+
+    let low = 0;
+    let mid = 0;
+    let high = 0;
+
+    for (let i = 0; i < bins; i++) {
+        const value = data[i] / 255;
+        if (i < bins * 0.12) low += value;
+        else if (i < bins * 0.42) mid += value;
+        else high += value;
+    }
+
+    motion.low = low / (bins * 0.12);
+    motion.mid = mid / (bins * 0.30);
+    motion.high = high / (bins * 0.58);
+}
+
+function drawBackground() {
+    const ctx = view.ctx;
+    const gradient = ctx.createLinearGradient(0, 0, 0, view.height);
+    const sectionColor = SECTIONS.find(section => section.name === motion.sectionName)?.color || CONFIG.COLORS.cyan;
+
+    gradient.addColorStop(0, '#04050a');
+    gradient.addColorStop(0.45, '#0b1020');
+    gradient.addColorStop(1, '#04050a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, view.width, view.height);
+
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = hexToRgba(sectionColor, 0.04 + motion.high * 0.04 + motion.shimmerPulse * 0.06);
+    ctx.beginPath();
+    ctx.arc(view.cx, view.cy, Math.min(view.width, view.height) * (0.22 + motion.sectionEnergy * 0.22), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawStars() {
+    const ctx = view.ctx;
+    ctx.save();
+    ctx.translate(view.cx, view.cy);
+    view.stars.forEach(star => {
+        star.angle += star.speed * (1 + motion.sectionEnergy * 1.6);
+        const x = Math.cos(star.angle + motion.time * 0.02) * star.radius;
+        const y = Math.sin(star.angle + motion.time * 0.02) * star.radius * 0.72;
+        ctx.fillStyle = `rgba(216, 222, 239, ${star.alpha})`;
+        ctx.fillRect(x, y, star.size, star.size);
+    });
+    ctx.restore();
+}
+
+function drawMandala() {
+    const ctx = view.ctx;
+    const rings = 6;
+    const baseRadius = Math.min(view.width, view.height) * 0.14;
+    const lowPush = motion.low * 120 + motion.bassPulse * 90;
+    const kickPush = motion.beatPulse * 80;
+
+    ctx.save();
+    ctx.translate(view.cx, view.cy);
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (let ring = 0; ring < rings; ring++) {
+        const progress = ring / rings;
+        const radius = baseRadius + ring * 36 + lowPush * (0.18 + progress * 0.14);
+        const sides = 6 + ring;
+        const rotation = motion.time * (0.11 + ring * 0.013) * (ring % 2 === 0 ? 1 : -1);
+        const alpha = 0.08 + progress * 0.08 + motion.shimmerPulse * 0.06;
+
+        ctx.strokeStyle = hexToRgba(ring % 2 === 0 ? CONFIG.COLORS.cyan : CONFIG.COLORS.gold, alpha);
+        ctx.lineWidth = 1 + motion.high * 1.6 + progress;
+        ctx.beginPath();
+        for (let i = 0; i <= sides; i++) {
+            const angle = rotation + (i / sides) * Math.PI * 2;
+            const modulation = 1 + Math.sin(motion.time * 0.6 + i * 0.9 + ring) * 0.06 + kickPush * 0.0008;
+            const x = Math.cos(angle) * radius * modulation;
+            const y = Math.sin(angle) * radius * modulation;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.62, 0, Math.PI * 2);
+        ctx.strokeStyle = hexToRgba(CONFIG.COLORS.ash, 0.03 + motion.high * 0.04);
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+    }
+
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawSpectrumHalo() {
+    if (!AudioEngine.analyser) return;
+    const ctx = view.ctx;
+    const bins = AudioEngine.analyser.frequencyBinCount;
+    const data = new Uint8Array(bins);
+    AudioEngine.analyser.getByteFrequencyData(data);
+
+    ctx.save();
+    ctx.translate(view.cx, view.cy);
+    ctx.rotate(motion.time * 0.02);
+    ctx.globalCompositeOperation = 'lighter';
+
+    const usable = 96;
+    const baseRadius = Math.min(view.width, view.height) * 0.2;
+
+    for (let i = 0; i < usable; i++) {
+        const value = data[i] / 255;
+        const angle = (i / usable) * Math.PI * 2;
+        const inner = baseRadius + i * 0.6;
+        const length = 10 + value * 70 + motion.high * 24;
+        const x1 = Math.cos(angle) * inner;
+        const y1 = Math.sin(angle) * inner;
+        const x2 = Math.cos(angle) * (inner + length);
+        const y2 = Math.sin(angle) * (inner + length);
+
+        ctx.strokeStyle = hexToRgba(i % 4 === 0 ? CONFIG.COLORS.gold : CONFIG.COLORS.cyan, 0.06 + value * 0.34);
+        ctx.lineWidth = 1.1 + value * 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawBassHorizon() {
+    const ctx = view.ctx;
+    const baseY = view.height * 0.78;
+    const width = view.width;
+
+    for (let layer = 0; layer < 3; layer++) {
+        ctx.beginPath();
+        for (let x = 0; x <= width; x += 8) {
+            const nx = x / width;
+            const wave =
+                Math.sin(nx * 12 + motion.time * (0.8 + layer * 0.2)) * (16 + motion.low * 28) +
+                Math.sin(nx * 34 - motion.time * (1.4 + layer * 0.3)) * (6 + motion.bassPulse * 18);
+            const y = baseY + layer * 18 + wave;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = hexToRgba(layer === 0 ? CONFIG.COLORS.gold : CONFIG.COLORS.cyan, 0.12 + layer * 0.05);
+        ctx.lineWidth = 2 + layer;
+        ctx.stroke();
+    }
+}
+
+function drawRipples() {
+    const ctx = view.ctx;
+    for (let i = view.ripples.length - 1; i >= 0; i--) {
+        const ripple = view.ripples[i];
+        ripple.radius += ripple.speed;
+        ripple.alpha *= 0.97;
+        if (ripple.alpha < 0.015) {
+            view.ripples.splice(i, 1);
+            continue;
+        }
+        ctx.beginPath();
+        ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${ripple.hue}, 95%, 68%, ${ripple.alpha})`;
+        ctx.lineWidth = ripple.width;
+        ctx.stroke();
+    }
+}
+
+function drawParticles() {
+    const ctx = view.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (let i = view.particles.length - 1; i >= 0; i--) {
+        const p = view.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life *= 0.982;
+        p.vx *= 0.992;
+        p.vy *= 0.992;
+
+        if (p.kind === 'mantra') {
+            const dx = view.cx - p.x;
+            const dy = view.cy - p.y;
+            p.vx += dx * 0.00008;
+            p.vy += dy * 0.00008;
+        } else if (p.kind === 'bass') {
+            p.y += Math.sin(motion.time * 0.12 + p.orbit * 0.03) * 0.4;
+        }
+
+        if (p.life < 0.03) {
+            view.particles.splice(i, 1);
+            continue;
+        }
+
+        ctx.fillStyle = `hsla(${p.hue}, 95%, 68%, ${p.life * 0.7})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function drawCenterCore() {
+    const ctx = view.ctx;
+    const coreRadius = 12 + motion.beatPulse * 18 + motion.high * 10;
+
+    ctx.save();
+    ctx.translate(view.cx, view.cy);
+
+    ctx.beginPath();
+    ctx.arc(0, 0, coreRadius * 2.4, 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(CONFIG.COLORS.cyan, 0.1 + motion.shimmerPulse * 0.08);
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(CONFIG.COLORS.gold, 0.42 + motion.beatPulse * 0.2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, coreRadius * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(CONFIG.COLORS.ash, 0.92);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function hexToRgba(hex, alpha) {
+    const value = hex.replace('#', '');
+    const bigint = parseInt(value, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function render() {
+    requestAnimationFrame(render);
+    motion.time += 1;
+    motion.beatPulse *= 0.91;
+    motion.bassPulse *= 0.94;
+    motion.shimmerPulse *= 0.95;
+
+    updateAnalysis();
+    drawBackground();
+    drawStars();
+    drawBassHorizon();
+    drawMandala();
+    drawSpectrumHalo();
+    drawRipples();
+    drawParticles();
+    drawCenterCore();
+}
+
+async function startPiece() {
+    await AudioEngine.init();
+    await AudioEngine.ctx.resume();
+
+    sequencer.isPlaying = true;
+    sequencer.startTime = AudioEngine.ctx.currentTime;
+    sequencer.nextBarTime = AudioEngine.ctx.currentTime + 0.1;
+    sequencer.absoluteBar = 0;
+
+    AudioEngine.setIntensity(motion.intensity);
+
+    dom.overlay.classList.add('hidden');
+    runScheduler();
+}
+
+const AudioEngine = {
+    ctx: null,
+    master: null,
+    masterFilter: null,
+    analyser: null,
+    compressor: null,
+    musicBus: null,
+    drumBus: null,
+    bassBus: null,
+    airBus: null,
+    delay: null,
+    delayFeedback: null,
+    delayOutput: null,
+    reverb: null,
+    reverbSend: null,
+    initialized: false,
+
+    async init() {
+        if (this.initialized) return;
+
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = this.ctx;
+
+        this.master = ctx.createGain();
+        this.master.gain.value = 0.78;
+
+        this.masterFilter = ctx.createBiquadFilter();
+        this.masterFilter.type = 'lowpass';
+        this.masterFilter.frequency.value = 18000;
+
+        this.compressor = ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -18;
+        this.compressor.knee.value = 12;
+        this.compressor.ratio.value = 4;
+        this.compressor.attack.value = 0.003;
+        this.compressor.release.value = 0.2;
+
+        this.analyser = ctx.createAnalyser();
+        this.analyser.fftSize = 1024;
+        this.analyser.smoothingTimeConstant = 0.82;
+
+        this.musicBus = ctx.createGain();
+        this.musicBus.gain.value = 0.88;
+
+        this.drumBus = ctx.createGain();
+        this.drumBus.gain.value = 0.96;
+
+        this.bassBus = ctx.createGain();
+        this.bassBus.gain.value = 1.0;
+
+        this.airBus = ctx.createGain();
+        this.airBus.gain.value = 0.72;
+
+        const bassDrive = ctx.createWaveShaper();
+        bassDrive.curve = makeDistortionCurve(2.2);
+        bassDrive.oversample = '4x';
+
+        const bassLowpass = ctx.createBiquadFilter();
+        bassLowpass.type = 'lowpass';
+        bassLowpass.frequency.value = 210;
+        bassLowpass.Q.value = 0.6;
+
+        const bassPresence = ctx.createBiquadFilter();
+        bassPresence.type = 'peaking';
+        bassPresence.frequency.value = 92;
+        bassPresence.gain.value = 5.5;
+        bassPresence.Q.value = 0.8;
+
+        const drumShape = ctx.createBiquadFilter();
+        drumShape.type = 'highpass';
+        drumShape.frequency.value = 20;
+
+        this.reverb = ctx.createConvolver();
+        this.reverb.buffer = await this.createImpulse(3.2, 2.4);
+        this.reverbSend = ctx.createGain();
+        this.reverbSend.gain.value = 0.24;
+
+        this.delay = ctx.createDelay(1.0);
+        this.delay.delayTime.value = beatToSec(0.75);
+        this.delayFeedback = ctx.createGain();
+        this.delayFeedback.gain.value = 0.24;
+        this.delayOutput = ctx.createGain();
+        this.delayOutput.gain.value = 0.18;
+
+        this.musicBus.connect(this.master);
+        this.airBus.connect(this.master);
+        this.musicBus.connect(this.reverbSend);
+        this.airBus.connect(this.reverbSend);
+        this.reverbSend.connect(this.reverb);
+        this.reverb.connect(this.master);
+
+        this.musicBus.connect(this.delay);
+        this.delay.connect(this.delayFeedback);
+        this.delayFeedback.connect(this.delay);
+        this.delay.connect(this.delayOutput);
+        this.delayOutput.connect(this.master);
+
+        this.drumBus.connect(drumShape);
+        drumShape.connect(this.master);
+
+        this.bassBus.connect(bassDrive);
+        bassDrive.connect(bassLowpass);
+        bassLowpass.connect(bassPresence);
+        bassPresence.connect(this.master);
+
+        this.master.connect(this.masterFilter);
+        this.masterFilter.connect(this.compressor);
+        this.compressor.connect(this.analyser);
+        this.analyser.connect(ctx.destination);
+
+        this.initialized = true;
+    },
+
+    async createImpulse(duration, decay) {
+        const rate = this.ctx.sampleRate;
+        const length = rate * duration;
+        const buffer = this.ctx.createBuffer(2, length, rate);
+        for (let channel = 0; channel < 2; channel++) {
+            const data = buffer.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+                const t = i / length;
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+            }
+        }
+        return buffer;
+    },
+
+    duck(time, depth = 0.34, release = 0.22) {
+        const g = this.musicBus.gain;
+        g.cancelScheduledValues(time);
+        g.setValueAtTime(g.value, time);
+        g.linearRampToValueAtTime(1 - depth, time + 0.015);
+        g.exponentialRampToValueAtTime(0.88, time + release);
+    },
+
+    setIntensity(value) {
+        motion.intensity = clamp(value, 0.18, 1.0);
+        dom.intensityFill.style.width = `${motion.intensity * 100}%`;
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const top = 12000 + motion.intensity * 5000;
+        this.masterFilter.frequency.setTargetAtTime(top, now, 0.18);
+        this.reverbSend.gain.setTargetAtTime(0.16 + motion.intensity * 0.12, now, 0.25);
+        this.delayOutput.gain.setTargetAtTime(0.10 + motion.intensity * 0.14, now, 0.25);
+    },
+
+    playKick(time, accent = 1.0) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const amp = ctx.createGain();
+        const click = ctx.createBufferSource();
+        const clickGain = ctx.createGain();
+        const clickFilter = ctx.createBiquadFilter();
+
+        const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.018), ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
+        }
+        click.buffer = buffer;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(160, time);
+        osc.frequency.exponentialRampToValueAtTime(42, time + 0.18);
+
+        amp.gain.setValueAtTime(0.0001, time);
+        amp.gain.exponentialRampToValueAtTime(1.15 * accent, time + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.34);
+
+        clickFilter.type = 'highpass';
+        clickFilter.frequency.value = 1900;
+
+        clickGain.gain.setValueAtTime(0.22 * accent, time);
+        clickGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
+
+        osc.connect(amp);
+        amp.connect(this.drumBus);
+        click.connect(clickFilter);
+        clickFilter.connect(clickGain);
+        clickGain.connect(this.drumBus);
+
+        osc.start(time);
+        osc.stop(time + 0.4);
+        click.start(time);
+        click.stop(time + 0.04);
+
+        this.duck(time, 0.32 + motion.intensity * 0.08, 0.18);
+        scheduleMotionPulse(time, 'beatPulse', 1.0 * accent);
+        spawnRippleFuture(time, 1.0 * accent, 'kick');
+    },
+
+    playClap(time, accent = 1.0) {
+        const ctx = this.ctx;
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        const bodyOsc = ctx.createOscillator();
+        const bodyGain = ctx.createGain();
+
+        const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.12), ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2.2);
+        }
+        source.buffer = buffer;
+
+        filter.type = 'bandpass';
+        filter.frequency.value = 1800;
+        filter.Q.value = 0.7;
+
+        gain.gain.setValueAtTime(0.0001, time);
+        gain.gain.linearRampToValueAtTime(0.22 * accent, time + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
+
+        bodyOsc.type = 'triangle';
+        bodyOsc.frequency.setValueAtTime(220, time);
+        bodyOsc.frequency.exponentialRampToValueAtTime(170, time + 0.08);
+
+        bodyGain.gain.setValueAtTime(0.001, time);
+        bodyGain.gain.linearRampToValueAtTime(0.08 * accent, time + 0.01);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.11);
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.airBus);
+        bodyOsc.connect(bodyGain);
+        bodyGain.connect(this.airBus);
+
+        source.start(time);
+        source.stop(time + 0.13);
+        bodyOsc.start(time);
+        bodyOsc.stop(time + 0.12);
+
+        scheduleMotionPulse(time, 'shimmerPulse', 0.42);
+        spawnRippleFuture(time, 0.38, 'air');
+    },
+
+    playHat(time, open = false) {
+        const ctx = this.ctx;
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        const duration = open ? 0.18 : 0.045;
+
+        const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = (Math.random() * 2 - 1);
+        }
+        source.buffer = buffer;
+
+        filter.type = 'highpass';
+        filter.frequency.value = open ? 7200 : 8400;
+
+        gain.gain.setValueAtTime(0.0001, time);
+        gain.gain.linearRampToValueAtTime(open ? 0.1 : 0.06, time + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.airBus);
+
+        source.start(time);
+        source.stop(time + duration + 0.01);
+
+        scheduleMotionPulse(time, 'shimmerPulse', open ? 0.32 : 0.16);
+    },
+
+    playTom(time, midi, duration = 0.18) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        const freq = midiToFreq(midi);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq * 1.6, time);
+        osc.frequency.exponentialRampToValueAtTime(freq, time + duration);
+
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+
+        gain.gain.setValueAtTime(0.0001, time);
+        gain.gain.linearRampToValueAtTime(0.28, time + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.drumBus);
+
+        osc.start(time);
+        osc.stop(time + duration + 0.01);
+
+        scheduleMotionPulse(time, 'beatPulse', 0.42);
+    },
+
+    playSub(time, midi, duration, glideToMidi = null) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const upper = ctx.createOscillator();
+        const amp = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        const saturationSend = ctx.createGain();
+        const baseFreq = midiToFreq(midi);
+
+        osc.type = 'sine';
+        upper.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, time);
+        upper.frequency.setValueAtTime(baseFreq, time);
+
+        if (glideToMidi !== null) {
+            const targetFreq = midiToFreq(glideToMidi);
+            osc.frequency.exponentialRampToValueAtTime(targetFreq, time + duration);
+            upper.frequency.exponentialRampToValueAtTime(targetFreq, time + duration);
+        }
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(180 + motion.intensity * 80, time);
+        filter.frequency.linearRampToValueAtTime(100 + motion.intensity * 70, time + duration);
+        filter.Q.value = 0.7;
+
+        amp.gain.setValueAtTime(0.0001, time);
+        amp.gain.linearRampToValueAtTime(0.7 + motion.intensity * 0.18, time + 0.02);
+        amp.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+        saturationSend.gain.value = 0.82;
+
+        osc.connect(filter);
+        upper.connect(saturationSend);
+        saturationSend.connect(filter);
+        filter.connect(amp);
+        amp.connect(this.bassBus);
+
+        osc.start(time);
+        upper.start(time);
+        osc.stop(time + duration + 0.02);
+        upper.stop(time + duration + 0.02);
+
+        scheduleMotionPulse(time, 'bassPulse', 0.8);
+        spawnRippleFuture(time, 0.55, 'bass');
+    },
+
+    playPulse(time, midi, duration, brightness = 0.6) {
+        const ctx = this.ctx;
+        const oscA = ctx.createOscillator();
+        const oscB = ctx.createOscillator();
+        const amp = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        const freq = midiToFreq(midi);
+
+        oscA.type = 'sawtooth';
+        oscB.type = 'triangle';
+        oscA.frequency.value = freq;
+        oscB.frequency.value = freq * 2;
+        oscB.detune.value = 6;
+
+        filter.type = 'lowpass';
+        const top = 900 + brightness * 2600 + motion.intensity * 1800;
+        filter.frequency.setValueAtTime(top, time);
+        filter.frequency.exponentialRampToValueAtTime(400 + brightness * 380, time + duration);
+        filter.Q.value = 2.4;
+
+        amp.gain.setValueAtTime(0.0001, time);
+        amp.gain.linearRampToValueAtTime(0.12 + brightness * 0.08, time + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+        oscA.connect(filter);
+        oscB.connect(filter);
+        filter.connect(amp);
+        amp.connect(this.musicBus);
+
+        oscA.start(time);
+        oscB.start(time);
+        oscA.stop(time + duration + 0.02);
+        oscB.stop(time + duration + 0.02);
+
+        scheduleMotionPulse(time, 'shimmerPulse', 0.22 + brightness * 0.2);
+    },
+
+    playPadChord(time, chord, duration) {
+        const ctx = this.ctx;
+        const attack = Math.min(1.2, duration * 0.28);
+        const releaseTime = duration + 0.35;
+
+        chord.intervals.forEach((interval, index) => {
+            const midi = chord.root + interval;
+            const freq = midiToFreq(midi);
+            const oscA = ctx.createOscillator();
+            const oscB = ctx.createOscillator();
+            const amp = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+
+            oscA.type = 'triangle';
+            oscB.type = 'sawtooth';
+            oscA.frequency.value = freq;
+            oscB.frequency.value = freq;
+            oscB.detune.value = index % 2 === 0 ? -8 : 8;
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1200 + motion.intensity * 1200, time);
+            filter.frequency.linearRampToValueAtTime(700 + motion.intensity * 600, time + duration);
+            filter.Q.value = 0.7;
+
+            amp.gain.setValueAtTime(0.0001, time);
+            amp.gain.linearRampToValueAtTime(0.05, time + attack);
+            amp.gain.setValueAtTime(0.05, time + duration * 0.72);
+            amp.gain.exponentialRampToValueAtTime(0.0001, time + releaseTime);
+
+            oscA.connect(filter);
+            oscB.connect(filter);
+            filter.connect(amp);
+            amp.connect(this.airBus);
+
+            oscA.start(time);
+            oscB.start(time);
+            oscA.stop(time + releaseTime + 0.05);
+            oscB.stop(time + releaseTime + 0.05);
+        });
+
+        scheduleMotionPulse(time, 'shimmerPulse', 0.28);
+    },
+
+    playMantra(time, rootMidi, duration = 1.6) {
+        const ctx = this.ctx;
+        const osc = ctx.createOscillator();
+        const noise = ctx.createBufferSource();
+        const voice = ctx.createGain();
+        const formant1 = ctx.createBiquadFilter();
+        const formant2 = ctx.createBiquadFilter();
+        const whisper = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.value = midiToFreq(rootMidi + 12);
+
+        const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2.8);
+        }
+        noise.buffer = buffer;
+
+        formant1.type = 'bandpass';
+        formant1.frequency.value = 620;
+        formant1.Q.value = 8;
+
+        formant2.type = 'bandpass';
+        formant2.frequency.value = 1080;
+        formant2.Q.value = 10;
+
+        voice.gain.setValueAtTime(0.0001, time);
+        voice.gain.linearRampToValueAtTime(0.08 + motion.intensity * 0.04, time + 0.18);
+        voice.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+        whisper.gain.setValueAtTime(0.0001, time);
+        whisper.gain.linearRampToValueAtTime(0.024, time + 0.12);
+        whisper.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+        osc.connect(formant1);
+        osc.connect(formant2);
+        formant1.connect(voice);
+        formant2.connect(voice);
+        voice.connect(this.airBus);
+
+        noise.connect(whisper);
+        whisper.connect(this.airBus);
+
+        osc.start(time);
+        noise.start(time);
+        osc.stop(time + duration + 0.02);
+        noise.stop(time + duration + 0.02);
+
+        scheduleMotionPulse(time, 'shimmerPulse', 0.52);
+        spawnRippleFuture(time, 0.5, 'mantra');
+    }
+};
+
+dom.enterButton.addEventListener('click', startPiece);
+
+window.addEventListener('resize', resize);
+
+window.addEventListener('mousemove', (event) => {
+    const intensity = 1 - (event.clientY / window.innerHeight);
+    if (AudioEngine.initialized) {
+        AudioEngine.setIntensity(0.2 + intensity * 0.8);
+    } else {
+        motion.intensity = 0.2 + intensity * 0.8;
+        dom.intensityFill.style.width = `${motion.intensity * 100}%`;
+    }
+});
+
+window.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space' || !AudioEngine.ctx) return;
+    event.preventDefault();
+
+    if (AudioEngine.ctx.state === 'running') {
+        AudioEngine.ctx.suspend();
+        sequencer.isPlaying = false;
+        if (sequencer.schedulerId) {
+            window.clearTimeout(sequencer.schedulerId);
+            sequencer.schedulerId = null;
+        }
+        dom.overlay.classList.remove('hidden');
+    } else {
+        AudioEngine.ctx.resume();
+        dom.overlay.classList.add('hidden');
+        if (!sequencer.isPlaying) {
+            sequencer.isPlaying = true;
+            sequencer.nextBarTime = AudioEngine.ctx.currentTime + 0.1;
+            runScheduler();
+        }
+    }
+});
+
+resize();
+dom.intensityFill.style.width = `${motion.intensity * 100}%`;
+render();
+</script>
+
+</body>
+</html>

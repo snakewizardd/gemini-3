@@ -8,6 +8,7 @@ The `python/` folder contains synthesis scripts and utilities that generate **pr
 
 | File | Type | Description | Size | Purpose |
 |------|------|-------------|------|---------|
+| **[creator_engine.py](creator_engine.py)** | Python | Local brief generator that turns recipient, occasion, key, mode, and palette into a Suno prompt plus visualizer handoff | ~250 lines | Repeatable creator workflow bridge |
 | **[attempt.py](attempt.py)** | Python | Full DSP pipeline: Karplus-Strong string synthesis, distortion, cabinet filtering, delay, reverb mastering. Metal guitar tone with 170 BPM fast tempo | 260 lines | High-gain metal synthesis engine |
 | **[dragonfire.py](dragonfire.py)** | Python | Dragon-themed composition script with aggressive harmonics, extreme filtering, and dynamic parameter evolution over time | ~280 lines | Cinematic/aggressive synthesis |
 | **[cyber_entry.py](cyber_entry.py)** | Python | Cyberpunk/industrial aesthetic synthesis with harsh timbres, rapid envelope modulation, and synchronized effects processing | ~250 lines | Cyber/industrial audio generation |
@@ -81,12 +82,15 @@ STRINGS = {
 ### Running a Synthesis Script
 
 ```bash
+python creator_engine.py    # Generates a shareable music/video brief
 python attempt.py           # Generates WAV file with metal guitar tone
 python dragonfire.py        # Aggressive dragon-themed composition
 python voodoo.py            # Mystical/experimental audio
 ```
 
-**Output**: Creates `[script_name]_output.wav` in the same directory.
+**Output**:
+- `creator_engine.py` prints a Markdown or JSON brief for external Suno/video workflows
+- Synthesis scripts create `[script_name]_output.wav` in the same directory
 
 ### Key Configuration Parameters (All Scripts)
 
@@ -136,6 +140,7 @@ Python scripts enable **offline rendering** and **programmatic control** impossi
 - Experimentation with DSP parameters
 - Creating reference implementations
 - Understanding synthesis mathematics deeply
+- Converting gemini-3 aesthetics into a repeatable person-specific workflow
 
 ---
 

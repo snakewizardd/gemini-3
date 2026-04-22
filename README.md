@@ -98,7 +98,7 @@ gemini-3/
 │   ├── india.md                       # Comprehensive notes & knowledge dump
 │   └── *.html                         # Iterative simulation experiments
 │
-├── opus/                              # Artistic expressions (7 core pieces)
+├── opus/                              # Artistic expressions (8 core pieces)
 │   ├── annihilate.html                # Aggressive dubstep destroyer
 │   ├── jellyfish.html                 # Organic particle system
 │   ├── lilypond.html                  # Classical trio composition
@@ -205,6 +205,8 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
 | **Generate music** | [`python/attempt.py`](python/attempt.py) or [`python/dragonfire.py`](python/dragonfire.py) |
 | **Explore visuals** | [`second/collatz.html`](second/collatz.html) or any file in `opus/` |
 | **View curated gallery** | [`docs/GALLERY.md`](docs/GALLERY.md) |
+| **Share the strongest work** | [`docs/CREATOR_SHOWCASE.md`](docs/CREATOR_SHOWCASE.md) |
+| **Generate a personal music/video brief** | [`python/creator_engine.py`](python/creator_engine.py) |
 
 ---
 

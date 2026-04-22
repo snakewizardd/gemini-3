@@ -8,13 +8,13 @@
 
 | Folder | Files | Index | Purpose |
 |--------|-------|-------|---------|
-| **opus/** | 7 | [opus/INDEX.md](opus/INDEX.md) | Masterwork String Engine artistic simulations |
+| **opus/** | 8 | [opus/INDEX.md](opus/INDEX.md) | Masterwork String Engine artistic simulations |
 | **tks/** | 33 | [tks/INDEX.md](tks/INDEX.md) | DDA agent research & development lab |
 | **second/** | 277 | [second/DETAILED_INDEX.md](second/DETAILED_INDEX.md) | Experimental archive - consciousness stream |
 | **python/** | 12 | [python/INDEX.md](python/INDEX.md) | DSP synthesis scripts & audio generation |
 | **proofs/** | 5 | [Below](#proofs-folder) | Mathematical foundations & formalization |
 | **whatami/** | 2 | [Below](#whatami-folder) | Philosophical manifestos & technical reference |
-| **docs/** | 4 | [Below](#docs-folder) | Comprehensive documentation |
+| **docs/** | 5 | [Below](#docs-folder) | Comprehensive documentation |
 | **tests/** | 2 | [Below](#tests-folder) | Validation & testing suite |
 | **Root** | 5+ | [Below](#root-level-files) | Configuration, README, scripts |
 
@@ -37,6 +37,7 @@ Complete index: **[opus/INDEX.md](opus/INDEX.md)**
 | **[festival.html](opus/festival.html)** | HTML5/Audio | Multi-instrument orchestral layers | Celebration |
 | **[evening.html](opus/evening.html)** | HTML5/Audio | Contemplative sparse arpeggios | Introspective |
 | **[fullclassic.html](opus/fullclassic.html)** | HTML5/Audio | Full orchestra simulation | Grandiose |
+| **[temple_of_e.html](opus/temple_of_e.html)** | HTML5/Audio | Bass-first E Aeolian ritual techno with synchronized sacred geometry | Techno |
 
 → **[Full opus/ documentation →](opus/INDEX.md)**
 
@@ -163,7 +164,7 @@ Complete index: **[python/INDEX.md](python/INDEX.md)**
 
 ### 📖 docs/ — Comprehensive Documentation
 
-**4 files** | System documentation and guidance
+**5 files** | System documentation and guidance
 
 | File | Purpose | Scope |
 |------|---------|-------|
@@ -171,6 +172,7 @@ Complete index: **[python/INDEX.md](python/INDEX.md)**
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Extension guidelines | How to add files, naming conventions, tone recipes |
 | **[DDA_VISUAL_GUIDE.md](docs/DDA_VISUAL_GUIDE.md)** | Visual explanation | Phase diagrams, bifurcation, persona engineering |
 | **[GALLERY.md](docs/GALLERY.md)** | Curated showcase | Tier-by-tier recommendations, use-case routing |
+| **[CREATOR_SHOWCASE.md](docs/CREATOR_SHOWCASE.md)** | Shareable curation + workflow bridge | Best proof files, date-safe lane, creator engine usage |
 
 → **[View all documentation →](docs/)**
 
@@ -220,6 +222,9 @@ Complete index: **[python/INDEX.md](python/INDEX.md)**
 **...see artistic experimentation**
 → Browse [second/DETAILED_INDEX.md](second/DETAILED_INDEX.md) by category
 
+**...package this into a repeatable creative workflow**
+→ Read [docs/CREATOR_SHOWCASE.md](docs/CREATOR_SHOWCASE.md) and run [python/creator_engine.py](python/creator_engine.py)
+
 **...understand the project philosophy**
 → Read [whatami/README.md](whatami/README.md)
 
@@ -261,7 +266,7 @@ ROOT
 ├── .gitignore ─────────────► Git configuration
 │
 ├── opus/
-│   ├── INDEX.md ───────────► [7 masterworks]
+│   ├── INDEX.md ───────────► [8 masterworks]
 │   └── [7 files] ──────────► String Engine showcase
 │
 ├── tks/
@@ -319,7 +324,7 @@ ROOT
 3. **Simulations** - Musical and artistic experimentation
    - 277 explorations: [second/DETAILED_INDEX.md](second/DETAILED_INDEX.md)
    - 33 research projects: [tks/INDEX.md](tks/INDEX.md)
-   - 7 masterworks: [opus/INDEX.md](opus/INDEX.md)
+   - 8 masterworks: [opus/INDEX.md](opus/INDEX.md)
 
 ---
 
@@ -338,11 +343,13 @@ ROOT
 | Purpose | Link |
 |---------|------|
 | **Hear music** | [opus/romance.html](opus/romance.html) |
+| **Share the best work** | [docs/CREATOR_SHOWCASE.md](docs/CREATOR_SHOWCASE.md) |
 | **Study theory** | [proofs/dda.md](proofs/dda.md) |
 | **See AI agent** | [tks/DDA_Elena_Sim.html](tks/DDA_Elena_Sim.html) |
 | **Browse art** | [second/DETAILED_INDEX.md](second/DETAILED_INDEX.md) |
 | **Learn synthesis** | [whatami/STRING_ENGINE_TECHNICAL_REFERENCE.md](whatami/STRING_ENGINE_TECHNICAL_REFERENCE.md) |
 | **Get coding** | [python/attempt.py](python/attempt.py) |
+| **Generate a personal brief** | [python/creator_engine.py](python/creator_engine.py) |
 | **Extend project** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | **Run tests** | [tests/](tests/) |
 
