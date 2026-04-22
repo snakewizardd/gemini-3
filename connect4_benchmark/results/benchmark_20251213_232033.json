@@ -1,0 +1,128 @@
+{
+  "models": [
+    "ChatGPT",
+    "Claude"
+  ],
+  "games": [
+    {
+      "game_id": 1,
+      "player1_model": "ChatGPT",
+      "player2_model": "Claude",
+      "winner": 1,
+      "winner_model": "ChatGPT",
+      "total_moves": 17,
+      "move_log": [
+        {
+          "move_num": 1,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 4
+        },
+        {
+          "move_num": 2,
+          "player": 2,
+          "model": "Claude",
+          "column": 4
+        },
+        {
+          "move_num": 3,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 3
+        },
+        {
+          "move_num": 4,
+          "player": 2,
+          "model": "Claude",
+          "column": 5
+        },
+        {
+          "move_num": 5,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 4
+        },
+        {
+          "move_num": 6,
+          "player": 2,
+          "model": "Claude",
+          "column": 6
+        },
+        {
+          "move_num": 7,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 5
+        },
+        {
+          "move_num": 8,
+          "player": 2,
+          "model": "Claude",
+          "column": 3
+        },
+        {
+          "move_num": 9,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 2
+        },
+        {
+          "move_num": 10,
+          "player": 2,
+          "model": "Claude",
+          "column": 7
+        },
+        {
+          "move_num": 11,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 4
+        },
+        {
+          "move_num": 12,
+          "player": 2,
+          "model": "Claude",
+          "column": 4
+        },
+        {
+          "move_num": 13,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 5
+        },
+        {
+          "move_num": 14,
+          "player": 2,
+          "model": "Claude",
+          "column": 3
+        },
+        {
+          "move_num": 15,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 5
+        },
+        {
+          "move_num": 16,
+          "player": 2,
+          "model": "Claude",
+          "column": 2
+        },
+        {
+          "move_num": 17,
+          "player": 1,
+          "model": "ChatGPT",
+          "column": 5
+        }
+      ],
+      "duration_seconds": 1812.97,
+      "timestamp": "2025-12-13T23:20:33.183139"
+    }
+  ],
+  "summary": {
+    "total_games": 1,
+    "model1_wins": 1,
+    "model2_wins": 0,
+    "draws": 0
+  }
+}

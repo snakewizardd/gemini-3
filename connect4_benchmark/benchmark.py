@@ -21,9 +21,6 @@ import time
 from game.board import Connect4
 from game.renderer import BoardRenderer
 from model_interfaces.base import BaseModel
-from model_interfaces.openai_model import OpenAIModel
-from model_interfaces.anthropic_model import AnthropicModel
-from model_interfaces.google_model import GoogleModel
 
 
 @dataclass
@@ -268,22 +265,47 @@ class Connect4Benchmark:
 
 def create_model(name: str, openai_key: str = None, anthropic_key: str = None, google_key: str = None) -> BaseModel:
     """Factory function to create model instances."""
+    from model_interfaces.manual_model import ManualModel, ClipboardModel
+    
     name_lower = name.lower()
     
+    # DDA (Dynamic Decision Algorithm) - standalone or wrapped
+    if name_lower == "dda":
+        from model_interfaces.dda_model import DDAModel
+        return DDAModel()
+    elif name_lower.startswith("dda+"):
+        # LLM augmentation mode: dda+gpt-4o, dda+claude-sonnet-4-20250514, etc.
+        from model_interfaces.dda_model import DDAModel
+        wrapped_name = name[4:]  # Remove "dda+" prefix
+        wrapped_model = create_model(wrapped_name, openai_key, anthropic_key, google_key)
+        return DDAModel(wrapped_model=wrapped_model)
+    
+    # Manual modes for web-based LLM access (no API needed)
+    if name_lower == "manual" or name_lower.startswith("manual:"):
+        display_name = name.split(":", 1)[1] if ":" in name else "Manual-LLM"
+        return ManualModel(display_name)
+    elif name_lower == "clipboard" or name_lower.startswith("clipboard:"):
+        display_name = name.split(":", 1)[1] if ":" in name else "Clipboard-LLM"
+        return ClipboardModel(display_name)
+    
+    # API-based models (lazy import to avoid requiring all libraries)
     if "gpt" in name_lower or "o1" in name_lower or "o3" in name_lower:
         if not openai_key:
             raise ValueError("OpenAI API key required for GPT models")
+        from model_interfaces.openai_model import OpenAIModel
         return OpenAIModel(openai_key, name)
     elif "claude" in name_lower:
         if not anthropic_key:
             raise ValueError("Anthropic API key required for Claude models")
+        from model_interfaces.anthropic_model import AnthropicModel
         return AnthropicModel(anthropic_key, name)
     elif "gemini" in name_lower:
         if not google_key:
             raise ValueError("Google API key required for Gemini models")
+        from model_interfaces.google_model import GoogleModel
         return GoogleModel(google_key, name)
     else:
-        raise ValueError(f"Unknown model: {name}. Use 'gpt-*', 'claude-*', or 'gemini-*'")
+        raise ValueError(f"Unknown model: {name}. Use 'gpt-*', 'claude-*', 'gemini-*', 'manual', or 'manual:Name'")
 
 
 if __name__ == "__main__":
