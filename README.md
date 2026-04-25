@@ -1,8 +1,12 @@
 # Gemini-3: Procedural Agency Through Mathematics
 
 *Dedicated to Malky. May her memory be a blessing.*
+___
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/snakewizardd/gemini-3)
 
 https://deepwiki.com/snakewizardd/gemini-3
+___
 
 A comprehensive exploration of **agency, decision-making, identity, and creativity** expressed through mathematics. This repository unifies three core systems: the **Dynamic Decision Algorithm (DDA)**, a **universal audio-visual synthesis engine**, and **interactive simulations** that bring mathematical agents to life.
 
