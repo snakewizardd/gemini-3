@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STRATOCASTER AFIRE — 3n+1 Experience</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#fff;font-family:Impact,'Arial Black',sans-serif}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{position:fixed;left:18px;bottom:16px;font:12px/1.6 'Courier New',monospace;letter-spacing:.14em;pointer-events:none;mix-blend-mode:screen;text-shadow:0 0 6px #b026ff,0 0 14px #ff5e00;z-index:2}
+#hud b{color:#ffb347;font-weight:700}#hud i{color:#3cf;font-style:normal}
+#tech{position:fixed;right:26px;top:20px;font-size:clamp(22px,4vw,46px);letter-spacing:.18em;pointer-events:none;mix-blend-mode:screen;opacity:0;z-index:2;text-shadow:0 0 12px currentColor,0 0 32px currentColor}
+#overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;cursor:pointer;z-index:10;background:radial-gradient(circle at 50% 50%,rgba(60,0,90,.92) 0%,rgba(12,0,24,.96) 45%,#000 80%);transition:opacity .9s}
+#overlay.hidden{opacity:0;pointer-events:none}
+h1{margin:0;font-size:clamp(44px,9vw,128px);line-height:.88;letter-spacing:.05em;background:linear-gradient(90deg,#b026ff,#ff5e00,#ffc400,#00c8ff,#b026ff);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 3.5s linear infinite;filter:drop-shadow(0 0 22px rgba(176,38,255,.75))}
+@keyframes flow{to{background-position:300% 0}}
+@keyframes throb{50%{opacity:.35;transform:scale(.97)}}
+.sub{font:13px 'Courier New',monospace;letter-spacing:.35em;color:#ff9a3c;text-shadow:0 0 10px #ff5e00}
+.go{font-size:22px;letter-spacing:.4em;color:#00d0ff;text-shadow:0 0 16px #00c8ff;animation:throb 1.4s ease-in-out infinite}
+.keys{font:11px 'Courier New',monospace;letter-spacing:.3em;color:#a07acc}
+#err{font:12px 'Courier New',monospace;color:#ff4040;max-width:70ch}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="tech"></div>
+<div id="overlay">
+  <h1>STRATOCASTER<br>AFIRE</h1>
+  <div class="sub">3n+1 EXPERIENCE · COLLATZ FUZZ ORACLE · E MINOR BLUES</div>
+  <div class="go">[ CLICK TO PLUG IN ]</div>
+  <div class="keys">MOUSE X · WAH &nbsp;&nbsp; MOUSE Y · FUZZ &nbsp;&nbsp; SPACE · KILL SWITCH</div>
+  <div id="err"></div>
+</div>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════
+// KARPLUS-STRONG STRING PHYSICS (AudioWorklet, fractional delay line)
+// ═══════════════════════════════════════════════════════════════
+const WORKLET = `
+const SR = sampleRate, LN2_12 = Math.LN2 / 12, TAU = 6.283185307179586;
+class Voice {
+  constructor(len) {
+    this.m = len - 1; this.buf = new Float32Array(len); this.exc = new Float32Array(len);
+    this.w = 0; this.lnP = Math.log(SR / 110); this.step = 0; this.cnt = 0;
+    this.S = 0.35; this.g = 0; this.prev = 0; this.eL = 0; this.eI = 0;
+    this.vd = 0; this.vdT = 0; this.vr = 5.5; this.ph = 0;
+  }
+}
+class StratString extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    let len = 1; while (len < SR / 8) len <<= 1;
+    this.maxP = len - 8; this.V = [];
+    for (let i = 0; i < 8; i++) this.V.push(new Voice(len));
+    this.q = []; this.fbV = 0;
+    this.port.onmessage = e => { const a = e.data; for (let i = 0; i < a.length; i++) this.q.push(a[i]); this.q.sort((x, y) => x.t - y.t); };
+  }
+  lnPer(f) { return Math.log(Math.min(this.maxP, Math.max(4, SR / f))); }
+  excite(v, amp, bright, pp) {
+    const L = Math.max(8, Math.min(this.maxP, Math.round(Math.exp(v.lnP))));
+    const a = 0.08 + 0.9 * bright, e = v.exc; let lp = 0;
+    for (let i = 0; i < L; i++) { lp += a * ((Math.random() * 2 - 1) - lp); e[i] = lp; }
+    const k = Math.max(1, Math.min(L - 1, Math.round(L * pp)));
+    for (let i = L - 1; i >= k; i--) e[i] = (e[i] - e[i - k]) * amp;
+    for (let i = 0; i < k; i++) e[i] *= amp;
+    v.eL = L; v.eI = 0;
+  }
+  glide(v, f, sec) {
+    const n = Math.max(1, Math.round(sec * SR));
+    v.step = (this.lnPer(f) - v.lnP) / n; v.cnt = n;
+  }
+  handle(ev) {
+    const v = this.V[ev.v]; if (!v) return;
+    switch (ev.type) {
+      case 'pluck':
+        v.lnP = this.lnPer(ev.f); v.cnt = 0; v.g = ev.g; v.S = ev.s; v.vd = 0; v.vdT = 0;
+        this.excite(v, ev.a, ev.b, ev.p);
+        if (ev.v < 6) this.fbV = ev.v;
+        break;
+      case 'legato':
+        this.glide(v, ev.f, ev.d);
+        if (ev.a > 0) this.excite(v, ev.a, 0.95, 0.5);
+        break;
+      case 'bend': this.glide(v, ev.f, ev.d); break;
+      case 'damp': v.g = ev.g; break;
+      case 'vib': v.vdT = ev.d; v.vr = ev.r; break;
+    }
+  }
+  process(inputs, outputs) {
+    const o0 = outputs[0][0], o1 = outputs[1] && outputs[1][0];
+    const inp = inputs[0] && inputs[0][0];
+    const n = o0.length, q = this.q, V = this.V;
+    for (let i = 0; i < n; i++) {
+      const t = currentTime + i / SR;
+      while (q.length && q[0].t <= t) this.handle(q.shift());
+      const fin = inp ? inp[i] : 0;
+      let s0 = 0, s1 = 0;
+      for (let k = 0; k < 8; k++) {
+        const v = V[k];
+        if (v.cnt > 0) { v.lnP += v.step; v.cnt--; }
+        let lp = v.lnP;
+        if (v.vdT > 0 || v.vd > 1e-4) {
+          v.vd += (v.vdT - v.vd) * 0.0004;
+          v.ph += TAU * v.vr / SR; if (v.ph > TAU) v.ph -= TAU;
+          lp -= v.vd * Math.sin(v.ph) * LN2_12;
+        }
+        let P = Math.exp(lp) - v.S;
+        if (P > this.maxP) P = this.maxP; else if (P < 3) P = 3;
+        const rp = v.w - P, ip = Math.floor(rp), fr = rp - ip, m = v.m, b = v.buf;
+        const xm = b[(ip - 1) & m], x0 = b[ip & m], x1 = b[(ip + 1) & m], x2 = b[(ip + 2) & m];
+        const c1 = 0.5 * (x1 - xm), c2 = xm - 2.5 * x0 + 2 * x1 - 0.5 * x2, c3 = 0.5 * (x2 - xm) + 1.5 * (x0 - x1);
+        const d = ((c3 * fr + c2) * fr + c1) * fr + x0;
+        let y = v.g * ((1 - v.S) * d + v.S * v.prev); v.prev = d;
+        if (v.eI < v.eL) y += v.exc[v.eI++];
+        if (k === this.fbV) y += fin * 0.6;
+        if (y > 1) y = 1 + 0.5 * Math.tanh(y - 1); else if (y < -1) y = -1 - 0.5 * Math.tanh(-y - 1);
+        b[v.w] = y; v.w = (v.w + 1) & m;
+        if (k < 7) s0 += y; else s1 += y;
+      }
+      o0[i] = s0 * 0.5; if (o1) o1[i] = s1 * 0.6;
+    }
+    return true;
+  }
+}
+registerProcessor('strat-string', StratString);
+`;
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIG / SCALE
+// ═══════════════════════════════════════════════════════════════
+const BPM = 108, SPB = 60 / BPM, ECHO_T = 0.75 * SPB;
+const SCALE_PC = new Set([4, 7, 9, 10, 11, 2]);            // E G A Bb B D
+const LEAD = []; for (let m = 52; m <= 86; m++) if (SCALE_PC.has(m % 12)) LEAD.push(m);
+const LI = i => LEAD[Math.max(0, Math.min(LEAD.length - 1, i))];
+const scaleAbove = (m, min) => { let x = m + min; while (!SCALE_PC.has(((x % 12) + 12) % 12)) x++; return x; };
+const E7S9 = [40, 52, 56, 62, 67];
+const BASS = [28, 0, 28, 40, 38, 0, 35, 0, 31, 33, 34, 35, 0, 38, 40, 0];
+const PROG = [0, 0, 0, 0, 5, 5, 0, 7];
+const KICK = [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1];
+const SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
+const noteName = m => NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+const STATE = { heat: 0, seed: 0, peak: 0, drive: 22 };
+
+let ctx = null, strings = null, NOISE = null;
+const N = {};
+
+// ═══════════════════════════════════════════════════════════════
+// AMP & PEDALBOARD CURVES
+// ═══════════════════════════════════════════════════════════════
+function fuzzCurve() {
+  const n = 8192, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i * 2 / (n - 1) - 1;
+    let y = x >= 0 ? Math.tanh(7 * x) : -Math.pow(Math.tanh(-5 * x), 0.7) * 0.82;
+    y += 0.1 * Math.sin(x * 23) * (1 - Math.abs(x));
+    c[i] = y;
+  }
+  return c;
+}
+function tanhCurve(k, norm) {
+  const n = 4096, c = new Float32Array(n), d = norm ? Math.tanh(k) : k;
+  for (let i = 0; i < n; i++) { const x = i * 2 / (n - 1) - 1; c[i] = Math.tanh(k * x) / d; }
+  return c;
+}
+function octCurve() {
+  const n = 4096, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = i * 2 / (n - 1) - 1; c[i] = Math.abs(x) * 1.5; }
+  return c;
+}
+function impulse(sec, decay) {
+  const len = Math.floor(ctx.sampleRate * sec), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      const chirp = Math.sin(i * 0.09 + ch) * 0.35;
+      d[i] = ((Math.random() * 2 - 1) + (ch ? -chirp : chirp)) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return buf;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO GRAPH:  STRINGS → FUZZ → WAH → AMP → CAB → (ECHO ⟲ | ROOM | FEEDBACK ⟲ STRINGS)
+// ═══════════════════════════════════════════════════════════════
+async function initAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  if (!ctx.audioWorklet) throw new Error('AudioWorklet unsupported in this browser.');
+  // file:// pages have an opaque origin, so blob: worklet URLs can be rejected; data: URLs always load.
+  try {
+    await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(WORKLET));
+  } catch (err) {
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })));
+  }
+  strings = new AudioWorkletNode(ctx, 'strat-string', {
+    numberOfInputs: 1, numberOfOutputs: 2, outputChannelCount: [1, 1],
+    channelCount: 1, channelCountMode: 'explicit'
+  });
+
+  const biq = (type, f, Q = 0.7, g = 0) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = Q; b.gain.value = g; return b; };
+  const gain = v => { const g = ctx.createGain(); g.gain.value = v; return g; };
+  const shaper = c => { const s = ctx.createWaveShaper(); s.curve = c; s.oversample = '4x'; return s; };
+  const osc = (type, f) => { const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.start(); return o; };
+
+  NOISE = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  { const d = NOISE.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+
+  // Guitar front end
+  N.pickHP = biq('highpass', 110); N.single = biq('peaking', 2800, 1.2, 5);
+  N.drive = gain(STATE.drive); N.fuzz = shaper(fuzzCurve()); N.fuzzTrim = gain(0.6);
+  N.octave = shaper(octCurve()); N.octHP = biq('highpass', 300); N.octGain = gain(0);
+  // Wah: bandpass swept by LFO
+  N.wah = biq('bandpass', 1050, 4.2); N.wahMake = gain(3.4); N.wahDry = gain(0.18);
+  N.wahLFO = osc('triangle', 2.4); N.wahDepth = gain(650);
+  N.wahLFO.connect(N.wahDepth); N.wahDepth.connect(N.wah.frequency);
+  // Amp + cab
+  N.ampIn = gain(1.8); N.amp = shaper(tanhCurve(2.2, true));
+  N.cabHP = biq('highpass', 75); N.cabLo = biq('peaking', 120, 0.9, 4); N.cabMid = biq('peaking', 1600, 0.8, 3);
+  N.cabLP = biq('lowpass', 5200, 0.8); N.gtr = gain(0.32);
+
+  strings.connect(N.pickHP, 0);
+  N.pickHP.connect(N.single); N.single.connect(N.drive); N.drive.connect(N.fuzz); N.fuzz.connect(N.fuzzTrim);
+  N.fuzzTrim.connect(N.wah); N.wah.connect(N.wahMake); N.wahMake.connect(N.ampIn);
+  N.fuzzTrim.connect(N.wahDry); N.wahDry.connect(N.ampIn);
+  N.fuzzTrim.connect(N.octave); N.octave.connect(N.octHP); N.octHP.connect(N.octGain); N.octGain.connect(N.wah);
+  N.ampIn.connect(N.amp); N.amp.connect(N.cabHP); N.cabHP.connect(N.cabLo); N.cabLo.connect(N.cabMid); N.cabMid.connect(N.cabLP); N.cabLP.connect(N.gtr);
+
+  N.an = ctx.createAnalyser(); N.an.fftSize = 2048; N.an.smoothingTimeConstant = 0.5;
+  N.fuzz.connect(N.an);
+
+  // Output buses
+  N.bus = gain(1);
+  N.comp = ctx.createDynamicsCompressor();
+  N.comp.threshold.value = -16; N.comp.knee.value = 8; N.comp.ratio.value = 4; N.comp.attack.value = 0.005; N.comp.release.value = 0.25;
+  N.lim = ctx.createDynamicsCompressor();
+  N.lim.threshold.value = -2; N.lim.knee.value = 0; N.lim.ratio.value = 20; N.lim.attack.value = 0.001; N.lim.release.value = 0.1;
+  N.master = gain(0.85);
+  N.bus.connect(N.comp); N.comp.connect(N.lim); N.lim.connect(N.master); N.master.connect(ctx.destination);
+
+  // Electric Ladyland auto-pan
+  N.pan = ctx.createStereoPanner(); N.panLFO = osc('sine', 0.11);
+  N.panDepth = gain(0.55); N.panLFO.connect(N.panDepth); N.panDepth.connect(N.pan.pan);
+  N.gtr.connect(N.pan); N.pan.connect(N.bus);
+
+  // Echo line riding the edge of self-oscillation (tanh-bounded loop)
+  N.echoSend = gain(0.45); N.echoDel = ctx.createDelay(3); N.echoDel.delayTime.value = ECHO_T;
+  N.echoLP = biq('lowpass', 2800); N.echoHP = biq('highpass', 260); N.echoSat = shaper(tanhCurve(1.2, false));
+  N.echoFb = gain(0.8); N.echoOut = gain(0.5); N.echoPan = ctx.createStereoPanner(); N.echoInv = gain(-0.75);
+  N.wow = osc('sine', 0.35); N.wowDepth = gain(0.0025); N.wow.connect(N.wowDepth); N.wowDepth.connect(N.echoDel.delayTime);
+  N.gtr.connect(N.echoSend); N.echoSend.connect(N.echoDel); N.echoDel.connect(N.echoLP); N.echoLP.connect(N.echoHP);
+  N.echoHP.connect(N.echoSat); N.echoSat.connect(N.echoFb); N.echoFb.connect(N.echoDel);
+  N.echoSat.connect(N.echoOut); N.echoOut.connect(N.echoPan); N.echoPan.connect(N.bus);
+  N.panLFO.connect(N.echoInv); N.echoInv.connect(N.echoPan.pan);
+
+  // Room
+  N.rev = ctx.createConvolver(); N.rev.buffer = impulse(2.6, 3.2);
+  N.revSend = gain(0.3); N.revOut = gain(0.35);
+  N.gtr.connect(N.revSend); N.revSend.connect(N.rev); N.rev.connect(N.revOut); N.revOut.connect(N.bus);
+
+  // Amp → string acoustic feedback loop
+  N.fbGain = gain(0); N.fbDel = ctx.createDelay(0.05); N.fbDel.delayTime.value = 0.0073;
+  N.gtr.connect(N.fbGain); N.fbGain.connect(N.fbDel); N.fbDel.connect(strings);
+
+  // Bass string
+  N.bassDrive = gain(2.5); N.bassSh = shaper(tanhCurve(2, true)); N.bassLP = biq('lowpass', 900); N.bassOut = gain(0.55);
+  strings.connect(N.bassDrive, 1); N.bassDrive.connect(N.bassSh); N.bassSh.connect(N.bassLP); N.bassLP.connect(N.bassOut); N.bassOut.connect(N.bus);
+
+  // Drums
+  N.drums = gain(0.7); N.drumRev = gain(0.12);
+  N.drums.connect(N.bus); N.drums.connect(N.drumRev); N.drumRev.connect(N.rev);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THE GUITARIST (string voice manager)
+// ═══════════════════════════════════════════════════════════════
+const G = {
+  lv: 0, out: [],
+  hz: m => 440 * Math.pow(2, (m - 69) / 12),
+  post(e) { this.out.push(e); },
+  flush() { if (this.out.length) { strings.port.postMessage(this.out); this.out = []; } },
+  pick(t, m, vel = 0.9, o = {}) {
+    if (!o.keep) for (let k = 0; k < 6; k++) this.post({ t, type: 'damp', v: k, g: 0.93 });
+    this.lv = (this.lv + 1) % 6;
+    this.post({ t, type: 'pluck', v: this.lv, f: this.hz(m), a: vel, b: o.b ?? 0.8, s: o.s ?? 0.3, g: o.g ?? 0.9965, p: o.p ?? (0.1 + Math.random() * 0.08) });
+    STATE.heat = Math.max(STATE.heat, vel * 0.35);
+    V.at(t, () => V.burst(m, vel, 1));
+  },
+  legato(t, m) {
+    this.post({ t, type: 'legato', v: this.lv, f: this.hz(m), d: 0.004, a: 0.07 });
+    V.at(t, () => V.burst(m, 0.5, 0.45));
+  },
+  bend(t, m, sec) {
+    this.post({ t, type: 'bend', v: this.lv, f: this.hz(m), d: sec });
+    V.at(t, () => { V.warp = 1; V.bolt(2); });
+  },
+  vib(t, depth, rate) { this.post({ t, type: 'vib', v: this.lv, d: depth, r: rate }); },
+  chord(t, ms, vel) {
+    for (let k = 0; k < 6; k++) this.post({ t, type: 'damp', v: k, g: 0.9 });
+    ms.forEach((m, i) => this.post({ t: t + i * 0.011, type: 'pluck', v: i, f: this.hz(m), a: vel, b: 0.85, s: 0.3, g: 0.997, p: 0.13 }));
+    this.lv = ms.length - 1;
+    V.at(t, () => { ms.forEach(m => V.burst(m, vel, 0.8)); V.bolt(4); V.flash = 1; });
+  },
+  dampAll(t, g = 0.85) { for (let k = 0; k < 6; k++) this.post({ t, type: 'damp', v: k, g }); },
+  bass(t, m) { this.post({ t, type: 'pluck', v: 7, f: this.hz(m), a: 0.85, b: 0.35, s: 0.45, g: 0.993, p: 0.22 }); },
+  bassMute(t) { this.post({ t, type: 'damp', v: 7, g: 0.9 }); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// PEDAL AUTOMATION
+// ═══════════════════════════════════════════════════════════════
+const FX = {
+  wahRate(t, r) { N.wahLFO.frequency.setTargetAtTime(r, t, 0.05); },
+  swell(t, amt, dur) { N.fbGain.gain.setTargetAtTime(amt, t, dur * 0.3); N.fbGain.gain.setTargetAtTime(0, t + dur, 0.08); },
+  edge(t, dur) { N.echoFb.gain.setTargetAtTime(1.045, t, 0.15); N.echoFb.gain.setTargetAtTime(0.8, t + dur, 0.5); },
+  octave(t, amt, dur) { N.octGain.gain.setTargetAtTime(amt, t, 0.02); N.octGain.gain.setTargetAtTime(0, t + dur, 0.1); },
+  spin(t, dur) { N.echoDel.delayTime.setTargetAtTime(ECHO_T * 0.35, t, dur * 0.5); N.echoDel.delayTime.setTargetAtTime(ECHO_T, t + dur, 0.3); },
+  heat(t, h) { V.at(t, () => { STATE.heat = Math.max(STATE.heat, h); }); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DRUMS (synthesized)
+// ═══════════════════════════════════════════════════════════════
+const D = {
+  env(node, t, peak, dec) { const g = ctx.createGain(); g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.001, t + dec); node.connect(g); g.connect(N.drums); return g; },
+  noise(t, dur) { const s = ctx.createBufferSource(); s.buffer = NOISE; s.start(t, Math.random() * 1.5, dur); return s; },
+  kick(t, v) {
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.11);
+    this.env(o, t, v, 0.4); o.start(t); o.stop(t + 0.45);
+    const n = this.noise(t, 0.012), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000; n.connect(hp); this.env(hp, t, v * 0.3, 0.012);
+    V.at(t, () => { V.kick = 1; });
+  },
+  snare(t, v) {
+    const n = this.noise(t, 0.22), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200; n.connect(hp); this.env(hp, t, v * 0.7, 0.18);
+    const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(230, t); o.frequency.exponentialRampToValueAtTime(170, t + 0.1);
+    this.env(o, t, v * 0.45, 0.1); o.start(t); o.stop(t + 0.12);
+    if (v > 0.5) V.at(t, () => { V.snare = 1; });
+  },
+  hat(t, v, open) {
+    const dec = open ? 0.3 : 0.045, n = this.noise(t, dec + 0.02), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7500;
+    n.connect(hp); this.env(hp, t, v * 0.35, dec);
+  },
+  tom(t, f, v) {
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.15);
+    this.env(o, t, v * 0.8, 0.35); o.start(t); o.stop(t + 0.4);
+    V.at(t, () => { V.kick = 0.6; });
+  },
+  crash(t, v) {
+    const n = this.noise(t, 2), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3500; n.connect(hp); this.env(hp, t, v * 0.4, 1.8);
+    V.at(t, () => { V.flash = Math.max(V.flash, 0.7); });
+  }
+};
+
+const Band = {
+  fillN: 0,
+  fill(n) { this.fillN = Math.max(this.fillN, n); },
+  step(i, t) {
+    const s = i % 16, bar = Math.floor(i / 16), root = PROG[bar % 8], h = STATE.heat;
+    const bn = BASS[s];
+    if (bn) G.bass(t, bn + root); else G.bassMute(t);
+    if (this.fillN > 0) {
+      const k = this.fillN--;
+      D.tom(t, 70 + k * 18, 0.9);
+      if (s % 2 === 0) D.kick(t, 0.9);
+      if (k % 2 === 1) D.snare(t, 0.6);
+    } else {
+      if (KICK[s] || (h > 0.7 && s === 11)) D.kick(t, 1);
+      if (SNARE[s]) D.snare(t, 1);
+      else if (Math.random() < 0.1 + h * 0.3) D.snare(t + (Math.random() - 0.5) * 0.008, 0.22);
+      if (s % 2 === 0) D.hat(t, s % 4 === 0 ? 0.55 : 0.38, s === 14);
+      else if (h > 0.45) D.hat(t, 0.2, false);
+    }
+    if (s === 0 && bar % 8 === 0) D.crash(t, 0.9);
+    STATE.heat *= 0.975;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// THE SHRED: COLLATZ ORBIT → E MINOR BLUES
+// ═══════════════════════════════════════════════════════════════
+function orbit(n) { const a = [n]; while (n !== 1) { n = n % 2 === 0 ? n / 2 : 3 * n + 1; a.push(n); } return a; }
+function pickSeed(k) {
+  const famous = [27, 97, 231, 703, 871, 6171];
+  if (k === 0) return 27;
+  if (Math.random() < 0.35) return famous[Math.floor(Math.random() * famous.length)];
+  for (;;) { const n = 100 + Math.floor(Math.random() * 400000), L = orbit(n).length; if (L >= 70 && L <= 200) return n; }
+}
+
+const P = (m, d, vel = 0.9, o) => ({ d, f: t => G.pick(t, m, vel, o) });
+const L = (m, d) => ({ d, f: t => G.legato(t, m) });
+const tag = (text, color) => ({ d: 0, f: t => V.tagAt(t, text, color) });
+
+function* opening() {
+  yield { d: 0, f: t => { V.tagAt(t, 'E7♯9', '#ff5e00'); D.crash(t, 1); FX.wahRate(t, 1.2); FX.swell(t, 0.05, SPB * 1.5); } };
+  yield { d: 1, f: t => G.chord(t, E7S9, 1) };
+  yield { d: 0.5, f: t => G.chord(t, E7S9, 0.8) };
+  yield { d: 0.5, f: t => { G.dampAll(t, 0.8); FX.wahRate(t, 2.4); } };
+}
+function* hammer(idx) {
+  yield tag('HAMMER-ON', '#ffb347');
+  yield P(LI(idx), 0.25, 0.9); yield L(LI(idx + 1), 0.125); yield L(LI(idx), 0.125);
+}
+function* trill(idx, n) {
+  const a = LI(idx), b = LI(idx + 1);
+  yield { d: 0, f: t => { V.tagAt(t, 'TRILL ×' + n, '#00c8ff'); FX.wahRate(t, 7); FX.heat(t, 0.6); } };
+  yield P(a, 1 / 12, 0.95);
+  for (let i = 0; i < n; i++) yield L(i % 2 ? a : b, 1 / 12);
+  yield { d: 0.25, f: t => { G.vib(t, 0.3, 6.5); FX.wahRate(t, 2.4); } };
+}
+function* cascade(ui, z) {
+  const n = z * 2 + 1, start = Math.max(ui, n);
+  yield { d: 0, f: t => { V.tagAt(t, 'CASCADE ↓' + z, '#ff5e00'); FX.wahRate(t, 4.5); FX.heat(t, 0.8); } };
+  for (let i = 0; i < n; i++) { const m = LI(start - i); yield i % 3 === 0 ? P(m, 1 / 8, 1) : L(m, 1 / 8); }
+  yield { d: 0.25, f: t => { G.pick(t, LI(start - n), 0.9); G.vib(t + 0.05, 0.25, 6); FX.wahRate(t, 2.4); } };
+}
+function* doubleStop(idx) {
+  const a = LI(idx), b = LI(idx - 2);
+  yield tag('DOUBLE-STOP', '#b026ff');
+  yield { d: 0.5, f: t => { G.pick(t, b, 0.85); G.pick(t + 0.004, a, 0.85, { keep: true }); } };
+}
+function* bendScream(ui) {
+  const m = LI(ui), tgt = scaleAbove(m, 2);
+  yield { d: 0, f: t => { V.tagAt(t, 'BEND ' + noteName(m) + '→' + noteName(tgt), '#ff5e00'); FX.wahRate(t, 0.9); FX.swell(t, 0.07, SPB * 1.5); FX.heat(t, 0.7); } };
+  yield { d: 0.25, f: t => { G.pick(t, m, 1, { g: 0.9993, b: 0.9 }); G.bend(t + 0.02, tgt, 0.11); } };
+  yield { d: 0.75, f: t => G.vib(t, 0.35, 6.2) };
+  yield { d: 0.25, f: t => { G.vib(t, 0, 6); G.bend(t, m, 0.09); } };
+  yield { d: 0, f: t => FX.wahRate(t, 2.4) };
+}
+function* dive(idx, z) {
+  const m = LI(idx), sec = z * 0.12 * SPB;
+  yield { d: 0, f: t => { V.tagAt(t, 'WHAMMY −' + (2 * z), '#00c8ff'); FX.spin(t, sec); FX.heat(t, 0.8); } };
+  yield P(m, 0.25, 1, { g: 0.9985 });
+  yield { d: z * 0.12, f: t => { G.bend(t, m - 2 * z, sec); V.diveAt(t, sec); } };
+  yield { d: 0.125, f: t => G.bend(t, m, 0.03) };
+}
+function* peakScream(ui) {
+  const m = LI(Math.max(ui, LEAD.length - 3)), tgt = scaleAbove(m, 2);
+  yield { d: 0, f: t => { V.tagAt(t, 'PEAK · FEEDBACK', '#b026ff'); FX.wahRate(t, 0.6); FX.swell(t, 0.22, SPB * 3); FX.edge(t, SPB * 4); FX.octave(t, 0.9, SPB * 4); Band.fill(8); FX.heat(t, 1); D.crash(t, 1); } };
+  yield { d: 0.5, f: t => { G.pick(t, m, 1, { g: 0.9997, b: 1 }); G.bend(t + 0.03, tgt, 0.16); } };
+  yield { d: 2, f: t => G.vib(t, 0.6, 6.8) };
+  yield { d: 0, f: t => { V.tagAt(t, 'DIVE-BOMB', '#00c8ff'); G.vib(t, 0, 6); FX.spin(t, SPB * 2); } };
+  yield { d: 1.5, f: t => { G.bend(t, tgt - 24, SPB * 1.4); V.diveAt(t, SPB * 1.5); } };
+  yield { d: 0.5, f: t => G.bend(t, m, 0.06) };
+  yield { d: 0, f: t => FX.wahRate(t, 2.4) };
+}
+function* finale() {
+  yield { d: 0, f: t => { V.tagAt(t, 'n = 1 · SINGULARITY', '#00c8ff'); FX.wahRate(t, 5); FX.heat(t, 1); Band.fill(8); } };
+  let j = 0;
+  for (let i = LEAD.length - 1; i >= 0; i -= 2, j++) yield j % 3 === 0 ? P(LI(i), 1 / 6, 1) : L(LI(i), 1 / 6);
+  yield { d: 0, f: t => { V.tagAt(t, 'FEEDBACK', '#b026ff'); FX.swell(t, 0.24, SPB * 3.5); FX.edge(t, SPB * 5); FX.octave(t, 0.8, SPB * 3.5); FX.wahRate(t, 0.5); D.crash(t, 1); } };
+  yield { d: 1, f: t => G.pick(t, 40, 1, { g: 0.9997, b: 1, s: 0.25 }) };
+  yield { d: 2.5, f: t => G.vib(t, 0.5, 5.8) };
+  yield { d: 0, f: t => { V.tagAt(t, 'DIVE-BOMB', '#ff5e00'); FX.spin(t, SPB * 2.5); } };
+  yield { d: 2.5, f: t => { G.vib(t, 0, 6); G.bend(t, 10, SPB * 2.4); V.diveAt(t, SPB * 2.5); } };
+  yield { d: 1, f: t => { G.dampAll(t, 0.8); FX.wahRate(t, 2.4); } };
+}
+
+function* solo() {
+  for (let k = 0; ; k++) {
+    const seed = pickSeed(k), orb = orbit(seed);
+    let peak = 1; for (const x of orb) if (x > peak) peak = x;
+    const lp = Math.log(peak), I = v => Math.round(Math.log(v) / lp * (LEAD.length - 1));
+    yield { d: 0, f: t => V.at(t, () => { STATE.seed = seed; STATE.peak = peak; }) };
+    yield* opening();
+    let rec = seed;
+    for (let s = 0; s < orb.length; s++) {
+      const v = orb[s], idx = I(v), m = LI(idx);
+      yield { d: 0, f: t => V.hudAt(t, s, orb.length, v, m) };
+      if (v === 1) { yield* finale(); break; }
+      if (v % 2 === 1) {
+        const u = 3 * v + 1; let z = 0, w = u; while (w % 2 === 0) { w /= 2; z++; }
+        const ui = I(u);
+        if (u === peak) yield* peakScream(ui);
+        else if (u > rec) { rec = u; yield* bendScream(ui); }
+        else if (z >= 6) yield* dive(idx, z);
+        else if (z >= 3) yield* cascade(ui, z);
+        else if (z === 1) yield* hammer(idx);
+        else yield* trill(idx, 5 + (v % 7));
+      } else {
+        const r = (v / 2) % 6;
+        if (v % 24 === 0) yield* trill(idx, 6 + (v % 5));
+        else if (r === 0) yield* doubleStop(idx);
+        else if (r === 1 || r === 4) yield P(m, 0.25, 0.85 + Math.random() * 0.15);
+        else if (r === 2) { yield P(m, 0.125, 0.9); yield L(LI(idx - 1), 0.125); }
+        else if (r === 3) { yield P(m, 1 / 6, 0.9); yield L(LI(idx + 1), 1 / 6); yield L(m, 1 / 6); }
+        else { yield P(m, 0.125, 0.95); yield P(m, 0.125, 0.8); }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOOKAHEAD SCHEDULER
+// ═══════════════════════════════════════════════════════════════
+let gen, tSolo = 0, tStep = 0, stepI = 0;
+function tick() {
+  if (!ctx || ctx.state !== 'running') return;
+  const now = ctx.currentTime, ahead = now + (document.hidden ? 1.5 : 0.2);
+  if (tSolo < now) tSolo = now + 0.02;
+  if (tStep < now) tStep = now + 0.02;
+  while (tSolo < ahead) { const a = gen.next().value; if (a.f) a.f(tSolo); tSolo += a.d * SPB; }
+  while (tStep < ahead) { Band.step(stepI++, tStep); tStep += SPB / 4; }
+  G.flush();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VISUAL ENGINE: perspective projection + alpha stacking + video feedback
+// ═══════════════════════════════════════════════════════════════
+const cvs = document.getElementById('c'), c2 = cvs.getContext('2d');
+const buf = document.createElement('canvas'), b2 = buf.getContext('2d');
+const HUD = document.getElementById('hud'), TECH = document.getElementById('tech');
+let W = 0, H = 0, DPR = 1, FOV = 400;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  W = cvs.width = buf.width = Math.floor(innerWidth * DPR); H = cvs.height = buf.height = Math.floor(innerHeight * DPR);
+  FOV = Math.min(W, H) * 0.9;
+  c2.fillStyle = '#000'; c2.fillRect(0, 0, W, H);
+}
+addEventListener('resize', resize); resize();
+
+const PAL = [[276, 100, 62], [22, 100, 55], [198, 100, 58], [300, 100, 60], [38, 100, 58], [215, 100, 62]];
+const hsl = (i, l = 0, j = 0) => { const p = PAL[((i % PAL.length) + PAL.length) % PAL.length]; return 'hsl(' + (p[0] + j) + ',' + p[1] + '%,' + (p[2] + l) + '%)'; };
+const pitchPal = m => m < 56 ? 0 : m < 64 ? 3 : m < 70 ? 1 : m < 76 ? 4 : m < 82 ? 2 : 5;
+const TD = new Float32Array(2048);
+
+const V = {
+  amp: 0, kick: 0, snare: 0, warp: 0, dive: 0, diveEnd: 0, flash: 0, rot: 0, frame: 0,
+  q: [], parts: [], stars: [], rings: [], bolts: [],
+  at(t, fn) { this.q.push({ t, fn }); },
+  tagAt(t, text, color) {
+    this.at(t, () => {
+      TECH.textContent = text; TECH.style.color = color;
+      TECH.animate([{ opacity: 1, transform: 'scale(1.35) skewX(-8deg)' }, { opacity: 0.9, offset: 0.3 }, { opacity: 0, transform: 'scale(1) skewX(0)' }], { duration: 1100, easing: 'ease-out' });
+    });
+  },
+  hudAt(t, s, len, v, m) {
+    this.at(t, () => {
+      HUD.innerHTML = 'SEED <b>' + STATE.seed + '</b> · PEAK <b>' + STATE.peak + '</b> · STEP <b>' + (s + 1) + '/' + len + '</b><br>' +
+        'n = <b>' + v + '</b> <i>' + (v === 1 ? '◉ SINGULARITY' : v % 2 ? '▲ 3n+1' : '▼ n/2') + '</i><br>' +
+        'NOTE <b>' + noteName(m) + '</b> · E MINOR BLUES · ' + BPM + ' BPM · FUZZ <b>' + Math.round(STATE.drive) + '</b>';
+    });
+  },
+  diveAt(t, dur) { this.at(t, () => { this.diveEnd = performance.now() + dur * 1000; }); },
+  burst(m, vel, scale) {
+    const n = Math.floor((10 + vel * 26) * scale * (1 + this.amp)), pi = pitchPal(m);
+    const sp = (3 + vel * 9) * (1 + this.amp * 2.5);
+    for (let i = 0; i < n && this.parts.length < 1600; i++) {
+      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), s = sp * (0.4 + Math.random());
+      this.parts.push({ x: 0, y: 0, z: 420, vx: r * Math.cos(th) * s, vy: r * Math.sin(th) * s, vz: u * s - 2,
+        life: 1, dec: 0.008 + Math.random() * 0.018, c: hsl(pi + (Math.random() < 0.25 ? 1 : 0), 5, (Math.random() - 0.5) * 30), sz: 1 + Math.random() * 2.5 });
+    }
+    if (vel >= 0.98 && Math.random() < 0.5) this.bolt(1);
+    this.rot += (m % 2 ? 1 : -1) * 0.02 * vel;
+  },
+  bolt(n) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, len = Math.min(W, H) * (0.35 + Math.random() * 0.35), pts = [];
+      for (let i = 0; i <= 14; i++) {
+        const f = i / 14, j = (Math.random() - 0.5) * 60 * DPR * f;
+        pts.push([Math.cos(a) * len * f - Math.sin(a) * j, Math.sin(a) * len * f + Math.cos(a) * j]);
+      }
+      this.bolts.push({ pts, life: 1, c: hsl(Math.random() < 0.5 ? 1 : 2, 15) });
+    }
+  }
+};
+for (let i = 0; i < 380; i++) V.stars.push({ x: (Math.random() * 2 - 1) * 1600, y: (Math.random() * 2 - 1) * 1600, z: 1 + Math.random() * 1500, c: hsl(i) });
+for (let i = 0; i < 14; i++) V.rings.push({ z: 100 + i * 105, c: i });
+
+function frame() {
+  requestAnimationFrame(frame);
+  V.frame++;
+  const now = ctx ? ctx.currentTime : 0, cx = W / 2, cy = H / 2;
+
+  if (ctx && V.q.length) {
+    const due = [];
+    V.q = V.q.filter(e => (e.t <= now ? (due.push(e), false) : true));
+    due.sort((a, b) => a.t - b.t).forEach(e => e.fn());
+  }
+
+  let rms = 0.04;
+  if (N.an) {
+    N.an.getFloatTimeDomainData(TD);
+    let s = 0; for (let i = 0; i < TD.length; i++) s += TD[i] * TD[i];
+    rms = Math.sqrt(s / TD.length);
+  } else {
+    for (let i = 0; i < TD.length; i++) TD[i] = Math.sin(i * 0.05 + V.frame * 0.05) * 0.1;
+  }
+  const target = N.an ? Math.max(0, Math.min(1, (rms - 0.55) * 2.5)) : 0.05;
+  V.amp += (target - V.amp) * (target > V.amp ? 0.5 : 0.08);
+  V.dive += ((performance.now() < V.diveEnd ? 1 : 0) - V.dive) * 0.08;
+  V.warp *= 0.96; V.kick *= 0.88; V.snare *= 0.85; V.flash *= 0.9; V.rot *= 0.97;
+  const A = V.amp;
+
+  // Video feedback: canvas drawn back onto itself, zoomed + twisted → outward warp
+  const zoom = 1.004 + A * 0.012 + V.dive * 0.05 + V.kick * 0.008;
+  const twist = 0.002 + V.rot * 0.1 + V.warp * 0.025 * Math.sin(V.frame * 0.07) + V.dive * 0.03;
+  c2.save();
+  b2.globalCompositeOperation = 'copy'; b2.drawImage(cvs, 0, 0);
+  c2.fillStyle = '#000'; c2.fillRect(0, 0, W, H);
+  c2.globalAlpha = 0.8;
+  c2.translate(cx, cy); c2.rotate(twist); c2.scale(zoom, zoom);
+  c2.drawImage(buf, -cx, -cy);
+  c2.restore();
+
+  // Alpha stacking
+  c2.fillStyle = 'rgba(0,0,0,0.1)';
+  c2.fillRect(0, 0, W, H);
+  if (V.flash > 0.02 || V.snare > 0.05) {
+    c2.fillStyle = 'rgba(' + (V.snare > V.flash ? '176,38,255,' : '255,94,0,') + (Math.max(V.flash, V.snare) * 0.12) + ')';
+    c2.fillRect(0, 0, W, H);
+  }
+
+  const sh = (A * A * 7 + V.kick * 4) * DPR;
+  const ox = cx + (Math.random() - 0.5) * sh, oy = cy + (Math.random() - 0.5) * sh;
+  c2.globalCompositeOperation = 'lighter';
+
+  // Warp-speed starfield (X_screen = X·FOV / (Z + viewerZ))
+  const VZ = 10, speed = 2 + A * 30 + V.dive * 45 + V.kick * 10;
+  c2.lineCap = 'round';
+  for (const s of V.stars) {
+    const pz = s.z; s.z -= speed;
+    if (s.z < 1) { s.z = 1500; s.x = (Math.random() * 2 - 1) * 1600; s.y = (Math.random() * 2 - 1) * 1600; continue; }
+    const k1 = FOV / (s.z + VZ), k0 = FOV / (pz + VZ + speed * 0.8);
+    const x1 = ox + s.x * k1, y1 = oy + s.y * k1;
+    if (x1 < -50 || x1 > W + 50 || y1 < -50 || y1 > H + 50) continue;
+    c2.strokeStyle = s.c; c2.globalAlpha = Math.min(0.8, (1 - s.z / 1500) * (0.08 + A * 0.3));
+    c2.lineWidth = Math.max(0.5, Math.min(4, k1 * 1.6));
+    c2.beginPath(); c2.moveTo(ox + s.x * k0, oy + s.y * k0); c2.lineTo(x1, y1); c2.stroke();
+  }
+
+  // Perspective tunnel rings (pulled hard during dive-bombs)
+  for (const r of V.rings) {
+    r.z -= speed * 0.6;
+    if (r.z < 20) { r.z += 1470; r.c++; }
+    const k = FOV / (r.z + VZ), rad = 700 * k;
+    const al = (0.05 + V.dive * 0.5 + A * 0.12) * (1 - r.z / 1500);
+    if (al < 0.01 || rad > W * 2) continue;
+    c2.globalAlpha = al; c2.strokeStyle = hsl(r.c, 0, V.frame * 0.5 % 40);
+    c2.lineWidth = 1.5 + k * 6;
+    c2.beginPath();
+    c2.ellipse(ox, oy, rad * (1 + V.warp * 0.25), rad * (1 - V.warp * 0.15 + V.dive * 0.1), V.frame * 0.01 + r.z * 0.002 + V.warp, 0, Math.PI * 2);
+    c2.stroke();
+  }
+
+  // Note shrapnel: 3D particles exploding outward with the fuzz amplitude
+  const push = 1 + A * 0.045, swirl = V.warp * 0.06 + V.dive * 0.04;
+  for (let i = V.parts.length - 1; i >= 0; i--) {
+    const p = V.parts[i];
+    p.vx *= push * 0.985; p.vy *= push * 0.985; p.vz *= 0.99;
+    if (swirl) { const cs = Math.cos(swirl), sn = Math.sin(swirl), nx = p.x * cs - p.y * sn; p.y = p.x * sn + p.y * cs; p.x = nx; }
+    p.x += p.vx; p.y += p.vy; p.z += p.vz - V.dive * 6;
+    p.life -= p.dec;
+    if (p.life <= 0 || p.z + VZ < 5) { V.parts[i] = V.parts[V.parts.length - 1]; V.parts.pop(); continue; }
+    const k = FOV / (p.z + VZ), x = ox + p.x * k, y = oy + p.y * k;
+    if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+    c2.globalAlpha = p.life * 0.75;
+    c2.fillStyle = p.c;
+    const rr = Math.max(0.6, p.sz * k * DPR * (0.4 + A * 0.5));
+    c2.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+  }
+
+  // Distorted waveform halo (the WaveShaper output, wrapped into polar space)
+  const base = Math.min(W, H) * (0.1 + A * 0.14 + V.kick * 0.03), n = 256, stride = TD.length / n;
+  const gainR = (40 + A * 240) * DPR;
+  for (let pass = 0; pass < 3; pass++) {
+    const R = base * (1 + pass * 0.55), dir = pass % 2 ? -1 : 1, ph = V.frame * 0.012 * dir + pass;
+    c2.globalAlpha = 0.55 - pass * 0.12;
+    c2.strokeStyle = hsl(pass === 0 ? 0 : pass === 1 ? 1 : 2, 8, Math.sin(V.frame * 0.02) * 20);
+    c2.lineWidth = (3 - pass * 0.7) * DPR;
+    c2.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const s = TD[Math.floor((i % n) * stride)], a = (i / n) * Math.PI * 2 + ph;
+      const r = R + s * gainR * (1 + pass * 0.4);
+      const x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r;
+      i ? c2.lineTo(x, y) : c2.moveTo(x, y);
+    }
+    c2.stroke();
+  }
+
+  // Lightning
+  for (let i = V.bolts.length - 1; i >= 0; i--) {
+    const b = V.bolts[i];
+    c2.globalAlpha = b.life; c2.strokeStyle = b.c; c2.lineWidth = (1 + b.life * 3) * DPR;
+    c2.beginPath(); b.pts.forEach((p, j) => j ? c2.lineTo(ox + p[0], oy + p[1]) : c2.moveTo(ox + p[0], oy + p[1])); c2.stroke();
+    b.life -= 0.12; if (b.life <= 0) V.bolts.splice(i, 1);
+  }
+
+  // Core
+  const coreR = Math.max(1, base * 0.35 * (0.5 + A));
+  const g = c2.createRadialGradient(ox, oy, 0, ox, oy, coreR);
+  g.addColorStop(0, 'rgba(255,240,220,' + (0.12 + A * 0.3) + ')'); g.addColorStop(0.4, 'rgba(255,94,0,' + (0.1 + A * 0.2) + ')'); g.addColorStop(1, 'rgba(120,0,255,0)');
+  c2.globalAlpha = 1; c2.fillStyle = g; c2.beginPath(); c2.arc(ox, oy, coreR, 0, Math.PI * 2); c2.fill();
+
+  c2.globalCompositeOperation = 'source-over';
+  c2.globalAlpha = 1;
+}
+requestAnimationFrame(frame);
+
+// ═══════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════
+const overlay = document.getElementById('overlay');
+let booting = false;
+overlay.addEventListener('click', async () => {
+  if (ctx) { if (ctx.state === 'suspended') await ctx.resume(); overlay.classList.add('hidden'); return; }
+  if (booting) return; booting = true;
+  try {
+    await initAudio();
+    if (ctx.state === 'suspended') await ctx.resume();
+    gen = solo();
+    tSolo = tStep = ctx.currentTime + 0.15;
+    setInterval(tick, 25); tick();
+    overlay.classList.add('hidden');
+  } catch (e) {
+    document.getElementById('err').textContent = 'AMP FAILURE: ' + e.message;
+    ctx = null; booting = false;
+  }
+});
+addEventListener('pointermove', e => {
+  if (!ctx || !N.wah) return;
+  const x = e.clientX / innerWidth, y = e.clientY / innerHeight, t = ctx.currentTime;
+  const base = 500 + x * 1300;
+  N.wah.frequency.setTargetAtTime(base, t, 0.05);
+  N.wahDepth.gain.setTargetAtTime(base * 0.62, t, 0.05);
+  STATE.drive = 6 + (1 - y) * 44;
+  N.drive.gain.setTargetAtTime(STATE.drive, t, 0.05);
+});
+addEventListener('keydown', async e => {
+  if (e.code !== 'Space' || !ctx) return;
+  e.preventDefault();
+  if (ctx.state === 'running') { await ctx.suspend(); overlay.classList.remove('hidden'); }
+  else { await ctx.resume(); overlay.classList.add('hidden'); }
+});
+</script>
+</body>
+</html>
