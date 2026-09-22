@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TWENTY-SEVEN — An Elegy in Collatz Orbits</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#000;overflow:hidden;color:#c9d2da;font-family:"Cormorant Garamond","EB Garamond",Garamond,"Times New Roman",Georgia,serif}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:1}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 38%,rgba(0,0,0,.55) 72%,rgba(0,0,0,.92) 100%)}
+#grain{position:fixed;left:-50%;top:-50%;width:200%;height:200%;pointer-events:none;z-index:3;opacity:.06;mix-blend-mode:overlay;animation:grain 1.4s steps(7) infinite}
+@keyframes grain{0%{transform:translate(0,0)}15%{transform:translate(-3%,2%)}30%{transform:translate(2%,-4%)}45%{transform:translate(-4%,-1%)}60%{transform:translate(3%,3%)}75%{transform:translate(-1%,4%)}90%{transform:translate(4%,-2%)}100%{transform:translate(0,0)}}
+#overlay{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer;background:radial-gradient(ellipse at center,rgba(0,0,0,.35) 0%,rgba(0,0,0,.94) 70%);transition:opacity 3.5s ease}
+#overlay.hidden{opacity:0;pointer-events:none}
+h1{font-weight:300;font-size:clamp(2rem,6vw,4.4rem);letter-spacing:.55em;text-indent:.55em;text-transform:uppercase;color:#dfe6ec;text-shadow:0 0 40px rgba(170,200,230,.25)}
+.sub{margin-top:1.1rem;font-style:italic;font-size:clamp(.9rem,1.8vw,1.25rem);letter-spacing:.28em;color:#7d8b98}
+.hint{margin-top:4rem;font-size:.78rem;letter-spacing:.42em;text-transform:uppercase;color:#48525c;animation:breathe 4.4s ease-in-out infinite}
+.foot{position:absolute;bottom:34px;font-size:.7rem;letter-spacing:.3em;color:#2e353c}
+@keyframes breathe{0%,100%{opacity:.25}50%{opacity:.9}}
+#hud{position:fixed;left:0;right:0;bottom:30px;z-index:5;text-align:center;opacity:0;transition:opacity 6s ease 2s;pointer-events:none}
+#hud.visible{opacity:1}
+#harm{font-size:.78rem;letter-spacing:.5em;text-transform:uppercase;color:#8a97a3}
+#orbit{margin-top:8px;font-size:.72rem;letter-spacing:.24em;color:#4f5a64;font-variant-numeric:tabular-nums}
+#clock{position:fixed;top:24px;right:28px;z-index:5;font-size:.68rem;letter-spacing:.3em;color:#343c44;opacity:0;transition:opacity 6s ease 2s;font-variant-numeric:tabular-nums}
+#clock.visible{opacity:1}
+#paused{position:fixed;inset:0;z-index:6;display:flex;justify-content:center;align-items:center;font-size:.8rem;letter-spacing:.6em;text-transform:uppercase;color:#5d6873;opacity:0;pointer-events:none;transition:opacity 1.2s ease}
+#paused.on{opacity:1}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="overlay">
+  <h1>Twenty-Seven</h1>
+  <div class="sub">an elegy for plucked strings &amp; the 3n + 1 problem</div>
+  <div class="hint">[ touch the dark to begin ]</div>
+  <div class="foot">space &mdash; hold your breath</div>
+</div>
+<div id="hud"><div id="harm">&nbsp;</div><div id="orbit">&nbsp;</div></div>
+<div id="clock">0:00</div>
+<div id="paused">suspended</div>
+<script>
+(() => {
+'use strict';
+
+const TAU = Math.PI * 2;
+const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const near = (pc, target) => { let m = target + (((pc - target) % 12) + 12) % 12; if (m - target > 6) m -= 12; return m; };
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+  BPM: 66,
+  ROOT: 62,
+  AEOLIAN:  [0, 2, 3, 5, 7, 8, 10],
+  PHRYGIAN: [0, 1, 3, 5, 7, 8, 10],
+  PROG: [0, 5, 2, 6, 0, 3, 5, 4],
+  PHRYG_PROG: [1, 6, 1, 0],
+  TICKS_PER_CHORD: 16,
+  MOVEMENT: 24,
+  SEEDS: [27, 97, 7, 871, 31, 41, 703, 54, 73, 649, 231, 327],
+  MEL_RANGE: [62, 86],
+  DRIFT: 1 + 1 / 48,
+  PAT_A: [0, 1, 2, 4, 3, 2],
+  PAT_B: [0, 2, 1, 3, 2]
+};
+const BEAT = 60 / CONFIG.BPM, EIGHTH = BEAT / 2, DOTTED = BEAT * 0.75;
+const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const ROMAN = {
+  aeolian:  ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
+  phrygian: ['i', '♭II', '♭III', 'iv', 'v°', '♭VI', '♭vii']
+};
+const DEG = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6];
+
+const VOICES = {
+  bass: { t60: 11,  dur: 9,   bright: .16, pos: .21, gain: .95, lp: 380,  send: .04 },
+  bed:  { t60: 7.5, dur: 7,   bright: .26, pos: .23, gain: .30, lp: 820,  send: .10 },
+  arp:  { t60: 3.4, dur: 3.8, bright: .42, pos: .13, gain: .24, lp: 1500, send: .34 },
+  mel:  { t60: 6,   dur: 6,   bright: .58, pos: .11, gain: .40, lp: 2600, send: .46 }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// KARPLUS-STRONG — excitation → delay line → averaging + allpass tuning → loss
+// ═══════════════════════════════════════════════════════════════
+function renderKS(ac, freq, v) {
+  const sr = ac.sampleRate, n = Math.floor(sr * v.dur);
+  const buf = ac.createBuffer(1, n, sr), y = buf.getChannelData(0);
+  const P = sr / freq;
+  let L = Math.floor(P - 0.5), d = P - L - 0.5;
+  if (d < 0.15) { L -= 1; d += 1; }
+  const C = (1 - d) / (1 + d);
+  const line = new Float32Array(L), ex = new Float32Array(L);
+  let lp = 0, mean = 0;
+  for (let i = 0; i < L; i++) { lp += v.bright * ((Math.random() * 2 - 1) - lp); ex[i] = lp; }
+  const pp = Math.max(1, Math.round(L * v.pos));
+  for (let i = 0; i < L; i++) { line[i] = ex[i] - ex[(i - pp + L) % L]; mean += line[i]; }
+  mean /= L;
+  for (let i = 0; i < L; i++) line[i] -= mean;
+  const rho = Math.pow(10, -3 / (v.t60 * freq));
+  let k = 0, prev = 0, x1 = 0, y1 = 0, peak = 1e-9;
+  for (let i = 0; i < n; i++) {
+    const cur = line[k];
+    y[i] = cur;
+    const avg = 0.5 * (cur + prev); prev = cur;
+    const ap = C * avg + x1 - C * y1; x1 = avg; y1 = ap;
+    line[k] = ap * rho;
+    if (++k === L) k = 0;
+    const a = cur < 0 ? -cur : cur; if (a > peak) peak = a;
+  }
+  const gn = 1 / peak, fade = Math.floor(sr * 0.4);
+  for (let i = 0; i < n; i++) y[i] *= gn;
+  for (let i = 0; i < fade; i++) y[n - 1 - i] *= i / fade;
+  return buf;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════
+const mkPan = (ac, p) => {
+  if (ac.createStereoPanner) { const n = ac.createStereoPanner(); n.pan.value = clamp(p, -1, 1); return n; }
+  return ac.createGain();
+};
+
+const A = {
+  ctx: null, pre: null, bus: {}, cache: new Map(), fb: .45,
+
+  async init() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = this.ctx = new AC({ latencyHint: 'playback' });
+
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 18; comp.ratio.value = 3;
+    comp.attack.value = .012; comp.release.value = .35;
+    const out = ac.createGain(); out.gain.value = .9;
+    comp.connect(out); out.connect(ac.destination);
+
+    const warm = ac.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 5200; warm.Q.value = .5;
+    const body = ac.createBiquadFilter(); body.type = 'peaking'; body.frequency.value = 210; body.Q.value = .9; body.gain.value = 3;
+    this.pre = ac.createGain(); this.pre.gain.value = 0;
+    this.pre.connect(body); body.connect(warm); warm.connect(comp);
+
+    const verb = ac.createConvolver(); verb.buffer = this.impulse(6.5, 2.8);
+    const vSend = ac.createGain(); vSend.gain.value = .5;
+    const vRet = ac.createGain(); vRet.gain.value = .85;
+    this.pre.connect(vSend); vSend.connect(verb); verb.connect(vRet); vRet.connect(warm);
+
+    // Ping-pong: echo k arrives at k·DOTTED with amplitude fb^(k-1), alternating L/R
+    this.dIn = ac.createGain();
+    const dL = ac.createDelay(4), dR = ac.createDelay(4);
+    dL.delayTime.value = DOTTED; dR.delayTime.value = DOTTED;
+    const dampL = ac.createBiquadFilter(); dampL.type = 'lowpass'; dampL.frequency.value = 2000;
+    const dampR = ac.createBiquadFilter(); dampR.type = 'lowpass'; dampR.frequency.value = 1700;
+    this.fbA = ac.createGain(); this.fbB = ac.createGain();
+    this.fbA.gain.value = this.fbB.gain.value = this.fb;
+    this.dIn.connect(dL); dL.connect(dampL); dampL.connect(this.fbA); this.fbA.connect(dR);
+    dR.connect(dampR); dampR.connect(this.fbB); this.fbB.connect(dL);
+    const pL = mkPan(ac, -.85), pR = mkPan(ac, .85);
+    dL.connect(pL); dR.connect(pR);
+    const dRet = ac.createGain(); dRet.gain.value = .7;
+    pL.connect(dRet); pR.connect(dRet);
+    dRet.connect(warm); dRet.connect(vSend);
+    this.an = ac.createAnalyser(); this.an.fftSize = 1024;
+    this.anBuf = new Float32Array(this.an.fftSize);
+    dRet.connect(this.an);
+
+    for (const [k, v] of Object.entries(VOICES)) {
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = v.lp; lp.Q.value = .35;
+      const gn = ac.createGain();
+      const s = ac.createGain(); s.gain.value = v.send;
+      lp.connect(gn); gn.connect(this.pre); gn.connect(s); s.connect(this.dIn);
+      this.bus[k] = { lp, gn, s };
+    }
+
+    this.sub = ac.createOscillator(); this.sub.type = 'sine'; this.sub.frequency.value = mtof(26);
+    this.subG = ac.createGain(); this.subG.gain.value = 0;
+    this.sub.connect(this.subG); this.subG.connect(this.pre);
+    this.sub.start();
+
+    const t = ac.currentTime;
+    this.pre.gain.setValueAtTime(0, t);
+    this.pre.gain.linearRampToValueAtTime(1, t + 6);
+  },
+
+  impulse(sec, decay) {
+    const ac = this.ctx, sr = ac.sampleRate, len = Math.floor(sr * sec), pd = Math.floor(sr * .025);
+    const b = ac.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = b.getChannelData(ch); let lp = 0;
+      for (let i = pd; i < len; i++) {
+        const t = (i - pd) / (len - pd);
+        lp += (.85 - .75 * t) * ((Math.random() * 2 - 1) - lp);
+        d[i] = lp * Math.pow(1 - t, decay);
+      }
+    }
+    return b;
+  },
+
+  buffer(type, midi) {
+    const key = type + midi;
+    let b = this.cache.get(key);
+    if (b) { this.cache.delete(key); this.cache.set(key, b); return b; }
+    b = renderKS(this.ctx, mtof(midi), VOICES[type]);
+    this.cache.set(key, b);
+    if (this.cache.size > 80) this.cache.delete(this.cache.keys().next().value);
+    return b;
+  },
+
+  play(type, midi, t, vel, pan = 0) {
+    const ac = this.ctx, v = VOICES[type];
+    const src = ac.createBufferSource();
+    src.buffer = this.buffer(type, midi);
+    src.playbackRate.value = Math.pow(2, ((Math.random() - .5) * 5) / 1200);
+    const gn = ac.createGain(); gn.gain.value = vel * v.gain;
+    const p = mkPan(ac, pan);
+    src.connect(gn); gn.connect(p); p.connect(this.bus[type].lp);
+    src.onended = () => { src.disconnect(); gn.disconnect(); p.disconnect(); };
+    src.start(Math.max(t, ac.currentTime));
+  },
+
+  shape(tension, density, t) {
+    const set = (param, val, tc) => param.setTargetAtTime(val, t, tc);
+    set(this.bus.arp.lp.frequency, 700 + 2100 * tension * (.4 + .6 * density), 1.5);
+    set(this.bus.mel.lp.frequency, 1500 + 2600 * tension, .8);
+    set(this.bus.bed.lp.frequency, 600 + 700 * density, 3);
+    this.fb = .38 + .24 * tension;
+    set(this.fbA.gain, this.fb, 2); set(this.fbB.gain, this.fb, 2);
+  },
+
+  drone(midi, t, level) {
+    this.sub.frequency.setTargetAtTime(mtof(midi), t, .8);
+    this.subG.gain.setTargetAtTime(level, t, 2);
+  },
+
+  echoLevel() {
+    this.an.getFloatTimeDomainData(this.anBuf);
+    let s = 0; for (let i = 0; i < this.anBuf.length; i++) s += this.anBuf[i] * this.anBuf[i];
+    return Math.sqrt(s / this.anBuf.length);
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// COMPOSER — Collatz orbits, log-normalised into Aeolian / Phrygian space
+// ═══════════════════════════════════════════════════════════════
+const M = {
+  tick: 0, next: 0, bNext: 0, bIdx: 0, t0: 0,
+  chordCount: -1, chord: [2, 5, 9], deg: 0, bass: 38, bed: [], arp: [],
+  arc: 0, density: 0, tension: .3, phryg: false,
+  seedIdx: 0, seed: 27, orbit: [], peak: 2, step: 0, rest: 0, lastMel: -1,
+
+  start(t) {
+    this.t0 = t; this.next = t + .1; this.bNext = t + .1 + EIGHTH * .5;
+    this.loadSeed();
+  },
+
+  collatz(n) { const o = [n]; while (n !== 1) { n = n % 2 ? 3 * n + 1 : n / 2; o.push(n); } return o; },
+
+  loadSeed() {
+    const S = CONFIG.SEEDS, cyc = Math.floor(this.seedIdx / S.length);
+    this.seed = S[this.seedIdx % S.length] + cyc * 2;
+    this.seedIdx++;
+    this.orbit = this.collatz(this.seed);
+    this.peak = Math.max(...this.orbit);
+    this.step = 0;
+  },
+
+  mode() { return this.phryg ? CONFIG.PHRYGIAN : CONFIG.AEOLIAN; },
+
+  scale() {
+    const md = this.mode(), out = [];
+    for (let m = CONFIG.MEL_RANGE[0]; m <= CONFIG.MEL_RANGE[1]; m++) {
+      if (md.includes((((m - CONFIG.ROOT) % 12) + 12) % 12)) out.push(m);
+    }
+    return out;
+  },
+
+  ghosts(t, midi, v, send, mel) {
+    let amp = v * send;
+    const d = DEG[(((midi - CONFIG.ROOT) % 12) + 12) % 12];
+    for (let k = 1; k <= 6; k++) {
+      V.push({ t: t + k * DOTTED, type: 'ghost', d, v: amp, k, side: k % 2 ? -1 : 1, mel });
+      amp *= A.fb;
+      if (amp < .01) break;
+    }
+  },
+
+  note(type, midi, t, vel, pan) {
+    A.play(type, midi, t, vel, pan);
+    if (type === 'bass') { V.push({ t, type: 'bass', v: vel }); return; }
+    if (type === 'bed') return;
+    V.push({ t, type, d: DEG[(((midi - CONFIG.ROOT) % 12) + 12) % 12], v: vel });
+    this.ghosts(t, midi, vel, VOICES[type].send, type === 'mel');
+  },
+
+  newChord(t) {
+    this.chordCount++;
+    const p = (this.chordCount % CONFIG.MOVEMENT) / CONFIG.MOVEMENT;
+    this.arc = Math.pow(Math.sin(Math.PI * p), 1.3);
+    this.density = clamp(this.arc * .85 + this.tension * .25, 0, 1);
+    const md = this.mode();
+    const deg = this.phryg
+      ? CONFIG.PHRYG_PROG[this.chordCount % CONFIG.PHRYG_PROG.length]
+      : CONFIG.PROG[this.chordCount % CONFIG.PROG.length];
+    this.deg = deg;
+    this.chord = [0, 2, 4].map(k => (CONFIG.ROOT + md[(deg + k) % 7]) % 12);
+    this.bass = near(this.chord[0], 41);
+    this.bed = this.chord.map(pc => near(pc, 57)).sort((a, b) => a - b);
+    const base = this.chord.map(pc => near(pc, 61)).sort((a, b) => a - b);
+    this.arp = [...base, ...base.map(m => m + 12)];
+    A.shape(this.tension, this.density, t);
+    A.drone(this.bass - 12, t, .05 + .07 * this.density);
+    const minor = ((this.chord[1] - this.chord[0] + 12) % 12) === 3;
+    const dim = minor && ((this.chord[2] - this.chord[0] + 12) % 12) === 6;
+    const modeName = this.phryg ? 'phrygian' : 'aeolian';
+    V.push({ t, type: 'chord', text: `D ${modeName} · ${ROMAN[modeName][deg]} · ${NAMES[this.chord[0]]}${dim ? '°' : minor ? 'm' : ''}` });
+  },
+
+  melody(t, strong) {
+    if (this.rest > 0) {
+      this.rest--;
+      this.tension *= .85;
+      if (this.rest === 0) this.loadSeed();
+      return;
+    }
+    const n = this.orbit[this.step];
+    const norm = Math.log(n) / Math.log(this.peak);
+    const rising = this.step > 0 && n > this.orbit[this.step - 1];
+    this.tension = norm;
+    if (!this.phryg && norm > .8) this.phryg = true;
+    else if (this.phryg && norm < .68) this.phryg = false;
+
+    const sc = this.scale();
+    let idx = Math.round(norm * (sc.length - 1));
+    let m = sc[idx];
+    if (strong && n !== 1 && !this.chord.includes(m % 12)) {
+      for (const o of [-1, 1, -2, 2]) {
+        const j = idx + o;
+        if (j >= 0 && j < sc.length && this.chord.includes(sc[j] % 12)) { m = sc[j]; break; }
+      }
+    }
+    if (this.density > .18 && m !== this.lastMel) {
+      const vel = (rising ? .62 : .46) * (.7 + .3 * this.density);
+      this.note('mel', m, t + (rising ? 0 : .02), vel, (norm - .5) * .3);
+      if (this.density > .78) A.play('mel', m - 12, t + .03, vel * .4, -.1);
+    }
+    this.lastMel = m;
+    V.push({ t, type: 'orbit', step: this.step, n, norm, rising, seed: this.seed, len: this.orbit.length });
+    this.step++;
+    if (this.step >= this.orbit.length) this.rest = 6;
+  },
+
+  stepTick(t) {
+    const k = this.tick % CONFIG.TICKS_PER_CHORD;
+    const h = () => (Math.random() - .5) * .012;
+    if (k === 0) this.newChord(t);
+    const d = this.density;
+
+    if (k === 0) this.note('bass', this.bass, t, .9, 0);
+    if (k === 8 && d > .3) this.note('bass', d > .7 ? near(this.chord[2], this.bass + 7) : this.bass, t, .5, 0);
+
+    if (k === 0 || (k === 8 && d > .2)) {
+      const lvl = (k ? .5 : .75) * (.6 + .4 * d);
+      this.bed.forEach((m, i) => this.note('bed', m, t + .11 * (i + 1) + h(), lvl, [-.3, .05, .35][i]));
+    }
+    if (d > .72 && (k === 4 || k === 12)) {
+      this.bed.forEach((m, i) => this.note('bed', m, t + .05 * i + h(), .35, [-.3, .05, .35][i]));
+    }
+
+    if (d > .1) {
+      const i = CONFIG.PAT_A[this.tick % CONFIG.PAT_A.length];
+      const acc = k % 4 === 0 ? 1.15 : 1;
+      this.note('arp', this.arp[i], t + h(), (.35 + .45 * d) * acc, -.45 + .15 * Math.sin(this.tick * .1));
+    }
+
+    if (this.tick % 2 === 0) this.melody(t, k === 0 || k === 8);
+    this.tick++;
+  },
+
+  stepB(t) {
+    if (this.density > .45 && this.arp.length) {
+      const i = CONFIG.PAT_B[this.bIdx % CONFIG.PAT_B.length];
+      this.note('arp', this.arp[i] + 12, t + (Math.random() - .5) * .01, .18 + .3 * (this.density - .45), .5);
+    }
+    this.bIdx++;
+  },
+
+  tickLoop() {
+    const ac = A.ctx;
+    if (!ac || ac.state !== 'running') return;
+    const now = ac.currentTime, H = .25;
+    if (this.next < now - .05) this.next = now + .05;
+    if (this.bNext < now - .05) this.bNext = now + .05;
+    while (this.next < now + H) { this.stepTick(this.next); this.next += EIGHTH; }
+    while (this.bNext < now + H) { this.stepB(this.bNext); this.bNext += EIGHTH * CONFIG.DRIFT; }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// VISUAL ENGINE — manual perspective, alpha-stacked ghosting
+// ═══════════════════════════════════════════════════════════════
+const cv = document.getElementById('cv');
+const g = cv.getContext('2d', { alpha: false });
+const HUD = {
+  harm: document.getElementById('harm'),
+  orbit: document.getElementById('orbit'),
+  clock: document.getElementById('clock')
+};
+const CAMZ = 140, Z1 = 3400, SPAWN = 420, CZ = 2600;
+
+const V = {
+  W: 0, H: 0, dpr: 1, cx: 0, cy: 0, fov: 600,
+  q: [], rings: [], orbs: [], dust: [], pts: [],
+  strings: Array.from({ length: 7 }, () => ({ amp: 0, ph: Math.random() * TAU, glow: 0 })),
+  echo: 0, pulse: 0, flare: 0, tension: .3, tTarget: .3, roll: 0,
+  mx: 0, my: 0, px: 0, py: 0, last: 0, started: false, clockSec: -1,
+
+  resize() {
+    this.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    this.W = window.innerWidth; this.H = window.innerHeight;
+    cv.width = Math.floor(this.W * this.dpr); cv.height = Math.floor(this.H * this.dpr);
+    this.cx = this.W / 2; this.cy = this.H / 2;
+    this.fov = Math.min(this.W, this.H) * .9;
+    g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  },
+
+  init() {
+    for (let i = 0; i < 240; i++) {
+      this.dust.push({ x: (Math.random() * 2 - 1) * 1400, y: (Math.random() * 2 - 1) * 1400, z: Math.random() * Z1 });
+    }
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('mousemove', e => { this.mx = e.clientX / this.W - .5; this.my = e.clientY / this.H - .5; });
+    requestAnimationFrame(ms => this.frame(ms));
+  },
+
+  push(e) { this.q.push(e); },
+
+  proj(x, y, z) {
+    const zz = z + CAMZ;
+    if (zz < 10) return null;
+    const s = this.fov / zz;
+    return [this.cx + (x - this.px) * s, this.cy + (y - this.py) * s, s];
+  },
+
+  fog(z) { const f = clamp(1 - z / Z1, 0, 1); return f * f * clamp((z + CAMZ - 40) / 260, 0, 1); },
+
+  hue() { const k = clamp((this.tension - .45) / .55, 0, 1); return lerp(212, 30, k * k * (3 - 2 * k)); },
+
+  fire(e) {
+    switch (e.type) {
+      case 'bass':
+        this.pulse = Math.min(1.5, this.pulse + e.v);
+        for (const s of this.strings) s.amp += 4 * e.v;
+        break;
+      case 'mel': {
+        const s = this.strings[e.d];
+        s.amp += 38 * e.v; s.glow = Math.min(1.5, s.glow + e.v * 1.4);
+        this.orbs.push({ d: e.d, off: 0, z: SPAWN, a: e.v * 1.4, big: true });
+        this.rings.push({ z: SPAWN, a: e.v * .8, w: 1.4, k: 1, ox: 0, dh: 0 });
+        break;
+      }
+      case 'arp': {
+        const s = this.strings[e.d];
+        s.amp += 14 * e.v; s.glow = Math.min(1.5, s.glow + e.v * .5);
+        this.rings.push({ z: SPAWN + 60, a: e.v * .28, w: .7, k: .93 + .05 * Math.random(), ox: 0, dh: -10 });
+        break;
+      }
+      case 'ghost':
+        this.rings.push({ z: SPAWN + 140 * e.k, a: e.v * .6, w: .8, k: 1 - .025 * e.k, ox: e.side * 34 * e.k, dh: 8 * e.k });
+        if (e.mel) this.orbs.push({ d: e.d, off: e.side * .07 * e.k, z: SPAWN + 120 * e.k, a: e.v, big: false });
+        this.strings[e.d].glow = Math.min(1.5, this.strings[e.d].glow + e.v * .4);
+        break;
+      case 'chord':
+        HUD.harm.textContent = e.text;
+        break;
+      case 'orbit':
+        if (e.step === 0) this.pts = [];
+        this.pts.push(e.norm);
+        this.tTarget = e.norm;
+        if (e.n === 1) this.flare = 1;
+        HUD.orbit.textContent = `${e.seed}  ·  ${e.step + 1} / ${e.len}  ·  n = ${e.n.toLocaleString('en-US')}  ${e.step === 0 ? '○' : e.rising ? '↑' : '↓'}`;
+        break;
+    }
+    if (this.rings.length > 160) this.rings.splice(0, this.rings.length - 160);
+    if (this.orbs.length > 120) this.orbs.splice(0, this.orbs.length - 120);
+  },
+
+  frame(ms) {
+    requestAnimationFrame(t => this.frame(t));
+    const dt = Math.min(.05, Math.max(.001, (ms - this.last) / 1000)); this.last = ms;
+    const ac = A.ctx, now = ac ? ac.currentTime : ms / 1000;
+
+    if (ac && this.q.length) {
+      const keep = [];
+      for (const e of this.q) (e.t <= now ? this.fire(e) : keep.push(e));
+      this.q = keep;
+    }
+    if (ac && A.an && ac.state === 'running') {
+      this.echo = Math.max(Math.min(1.4, A.echoLevel() * 7), this.echo * Math.pow(.2, dt));
+    }
+    if (this.started && ac) {
+      const sec = Math.floor(now - M.t0);
+      if (sec !== this.clockSec && sec >= 0) {
+        this.clockSec = sec;
+        HUD.clock.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+      }
+    }
+
+    this.pulse *= Math.pow(.18, dt);
+    this.flare *= Math.pow(.3, dt);
+    this.tension += (this.tTarget - this.tension) * Math.min(1, dt * .5);
+    this.roll += dt * (.015 + .035 * this.tension);
+    this.px += (this.mx * 120 - this.px) * Math.min(1, dt * .8);
+    this.py += (this.my * 90 - this.py) * Math.min(1, dt * .8);
+
+    const hue = this.hue(), sat = 18 + 30 * this.tension;
+    const breath = .5 + .5 * Math.sin(now * TAU / (BEAT * 16));
+    const echo = Math.min(1, this.echo);
+    const cw = cv.width, ch = cv.height, dpr = this.dpr;
+
+    // Ghost feedback: canvas re-drawn onto itself, zoom breathing with the delay return
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    const zf = 1.006 + .018 * echo + .006 * this.pulse;
+    const dw = cw * zf, dh = ch * zf;
+    g.globalAlpha = .32 + .22 * echo;
+    g.drawImage(cv, 0, 0, cw, ch, (cw - dw) / 2 - this.px * .02 * dpr, (ch - dh) / 2 - this.py * .02 * dpr, dw, dh);
+    g.globalAlpha = 1;
+    g.fillStyle = 'rgba(0,0,0,0.1)';
+    g.fillRect(0, 0, cw, ch);
+
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.globalCompositeOperation = 'lighter';
+    const R = 300 * (1 + .04 * breath + .07 * this.pulse + .1 * echo);
+
+    // Dust
+    const sp = (30 + 120 * this.tension) * dt;
+    g.fillStyle = `hsl(${hue},${sat}%,82%)`;
+    for (const d of this.dust) {
+      d.z -= sp;
+      if (d.z < -CAMZ + 40) { d.z += Z1; d.x = (Math.random() * 2 - 1) * 1400; d.y = (Math.random() * 2 - 1) * 1400; }
+      const p = this.proj(d.x, d.y, d.z);
+      if (!p || p[0] < -10 || p[0] > this.W + 10 || p[1] < -10 || p[1] > this.H + 10) continue;
+      g.globalAlpha = this.fog(d.z) * .5;
+      const s = Math.max(.6, 2.2 * p[2]);
+      g.fillRect(p[0], p[1], s, s);
+    }
+    g.globalAlpha = 1;
+
+    // Strings: a heptagonal tunnel of scale degrees receding to the vanishing point
+    const SEG = 36;
+    for (let i = 0; i < 7; i++) {
+      const st = this.strings[i];
+      st.amp *= Math.pow(.3, dt); st.glow *= Math.pow(.2, dt); st.ph += dt * (5.5 + i * .9);
+      const ang = i / 7 * TAU + this.roll, ca = Math.cos(ang), sa = Math.sin(ang);
+      g.beginPath();
+      let first = null, lastp = null;
+      for (let s = 0; s <= SEG; s++) {
+        const u = s / SEG, z = 40 + u * (Z1 - 40);
+        const disp = st.amp * (Math.sin(Math.PI * u) * Math.sin(st.ph) + .35 * Math.sin(3 * Math.PI * u) * Math.sin(st.ph * 2.3 + 1));
+        const r = R + disp + 6 * Math.sin(u * 9 + now * .7 + i);
+        const p = this.proj(ca * r, sa * r, z);
+        if (!first) { g.moveTo(p[0], p[1]); first = p; } else g.lineTo(p[0], p[1]);
+        lastp = p;
+      }
+      const a = .1 + .5 * Math.min(1, st.glow) + .06 * breath;
+      const grad = g.createLinearGradient(first[0], first[1], lastp[0], lastp[1]);
+      grad.addColorStop(0, `hsla(${hue},${sat}%,78%,0)`);
+      grad.addColorStop(.18, `hsla(${hue},${sat}%,78%,${a})`);
+      grad.addColorStop(1, `hsla(${hue},${sat}%,70%,0)`);
+      g.strokeStyle = grad;
+      g.lineWidth = .8 + Math.min(1.5, st.glow) * 1.6;
+      g.stroke();
+    }
+
+    // Rings: note-born and echo-born, falling into depth
+    const rs = (160 + 300 * this.tension) * dt;
+    this.rings = this.rings.filter(r => {
+      r.z += rs;
+      const f = this.fog(r.z), al = r.a * f;
+      if (r.z > Z1 || al < .003) return r.z < Z1;
+      const p = this.proj(r.ox, 0, r.z);
+      g.strokeStyle = `hsla(${hue + r.dh},${sat}%,80%,${al})`;
+      g.lineWidth = Math.max(.5, r.w * p[2]);
+      g.beginPath(); g.arc(p[0], p[1], R * r.k * p[2], 0, TAU); g.stroke();
+      return true;
+    });
+
+    // Orbs: melodic light travelling along its string
+    this.orbs = this.orbs.filter(o => {
+      o.z += rs * .8;
+      if (o.z > Z1) return false;
+      const ang = o.d / 7 * TAU + this.roll + o.off;
+      const p = this.proj(Math.cos(ang) * R * .98, Math.sin(ang) * R * .98, o.z);
+      const f = this.fog(o.z) * o.a;
+      const rad = (o.big ? 7 : 3.5) * p[2];
+      g.fillStyle = `hsla(${hue},${sat + 20}%,70%,${f * .16})`;
+      g.beginPath(); g.arc(p[0], p[1], rad * 1.8, 0, TAU); g.fill();
+      g.fillStyle = `hsla(${hue},${sat + 10}%,90%,${f * .85})`;
+      g.beginPath(); g.arc(p[0], p[1], rad * .35, 0, TAU); g.fill();
+      return true;
+    });
+
+    // Orbit constellation: step k at golden angle, radius = log-normalised n
+    if (this.pts.length) {
+      const Rc = 820;
+      g.beginPath();
+      let lastp = null;
+      for (let k = 0; k < this.pts.length; k++) {
+        const ang = k * GOLDEN + this.roll * .6, r = Rc * (.1 + .9 * this.pts[k]);
+        const p = this.proj(Math.cos(ang) * r, Math.sin(ang) * r, CZ);
+        if (k === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+        lastp = p;
+      }
+      g.strokeStyle = `hsla(${hue},${sat}%,75%,${.05 + .07 * this.tension})`;
+      g.lineWidth = .6;
+      g.stroke();
+      if (lastp) {
+        g.fillStyle = `hsla(${hue},${sat + 15}%,88%,${.5 + .4 * echo})`;
+        g.beginPath(); g.arc(lastp[0], lastp[1], 1.6 + 2 * echo, 0, TAU); g.fill();
+      }
+    }
+
+    // Singularity: the 1 every orbit returns to
+    const c = this.proj(0, 0, CZ);
+    const cr = 14 + 46 * echo + 110 * this.flare + 8 * breath;
+    const rg = g.createRadialGradient(c[0], c[1], 0, c[0], c[1], cr);
+    rg.addColorStop(0, `hsla(${hue},${sat + 10}%,85%,${.16 + .3 * this.flare})`);
+    rg.addColorStop(1, `hsla(${hue},${sat}%,50%,0)`);
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(c[0], c[1], cr, 0, TAU); g.fill();
+
+    g.globalCompositeOperation = 'source-over';
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// GRAIN (generated, not loaded)
+// ═══════════════════════════════════════════════════════════════
+(() => {
+  const S = 160, gc = document.createElement('canvas'); gc.width = gc.height = S;
+  const gx = gc.getContext('2d'), id = gx.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) { const v = Math.random() * 255 | 0; id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+  gx.putImageData(id, 0, 0);
+  document.getElementById('grain').style.backgroundImage = `url(${gc.toDataURL()})`;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// LIFECYCLE
+// ═══════════════════════════════════════════════════════════════
+const overlay = document.getElementById('overlay');
+const paused = document.getElementById('paused');
+
+async function begin() {
+  if (V.started) return;
+  V.started = true;
+  await A.init();
+  if (A.ctx.state === 'suspended') await A.ctx.resume();
+  M.start(A.ctx.currentTime);
+  setInterval(() => M.tickLoop(), 25);
+  overlay.classList.add('hidden');
+  document.getElementById('hud').classList.add('visible');
+  HUD.clock.classList.add('visible');
+}
+
+overlay.addEventListener('click', begin);
+window.addEventListener('keydown', async e => {
+  if (e.code !== 'Space') return;
+  e.preventDefault();
+  if (!V.started) return begin();
+  if (A.ctx.state === 'running') { await A.ctx.suspend(); paused.classList.add('on'); }
+  else { await A.ctx.resume(); paused.classList.remove('on'); }
+});
+
+V.init();
+})();
+</script>
+</body>
+</html>
