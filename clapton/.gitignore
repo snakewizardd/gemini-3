@@ -1,0 +1,8 @@
+node_modules/
+output/tmp/
+output/frames/
+output/analysis/stems/
+output/**/*.wav
+output/*.wav
+output/*.mp4
+output/**/*.f32

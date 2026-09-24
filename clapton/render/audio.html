@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FILAMENT — offline String Engine render</title>
+</head>
+<body>
+<script src="../src/engine.js"></script>
+<script src="../src/composition.js"></script>
+<script>
+'use strict';
+// Offline, sample-deterministic render of the whole score through the String Engine.
+// Channel 0/1: stereo mix (pre-mastering). Channel 2: dry lead string (for sync QA).
+// opts.mute: subset of ['lead','rhythm','bass','drums','organ'] (inspection stems); opts.prefix: upload name prefix
+window.renderAudio = async function (opts = {}) {
+  const S = window.FilamentScore, SR = S.meta.sampleRate, mute = new Set(opts.mute || []), prefix = opts.prefix || '';
+  const DRUMS = new Set(['kick', 'snare', 'rim', 'hat', 'ride', 'tom', 'crash', 'swell']);
+  const length = Math.round(S.meta.duration * SR);
+  const ctx = new OfflineAudioContext({ numberOfChannels: 3, length, sampleRate: SR });
+  const cmds = {}; for (const k of ['lead', 'rhythm', 'bass']) cmds[k] = mute.has(k) ? [] : S.cmds[k];
+  const eng = await FilamentEngine.build(ctx, { seed: S.meta.seed, stems: true, events: cmds });
+  // Feed native-node commands (drums, organ, automation) progressively with a 4 s lookahead,
+  // exactly like the live scheduler: pending-but-unstarted nodes still cost CPU every quantum.
+  const CHUNK = 2, native = S.native.filter(c => !(mute.has('drums') && DRUMS.has(c.type)) && !(mute.has('organ') && c.type === 'organ')); let ni = 0;
+  const feed = upTo => { const batch = []; while (ni < native.length && native[ni].t < upTo) batch.push(native[ni++]); eng.scheduleNative(batch, 0); };
+  feed(CHUNK * 2);
+  for (let k = 1; k * CHUNK < S.meta.duration; k++) {
+    const tk = k * CHUNK;
+    ctx.suspend(tk).then(() => { feed(tk + CHUNK * 2); ctx.resume(); });
+  }
+  const t0 = performance.now();
+  const buf = await ctx.startRendering();
+  const ms = performance.now() - t0;
+  const stats = [];
+  for (let ch = 0; ch < 3; ch++) {
+    const d = buf.getChannelData(ch);
+    let peak = 0, ss = 0, nan = 0;
+    for (let i = 0; i < d.length; i++) { const x = d[i]; if (x !== x) { nan++; continue; } const a = Math.abs(x); if (a > peak) peak = a; ss += x * x; }
+    stats.push({ ch, peak, rms: Math.sqrt(ss / d.length), nan });
+    const r = await fetch('/__upload?name=' + prefix + 'ch' + ch + '.f32', { method: 'POST', body: new Blob([d]) });
+    if (!r.ok) throw new Error('upload failed ' + r.status);
+  }
+  return { ms, length, sampleRate: SR, stats };
+};
+window.ready = true;
+</script>
+</body>
+</html>

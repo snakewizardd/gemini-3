@@ -1,0 +1,18 @@
+{
+  "name": "filament-clapton-oneshot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FILAMENT - an original blues-rock ballad in A minor, synthesized by the String Engine, with a raymarched code-drawn film.",
+  "type": "commonjs",
+  "scripts": {
+    "audio": "node scripts/render_audio.mjs",
+    "telemetry": "python scripts/extract_telemetry.py",
+    "video": "node render.mjs",
+    "qa": "node scripts/qa.mjs",
+    "build": "npm run audio && npm run telemetry && npm run video && npm run qa",
+    "serve": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.12.0"
+  }
+}
