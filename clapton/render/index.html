@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FILAMENT — deterministic render harness</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:1920px;height:1080px}</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="../src/visual.js"></script>
+<script>
+'use strict';
+// Capture harness. Inputs: events (score export) + telemetry (spectral frames), either injected
+// by the capture script as window.FILAMENT_INJECT = { events, telemetry } or fetched from ../output/.
+// Exposes:
+//   window.renderFrame(i)     → draws frame i at t = i/60 and returns a raw base64 PNG
+//   window.renderFrameHash(i) → draws frame i and returns an FNV-1a hash of the RGBA pixels
+//   window.visualStateAt(t)   → the pure visual state (for sync QA)
+(async function () {
+  const inj = window.FILAMENT_INJECT || {};
+  const events = inj.events || await (await fetch('../output/events.json')).json();
+  const telemetry = inj.telemetry || await (await fetch('../output/telemetry.json')).json();
+  const W = 1920, H = 1080, FPS = telemetry.fps || 60;
+  const vis = FilamentVisual.create(document.getElementById('c'), events, telemetry, { width: W, height: H, preserve: true });
+  const gl = vis.gl, px = new Uint8Array(W * H * 4);
+  window.telemetry = telemetry.frames;
+  window.TOTAL_FRAMES = telemetry.total_frames;
+  window.renderFrame = function (frameIndex) {
+    vis.drawWith(gl, frameIndex / FPS);
+    return document.getElementById('c').toDataURL('image/png').slice(22);
+  };
+  window.renderFrameHash = function (frameIndex) {
+    vis.drawWith(gl, frameIndex / FPS);
+    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let h = 2166136261 >>> 0;
+    const u = new Uint32Array(px.buffer);
+    for (let i = 0; i < u.length; i++) { h ^= u[i]; h = Math.imul(h, 16777619) >>> 0; }
+    return h.toString(16);
+  };
+  window.visualStateAt = t => {
+    const s = vis.stateAt(t);
+    return { section: s.section, bar: s.bar, notes: s.notes.map(n => ({ id: n.id, onset: n.onset, glow: n.glow, cents: n.cents })), camera: s.camera, band: s.band, key: s.key };
+  };
+  window.renderer = gl.getParameter(gl.RENDERER) + ' | ' + ((e => e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : '')(gl.getExtension('WEBGL_debug_renderer_info')));
+  window.ready = true;
+})().catch(e => { window.initError = String(e && e.stack || e); });
+</script>
+</body>
+</html>

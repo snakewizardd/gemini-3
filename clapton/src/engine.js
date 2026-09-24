@@ -212,7 +212,8 @@ async function loadWorklet(ctx) {
   try {
     await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(WORKLET_SRC));
   } catch (err) {
-    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'text/javascript' })));
+    const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'text/javascript' }));
+    try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
   }
 }
 

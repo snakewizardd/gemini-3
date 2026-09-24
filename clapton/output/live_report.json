@@ -1,0 +1,78 @@
+{
+ "when": "2026-09-24T18:20:51.636Z",
+ "quick": true,
+ "passed": 14,
+ "failed": 0,
+ "results": [
+  {
+   "name": "before the gesture: idle, no AudioContext",
+   "pass": true,
+   "measured": "{\"state\":\"idle\",\"audio\":\"none\"}"
+  },
+  {
+   "name": "click gesture starts audio (AudioContext running)",
+   "pass": true,
+   "measured": "state playing, audio running"
+  },
+  {
+   "name": "audio clock advances in real time",
+   "pass": true,
+   "measured": "song time 3.561 s after 4.0 s wall"
+  },
+  {
+   "name": "pause (Space): audio suspended and song time frozen",
+   "pass": true,
+   "measured": "state paused/suspended, Δ over 2 s = 0.000 ms"
+  },
+  {
+   "name": "picture frozen while paused (camera state identical)",
+   "pass": true,
+   "measured": "visual state is f(song time)"
+  },
+  {
+   "name": "resume (Space): continues from the paused position",
+   "pass": true,
+   "measured": "advanced 2.019 s in 2.0 s wall"
+  },
+  {
+   "name": "scheduler never posted an event late",
+   "pass": true,
+   "measured": "late=0, posted lead 676 / rhythm 1689 / bass 682 / native 16"
+  },
+  {
+   "name": "restart returns to the beginning",
+   "pass": true,
+   "measured": "song time 0.000 s"
+  },
+  {
+   "name": "exactly one scheduler after restart (no leaked intervals)",
+   "pass": true,
+   "measured": "25.0 ticks/s (interval = 40 ms)"
+  },
+  {
+   "name": "rapid double Space: state and AudioContext agree",
+   "pass": true,
+   "measured": "state playing, audio running"
+  },
+  {
+   "name": "rapid double restart: one context, one scheduler, from the top",
+   "pass": true,
+   "measured": "song time 0.00 s, 25.0 ticks/s"
+  },
+  {
+   "name": "only local code loaded; no media, no network beyond localhost files",
+   "pass": true,
+   "measured": "/index.html, /src/engine.js, /src/composition.js, /src/visual.js, /output/telemetry.js, /favicon.ico"
+  },
+  {
+   "name": "no console errors or unhandled exceptions",
+   "pass": true,
+   "measured": "clean"
+  },
+  {
+   "name": "also runs from file:// (double-click index.html)",
+   "pass": true,
+   "measured": "song time 1.20 s, errors 0"
+  }
+ ]
+}
