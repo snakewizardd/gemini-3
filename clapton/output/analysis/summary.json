@@ -1,0 +1,51 @@
+{
+ "sections": {
+  "intro": {
+   "short_term_lufs_mean": -21.85,
+   "max": -16.81
+  },
+  "verse1": {
+   "short_term_lufs_mean": -15.75,
+   "max": -14.2
+  },
+  "chorus1": {
+   "short_term_lufs_mean": -13.97,
+   "max": -13.18
+  },
+  "verse2": {
+   "short_term_lufs_mean": -15.07,
+   "max": -13.75
+  },
+  "chorus2": {
+   "short_term_lufs_mean": -13.93,
+   "max": -12.92
+  },
+  "solo": {
+   "short_term_lufs_mean": -13.09,
+   "max": -11.3
+  },
+  "final": {
+   "short_term_lufs_mean": -13.72,
+   "max": -12.57
+  },
+  "outro": {
+   "short_term_lufs_mean": -20.42,
+   "max": -14.66
+  }
+ },
+ "pitch_median_abs_err_cents_per_note": [
+  2.4,
+  1.0,
+  0.1,
+  0.1,
+  0.0,
+  0.1,
+  1.3,
+  0.1,
+  1.4,
+  0.2,
+  0.1,
+  0.1
+ ],
+ "pitch_err_median_cents": 0.14
+}

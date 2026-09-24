@@ -1,0 +1,16 @@
+{
+  "sample_rate": 48000,
+  "channels": 2,
+  "bits": 24,
+  "samples": 10509600,
+  "duration_s": 218.95,
+  "raw_lufs": -14.227,
+  "raw_true_peak_dbtp": 0.522,
+  "gain_db": 0.227,
+  "max_gain_reduction_db": -5.998,
+  "lufs_integrated": -14.002,
+  "true_peak_dbtp": -1.5,
+  "clipped_samples": 0,
+  "pct_time_gr_over_1db": 0.019,
+  "pct_time_gr_over_3db": 0.002
+}

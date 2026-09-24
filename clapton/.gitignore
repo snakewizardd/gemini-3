@@ -1,3 +1,7 @@
+# re-include what the repo-root .gitignore excludes but this work needs for reproducibility
+!output/
+!package-lock.json
+
 node_modules/
 output/tmp/
 output/frames/
