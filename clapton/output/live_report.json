@@ -1,7 +1,7 @@
 {
- "when": "2026-09-24T18:20:51.636Z",
- "quick": true,
- "passed": 14,
+ "when": "2026-09-24T18:25:44.337Z",
+ "quick": false,
+ "passed": 19,
  "failed": 0,
  "results": [
   {
@@ -17,7 +17,7 @@
   {
    "name": "audio clock advances in real time",
    "pass": true,
-   "measured": "song time 3.561 s after 4.0 s wall"
+   "measured": "song time 3.681 s after 4.0 s wall"
   },
   {
    "name": "pause (Space): audio suspended and song time frozen",
@@ -58,6 +58,31 @@
    "name": "rapid double restart: one context, one scheduler, from the top",
    "pass": true,
    "measured": "song time 0.00 s, 25.0 ticks/s"
+  },
+  {
+   "name": "every formal section is reached, in order",
+   "pass": true,
+   "measured": "intro@2.0s verse1@15.1s chorus1@41.2s verse2@68.3s chorus2@95.5s solo@121.7s final@175.3s outro@201.5s"
+  },
+  {
+   "name": "the climax ignition occurs",
+   "pass": true,
+   "measured": "ignition wave observed in the live picture"
+  },
+  {
+   "name": "the work ends intentionally: scheduler stopped, context closed, final time held",
+   "pass": true,
+   "measured": "state ended, audio none, song time 218.950 / 218.950 s"
+  },
+  {
+   "name": "no activity after the end (no runaway timers)",
+   "pass": true,
+   "measured": "ticks 5696 → 5696"
+  },
+  {
+   "name": "no late events across the whole run",
+   "pass": true,
+   "measured": "late=0"
   },
   {
    "name": "only local code loaded; no media, no network beyond localhost files",

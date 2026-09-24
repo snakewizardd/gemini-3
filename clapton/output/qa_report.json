@@ -1,0 +1,147 @@
+{
+ "when": "2026-09-24T18:34:56.405Z",
+ "passed": 28,
+ "failed": 0,
+ "results": [
+  {
+   "name": "exists & non-empty: output/audio/clapton_master.wav",
+   "pass": true,
+   "measured": "60.14 MiB"
+  },
+  {
+   "name": "exists & non-empty: output/song.wav",
+   "pass": true,
+   "measured": "60.14 MiB"
+  },
+  {
+   "name": "exists & non-empty: output/final_render.mp4",
+   "pass": true,
+   "measured": "388.83 MiB"
+  },
+  {
+   "name": "exists & non-empty: output/final.mp4",
+   "pass": true,
+   "measured": "388.83 MiB"
+  },
+  {
+   "name": "exists & non-empty: output/events.json",
+   "pass": true,
+   "measured": "0.28 MiB"
+  },
+  {
+   "name": "exists & non-empty: output/telemetry.json",
+   "pass": true,
+   "measured": "1.66 MiB"
+  },
+  {
+   "name": "song.wav is byte-identical to clapton_master.wav",
+   "pass": true,
+   "measured": "sha256 77ee88cfac60c9a8…"
+  },
+  {
+   "name": "final.mp4 is byte-identical to final_render.mp4",
+   "pass": true,
+   "measured": "sha256 fe8ad0529ba64b90…"
+  },
+  {
+   "name": "master format 48 kHz / 24-bit PCM / stereo",
+   "pass": true,
+   "measured": "pcm_s24le 48000 Hz 2 ch"
+  },
+  {
+   "name": "song duration within 3:15–3:45",
+   "pass": true,
+   "measured": "218.950 s (3:38.95)"
+  },
+  {
+   "name": "video stream: H.264 1920×1080 yuv420p",
+   "pass": true,
+   "measured": "h264 1920x1080 yuv420p"
+  },
+  {
+   "name": "solid 60.0 fps (r_frame_rate = avg_frame_rate = 60/1)",
+   "pass": true,
+   "measured": "r=60/1 avg=60/1"
+  },
+  {
+   "name": "mp4 audio vs video stream duration delta < 0.05 s",
+   "pass": true,
+   "measured": "video 218.9500 s, audio 218.9500 s, Δ 0.0 ms"
+  },
+  {
+   "name": "song.wav vs final.mp4 duration delta < 50 ms",
+   "pass": true,
+   "measured": "wav 218.9500 s, mp4 218.9500 s, Δ 0.0 ms"
+  },
+  {
+   "name": "video frame count = duration × 60 (±1)",
+   "pass": true,
+   "measured": "13137 frames vs 13137.00 expected"
+  },
+  {
+   "name": "stream start times aligned",
+   "pass": true,
+   "measured": "video 0.000000, audio 0.000000"
+  },
+  {
+   "name": "integrated loudness −14 LUFS ±1 (ffmpeg ebur128)",
+   "pass": true,
+   "measured": "-14 LUFS (LRA 5.9 LU)"
+  },
+  {
+   "name": "true peak ≤ −1 dBTP (ffmpeg ebur128 peak=true)",
+   "pass": true,
+   "measured": "-1.5 dBTP"
+  },
+  {
+   "name": "loudnorm measurement agrees (−14 ±1 LUFS, ≤ −1 dBTP)",
+   "pass": true,
+   "measured": "input_i -14.04 LUFS, input_tp -1.47 dBTP"
+  },
+  {
+   "name": "no clipped samples",
+   "pass": true,
+   "measured": "0 full-scale samples; sample peak -1.51 dBFS"
+  },
+  {
+   "name": "determinism: 5 random frames rendered twice (separate browser launches) are pixel-identical",
+   "pass": true,
+   "measured": "#836:c0379b9e= #4081:166e6640= #9918:9a7e1d9f= #12571:f797450f= #12780:59f0f3be="
+  },
+  {
+   "name": "sync: every lead onset appears in the picture within one frame (≤ 16.7 ms)",
+   "pass": true,
+   "measured": "256/256 notes, max lag 16.65 ms"
+  },
+  {
+   "name": "sync: audio transients of the dry lead match events.json pick onsets within 16.7 ms",
+   "pass": true,
+   "measured": "173/173 detected picks, median |Δ| 0.02 ms, max |Δ| 0.21 ms"
+  },
+  {
+   "name": "renderer loaded no external image/audio files (runtime request audit)",
+   "pass": true,
+   "measured": "/render/index.html, /src/visual.js, /output/events.json, /favicon.ico, /output/telemetry.json"
+  },
+  {
+   "name": "no media references in composition/engine/renderer source (static scan)",
+   "pass": true,
+   "measured": "6 files clean"
+  },
+  {
+   "name": "seeded randomness only: no Math.random() in engine/score/renderer",
+   "pass": true,
+   "measured": "mulberry32 / hash-based only"
+  },
+  {
+   "name": "determinism: re-rendering the String Engine master reproduces it bit-for-bit",
+   "pass": true,
+   "measured": "sha256 77ee88cfac60c9a8… == 77ee88cfac60c9a8…"
+  },
+  {
+   "name": "work is on branch oneshot-clapton",
+   "pass": true,
+   "measured": "oneshot-clapton"
+  }
+ ]
+}

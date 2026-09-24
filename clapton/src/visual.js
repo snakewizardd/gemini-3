@@ -327,7 +327,7 @@ function createState(score, telemetry) {
   function leadEnv(n, t) {
     const age = t - n.t; if (age < 0) return 0;
     const legato = n.art !== 'pick';
-    const a = age < 0.012 ? age / 0.012 : 1;
+    const a = age < 0.002 ? 0.5 + 0.5 * age / 0.002 : 1;          // a pick is instantaneous at frame resolution
     const sustain = Math.exp(-age / (legato ? 2.4 : 1.9)) * 0.75 + 0.25;
     const rel = age > n.dur ? Math.exp(-(age - n.dur) / 0.14) : 1;
     return n.vel * a * sustain * rel * (legato ? 0.8 : 1);
@@ -337,7 +337,7 @@ function createState(score, telemetry) {
     let i = lowerBound(leads, t - 16);
     for (; i < leads.length && leads[i].t <= t; i++) {
       const n = leads[i], e = leadEnv(n, t);
-      if (e > 0.004) out.push([e, n]);
+      if (e > 0.004 || t - n.t < 0.1) out.push([e, n]);
     }
     out.sort((a, b) => b[0] - a[0]);
     return out.slice(0, 4);
